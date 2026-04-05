@@ -40,7 +40,7 @@ router.get("/professionals/me", requireAuth, async (req, res): Promise<void> => 
   res.json(GetMyProfessionalProfileResponse.parse(profile));
 });
 
-router.post("/professionals/me", requireAuth, requireRole("professional", "admin"), async (req, res): Promise<void> => {
+router.post("/professionals/me", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateProfessionalProfileBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -70,7 +70,7 @@ router.post("/professionals/me", requireAuth, requireRole("professional", "admin
   res.status(201).json(GetMyProfessionalProfileResponse.parse(profile));
 });
 
-router.patch("/professionals/me", requireAuth, requireRole("professional", "admin"), async (req, res): Promise<void> => {
+router.patch("/professionals/me", requireAuth, async (req, res): Promise<void> => {
   const parsed = UpdateProfessionalProfileBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

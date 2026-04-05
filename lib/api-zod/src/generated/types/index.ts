@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./complianceContent";
 export * from "./contactUnlock";
 export * from "./createProfessionalProfileBody";
 export * from "./createProfessionalProfileBodySpecialty";
@@ -26,6 +27,8 @@ export * from "./rating";
 export * from "./searchProfessionalsParams";
 export * from "./searchProfessionalsResponse";
 export * from "./searchProfessionalsSpecialty";
+export * from "./setRoleBody";
+export * from "./setRoleBodyRole";
 export * from "./unlockStatus";
 export * from "./updateProfessionalProfileBody";
 export * from "./updateProfessionalProfileBodySpecialty";

@@ -49,6 +49,18 @@ export interface UpdateUserBody {
   avatarUrl?: string;
 }
 
+export type SetRoleBodyRole =
+  (typeof SetRoleBodyRole)[keyof typeof SetRoleBodyRole];
+
+export const SetRoleBodyRole = {
+  parent: "parent",
+  professional: "professional",
+} as const;
+
+export interface SetRoleBody {
+  role: SetRoleBodyRole;
+}
+
 export type ProfessionalProfileSpecialty =
   (typeof ProfessionalProfileSpecialty)[keyof typeof ProfessionalProfileSpecialty];
 
@@ -181,6 +193,7 @@ export const CreateProfessionalProfileBodySpecialty = {
 } as const;
 
 export interface CreateProfessionalProfileBody {
+  fullName: string;
   specialty: CreateProfessionalProfileBodySpecialty;
   bio?: string;
   yearsExperience: number;
@@ -207,6 +220,7 @@ export const UpdateProfessionalProfileBodySpecialty = {
 } as const;
 
 export interface UpdateProfessionalProfileBody {
+  fullName?: string;
   specialty?: UpdateProfessionalProfileBodySpecialty;
   bio?: string;
   yearsExperience?: number;
@@ -279,6 +293,12 @@ export interface PlatformStats {
   totalRatings: number;
   specialtyCounts: PlatformStatsSpecialtyCounts;
   verifiedCount: number;
+}
+
+export interface ComplianceContent {
+  title: string;
+  lastUpdated: string;
+  content: string;
 }
 
 export type SearchProfessionalsParams = {

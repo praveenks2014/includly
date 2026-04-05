@@ -8,6 +8,7 @@
 import type { UpdateProfessionalProfileBodySpecialty } from "./updateProfessionalProfileBodySpecialty";
 
 export interface UpdateProfessionalProfileBody {
+  fullName?: string;
   specialty?: UpdateProfessionalProfileBodySpecialty;
   bio?: string;
   yearsExperience?: number;

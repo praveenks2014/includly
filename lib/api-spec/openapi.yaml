@@ -22,6 +22,8 @@ tags:
     description: Contact unlock operations
   - name: dashboard
     description: Dashboard summaries
+  - name: compliance
+    description: Compliance and legal content
 
 paths:
   /healthz:
@@ -70,6 +72,40 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: Updated user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/me/role:
+    patch:
+      operationId: setMyRole
+      tags: [users]
+      summary: Set current user role (parent or professional)
+      description: Allows a user to self-select their role during onboarding
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetRoleBody"
       responses:
         "200":
           description: Updated user profile
@@ -405,6 +441,45 @@ paths:
               schema:
                 $ref: "#/components/schemas/PlatformStats"
 
+  /compliance/privacy:
+    get:
+      operationId: getPrivacyPolicy
+      tags: [compliance]
+      summary: Get privacy policy content
+      responses:
+        "200":
+          description: Privacy policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplianceContent"
+
+  /compliance/terms:
+    get:
+      operationId: getTermsOfService
+      tags: [compliance]
+      summary: Get terms of service content
+      responses:
+        "200":
+          description: Terms of service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplianceContent"
+
+  /compliance/support:
+    get:
+      operationId: getSupportInfo
+      tags: [compliance]
+      summary: Get support information
+      responses:
+        "200":
+          description: Support info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplianceContent"
+
 components:
   securitySchemes:
     clerkAuth:
@@ -472,6 +547,17 @@ components:
           type: string
         avatarUrl:
           type: string
+
+    SetRoleBody:
+      type: object
+      properties:
+        role:
+          type: string
+          enum:
+            - parent
+            - professional
+      required:
+        - role
 
     ProfessionalProfile:
       type: object
@@ -674,6 +760,8 @@ components:
     CreateProfessionalProfileBody:
       type: object
       properties:
+        fullName:
+          type: string
         specialty:
           type: string
           enum:
@@ -703,6 +791,7 @@ components:
         email:
           type: string
       required:
+        - fullName
         - specialty
         - yearsExperience
         - qualifications
@@ -710,6 +799,8 @@ components:
     UpdateProfessionalProfileBody:
       type: object
       properties:
+        fullName:
+          type: string
         specialty:
           type: string
           enum:
@@ -877,3 +968,17 @@ components:
         - totalRatings
         - specialtyCounts
         - verifiedCount
+
+    ComplianceContent:
+      type: object
+      properties:
+        title:
+          type: string
+        lastUpdated:
+          type: string
+        content:
+          type: string
+      required:
+        - title
+        - lastUpdated
+        - content

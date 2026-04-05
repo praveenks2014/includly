@@ -56,6 +56,27 @@ export const UpdateMeResponse = zod.object({
 });
 
 /**
+ * Allows a user to self-select their role during onboarding
+ * @summary Set current user role (parent or professional)
+ */
+export const SetMyRoleBody = zod.object({
+  role: zod.enum(["parent", "professional"]),
+});
+
+export const SetMyRoleResponse = zod.object({
+  id: zod.number(),
+  clerkId: zod.string(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  fullName: zod.string().nullish(),
+  avatarUrl: zod.string().nullish(),
+  role: zod.enum(["parent", "professional", "admin"]),
+  city: zod.string().nullish(),
+  country: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
  * @summary Get my professional profile
  */
 export const GetMyProfessionalProfileResponse = zod.object({
@@ -98,6 +119,7 @@ export const GetMyProfessionalProfileResponse = zod.object({
  * @summary Create professional profile (onboarding)
  */
 export const CreateProfessionalProfileBody = zod.object({
+  fullName: zod.string(),
   specialty: zod.enum([
     "shadow_teacher",
     "special_tutor",
@@ -122,6 +144,7 @@ export const CreateProfessionalProfileBody = zod.object({
  * @summary Update professional profile
  */
 export const UpdateProfessionalProfileBody = zod.object({
+  fullName: zod.string().optional(),
   specialty: zod
     .enum([
       "shadow_teacher",
@@ -447,4 +470,31 @@ export const GetPlatformStatsResponse = zod.object({
   totalRatings: zod.number(),
   specialtyCounts: zod.record(zod.string(), zod.number()),
   verifiedCount: zod.number(),
+});
+
+/**
+ * @summary Get privacy policy content
+ */
+export const GetPrivacyPolicyResponse = zod.object({
+  title: zod.string(),
+  lastUpdated: zod.string(),
+  content: zod.string(),
+});
+
+/**
+ * @summary Get terms of service content
+ */
+export const GetTermsOfServiceResponse = zod.object({
+  title: zod.string(),
+  lastUpdated: zod.string(),
+  content: zod.string(),
+});
+
+/**
+ * @summary Get support information
+ */
+export const GetSupportInfoResponse = zod.object({
+  title: zod.string(),
+  lastUpdated: zod.string(),
+  content: zod.string(),
 });

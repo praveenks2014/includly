@@ -8,6 +8,7 @@
 import type { CreateProfessionalProfileBodySpecialty } from "./createProfessionalProfileBodySpecialty";
 
 export interface CreateProfessionalProfileBody {
+  fullName: string;
   specialty: CreateProfessionalProfileBodySpecialty;
   bio?: string;
   yearsExperience: number;

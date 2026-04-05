@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, avg } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db, ratingsTable, professionalProfilesTable } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import {
@@ -33,11 +33,6 @@ router.post("/ratings", requireAuth, requireRole("parent", "admin"), async (req,
       comment: comment ?? null,
     })
     .returning();
-
-  const [avgResult] = await db
-    .select({ avg: avg(ratingsTable.score), count: { value: ratingsTable.id } })
-    .from(ratingsTable)
-    .where(eq(ratingsTable.professionalId, professionalId));
 
   const allRatings = await db
     .select({ score: ratingsTable.score })

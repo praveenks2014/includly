@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  ComplianceContent,
   ContactUnlock,
   CreateProfessionalProfileBody,
   CreateRatingBody,
@@ -31,6 +32,7 @@ import type {
   Rating,
   SearchProfessionalsParams,
   SearchProfessionalsResponse,
+  SetRoleBody,
   UnlockStatus,
   UpdateProfessionalProfileBody,
   UpdateUserBody,
@@ -269,6 +271,93 @@ export const useUpdateMe = <
   TContext
 > => {
   return useMutation(getUpdateMeMutationOptions(options));
+};
+
+/**
+ * Allows a user to self-select their role during onboarding
+ * @summary Set current user role (parent or professional)
+ */
+export const getSetMyRoleUrl = () => {
+  return `/api/users/me/role`;
+};
+
+export const setMyRole = async (
+  setRoleBody: SetRoleBody,
+  options?: RequestInit,
+): Promise<UserProfile> => {
+  return customFetch<UserProfile>(getSetMyRoleUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(setRoleBody),
+  });
+};
+
+export const getSetMyRoleMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setMyRole>>,
+    TError,
+    { data: BodyType<SetRoleBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setMyRole>>,
+  TError,
+  { data: BodyType<SetRoleBody> },
+  TContext
+> => {
+  const mutationKey = ["setMyRole"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setMyRole>>,
+    { data: BodyType<SetRoleBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setMyRole(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetMyRoleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setMyRole>>
+>;
+export type SetMyRoleMutationBody = BodyType<SetRoleBody>;
+export type SetMyRoleMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Set current user role (parent or professional)
+ */
+export const useSetMyRole = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setMyRole>>,
+    TError,
+    { data: BodyType<SetRoleBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setMyRole>>,
+  TError,
+  { data: BodyType<SetRoleBody> },
+  TContext
+> => {
+  return useMutation(getSetMyRoleMutationOptions(options));
 };
 
 /**
@@ -1357,6 +1446,231 @@ export function useGetPlatformStats<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetPlatformStatsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get privacy policy content
+ */
+export const getGetPrivacyPolicyUrl = () => {
+  return `/api/compliance/privacy`;
+};
+
+export const getPrivacyPolicy = async (
+  options?: RequestInit,
+): Promise<ComplianceContent> => {
+  return customFetch<ComplianceContent>(getGetPrivacyPolicyUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPrivacyPolicyQueryKey = () => {
+  return [`/api/compliance/privacy`] as const;
+};
+
+export const getGetPrivacyPolicyQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPrivacyPolicy>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPrivacyPolicy>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPrivacyPolicyQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPrivacyPolicy>>
+  > = ({ signal }) => getPrivacyPolicy({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPrivacyPolicy>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPrivacyPolicyQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPrivacyPolicy>>
+>;
+export type GetPrivacyPolicyQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get privacy policy content
+ */
+
+export function useGetPrivacyPolicy<
+  TData = Awaited<ReturnType<typeof getPrivacyPolicy>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPrivacyPolicy>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPrivacyPolicyQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get terms of service content
+ */
+export const getGetTermsOfServiceUrl = () => {
+  return `/api/compliance/terms`;
+};
+
+export const getTermsOfService = async (
+  options?: RequestInit,
+): Promise<ComplianceContent> => {
+  return customFetch<ComplianceContent>(getGetTermsOfServiceUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTermsOfServiceQueryKey = () => {
+  return [`/api/compliance/terms`] as const;
+};
+
+export const getGetTermsOfServiceQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTermsOfService>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTermsOfService>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTermsOfServiceQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTermsOfService>>
+  > = ({ signal }) => getTermsOfService({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTermsOfService>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTermsOfServiceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTermsOfService>>
+>;
+export type GetTermsOfServiceQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get terms of service content
+ */
+
+export function useGetTermsOfService<
+  TData = Awaited<ReturnType<typeof getTermsOfService>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTermsOfService>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTermsOfServiceQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get support information
+ */
+export const getGetSupportInfoUrl = () => {
+  return `/api/compliance/support`;
+};
+
+export const getSupportInfo = async (
+  options?: RequestInit,
+): Promise<ComplianceContent> => {
+  return customFetch<ComplianceContent>(getGetSupportInfoUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSupportInfoQueryKey = () => {
+  return [`/api/compliance/support`] as const;
+};
+
+export const getGetSupportInfoQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSupportInfo>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSupportInfo>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSupportInfoQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSupportInfo>>> = ({
+    signal,
+  }) => getSupportInfo({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSupportInfo>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSupportInfoQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSupportInfo>>
+>;
+export type GetSupportInfoQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get support information
+ */
+
+export function useGetSupportInfo<
+  TData = Awaited<ReturnType<typeof getSupportInfo>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSupportInfo>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSupportInfoQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
