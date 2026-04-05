@@ -6,6 +6,7 @@ import {
   useGetProfessionalDashboard,
   useGetMySubscription,
   useGetPaymentHistory,
+  useCreateStripeCheckout,
   getGetMySubscriptionQueryKey,
   getGetPaymentHistoryQueryKey,
   type ParentDashboard,
@@ -17,7 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel } from "@/lib/specialties";
-import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp } from "lucide-react";
 
 export default function DashboardPage() {
   const { user } = useUser();
@@ -225,6 +227,31 @@ function ParentDashboard({
 }
 
 function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboard | undefined; isLoading: boolean }) {
+  const { toast } = useToast();
+  const { mutateAsync: createStripeCheckout, isPending: stripeLoading } = useCreateStripeCheckout();
+
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+  async function handleFeaturedListing() {
+    try {
+      const origin = window.location.origin;
+      const result = await createStripeCheckout({
+        data: {
+          plan: "plan_c_featured",
+          successUrl: `${origin}${basePath}/payment/success?plan=plan_c_featured`,
+          cancelUrl: `${origin}${basePath}/payment/cancel`,
+        },
+      });
+      window.location.href = result.url;
+    } catch {
+      toast({
+        title: "Stripe not configured",
+        description: "Featured listing requires Stripe. Please contact support.",
+        variant: "destructive",
+      });
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -252,6 +279,28 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
 
   return (
     <div className="space-y-6">
+      {/* Featured listing upsell */}
+      <div className="bg-gradient-to-r from-violet-50 to-blue-50 border border-violet-200 rounded-xl p-4 flex items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <TrendingUp size={20} className="text-violet-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-sm text-foreground">Get featured at the top of search</p>
+            <p className="text-xs text-muted-foreground">₹299 for 30 days — more parents find you, more inquiries.</p>
+          </div>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-2 shrink-0 border-violet-300 text-violet-700 hover:bg-violet-50"
+          disabled={stripeLoading}
+          onClick={handleFeaturedListing}
+          data-testid="featured-listing-cta"
+        >
+          {stripeLoading ? <Loader2 size={13} className="animate-spin" /> : <CreditCard size={13} />}
+          Get featured
+        </Button>
+      </div>
+
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatCard icon={<Eye size={18} className="text-primary" />} label="Profile views" value={data.totalViews ?? 0} />

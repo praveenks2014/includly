@@ -605,6 +605,15 @@ export const StripeWebhookResponse = zod.object({
 });
 
 /**
+ * @summary Razorpay webhook handler (payment.captured)
+ */
+export const RazorpayWebhookBody = zod.object({}).passthrough();
+
+export const RazorpayWebhookResponse = zod.object({
+  status: zod.string(),
+});
+
+/**
  * @summary Get privacy policy content
  */
 export const GetPrivacyPolicyResponse = zod.object({

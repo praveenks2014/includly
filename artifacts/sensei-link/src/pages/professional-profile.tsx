@@ -4,17 +4,17 @@ import {
   useGetProfessional,
   useGetRatingsForProfessional,
   useCheckUnlockStatus,
-  getCreateUnlockMutationOptions,
   getGetProfessionalQueryKey,
   getCheckUnlockStatusQueryKey,
 } from "@workspace/api-client-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel, SPECIALTY_COLORS } from "@/lib/specialties";
-import { useToast } from "@/hooks/use-toast";
+import { UnlockPaymentModal } from "@/components/UnlockPaymentModal";
+import { useState } from "react";
 import {
   BadgeCheck,
   Clock,
@@ -33,8 +33,8 @@ export default function ProfessionalProfilePage() {
   const professionalId = Number(id);
   const [, setLocation] = useLocation();
   const { isSignedIn } = useUser();
-  const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [showPayModal, setShowPayModal] = useState(false);
 
   const { data: professional, isLoading } = useGetProfessional(professionalId);
   const { data: ratingsData } = useGetRatingsForProfessional(professionalId);
@@ -48,33 +48,17 @@ export default function ProfessionalProfilePage() {
 
   const isUnlocked = unlockStatus?.isUnlocked ?? false;
 
-  const unlockMutation = useMutation({
-    ...getCreateUnlockMutationOptions(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: getGetProfessionalQueryKey(professionalId) });
-      queryClient.invalidateQueries({ queryKey: getCheckUnlockStatusQueryKey(professionalId) });
-      toast({ title: "Contact unlocked", description: "You can now view their contact details." });
-    },
-    onError: (error: unknown) => {
-      const status = (error as { status?: number })?.status;
-      if (status === 402) {
-        toast({
-          title: "Purchase required",
-          description: "Get a plan to view contact details.",
-        });
-        setLocation(`/pricing`);
-        return;
-      }
-      toast({ title: "Could not unlock", description: "Please try again.", variant: "destructive" });
-    },
-  });
-
   function handleUnlock() {
     if (!isSignedIn) {
       setLocation("/sign-in");
       return;
     }
-    unlockMutation.mutate({ data: { professionalId } });
+    setShowPayModal(true);
+  }
+
+  function handleUnlockSuccess() {
+    queryClient.invalidateQueries({ queryKey: getGetProfessionalQueryKey(professionalId) });
+    queryClient.invalidateQueries({ queryKey: getCheckUnlockStatusQueryKey(professionalId) });
   }
 
   if (isLoading) {
@@ -219,16 +203,11 @@ export default function ProfessionalProfilePage() {
                 </div>
                 <Button
                   onClick={handleUnlock}
-                  disabled={unlockMutation.isPending}
                   className="gap-2 shrink-0"
                   data-testid="unlock-contact-btn"
                 >
-                  {unlockMutation.isPending ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <Lock size={14} />
-                  )}
-                  {unlockMutation.isPending ? "Unlocking..." : "Unlock contact"}
+                  <Lock size={14} />
+                  Unlock contact
                 </Button>
               </div>
             )}
@@ -259,6 +238,15 @@ export default function ProfessionalProfilePage() {
           )}
         </div>
       </div>
+
+      {/* Payment modal */}
+      <UnlockPaymentModal
+        open={showPayModal}
+        onClose={() => setShowPayModal(false)}
+        professionalId={professionalId}
+        professionalName={professional?.fullName ?? undefined}
+        onUnlockSuccess={handleUnlockSuccess}
+      />
     </div>
   );
 }

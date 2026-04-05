@@ -36,6 +36,7 @@ import type {
   ProfessionalProfile,
   Rating,
   RazorpayOrder,
+  RazorpayWebhookBody,
   SearchProfessionalsParams,
   SearchProfessionalsResponse,
   SetRoleBody,
@@ -2032,6 +2033,92 @@ export const useStripeWebhook = <
   TContext
 > => {
   return useMutation(getStripeWebhookMutationOptions(options));
+};
+
+/**
+ * @summary Razorpay webhook handler (payment.captured)
+ */
+export const getRazorpayWebhookUrl = () => {
+  return `/api/webhooks/razorpay`;
+};
+
+export const razorpayWebhook = async (
+  razorpayWebhookBody: RazorpayWebhookBody,
+  options?: RequestInit,
+): Promise<HealthStatus> => {
+  return customFetch<HealthStatus>(getRazorpayWebhookUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(razorpayWebhookBody),
+  });
+};
+
+export const getRazorpayWebhookMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof razorpayWebhook>>,
+    TError,
+    { data: BodyType<RazorpayWebhookBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof razorpayWebhook>>,
+  TError,
+  { data: BodyType<RazorpayWebhookBody> },
+  TContext
+> => {
+  const mutationKey = ["razorpayWebhook"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof razorpayWebhook>>,
+    { data: BodyType<RazorpayWebhookBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return razorpayWebhook(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RazorpayWebhookMutationResult = NonNullable<
+  Awaited<ReturnType<typeof razorpayWebhook>>
+>;
+export type RazorpayWebhookMutationBody = BodyType<RazorpayWebhookBody>;
+export type RazorpayWebhookMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Razorpay webhook handler (payment.captured)
+ */
+export const useRazorpayWebhook = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof razorpayWebhook>>,
+    TError,
+    { data: BodyType<RazorpayWebhookBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof razorpayWebhook>>,
+  TError,
+  { data: BodyType<RazorpayWebhookBody> },
+  TContext
+> => {
+  return useMutation(getRazorpayWebhookMutationOptions(options));
 };
 
 /**

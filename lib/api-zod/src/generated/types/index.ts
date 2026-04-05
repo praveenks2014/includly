@@ -33,6 +33,7 @@ export * from "./professionalProfileVerificationStatus";
 export * from "./professionalSearchResult";
 export * from "./rating";
 export * from "./razorpayOrder";
+export * from "./razorpayWebhookBody";
 export * from "./searchProfessionalsParams";
 export * from "./searchProfessionalsResponse";
 export * from "./searchProfessionalsSpecialty";

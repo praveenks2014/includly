@@ -427,3 +427,5 @@ export const SearchProfessionalsSpecialty = {
 } as const;
 
 export type StripeWebhookBody = { [key: string]: unknown };
+
+export type RazorpayWebhookBody = { [key: string]: unknown };

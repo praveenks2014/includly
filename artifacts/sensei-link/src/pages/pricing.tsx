@@ -11,57 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Check, Loader2, Zap, CreditCard, Shield } from "lucide-react";
+import { loadRazorpayScript, formatRupees, type RazorpayPaymentResponse } from "@/lib/razorpay";
 
-declare global {
-  interface Window {
-    Razorpay: new (options: RazorpayOptions) => RazorpayInstance;
-  }
-}
-
-interface RazorpayOptions {
-  key: string;
-  amount: number;
-  currency: string;
-  name: string;
-  description: string;
-  order_id: string;
-  handler: (response: RazorpayResponse) => void;
-  prefill?: { name?: string; email?: string; contact?: string };
-  theme?: { color?: string };
-  modal?: { ondismiss?: () => void };
-}
-
-interface RazorpayInstance {
-  open(): void;
-}
-
-interface RazorpayResponse {
-  razorpay_payment_id: string;
-  razorpay_order_id: string;
-  razorpay_signature: string;
-}
-
-function loadRazorpayScript(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (typeof window !== "undefined" && window.Razorpay) {
-      resolve(true);
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-}
-
-function formatRupees(paise: number): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(paise / 100);
-}
+type RazorpayResponse = RazorpayPaymentResponse;
 
 export default function PricingPage() {
   const [, setLocation] = useLocation();
