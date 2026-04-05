@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, ilike, or } from "drizzle-orm";
+import { eq, and, gte, ilike, or, gt } from "drizzle-orm";
 import { db, usersTable, professionalProfilesTable, contactUnlocksTable, specialtyEnum } from "@workspace/db";
+import { subscriptionsTable } from "@workspace/db";
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
 import {
   GetMyProfessionalProfileResponse,
@@ -142,16 +143,30 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
   const paginated = filtered.slice(offset, offset + limitNum);
 
   const unlockSet = new Set<number>();
+  let hasActiveSubscription = false;
   if (req.userId) {
     const unlocks = await db
       .select()
       .from(contactUnlocksTable)
       .where(eq(contactUnlocksTable.parentId, req.userId));
     unlocks.forEach((u) => unlockSet.add(u.professionalId));
+
+    const [activeSub] = await db
+      .select()
+      .from(subscriptionsTable)
+      .where(
+        and(
+          eq(subscriptionsTable.userId, req.userId),
+          eq(subscriptionsTable.status, "active"),
+          gt(subscriptionsTable.expiresAt, new Date()),
+        ),
+      )
+      .limit(1);
+    hasActiveSubscription = !!activeSub;
   }
 
   const results = paginated.map((p) => {
-    const isUnlocked = unlockSet.has(p.id);
+    const isUnlocked = hasActiveSubscription || unlockSet.has(p.id);
     return {
       id: p.id,
       userId: p.userId,
@@ -210,16 +225,32 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
 
   let isUnlocked = false;
   if (req.userId) {
-    const [unlock] = await db
+    const [activeSub] = await db
       .select()
-      .from(contactUnlocksTable)
+      .from(subscriptionsTable)
       .where(
         and(
-          eq(contactUnlocksTable.parentId, req.userId),
-          eq(contactUnlocksTable.professionalId, profile.id),
+          eq(subscriptionsTable.userId, req.userId),
+          eq(subscriptionsTable.status, "active"),
+          gt(subscriptionsTable.expiresAt, new Date()),
         ),
-      );
-    isUnlocked = !!unlock;
+      )
+      .limit(1);
+
+    if (activeSub) {
+      isUnlocked = true;
+    } else {
+      const [unlock] = await db
+        .select()
+        .from(contactUnlocksTable)
+        .where(
+          and(
+            eq(contactUnlocksTable.parentId, req.userId),
+            eq(contactUnlocksTable.professionalId, profile.id),
+          ),
+        );
+      isUnlocked = !!unlock;
+    }
   }
 
   const result = {

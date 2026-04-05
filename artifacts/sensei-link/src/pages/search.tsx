@@ -2,11 +2,10 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   useSearchProfessionals,
-  getCreateUnlockMutationOptions,
   getSearchProfessionalsQueryKey,
   type SearchProfessionalsSpecialty,
 } from "@workspace/api-client-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { ProfessionalCard } from "@/components/ProfessionalCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,13 +20,12 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Search, SlidersHorizontal, X } from "lucide-react";
 import { SPECIALTY_OPTIONS } from "@/lib/specialties";
-import { useToast } from "@/hooks/use-toast";
+import { UnlockPaymentModal } from "@/components/UnlockPaymentModal";
 
 export default function SearchPage() {
   const [location] = useLocation();
-  const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [unlockingId, setUnlockingId] = useState<number | null>(null);
+  const [unlockTarget, setUnlockTarget] = useState<{ id: number; name?: string } | null>(null);
 
   const params = new URLSearchParams(
     typeof window !== "undefined" ? window.location.search : ""
@@ -49,22 +47,13 @@ export default function SearchPage() {
 
   const { data, isLoading, isFetching } = useSearchProfessionals(searchParams);
 
-  const unlockMutation = useMutation({
-    ...getCreateUnlockMutationOptions(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: getSearchProfessionalsQueryKey(searchParams) });
-      toast({ title: "Contact unlocked", description: "You can now view their contact details." });
-      setUnlockingId(null);
-    },
-    onError: () => {
-      toast({ title: "Could not unlock", description: "Please try again.", variant: "destructive" });
-      setUnlockingId(null);
-    },
-  });
+  function handleUnlock(professionalId: number, name?: string) {
+    setUnlockTarget({ id: professionalId, name });
+  }
 
-  function handleUnlock(professionalId: number) {
-    setUnlockingId(professionalId);
-    unlockMutation.mutate({ data: { professionalId } });
+  function handleUnlockSuccess() {
+    queryClient.invalidateQueries({ queryKey: getSearchProfessionalsQueryKey(searchParams) });
+    setUnlockTarget(null);
   }
 
   function clearFilters() {
@@ -182,14 +171,22 @@ export default function SearchPage() {
                 <ProfessionalCard
                   key={p.id}
                   professional={p}
-                  onUnlock={handleUnlock}
-                  unlocking={unlockingId === p.id}
+                  onUnlock={(id) => handleUnlock(id, p.fullName ?? undefined)}
+                  unlocking={false}
                 />
               ))}
             </div>
           </>
         )}
       </div>
+
+      <UnlockPaymentModal
+        open={unlockTarget !== null}
+        onClose={() => setUnlockTarget(null)}
+        professionalId={unlockTarget?.id ?? 0}
+        professionalName={unlockTarget?.name}
+        onUnlockSuccess={handleUnlockSuccess}
+      />
     </div>
   );
 }
