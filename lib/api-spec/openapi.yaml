@@ -3,13 +3,26 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: SenseiLink API specification — marketplace for parents to find Shadow Teachers, Special Educators, and Medical Specialists
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: users
+    description: User profile management
+  - name: professionals
+    description: Professional profile operations
+  - name: search
+    description: Search and discovery
+  - name: ratings
+    description: Rating system
+  - name: unlocks
+    description: Contact unlock operations
+  - name: dashboard
+    description: Dashboard summaries
+
 paths:
   /healthz:
     get:
@@ -24,7 +37,380 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /users/me:
+    get:
+      operationId: getMe
+      tags: [users]
+      summary: Get current user profile
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateMe
+      tags: [users]
+      summary: Update current user profile
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: Updated user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /professionals/me:
+    get:
+      operationId: getMyProfessionalProfile
+      tags: [professionals]
+      summary: Get my professional profile
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Professional profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfessionalProfile"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createProfessionalProfile
+      tags: [professionals]
+      summary: Create professional profile (onboarding)
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProfessionalProfileBody"
+      responses:
+        "201":
+          description: Created professional profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfessionalProfile"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateProfessionalProfile
+      tags: [professionals]
+      summary: Update professional profile
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfessionalProfileBody"
+      responses:
+        "200":
+          description: Updated professional profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfessionalProfile"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /professionals/{id}:
+    get:
+      operationId: getProfessional
+      tags: [professionals]
+      summary: Get professional by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Professional profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfessionalDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /professionals/search:
+    get:
+      operationId: searchProfessionals
+      tags: [search]
+      summary: Search professionals by specialty and location
+      parameters:
+        - name: specialty
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - shadow_teacher
+              - special_tutor
+              - occupational_therapy
+              - speech_therapy
+              - psychiatrist
+              - developmental_pediatrician
+              - neurologist
+        - name: city
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: minExperience
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: minRating
+          in: query
+          required: false
+          schema:
+            type: number
+        - name: willingToTravel
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of professionals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchProfessionalsResponse"
+
+  /ratings:
+    post:
+      operationId: createRating
+      tags: [ratings]
+      summary: Submit a rating for a professional
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRatingBody"
+      responses:
+        "201":
+          description: Rating created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rating"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ratings/professional/{id}:
+    get:
+      operationId: getRatingsForProfessional
+      tags: [ratings]
+      summary: Get all ratings for a professional
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of ratings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Rating"
+
+  /unlocks/check/{professionalId}:
+    get:
+      operationId: checkUnlockStatus
+      tags: [unlocks]
+      summary: Check if parent has unlocked a professional's contact
+      security:
+        - clerkAuth: []
+      parameters:
+        - name: professionalId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Unlock status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnlockStatus"
+
+  /unlocks:
+    get:
+      operationId: getMyUnlocks
+      tags: [unlocks]
+      summary: Get all contact unlocks for current parent
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: List of unlocked professional contacts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContactUnlock"
+    post:
+      operationId: createUnlock
+      tags: [unlocks]
+      summary: Unlock a professional's contact details (dev/test only — bypasses payment)
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUnlockBody"
+      responses:
+        "201":
+          description: Contact unlocked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactUnlock"
+        "400":
+          description: Already unlocked or validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /dashboard/parent:
+    get:
+      operationId: getParentDashboard
+      tags: [dashboard]
+      summary: Get parent dashboard summary
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Parent dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParentDashboard"
+
+  /dashboard/professional:
+    get:
+      operationId: getProfessionalDashboard
+      tags: [dashboard]
+      summary: Get professional dashboard summary
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Professional dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfessionalDashboard"
+
+  /dashboard/stats:
+    get:
+      operationId: getPlatformStats
+      tags: [dashboard]
+      summary: Get platform-wide statistics (public)
+      responses:
+        "200":
+          description: Platform stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformStats"
+
 components:
+  securitySchemes:
+    clerkAuth:
+      type: http
+      scheme: bearer
+
   schemas:
     HealthStatus:
       type: object
@@ -34,3 +420,460 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        clerkId:
+          type: string
+        email:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        fullName:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+        role:
+          type: string
+          enum: [parent, professional, admin]
+        city:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - clerkId
+        - role
+        - createdAt
+
+    UpdateUserBody:
+      type: object
+      properties:
+        fullName:
+          type: string
+        phone:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+        avatarUrl:
+          type: string
+
+    ProfessionalProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        fullName:
+          type: ["string", "null"]
+        specialty:
+          type: string
+          enum:
+            - shadow_teacher
+            - special_tutor
+            - occupational_therapy
+            - speech_therapy
+            - psychiatrist
+            - developmental_pediatrician
+            - neurologist
+        bio:
+          type: ["string", "null"]
+        yearsExperience:
+          type: integer
+        qualifications:
+          type: string
+        city:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        latitude:
+          type: ["number", "null"]
+        longitude:
+          type: ["number", "null"]
+        travelRadiusKm:
+          type: integer
+        willingToTravel:
+          type: boolean
+        isVerified:
+          type: boolean
+        verificationStatus:
+          type: string
+          enum: [pending, verified, rejected, unsubmitted]
+        averageRating:
+          type: ["number", "null"]
+        totalRatings:
+          type: integer
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - specialty
+        - yearsExperience
+        - qualifications
+        - travelRadiusKm
+        - willingToTravel
+        - isVerified
+        - verificationStatus
+        - totalRatings
+        - createdAt
+
+    ProfessionalDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        fullName:
+          type: ["string", "null"]
+        specialty:
+          type: string
+        bio:
+          type: ["string", "null"]
+        yearsExperience:
+          type: integer
+        qualifications:
+          type: string
+        city:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        travelRadiusKm:
+          type: integer
+        willingToTravel:
+          type: boolean
+        isVerified:
+          type: boolean
+        verificationStatus:
+          type: string
+        averageRating:
+          type: ["number", "null"]
+        totalRatings:
+          type: integer
+        phoneBlurred:
+          type: string
+        emailBlurred:
+          type: string
+        isUnlocked:
+          type: boolean
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - specialty
+        - yearsExperience
+        - qualifications
+        - travelRadiusKm
+        - willingToTravel
+        - isVerified
+        - verificationStatus
+        - totalRatings
+        - phoneBlurred
+        - emailBlurred
+        - isUnlocked
+        - createdAt
+
+    ProfessionalSearchResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        fullName:
+          type: ["string", "null"]
+        specialty:
+          type: string
+        bio:
+          type: ["string", "null"]
+        yearsExperience:
+          type: integer
+        city:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        travelRadiusKm:
+          type: integer
+        willingToTravel:
+          type: boolean
+        isVerified:
+          type: boolean
+        verificationStatus:
+          type: string
+        averageRating:
+          type: ["number", "null"]
+        totalRatings:
+          type: integer
+        phoneBlurred:
+          type: string
+        emailBlurred:
+          type: string
+        isUnlocked:
+          type: boolean
+      required:
+        - id
+        - userId
+        - specialty
+        - yearsExperience
+        - travelRadiusKm
+        - willingToTravel
+        - isVerified
+        - verificationStatus
+        - totalRatings
+        - phoneBlurred
+        - emailBlurred
+        - isUnlocked
+
+    SearchProfessionalsResponse:
+      type: object
+      properties:
+        professionals:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfessionalSearchResult"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required:
+        - professionals
+        - total
+        - page
+        - limit
+
+    CreateProfessionalProfileBody:
+      type: object
+      properties:
+        specialty:
+          type: string
+          enum:
+            - shadow_teacher
+            - special_tutor
+            - occupational_therapy
+            - speech_therapy
+            - psychiatrist
+            - developmental_pediatrician
+            - neurologist
+        bio:
+          type: string
+        yearsExperience:
+          type: integer
+        qualifications:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+        travelRadiusKm:
+          type: integer
+        willingToTravel:
+          type: boolean
+        phone:
+          type: string
+        email:
+          type: string
+      required:
+        - specialty
+        - yearsExperience
+        - qualifications
+
+    UpdateProfessionalProfileBody:
+      type: object
+      properties:
+        specialty:
+          type: string
+          enum:
+            - shadow_teacher
+            - special_tutor
+            - occupational_therapy
+            - speech_therapy
+            - psychiatrist
+            - developmental_pediatrician
+            - neurologist
+        bio:
+          type: string
+        yearsExperience:
+          type: integer
+        qualifications:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+        travelRadiusKm:
+          type: integer
+        willingToTravel:
+          type: boolean
+        phone:
+          type: string
+        email:
+          type: string
+
+    Rating:
+      type: object
+      properties:
+        id:
+          type: integer
+        parentId:
+          type: integer
+        professionalId:
+          type: integer
+        score:
+          type: integer
+        comment:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - parentId
+        - professionalId
+        - score
+        - createdAt
+
+    CreateRatingBody:
+      type: object
+      properties:
+        professionalId:
+          type: integer
+        score:
+          type: integer
+        comment:
+          type: string
+      required:
+        - professionalId
+        - score
+
+    UnlockStatus:
+      type: object
+      properties:
+        isUnlocked:
+          type: boolean
+        unlockedAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - isUnlocked
+
+    ContactUnlock:
+      type: object
+      properties:
+        id:
+          type: integer
+        parentId:
+          type: integer
+        professionalId:
+          type: integer
+        professional:
+          $ref: "#/components/schemas/ProfessionalSearchResult"
+        unlockedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - parentId
+        - professionalId
+        - unlockedAt
+
+    CreateUnlockBody:
+      type: object
+      properties:
+        professionalId:
+          type: integer
+      required:
+        - professionalId
+
+    ParentDashboard:
+      type: object
+      properties:
+        totalUnlocks:
+          type: integer
+        recentUnlocks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContactUnlock"
+        hasActiveSubscription:
+          type: boolean
+        subscriptionExpiresAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - totalUnlocks
+        - recentUnlocks
+        - hasActiveSubscription
+
+    ProfessionalDashboard:
+      type: object
+      properties:
+        profile:
+          $ref: "#/components/schemas/ProfessionalProfile"
+        totalViews:
+          type: integer
+        totalUnlocks:
+          type: integer
+        averageRating:
+          type: ["number", "null"]
+        totalRatings:
+          type: integer
+        recentRatings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Rating"
+      required:
+        - totalViews
+        - totalUnlocks
+        - totalRatings
+        - recentRatings
+
+    PlatformStats:
+      type: object
+      properties:
+        totalProfessionals:
+          type: integer
+        totalParents:
+          type: integer
+        totalRatings:
+          type: integer
+        specialtyCounts:
+          type: object
+          additionalProperties:
+            type: integer
+        verifiedCount:
+          type: integer
+      required:
+        - totalProfessionals
+        - totalParents
+        - totalRatings
+        - specialtyCounts
+        - verifiedCount
