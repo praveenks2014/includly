@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
-import { db, contactUnlocksTable, professionalProfilesTable } from "@workspace/db";
+import { eq, and, gt } from "drizzle-orm";
+import { db, contactUnlocksTable, professionalProfilesTable, subscriptionsTable } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import {
   CheckUnlockStatusParams,
@@ -18,6 +18,22 @@ function blurContact(value: string | null | undefined): string {
     return `${local[0]}•••@${domain}`;
   }
   return value.slice(0, 3) + "•".repeat(value.length - 3);
+}
+
+async function hasActiveSubscription(userId: number): Promise<boolean> {
+  const now = new Date();
+  const [sub] = await db
+    .select({ id: subscriptionsTable.id })
+    .from(subscriptionsTable)
+    .where(
+      and(
+        eq(subscriptionsTable.userId, userId),
+        eq(subscriptionsTable.status, "active"),
+        gt(subscriptionsTable.expiresAt, now),
+      ),
+    )
+    .limit(1);
+  return !!sub;
 }
 
 router.get("/unlocks/check/:professionalId", requireAuth, requireRole("parent", "admin"), async (req, res): Promise<void> => {
@@ -38,9 +54,11 @@ router.get("/unlocks/check/:professionalId", requireAuth, requireRole("parent", 
       ),
     );
 
+  const hasSub = !unlock ? await hasActiveSubscription(req.userId!) : false;
+
   res.json(
     CheckUnlockStatusResponse.parse({
-      isUnlocked: !!unlock,
+      isUnlocked: !!unlock || hasSub,
       unlockedAt: unlock?.unlockedAt?.toISOString() ?? null,
     }),
   );
@@ -119,6 +137,16 @@ router.post("/unlocks", requireAuth, requireRole("parent", "admin"), async (req,
 
   if (existing) {
     res.status(400).json({ error: "Contact already unlocked" });
+    return;
+  }
+
+  const hasSub = await hasActiveSubscription(req.userId!);
+  if (!hasSub) {
+    res.status(402).json({
+      error: "Payment required",
+      code: "PAYMENT_REQUIRED",
+      pricingUrl: "/pricing",
+    });
     return;
   }
 

@@ -4,14 +4,20 @@ import {
   useGetMe,
   useGetParentDashboard,
   useGetProfessionalDashboard,
+  useGetMySubscription,
+  useGetPaymentHistory,
+  getGetMySubscriptionQueryKey,
+  getGetPaymentHistoryQueryKey,
   type ParentDashboard,
   type ProfessionalDashboard,
+  type SubscriptionStatus,
+  type PaymentRecord,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel } from "@/lib/specialties";
-import { Loader2, Search, User, BarChart3, Star, Eye, Phone } from "lucide-react";
+import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard } from "lucide-react";
 
 export default function DashboardPage() {
   const { user } = useUser();
@@ -20,6 +26,12 @@ export default function DashboardPage() {
 
   const { data: parentDash, isLoading: parentLoading } = useGetParentDashboard();
   const { data: proDash, isLoading: proLoading } = useGetProfessionalDashboard();
+  const { data: subscription } = useGetMySubscription({
+    query: { enabled: role === "parent", queryKey: getGetMySubscriptionQueryKey() },
+  });
+  const { data: paymentHistory } = useGetPaymentHistory({
+    query: { enabled: role === "parent", queryKey: getGetPaymentHistoryQueryKey() },
+  });
 
   if (meLoading) {
     return (
@@ -42,7 +54,12 @@ export default function DashboardPage() {
         </div>
 
         {role === "parent" && (
-          <ParentDashboard data={parentDash} isLoading={parentLoading} />
+          <ParentDashboard
+            data={parentDash}
+            isLoading={parentLoading}
+            subscription={subscription}
+            paymentHistory={paymentHistory ?? []}
+          />
         )}
         {role === "professional" && (
           <ProfessionalDashboard data={proDash} isLoading={proLoading} />
@@ -57,7 +74,17 @@ export default function DashboardPage() {
   );
 }
 
-function ParentDashboard({ data, isLoading }: { data: ParentDashboard | undefined; isLoading: boolean }) {
+function ParentDashboard({
+  data,
+  isLoading,
+  subscription,
+  paymentHistory,
+}: {
+  data: ParentDashboard | undefined;
+  isLoading: boolean;
+  subscription: SubscriptionStatus | undefined;
+  paymentHistory: PaymentRecord[];
+}) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -66,8 +93,39 @@ function ParentDashboard({ data, isLoading }: { data: ParentDashboard | undefine
     );
   }
 
+  const hasActiveSub = subscription?.hasActiveSubscription ?? false;
+  const sub = subscription?.subscription;
+
   return (
     <div className="space-y-6">
+      {/* Subscription banner */}
+      {!hasActiveSub && (
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="font-semibold text-sm text-foreground">Get unlimited access</p>
+            <p className="text-xs text-muted-foreground">Subscribe for ₹499/30 days or unlock individual contacts for ₹99 each.</p>
+          </div>
+          <Link href="/pricing">
+            <Button size="sm" className="gap-2 shrink-0" data-testid="upgrade-cta">
+              <Sparkles size={14} />
+              See plans
+            </Button>
+          </Link>
+        </div>
+      )}
+
+      {hasActiveSub && sub?.expiresAt && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+          <Sparkles size={18} className="text-green-600 shrink-0" />
+          <div>
+            <p className="font-semibold text-sm text-green-800">Premium active</p>
+            <p className="text-xs text-green-700">
+              Expires {new Date(sub.expiresAt).toLocaleDateString("en-IN", { month: "long", day: "numeric", year: "numeric" })}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Quick stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
@@ -78,7 +136,7 @@ function ParentDashboard({ data, isLoading }: { data: ParentDashboard | undefine
         <StatCard
           icon={<Star size={18} className="text-yellow-500" />}
           label="Subscription"
-          value={data?.hasActiveSubscription ? "Active" : "Free plan"}
+          value={hasActiveSub ? "Premium" : "Free plan"}
         />
         <StatCard
           icon={<Search size={18} className="text-accent" />}
@@ -132,6 +190,36 @@ function ParentDashboard({ data, isLoading }: { data: ParentDashboard | undefine
           )}
         </div>
       </div>
+
+      {/* Payment history */}
+      {paymentHistory.length > 0 && (
+        <div className="bg-card border border-border rounded-xl shadow-sm">
+          <div className="p-5 border-b border-border">
+            <h2 className="font-semibold text-foreground flex items-center gap-2">
+              <CreditCard size={16} className="text-muted-foreground" />
+              Payment history
+            </h2>
+          </div>
+          <div className="p-5">
+            <div className="space-y-3">
+              {paymentHistory.slice(0, 5).map((p) => (
+                <div key={p.id} className="flex items-center justify-between py-2 border-b border-border/60 last:border-0 last:pb-0">
+                  <div>
+                    <p className="text-sm font-medium capitalize">{p.plan.replace(/_/g, " ")}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{p.provider} · {new Date(p.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold">₹{(p.amountPaise / 100).toFixed(0)}</p>
+                    <p className={`text-xs font-medium capitalize ${p.status === "completed" ? "text-green-600" : p.status === "failed" ? "text-red-500" : "text-yellow-600"}`}>
+                      {p.status}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

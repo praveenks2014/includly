@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and } from "drizzle-orm";
 import Stripe from "stripe";
+import crypto from "crypto";
 import { db, paymentsTable, subscriptionsTable, contactUnlocksTable } from "@workspace/db";
 import { activatePayment } from "./payments";
 
@@ -27,8 +28,13 @@ router.post(
         res.status(400).json({ error: "Missing stripe-signature header" });
         return;
       }
+      const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+      if (!rawBody) {
+        res.status(400).json({ error: "Raw body not available for signature verification" });
+        return;
+      }
       try {
-        event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
+        event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
       } catch (err) {
         res.status(400).json({ error: `Webhook signature verification failed: ${(err as Error).message}` });
         return;
@@ -115,6 +121,66 @@ router.post(
 
       default:
         break;
+    }
+
+    res.json({ status: "ok" });
+  },
+);
+
+router.post(
+  "/webhooks/razorpay",
+  async (req: Request, res: Response): Promise<void> => {
+    const webhookSecret = process.env["RAZORPAY_WEBHOOK_SECRET"];
+
+    if (webhookSecret) {
+      const sig = req.headers["x-razorpay-signature"] as string;
+      if (!sig) {
+        res.status(400).json({ error: "Missing x-razorpay-signature header" });
+        return;
+      }
+      const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+      const bodyStr = rawBody ? rawBody.toString() : JSON.stringify(req.body);
+      const expectedSig = crypto.createHmac("sha256", webhookSecret).update(bodyStr).digest("hex");
+      if (expectedSig !== sig) {
+        res.status(400).json({ error: "Invalid webhook signature" });
+        return;
+      }
+    }
+
+    const event = req.body as { event: string; payload: Record<string, unknown> };
+
+    if (event.event === "payment.captured") {
+      const paymentEntity = (event.payload as { payment?: { entity?: Record<string, unknown> } }).payment?.entity;
+      if (!paymentEntity) {
+        res.json({ status: "ok" });
+        return;
+      }
+
+      const orderId = paymentEntity["order_id"] as string | undefined;
+      const razorpayPaymentId = paymentEntity["id"] as string | undefined;
+
+      if (!orderId || !razorpayPaymentId) {
+        res.json({ status: "ok" });
+        return;
+      }
+
+      const [payment] = await db
+        .select()
+        .from(paymentsTable)
+        .where(and(eq(paymentsTable.providerOrderId, orderId), eq(paymentsTable.provider, "razorpay")))
+        .limit(1);
+
+      if (!payment || payment.status === "completed") {
+        res.json({ status: "ok" });
+        return;
+      }
+
+      await db
+        .update(paymentsTable)
+        .set({ status: "completed", providerPaymentId: razorpayPaymentId, updatedAt: new Date() })
+        .where(eq(paymentsTable.id, payment.id));
+
+      await activatePayment(payment.userId, payment.plan, payment.professionalId ?? null, "razorpay");
     }
 
     res.json({ status: "ok" });

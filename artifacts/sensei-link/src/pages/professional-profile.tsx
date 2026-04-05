@@ -55,7 +55,16 @@ export default function ProfessionalProfilePage() {
       queryClient.invalidateQueries({ queryKey: getCheckUnlockStatusQueryKey(professionalId) });
       toast({ title: "Contact unlocked", description: "You can now view their contact details." });
     },
-    onError: () => {
+    onError: (error: unknown) => {
+      const status = (error as { status?: number })?.status;
+      if (status === 402) {
+        toast({
+          title: "Purchase required",
+          description: "Get a plan to view contact details.",
+        });
+        setLocation(`/pricing`);
+        return;
+      }
       toast({ title: "Could not unlock", description: "Please try again.", variant: "destructive" });
     },
   });

@@ -244,16 +244,6 @@ router.post("/payments/razorpay/verify", requireAuth, async (req: Request, res: 
     return;
   }
 
-  const expectedSignature = crypto
-    .createHmac("sha256", keySecret)
-    .update(`${razorpayOrderId}|${razorpayPaymentId}`)
-    .digest("hex");
-
-  if (expectedSignature !== razorpaySignature) {
-    res.status(400).json({ error: "Invalid payment signature" });
-    return;
-  }
-
   const [payment] = await db
     .select()
     .from(paymentsTable)
@@ -265,16 +255,40 @@ router.post("/payments/razorpay/verify", requireAuth, async (req: Request, res: 
     return;
   }
 
+  if (payment.status === "completed") {
+    res.status(400).json({ error: "Payment already processed" });
+    return;
+  }
+
+  if (payment.providerOrderId !== razorpayOrderId) {
+    res.status(400).json({ error: "Order ID mismatch" });
+    return;
+  }
+
+  const expectedSignature = crypto
+    .createHmac("sha256", keySecret)
+    .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+    .digest("hex");
+
+  if (expectedSignature !== razorpaySignature) {
+    res.status(400).json({ error: "Invalid payment signature" });
+    return;
+  }
+
   await db
     .update(paymentsTable)
     .set({ status: "completed", providerPaymentId: razorpayPaymentId, updatedAt: new Date() })
     .where(eq(paymentsTable.id, paymentId));
 
-  const result = await activatePayment(payment.userId, payment.plan, payment.professionalId ?? null);
+  const result = await activatePayment(payment.userId, payment.plan, payment.professionalId ?? null, "razorpay");
 
   res.json({
     success: true,
-    message: "Payment verified and contact unlocked",
+    message: result.isSubscriptionActive
+      ? "Premium subscription activated"
+      : result.unlockedProfessionalId
+        ? "Contact unlocked successfully"
+        : "Payment recorded",
     ...result,
   });
 });
@@ -283,13 +297,14 @@ export async function activatePayment(
   userId: number,
   plan: string,
   professionalId: number | null,
+  provider: "stripe" | "razorpay" = "razorpay",
 ): Promise<{ isSubscriptionActive: boolean; unlockedProfessionalId: number | null }> {
   if (plan === "plan_a_subscription") {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
     await db.insert(subscriptionsTable).values({
       userId,
-      provider: "razorpay",
+      provider,
       plan: "plan_a",
       status: "active",
       startsAt: new Date(),
