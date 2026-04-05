@@ -57,16 +57,25 @@ router.post(
         const userId = parseInt(userIdStr, 10);
         const professionalId = professionalIdStr ? parseInt(professionalIdStr, 10) : null;
 
+        const [existingPayment] = await db
+          .select()
+          .from(paymentsTable)
+          .where(eq(paymentsTable.id, paymentId))
+          .limit(1);
+
+        if (existingPayment?.status === "completed") break;
+
         await db
           .update(paymentsTable)
           .set({
             status: "completed",
-            providerPaymentId: session.payment_intent as string ?? session.id,
+            providerPaymentId: typeof session.payment_intent === "string" ? session.payment_intent : session.id,
             updatedAt: new Date(),
           })
           .where(eq(paymentsTable.id, paymentId));
 
-        await activatePayment(userId, plan, professionalId);
+        const stripeSubId = typeof session.subscription === "string" ? session.subscription : null;
+        await activatePayment(userId, plan, professionalId, "stripe", stripeSubId);
         break;
       }
 
