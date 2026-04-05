@@ -35,11 +35,16 @@ Tables:
 - `professional_profiles` — user_id FK, full_name, specialty (enum), bio, qualifications, years_experience, city, country, lat/lng, travel_radius_km, willing_to_travel, is_verified, verification_status (enum), average_rating, total_ratings, total_views, total_unlocks, phone, email
 - `ratings` — parent_id FK, professional_id FK, score (1-5), comment
 - `contact_unlocks` — parent_id FK, professional_id FK, unlocked_at
+- `payments` — user_id FK, plan (enum), provider (stripe/razorpay), provider_payment_id, provider_order_id, amount_paise, currency, status (pending/completed/failed/refunded), professional_id FK, metadata
+- `subscriptions` — user_id FK, provider, provider_subscription_id, plan, status, starts_at, expires_at
 
 Enums:
 - `specialty`: shadow_teacher, special_tutor, occupational_therapy, speech_therapy, psychiatrist, developmental_pediatrician, neurologist
 - `verification_status`: unsubmitted, pending, verified, rejected
 - `role`: parent, professional, admin
+- `payment_provider`: stripe, razorpay
+- `payment_status`: pending, completed, failed, refunded
+- `payment_plan`: plan_a_subscription, plan_b_per_contact, plan_c_featured
 
 ## Pages
 
@@ -50,12 +55,20 @@ Enums:
 - `/dashboard` — Role-aware dashboard (parent / professional)
 - `/onboard` — Multi-step professional profile creation/edit
 - `/account` — Account settings
+- `/pricing` — Pricing page with Plan A/B/C cards, Razorpay integration
+- `/payment/success` — Post-payment success confirmation
+- `/payment/cancel` — Cancelled payment redirect
 - `/privacy`, `/terms`, `/support` — Compliance pages
 
-## Monetization (TODO)
+## Monetization
 
-- Plan A: 30-day premium subscription (Stripe + Razorpay)
-- Plan B: Pay-per-contact unlock (Stripe + Razorpay)
+- **Plan A** (₹499/30 days): Premium subscription — unlimited contact unlocks for 30 days
+- **Plan B** (₹99/contact): Pay-per-contact — unlock one professional's contact details
+- **Plan C** (₹299/30 days): Featured listing for professionals
+- Payment providers: Razorpay (primary, INR), Stripe (secondary — needs STRIPE_SECRET_KEY)
+- Razorpay: needs `RAZORPAY_KEY_ID` + `RAZORPAY_KEY_SECRET` env secrets
+- Stripe webhook: POST /api/webhooks/stripe (set STRIPE_WEBHOOK_SECRET for signature verification)
+- After payment verified: Plan A creates subscription row, Plan B inserts contact_unlock row
 
 ## Key Commands
 

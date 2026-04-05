@@ -21,22 +21,32 @@ import type {
   ContactUnlock,
   CreateProfessionalProfileBody,
   CreateRatingBody,
+  CreateRazorpayOrderBody,
+  CreateStripeCheckoutBody,
   CreateUnlockBody,
   ErrorResponse,
   HealthStatus,
   ParentDashboard,
+  PaymentPlans,
+  PaymentRecord,
+  PaymentVerifyResult,
   PlatformStats,
   ProfessionalDashboard,
   ProfessionalDetail,
   ProfessionalProfile,
   Rating,
+  RazorpayOrder,
   SearchProfessionalsParams,
   SearchProfessionalsResponse,
   SetRoleBody,
+  StripeCheckoutSession,
+  StripeWebhookBody,
+  SubscriptionStatus,
   UnlockStatus,
   UpdateProfessionalProfileBody,
   UpdateUserBody,
   UserProfile,
+  VerifyRazorpayBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -1453,6 +1463,576 @@ export function useGetPlatformStats<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get available payment plans and prices
+ */
+export const getGetPaymentPlansUrl = () => {
+  return `/api/payments/plans`;
+};
+
+export const getPaymentPlans = async (
+  options?: RequestInit,
+): Promise<PaymentPlans> => {
+  return customFetch<PaymentPlans>(getGetPaymentPlansUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPaymentPlansQueryKey = () => {
+  return [`/api/payments/plans`] as const;
+};
+
+export const getGetPaymentPlansQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPaymentPlans>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPaymentPlans>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPaymentPlansQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPaymentPlans>>> = ({
+    signal,
+  }) => getPaymentPlans({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPaymentPlans>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPaymentPlansQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPaymentPlans>>
+>;
+export type GetPaymentPlansQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get available payment plans and prices
+ */
+
+export function useGetPaymentPlans<
+  TData = Awaited<ReturnType<typeof getPaymentPlans>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPaymentPlans>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPaymentPlansQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get current user's active subscription
+ */
+export const getGetMySubscriptionUrl = () => {
+  return `/api/payments/subscription`;
+};
+
+export const getMySubscription = async (
+  options?: RequestInit,
+): Promise<SubscriptionStatus> => {
+  return customFetch<SubscriptionStatus>(getGetMySubscriptionUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMySubscriptionQueryKey = () => {
+  return [`/api/payments/subscription`] as const;
+};
+
+export const getGetMySubscriptionQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMySubscription>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMySubscription>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMySubscriptionQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMySubscription>>
+  > = ({ signal }) => getMySubscription({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMySubscription>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMySubscriptionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMySubscription>>
+>;
+export type GetMySubscriptionQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get current user's active subscription
+ */
+
+export function useGetMySubscription<
+  TData = Awaited<ReturnType<typeof getMySubscription>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMySubscription>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMySubscriptionQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get user's payment history
+ */
+export const getGetPaymentHistoryUrl = () => {
+  return `/api/payments/history`;
+};
+
+export const getPaymentHistory = async (
+  options?: RequestInit,
+): Promise<PaymentRecord[]> => {
+  return customFetch<PaymentRecord[]>(getGetPaymentHistoryUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPaymentHistoryQueryKey = () => {
+  return [`/api/payments/history`] as const;
+};
+
+export const getGetPaymentHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPaymentHistory>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPaymentHistory>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPaymentHistoryQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPaymentHistory>>
+  > = ({ signal }) => getPaymentHistory({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPaymentHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPaymentHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPaymentHistory>>
+>;
+export type GetPaymentHistoryQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get user's payment history
+ */
+
+export function useGetPaymentHistory<
+  TData = Awaited<ReturnType<typeof getPaymentHistory>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPaymentHistory>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPaymentHistoryQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a Stripe Checkout session
+ */
+export const getCreateStripeCheckoutUrl = () => {
+  return `/api/payments/stripe/checkout`;
+};
+
+export const createStripeCheckout = async (
+  createStripeCheckoutBody: CreateStripeCheckoutBody,
+  options?: RequestInit,
+): Promise<StripeCheckoutSession> => {
+  return customFetch<StripeCheckoutSession>(getCreateStripeCheckoutUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createStripeCheckoutBody),
+  });
+};
+
+export const getCreateStripeCheckoutMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createStripeCheckout>>,
+    TError,
+    { data: BodyType<CreateStripeCheckoutBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createStripeCheckout>>,
+  TError,
+  { data: BodyType<CreateStripeCheckoutBody> },
+  TContext
+> => {
+  const mutationKey = ["createStripeCheckout"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createStripeCheckout>>,
+    { data: BodyType<CreateStripeCheckoutBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createStripeCheckout(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateStripeCheckoutMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createStripeCheckout>>
+>;
+export type CreateStripeCheckoutMutationBody =
+  BodyType<CreateStripeCheckoutBody>;
+export type CreateStripeCheckoutMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Create a Stripe Checkout session
+ */
+export const useCreateStripeCheckout = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createStripeCheckout>>,
+    TError,
+    { data: BodyType<CreateStripeCheckoutBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createStripeCheckout>>,
+  TError,
+  { data: BodyType<CreateStripeCheckoutBody> },
+  TContext
+> => {
+  return useMutation(getCreateStripeCheckoutMutationOptions(options));
+};
+
+/**
+ * @summary Create a Razorpay order
+ */
+export const getCreateRazorpayOrderUrl = () => {
+  return `/api/payments/razorpay/order`;
+};
+
+export const createRazorpayOrder = async (
+  createRazorpayOrderBody: CreateRazorpayOrderBody,
+  options?: RequestInit,
+): Promise<RazorpayOrder> => {
+  return customFetch<RazorpayOrder>(getCreateRazorpayOrderUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createRazorpayOrderBody),
+  });
+};
+
+export const getCreateRazorpayOrderMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createRazorpayOrder>>,
+    TError,
+    { data: BodyType<CreateRazorpayOrderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createRazorpayOrder>>,
+  TError,
+  { data: BodyType<CreateRazorpayOrderBody> },
+  TContext
+> => {
+  const mutationKey = ["createRazorpayOrder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createRazorpayOrder>>,
+    { data: BodyType<CreateRazorpayOrderBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createRazorpayOrder(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateRazorpayOrderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createRazorpayOrder>>
+>;
+export type CreateRazorpayOrderMutationBody = BodyType<CreateRazorpayOrderBody>;
+export type CreateRazorpayOrderMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Create a Razorpay order
+ */
+export const useCreateRazorpayOrder = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createRazorpayOrder>>,
+    TError,
+    { data: BodyType<CreateRazorpayOrderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createRazorpayOrder>>,
+  TError,
+  { data: BodyType<CreateRazorpayOrderBody> },
+  TContext
+> => {
+  return useMutation(getCreateRazorpayOrderMutationOptions(options));
+};
+
+/**
+ * @summary Verify Razorpay payment signature and activate unlock
+ */
+export const getVerifyRazorpayPaymentUrl = () => {
+  return `/api/payments/razorpay/verify`;
+};
+
+export const verifyRazorpayPayment = async (
+  verifyRazorpayBody: VerifyRazorpayBody,
+  options?: RequestInit,
+): Promise<PaymentVerifyResult> => {
+  return customFetch<PaymentVerifyResult>(getVerifyRazorpayPaymentUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(verifyRazorpayBody),
+  });
+};
+
+export const getVerifyRazorpayPaymentMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof verifyRazorpayPayment>>,
+    TError,
+    { data: BodyType<VerifyRazorpayBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof verifyRazorpayPayment>>,
+  TError,
+  { data: BodyType<VerifyRazorpayBody> },
+  TContext
+> => {
+  const mutationKey = ["verifyRazorpayPayment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof verifyRazorpayPayment>>,
+    { data: BodyType<VerifyRazorpayBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return verifyRazorpayPayment(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type VerifyRazorpayPaymentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof verifyRazorpayPayment>>
+>;
+export type VerifyRazorpayPaymentMutationBody = BodyType<VerifyRazorpayBody>;
+export type VerifyRazorpayPaymentMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Verify Razorpay payment signature and activate unlock
+ */
+export const useVerifyRazorpayPayment = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof verifyRazorpayPayment>>,
+    TError,
+    { data: BodyType<VerifyRazorpayBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof verifyRazorpayPayment>>,
+  TError,
+  { data: BodyType<VerifyRazorpayBody> },
+  TContext
+> => {
+  return useMutation(getVerifyRazorpayPaymentMutationOptions(options));
+};
+
+/**
+ * @summary Stripe webhook handler
+ */
+export const getStripeWebhookUrl = () => {
+  return `/api/webhooks/stripe`;
+};
+
+export const stripeWebhook = async (
+  stripeWebhookBody: StripeWebhookBody,
+  options?: RequestInit,
+): Promise<HealthStatus> => {
+  return customFetch<HealthStatus>(getStripeWebhookUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(stripeWebhookBody),
+  });
+};
+
+export const getStripeWebhookMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof stripeWebhook>>,
+    TError,
+    { data: BodyType<StripeWebhookBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof stripeWebhook>>,
+  TError,
+  { data: BodyType<StripeWebhookBody> },
+  TContext
+> => {
+  const mutationKey = ["stripeWebhook"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof stripeWebhook>>,
+    { data: BodyType<StripeWebhookBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return stripeWebhook(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StripeWebhookMutationResult = NonNullable<
+  Awaited<ReturnType<typeof stripeWebhook>>
+>;
+export type StripeWebhookMutationBody = BodyType<StripeWebhookBody>;
+export type StripeWebhookMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Stripe webhook handler
+ */
+export const useStripeWebhook = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof stripeWebhook>>,
+    TError,
+    { data: BodyType<StripeWebhookBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof stripeWebhook>>,
+  TError,
+  { data: BodyType<StripeWebhookBody> },
+  TContext
+> => {
+  return useMutation(getStripeWebhookMutationOptions(options));
+};
 
 /**
  * @summary Get privacy policy content

@@ -19,7 +19,9 @@
     "express": "^5",
     "http-proxy-middleware": "^3.0.5",
     "pino": "^9",
-    "pino-http": "^10"
+    "pino-http": "^10",
+    "razorpay": "^2.9.6",
+    "stripe": "^22.0.0"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

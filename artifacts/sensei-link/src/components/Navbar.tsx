@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, LayoutDashboard, LogOut, User, Menu, X } from "lucide-react";
+import { Search, LayoutDashboard, LogOut, User, Menu, X, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -46,6 +46,12 @@ export function Navbar() {
                 <Button variant="ghost" size="sm" className="gap-2">
                   <Search size={16} />
                   Search
+                </Button>
+              </Link>
+              <Link href="/pricing">
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <Sparkles size={16} />
+                  Pricing
                 </Button>
               </Link>
               <Link href="/dashboard">
@@ -113,6 +119,11 @@ export function Navbar() {
               <Link href="/search" onClick={() => setMobileOpen(false)}>
                 <Button variant="ghost" className="w-full justify-start gap-2">
                   <Search size={16} /> Search
+                </Button>
+              </Link>
+              <Link href="/pricing" onClick={() => setMobileOpen(false)}>
+                <Button variant="ghost" className="w-full justify-start gap-2">
+                  <Sparkles size={16} /> Pricing
                 </Button>
               </Link>
               <Link href="/dashboard" onClick={() => setMobileOpen(false)}>

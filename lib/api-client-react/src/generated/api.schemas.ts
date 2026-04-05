@@ -301,6 +301,108 @@ export interface ComplianceContent {
   content: string;
 }
 
+export interface PaymentPlan {
+  id: string;
+  name: string;
+  description: string;
+  amountPaise: number;
+  currency: string;
+  /** @nullable */
+  durationDays?: number | null;
+  /** @nullable */
+  stripePriceId?: string | null;
+}
+
+export interface PaymentPlans {
+  planA: PaymentPlan;
+  planB: PaymentPlan;
+  planC: PaymentPlan;
+}
+
+export type SubscriptionStatusSubscription = {
+  id?: number;
+  expiresAt?: string;
+  provider?: string;
+  plan?: string;
+} | null;
+
+export interface SubscriptionStatus {
+  hasActiveSubscription: boolean;
+  subscription?: SubscriptionStatusSubscription;
+}
+
+export interface PaymentRecord {
+  id: number;
+  plan: string;
+  provider: string;
+  amountPaise: number;
+  currency: string;
+  status: string;
+  createdAt: string;
+  /** @nullable */
+  professionalId?: number | null;
+}
+
+export type CreateStripeCheckoutBodyPlan =
+  (typeof CreateStripeCheckoutBodyPlan)[keyof typeof CreateStripeCheckoutBodyPlan];
+
+export const CreateStripeCheckoutBodyPlan = {
+  plan_a_subscription: "plan_a_subscription",
+  plan_b_per_contact: "plan_b_per_contact",
+  plan_c_featured: "plan_c_featured",
+} as const;
+
+export interface CreateStripeCheckoutBody {
+  plan: CreateStripeCheckoutBodyPlan;
+  professionalId?: number;
+  successUrl: string;
+  cancelUrl: string;
+}
+
+export interface StripeCheckoutSession {
+  sessionId: string;
+  url: string;
+  paymentId: number;
+}
+
+export type CreateRazorpayOrderBodyPlan =
+  (typeof CreateRazorpayOrderBodyPlan)[keyof typeof CreateRazorpayOrderBodyPlan];
+
+export const CreateRazorpayOrderBodyPlan = {
+  plan_a_subscription: "plan_a_subscription",
+  plan_b_per_contact: "plan_b_per_contact",
+  plan_c_featured: "plan_c_featured",
+} as const;
+
+export interface CreateRazorpayOrderBody {
+  plan: CreateRazorpayOrderBodyPlan;
+  professionalId?: number;
+}
+
+export interface RazorpayOrder {
+  orderId: string;
+  amount: number;
+  currency: string;
+  keyId: string;
+  paymentId: number;
+  planName: string;
+}
+
+export interface VerifyRazorpayBody {
+  razorpayPaymentId: string;
+  razorpayOrderId: string;
+  razorpaySignature: string;
+  paymentId: number;
+}
+
+export interface PaymentVerifyResult {
+  success: boolean;
+  message: string;
+  isSubscriptionActive: boolean;
+  /** @nullable */
+  unlockedProfessionalId?: number | null;
+}
+
 export type SearchProfessionalsParams = {
   specialty?: SearchProfessionalsSpecialty;
   city?: string;
@@ -323,3 +425,5 @@ export const SearchProfessionalsSpecialty = {
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
 } as const;
+
+export type StripeWebhookBody = { [key: string]: unknown };

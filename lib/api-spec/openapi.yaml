@@ -24,6 +24,10 @@ tags:
     description: Dashboard summaries
   - name: compliance
     description: Compliance and legal content
+  - name: payments
+    description: Payment processing (Stripe + Razorpay)
+  - name: webhooks
+    description: Payment webhook handlers
 
 paths:
   /healthz:
@@ -440,6 +444,181 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PlatformStats"
+
+  /payments/plans:
+    get:
+      operationId: getPaymentPlans
+      tags: [payments]
+      summary: Get available payment plans and prices
+      responses:
+        "200":
+          description: Payment plans
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentPlans"
+
+  /payments/subscription:
+    get:
+      operationId: getMySubscription
+      tags: [payments]
+      summary: Get current user's active subscription
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Active subscription or null
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionStatus"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /payments/history:
+    get:
+      operationId: getPaymentHistory
+      tags: [payments]
+      summary: Get user's payment history
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Payment history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaymentRecord"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /payments/stripe/checkout:
+    post:
+      operationId: createStripeCheckout
+      tags: [payments]
+      summary: Create a Stripe Checkout session
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStripeCheckoutBody"
+      responses:
+        "200":
+          description: Stripe checkout session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StripeCheckoutSession"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /payments/razorpay/order:
+    post:
+      operationId: createRazorpayOrder
+      tags: [payments]
+      summary: Create a Razorpay order
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRazorpayOrderBody"
+      responses:
+        "200":
+          description: Razorpay order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RazorpayOrder"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /payments/razorpay/verify:
+    post:
+      operationId: verifyRazorpayPayment
+      tags: [payments]
+      summary: Verify Razorpay payment signature and activate unlock
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyRazorpayBody"
+      responses:
+        "200":
+          description: Payment verified and activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentVerifyResult"
+        "400":
+          description: Signature verification failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /webhooks/stripe:
+    post:
+      operationId: stripeWebhook
+      tags: [webhooks]
+      summary: Stripe webhook handler
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Webhook received
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
 
   /compliance/privacy:
     get:
@@ -982,3 +1161,195 @@ components:
         - title
         - lastUpdated
         - content
+
+    PaymentPlan:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        amountPaise:
+          type: integer
+        currency:
+          type: string
+        durationDays:
+          type: ["integer", "null"]
+        stripePriceId:
+          type: ["string", "null"]
+      required:
+        - id
+        - name
+        - description
+        - amountPaise
+        - currency
+
+    PaymentPlans:
+      type: object
+      properties:
+        planA:
+          $ref: "#/components/schemas/PaymentPlan"
+        planB:
+          $ref: "#/components/schemas/PaymentPlan"
+        planC:
+          $ref: "#/components/schemas/PaymentPlan"
+      required:
+        - planA
+        - planB
+        - planC
+
+    SubscriptionStatus:
+      type: object
+      properties:
+        hasActiveSubscription:
+          type: boolean
+        subscription:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            expiresAt:
+              type: string
+              format: date-time
+            provider:
+              type: string
+            plan:
+              type: string
+      required:
+        - hasActiveSubscription
+
+    PaymentRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        plan:
+          type: string
+        provider:
+          type: string
+        amountPaise:
+          type: integer
+        currency:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        professionalId:
+          type: ["integer", "null"]
+      required:
+        - id
+        - plan
+        - provider
+        - amountPaise
+        - currency
+        - status
+        - createdAt
+
+    CreateStripeCheckoutBody:
+      type: object
+      properties:
+        plan:
+          type: string
+          enum:
+            - plan_a_subscription
+            - plan_b_per_contact
+            - plan_c_featured
+        professionalId:
+          type: integer
+        successUrl:
+          type: string
+        cancelUrl:
+          type: string
+      required:
+        - plan
+        - successUrl
+        - cancelUrl
+
+    StripeCheckoutSession:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        url:
+          type: string
+        paymentId:
+          type: integer
+      required:
+        - sessionId
+        - url
+        - paymentId
+
+    CreateRazorpayOrderBody:
+      type: object
+      properties:
+        plan:
+          type: string
+          enum:
+            - plan_a_subscription
+            - plan_b_per_contact
+            - plan_c_featured
+        professionalId:
+          type: integer
+      required:
+        - plan
+
+    RazorpayOrder:
+      type: object
+      properties:
+        orderId:
+          type: string
+        amount:
+          type: integer
+        currency:
+          type: string
+        keyId:
+          type: string
+        paymentId:
+          type: integer
+        planName:
+          type: string
+      required:
+        - orderId
+        - amount
+        - currency
+        - keyId
+        - paymentId
+        - planName
+
+    VerifyRazorpayBody:
+      type: object
+      properties:
+        razorpayPaymentId:
+          type: string
+        razorpayOrderId:
+          type: string
+        razorpaySignature:
+          type: string
+        paymentId:
+          type: integer
+      required:
+        - razorpayPaymentId
+        - razorpayOrderId
+        - razorpaySignature
+        - paymentId
+
+    PaymentVerifyResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        isSubscriptionActive:
+          type: boolean
+        unlockedProfessionalId:
+          type: ["integer", "null"]
+      required:
+        - success
+        - message
+        - isSubscriptionActive

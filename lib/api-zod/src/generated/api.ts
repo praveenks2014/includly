@@ -473,6 +473,138 @@ export const GetPlatformStatsResponse = zod.object({
 });
 
 /**
+ * @summary Get available payment plans and prices
+ */
+export const GetPaymentPlansResponse = zod.object({
+  planA: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    description: zod.string(),
+    amountPaise: zod.number(),
+    currency: zod.string(),
+    durationDays: zod.number().nullish(),
+    stripePriceId: zod.string().nullish(),
+  }),
+  planB: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    description: zod.string(),
+    amountPaise: zod.number(),
+    currency: zod.string(),
+    durationDays: zod.number().nullish(),
+    stripePriceId: zod.string().nullish(),
+  }),
+  planC: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    description: zod.string(),
+    amountPaise: zod.number(),
+    currency: zod.string(),
+    durationDays: zod.number().nullish(),
+    stripePriceId: zod.string().nullish(),
+  }),
+});
+
+/**
+ * @summary Get current user's active subscription
+ */
+export const GetMySubscriptionResponse = zod.object({
+  hasActiveSubscription: zod.boolean(),
+  subscription: zod
+    .object({
+      id: zod.number().optional(),
+      expiresAt: zod.coerce.date().optional(),
+      provider: zod.string().optional(),
+      plan: zod.string().optional(),
+    })
+    .nullish(),
+});
+
+/**
+ * @summary Get user's payment history
+ */
+export const GetPaymentHistoryResponseItem = zod.object({
+  id: zod.number(),
+  plan: zod.string(),
+  provider: zod.string(),
+  amountPaise: zod.number(),
+  currency: zod.string(),
+  status: zod.string(),
+  createdAt: zod.coerce.date(),
+  professionalId: zod.number().nullish(),
+});
+export const GetPaymentHistoryResponse = zod.array(
+  GetPaymentHistoryResponseItem,
+);
+
+/**
+ * @summary Create a Stripe Checkout session
+ */
+export const CreateStripeCheckoutBody = zod.object({
+  plan: zod.enum([
+    "plan_a_subscription",
+    "plan_b_per_contact",
+    "plan_c_featured",
+  ]),
+  professionalId: zod.number().optional(),
+  successUrl: zod.string(),
+  cancelUrl: zod.string(),
+});
+
+export const CreateStripeCheckoutResponse = zod.object({
+  sessionId: zod.string(),
+  url: zod.string(),
+  paymentId: zod.number(),
+});
+
+/**
+ * @summary Create a Razorpay order
+ */
+export const CreateRazorpayOrderBody = zod.object({
+  plan: zod.enum([
+    "plan_a_subscription",
+    "plan_b_per_contact",
+    "plan_c_featured",
+  ]),
+  professionalId: zod.number().optional(),
+});
+
+export const CreateRazorpayOrderResponse = zod.object({
+  orderId: zod.string(),
+  amount: zod.number(),
+  currency: zod.string(),
+  keyId: zod.string(),
+  paymentId: zod.number(),
+  planName: zod.string(),
+});
+
+/**
+ * @summary Verify Razorpay payment signature and activate unlock
+ */
+export const VerifyRazorpayPaymentBody = zod.object({
+  razorpayPaymentId: zod.string(),
+  razorpayOrderId: zod.string(),
+  razorpaySignature: zod.string(),
+  paymentId: zod.number(),
+});
+
+export const VerifyRazorpayPaymentResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string(),
+  isSubscriptionActive: zod.boolean(),
+  unlockedProfessionalId: zod.number().nullish(),
+});
+
+/**
+ * @summary Stripe webhook handler
+ */
+export const StripeWebhookBody = zod.object({}).passthrough();
+
+export const StripeWebhookResponse = zod.object({
+  status: zod.string(),
+});
+
+/**
  * @summary Get privacy policy content
  */
 export const GetPrivacyPolicyResponse = zod.object({

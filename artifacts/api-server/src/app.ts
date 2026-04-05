@@ -1,9 +1,10 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
 import { CLERK_PROXY_PATH, clerkProxyMiddleware } from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
+import webhooksRouter from "./routes/webhooks";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
@@ -31,11 +32,22 @@ app.use(
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
 app.use(cors({ credentials: true, origin: true }));
-app.use(express.json());
+
+app.use(
+  express.json({
+    verify: (req: Request, _res: Response, buf: Buffer) => {
+      if (req.path === "/api/webhooks/stripe") {
+        (req as Request & { rawBody?: Buffer }).rawBody = buf;
+      }
+    },
+  }),
+);
+
 app.use(express.urlencoded({ extended: true }));
 
 app.use(clerkMiddleware());
 
+app.use("/api", webhooksRouter);
 app.use("/api", router);
 
 export default app;

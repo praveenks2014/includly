@@ -1,0 +1,124 @@
+import { Router, type IRouter, type Request, type Response } from "express";
+import { eq, and } from "drizzle-orm";
+import Stripe from "stripe";
+import { db, paymentsTable, subscriptionsTable, contactUnlocksTable } from "@workspace/db";
+import { activatePayment } from "./payments";
+
+const router: IRouter = Router();
+
+router.post(
+  "/webhooks/stripe",
+  async (req: Request, res: Response): Promise<void> => {
+    const stripeKey = process.env["STRIPE_SECRET_KEY"];
+    const webhookSecret = process.env["STRIPE_WEBHOOK_SECRET"];
+
+    if (!stripeKey) {
+      res.status(503).json({ error: "Stripe not configured" });
+      return;
+    }
+
+    const stripe = new Stripe(stripeKey);
+
+    let event: Stripe.Event;
+
+    if (webhookSecret) {
+      const sig = req.headers["stripe-signature"] as string;
+      if (!sig) {
+        res.status(400).json({ error: "Missing stripe-signature header" });
+        return;
+      }
+      try {
+        event = stripe.webhooks.constructEvent(req.body as Buffer, sig, webhookSecret);
+      } catch (err) {
+        res.status(400).json({ error: `Webhook signature verification failed: ${(err as Error).message}` });
+        return;
+      }
+    } else {
+      event = req.body as Stripe.Event;
+    }
+
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const paymentIdStr = session.metadata?.paymentId;
+        const userIdStr = session.metadata?.userId;
+        const plan = session.metadata?.plan;
+        const professionalIdStr = session.metadata?.professionalId;
+
+        if (!paymentIdStr || !userIdStr || !plan) break;
+
+        const paymentId = parseInt(paymentIdStr, 10);
+        const userId = parseInt(userIdStr, 10);
+        const professionalId = professionalIdStr ? parseInt(professionalIdStr, 10) : null;
+
+        await db
+          .update(paymentsTable)
+          .set({
+            status: "completed",
+            providerPaymentId: session.payment_intent as string ?? session.id,
+            updatedAt: new Date(),
+          })
+          .where(eq(paymentsTable.id, paymentId));
+
+        await activatePayment(userId, plan, professionalId);
+        break;
+      }
+
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const subscriptionId = (invoice as { subscription?: string }).subscription;
+        if (!subscriptionId) break;
+
+        const sub = await stripe.subscriptions.retrieve(subscriptionId);
+        const paymentIdStr = sub.metadata?.["paymentId"];
+        const userIdStr = sub.metadata?.["userId"];
+
+        if (!paymentIdStr || !userIdStr) break;
+
+        const userId = parseInt(userIdStr, 10);
+        const subAny = sub as unknown as { current_period_end?: number; current_period_start?: number };
+        const expiresAt = new Date((subAny.current_period_end ?? 0) * 1000);
+
+        const [existingSub] = await db
+          .select()
+          .from(subscriptionsTable)
+          .where(and(eq(subscriptionsTable.userId, userId), eq(subscriptionsTable.providerSubscriptionId, subscriptionId)))
+          .limit(1);
+
+        if (existingSub) {
+          await db
+            .update(subscriptionsTable)
+            .set({ expiresAt, status: "active" })
+            .where(eq(subscriptionsTable.id, existingSub.id));
+        } else {
+          await db.insert(subscriptionsTable).values({
+            userId,
+            provider: "stripe",
+            providerSubscriptionId: subscriptionId,
+            plan: "plan_a",
+            status: "active",
+            startsAt: new Date((subAny.current_period_start ?? 0) * 1000),
+            expiresAt,
+          });
+        }
+        break;
+      }
+
+      case "customer.subscription.deleted": {
+        const sub = event.data.object as Stripe.Subscription;
+        await db
+          .update(subscriptionsTable)
+          .set({ status: "cancelled" })
+          .where(eq(subscriptionsTable.providerSubscriptionId, sub.id));
+        break;
+      }
+
+      default:
+        break;
+    }
+
+    res.json({ status: "ok" });
+  },
+);
+
+export default router;

@@ -6,6 +6,7 @@ import ratingsRouter from "./ratings";
 import unlocksRouter from "./unlocks";
 import dashboardRouter from "./dashboard";
 import complianceRouter from "./compliance";
+import paymentsRouter from "./payments";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(ratingsRouter);
 router.use(unlocksRouter);
 router.use(dashboardRouter);
 router.use(complianceRouter);
+router.use(paymentsRouter);
 
 export default router;

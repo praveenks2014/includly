@@ -15,6 +15,9 @@ import AccountPage from "@/pages/account";
 import PrivacyPage from "@/pages/privacy";
 import TermsPage from "@/pages/terms";
 import SupportPage from "@/pages/support";
+import PricingPage from "@/pages/pricing";
+import PaymentSuccessPage from "@/pages/payment-success";
+import PaymentCancelPage from "@/pages/payment-cancel";
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
@@ -130,6 +133,9 @@ function Router() {
         <Route path="/account">
           <RequireAuth><AccountPage /></RequireAuth>
         </Route>
+        <Route path="/pricing" component={PricingPage} />
+        <Route path="/payment/success" component={PaymentSuccessPage} />
+        <Route path="/payment/cancel" component={PaymentCancelPage} />
         <Route path="/privacy" component={PrivacyPage} />
         <Route path="/terms" component={TermsPage} />
         <Route path="/support" component={SupportPage} />
