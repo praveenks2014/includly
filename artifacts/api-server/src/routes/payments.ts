@@ -113,6 +113,29 @@ router.post(
       return;
     }
 
+    // Validate redirect URLs are same-origin to prevent open-redirect abuse
+    const allowedOrigins = process.env["ALLOWED_REDIRECT_ORIGINS"]
+      ? process.env["ALLOWED_REDIRECT_ORIGINS"].split(",").map((s) => s.trim())
+      : null;
+
+    function isOriginAllowed(url: string): boolean {
+      try {
+        const parsed = new URL(url);
+        if (allowedOrigins) {
+          return allowedOrigins.some((o) => o === parsed.origin);
+        }
+        // In dev (no env var), allow any https or localhost
+        return parsed.protocol === "https:" || parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+      } catch {
+        return false;
+      }
+    }
+
+    if (!isOriginAllowed(successUrl) || !isOriginAllowed(cancelUrl)) {
+      res.status(400).json({ error: "Invalid redirect URL: must be a trusted origin." });
+      return;
+    }
+
     // Plan C is professional-only
     if (plan === "plan_c_featured" && req.userRole !== "professional" && req.userRole !== "admin") {
       res.status(403).json({ error: "Featured listing is only available to professional accounts." });
@@ -219,7 +242,11 @@ router.get("/payments/stripe/session/:sessionId", requireAuth, async (req: Reque
     }
 
     const paymentId = parseInt(paymentIdStr, 10);
-    const [payment] = await db.select().from(paymentsTable).where(eq(paymentsTable.id, paymentId)).limit(1);
+    const [payment] = await db
+      .select()
+      .from(paymentsTable)
+      .where(and(eq(paymentsTable.id, paymentId), eq(paymentsTable.userId, req.userId!)))
+      .limit(1);
 
     if (!payment) {
       res.status(404).json({ error: "Payment not found" });
