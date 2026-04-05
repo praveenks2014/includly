@@ -1,6 +1,6 @@
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { ClerkProvider, SignIn, SignUp, useClerk } from "@clerk/react";
+import { ClerkProvider, SignIn, SignUp, useClerk, useAuth } from "@clerk/react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, useRef } from "react";
@@ -97,6 +97,21 @@ function SignUpPage() {
   );
 }
 
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { isSignedIn, isLoaded } = useAuth();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      setLocation(`/sign-in?redirect_url=${encodeURIComponent(window.location.pathname)}`);
+    }
+  }, [isLoaded, isSignedIn, setLocation]);
+
+  if (!isLoaded) return null;
+  if (!isSignedIn) return null;
+  return <>{children}</>;
+}
+
 function Router() {
   return (
     <Layout>
@@ -106,9 +121,15 @@ function Router() {
         <Route path="/sign-up/*?" component={SignUpPage} />
         <Route path="/search" component={SearchPage} />
         <Route path="/professionals/:id" component={ProfessionalProfilePage} />
-        <Route path="/dashboard" component={DashboardPage} />
-        <Route path="/onboard" component={OnboardPage} />
-        <Route path="/account" component={AccountPage} />
+        <Route path="/dashboard">
+          <RequireAuth><DashboardPage /></RequireAuth>
+        </Route>
+        <Route path="/onboard">
+          <RequireAuth><OnboardPage /></RequireAuth>
+        </Route>
+        <Route path="/account">
+          <RequireAuth><AccountPage /></RequireAuth>
+        </Route>
         <Route path="/privacy" component={PrivacyPage} />
         <Route path="/terms" component={TermsPage} />
         <Route path="/support" component={SupportPage} />
