@@ -1,0 +1,44 @@
+"Build a comprehensive full-stack marketplace application called 'SenseiLink' (placeholder name) designed for parents to find Shadow Teachers, Special Educators, and Medical Specialists (OT, Speech Therapy, Psychiatrists, Neurologists).
+Core Tech Stack:
+* Frontend: React with Tailwind CSS (Mobile-responsive).
+* Backend: Node.js with Express.
+* Database: PostgreSQL (with Prisma or Supabase).
+* Maps: Google Maps API or Mapbox for geo-radius searching (5km, 10km filters) and travel-willingness markers.
+* Payments: Integration with Stripe (International) and Razorpay (India) for flat-fee searches and contact-unlocking credits.
+User Roles & Features:
+1. Parents: Can search by location and specialty. Basic profiles are visible (Name, Exp, Rating), but contact details (Phone/Email) are blurred until a 'Contact Fee' is paid or a 'Premium Search' plan is active.
+2. Professionals (Shadow Teachers/Doctors): Detailed onboarding including qualification list and PDF certification upload. Include a 'Willingness to Travel' toggle with km-radius settings.
+Key Functionalities:
+* Identity Verification: Integrate a placeholder module for Aadhar API (for India) and a generic ID upload for global users.
+* Monetization (NoBroker Model): >   - Plan A: Pay a flat fee to access the 'Premium Search' dashboard for 30 days.
+    * Plan B: Pay per contact to unlock a specific teacher’s details.
+* Specialized Categories: Dropdown filters for: Shadow Teacher, Special Tutor, OT, Speech Therapy, Psychiatrist, Developmental Pediatrician, Neurologist.
+* Location Logic: Use Haversine formula or Geospatial queries to find professionals within 5km/10km of the parent's coordinates.
+Legal & Compliance:
+* Generate a /privacy-policy and /support route with standard boilerplate for App Store compliance.
+* Implement role-based access control (RBAC) to ensure medical data/certifications are stored securely.
+Design Aesthetic: Professional, empathetic, and high-trust. Use a calming color palette (Blues/Teals/Soft Greys)."
+
+Business & Compliance Strategy
+To make this app successful and compliant with App Store/Google Play rules, keep these points in mind:
+1. Global vs. Local Identity (Aadhar)
+Aadhar is unique to India. For a global app, you should use a KYC (Know Your Customer) provider like Stripe Identity or Sumsub. This allows you to verify Passports, DLs, or National IDs worldwide while using Aadhar specifically for the Indian market.
+2. Data Privacy (HIPAA & GDPR)
+Because you are listing Neurologists and Pediatricians, you may inadvertently handle sensitive health data (PHI).
+* GDPR (Europe): You must allow users to delete their data.
+* HIPAA (USA): If you store medical records or session notes, your database must be HIPAA-compliant (Supabase and AWS offer this).
+* DPDP (India): Ensure you have explicit consent checkboxes for Aadhar and data processing.
+3. Monetization Nuance
+The "NoBroker" model works because it saves users high brokerage fees.
+* Parent Side: Charge for "Verified Contact Unlocks."
+* Professional Side: Keep it free to list initially to build your database, then offer "Featured Listing" spots for a fee.
+
+App Store Requirements
+You mentioned needing URLs for the App Store. Replit will host your app, but you should eventually point a custom domain (e.g., www.yourshadowapp.com) to it.
+Your required routes will be:
+1. Privacy Policy: yourdomain.com/privacy
+    * Must disclose: How you use Aadhar data, how payments are handled, and data retention.
+2. Support URL: yourdomain.com/support
+    * Must include: A contact form or an email address (e.g., support@yourdomain.com).
+3. Terms of Service: yourdomain.com/terms
+    * Must disclose: Refund policies for "Contact Fees" if a teacher is unavailable
