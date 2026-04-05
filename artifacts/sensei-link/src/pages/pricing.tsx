@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { useAuth } from "@clerk/react";
 import {
   useGetPaymentPlans,
@@ -176,7 +176,7 @@ export default function PricingPage() {
                 loadingKey={loadingKey}
                 planId="plan_a_subscription"
               />
-              {/* Plan B — Per contact (parents) */}
+              {/* Plan B — Per contact (parents, must unlock from profile) */}
               <PlanCard
                 plan={plans.planB}
                 icon={<CreditCard size={20} className="text-muted-foreground" />}
@@ -186,11 +186,9 @@ export default function PricingPage() {
                   "Never expires",
                   "Instant access",
                 ]}
-                onRazorpay={() => handleRazorpay("plan_b_per_contact")}
-                onStripe={() => handleStripe("plan_b_per_contact")}
                 loadingKey={loadingKey}
                 planId="plan_b_per_contact"
-                note="Tip: unlock from a specialist's profile for direct one-click payment."
+                profileUnlockOnly
               />
               {/* Plan C — Featured (professionals only, Stripe only) */}
               <PlanCard
@@ -248,6 +246,7 @@ function PlanCard({
   loadingKey,
   planId,
   stripeOnly,
+  profileUnlockOnly,
   note,
 }: {
   plan: PlanDetails;
@@ -262,6 +261,7 @@ function PlanCard({
   loadingKey: string | null;
   planId: string;
   stripeOnly?: boolean;
+  profileUnlockOnly?: boolean;
   note?: string;
 }) {
   const rzpLoading = loadingKey === `rzp-${planId}`;
@@ -307,6 +307,17 @@ function PlanCard({
         <Button className="w-full" disabled>
           {disabledLabel ?? "Unavailable"}
         </Button>
+      ) : profileUnlockOnly ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-muted-foreground/70 italic mb-1">
+            To unlock a specific specialist, click "Unlock" on their profile or in search results.
+          </p>
+          <Link href="/search">
+            <Button className="w-full" variant="outline" data-testid={`cta-browse-${planId}`}>
+              Browse specialists
+            </Button>
+          </Link>
+        </div>
       ) : (
         <div className="flex flex-col gap-2">
           {!stripeOnly && onRazorpay && (

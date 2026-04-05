@@ -20,27 +20,28 @@ router.post(
 
     const stripe = new Stripe(stripeKey);
 
+    if (!webhookSecret) {
+      res.status(400).json({ error: "STRIPE_WEBHOOK_SECRET is not configured. Webhook verification required." });
+      return;
+    }
+
     let event: Stripe.Event;
 
-    if (webhookSecret) {
-      const sig = req.headers["stripe-signature"] as string;
-      if (!sig) {
-        res.status(400).json({ error: "Missing stripe-signature header" });
-        return;
-      }
-      const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
-      if (!rawBody) {
-        res.status(400).json({ error: "Raw body not available for signature verification" });
-        return;
-      }
-      try {
-        event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
-      } catch (err) {
-        res.status(400).json({ error: `Webhook signature verification failed: ${(err as Error).message}` });
-        return;
-      }
-    } else {
-      event = req.body as Stripe.Event;
+    const sig = req.headers["stripe-signature"] as string;
+    if (!sig) {
+      res.status(400).json({ error: "Missing stripe-signature header" });
+      return;
+    }
+    const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+    if (!rawBody) {
+      res.status(400).json({ error: "Raw body not available for signature verification" });
+      return;
+    }
+    try {
+      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+    } catch (err) {
+      res.status(400).json({ error: `Webhook signature verification failed: ${(err as Error).message}` });
+      return;
     }
 
     switch (event.type) {
@@ -141,19 +142,22 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     const webhookSecret = process.env["RAZORPAY_WEBHOOK_SECRET"];
 
-    if (webhookSecret) {
-      const sig = req.headers["x-razorpay-signature"] as string;
-      if (!sig) {
-        res.status(400).json({ error: "Missing x-razorpay-signature header" });
-        return;
-      }
-      const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
-      const bodyStr = rawBody ? rawBody.toString() : JSON.stringify(req.body);
-      const expectedSig = crypto.createHmac("sha256", webhookSecret).update(bodyStr).digest("hex");
-      if (expectedSig !== sig) {
-        res.status(400).json({ error: "Invalid webhook signature" });
-        return;
-      }
+    if (!webhookSecret) {
+      res.status(400).json({ error: "RAZORPAY_WEBHOOK_SECRET is not configured. Webhook verification required." });
+      return;
+    }
+
+    const sig = req.headers["x-razorpay-signature"] as string;
+    if (!sig) {
+      res.status(400).json({ error: "Missing x-razorpay-signature header" });
+      return;
+    }
+    const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+    const bodyStr = rawBody ? rawBody.toString() : JSON.stringify(req.body);
+    const expectedSig = crypto.createHmac("sha256", webhookSecret).update(bodyStr).digest("hex");
+    if (expectedSig !== sig) {
+      res.status(400).json({ error: "Invalid webhook signature" });
+      return;
     }
 
     const event = req.body as { event: string; payload: Record<string, unknown> };
