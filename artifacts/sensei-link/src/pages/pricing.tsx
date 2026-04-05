@@ -6,6 +6,7 @@ import {
   useGetMySubscription,
   useCreateRazorpayOrder,
   useVerifyRazorpayPayment,
+  useCreateStripeCheckout,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,30 +21,43 @@ export default function PricingPage() {
   const { isSignedIn } = useAuth();
   const { toast } = useToast();
 
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
   const { data: plans, isLoading: plansLoading } = useGetPaymentPlans();
   const { data: sub } = useGetMySubscription();
 
-  const { mutateAsync: createOrder, isPending: orderPending } = useCreateRazorpayOrder();
-  const { mutateAsync: verifyPayment, isPending: verifyPending } = useVerifyRazorpayPayment();
+  const { mutateAsync: createOrder } = useCreateRazorpayOrder();
+  const { mutateAsync: verifyPayment } = useVerifyRazorpayPayment();
+  const { mutateAsync: createStripeCheckout } = useCreateStripeCheckout();
 
-  const [activePlan, setActivePlan] = useState<string | null>(null);
-  const isLoading = orderPending || verifyPending;
+  const [loadingKey, setLoadingKey] = useState<string | null>(null);
 
-  async function handleRazorpay(planId: string) {
+  function requireSignIn() {
     if (!isSignedIn) {
       setLocation("/sign-in");
-      return;
+      return false;
     }
+    return true;
+  }
+
+  async function handleRazorpay(planId: string, professionalId?: number) {
+    if (!requireSignIn()) return;
 
     const loaded = await loadRazorpayScript();
     if (!loaded) {
-      toast({ title: "Could not load payment module", description: "Please try again or contact support.", variant: "destructive" });
+      toast({ title: "Could not load payment module", description: "Please try again.", variant: "destructive" });
       return;
     }
 
-    setActivePlan(planId);
+    const key = `rzp-${planId}`;
+    setLoadingKey(key);
     try {
-      const order = await createOrder({ data: { plan: planId as "plan_a_subscription" | "plan_b_per_contact" | "plan_c_featured" } });
+      const order = await createOrder({
+        data: {
+          plan: planId as "plan_a_subscription" | "plan_b_per_contact" | "plan_c_featured",
+          professionalId,
+        },
+      });
 
       const rzp = new window.Razorpay({
         key: order.keyId,
@@ -66,7 +80,7 @@ export default function PricingPage() {
               toast({ title: "Payment successful!", description: result.message });
               setLocation("/payment/success?plan=" + planId);
             } else {
-              toast({ title: "Payment verification failed", description: "Please contact support.", variant: "destructive" });
+              toast({ title: "Verification failed", description: "Please contact support.", variant: "destructive" });
             }
           } catch {
             toast({ title: "Verification error", description: "Please contact support.", variant: "destructive" });
@@ -75,7 +89,7 @@ export default function PricingPage() {
         theme: { color: "#4f46e5" },
         modal: {
           ondismiss: () => {
-            setActivePlan(null);
+            setLoadingKey(null);
             toast({ title: "Payment cancelled", description: "You can try again anytime." });
           },
         },
@@ -86,7 +100,31 @@ export default function PricingPage() {
       const msg = err instanceof Error ? err.message : "Something went wrong";
       toast({ title: "Could not initiate payment", description: msg, variant: "destructive" });
     } finally {
-      setActivePlan(null);
+      setLoadingKey(null);
+    }
+  }
+
+  async function handleStripe(planId: string, professionalId?: number) {
+    if (!requireSignIn()) return;
+
+    const key = `stripe-${planId}`;
+    setLoadingKey(key);
+    try {
+      const origin = window.location.origin;
+      const result = await createStripeCheckout({
+        data: {
+          plan: planId as "plan_a_subscription" | "plan_b_per_contact" | "plan_c_featured",
+          professionalId,
+          successUrl: `${origin}${basePath}/payment/success`,
+          cancelUrl: `${origin}${basePath}/payment/cancel`,
+        },
+      });
+      window.location.href = result.url;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Stripe is not configured.";
+      toast({ title: "Stripe unavailable", description: msg, variant: "destructive" });
+    } finally {
+      setLoadingKey(null);
     }
   }
 
@@ -119,6 +157,7 @@ export default function PricingPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           {plans && (
             <>
+              {/* Plan A — Subscription (parents) */}
               <PlanCard
                 plan={plans.planA}
                 icon={<Zap size={20} className="text-primary" />}
@@ -130,11 +169,14 @@ export default function PricingPage() {
                   "All specialties included",
                   "Download contact info",
                 ]}
-                ctaLabel={hasActiveSub ? "Already subscribed" : "Get Premium"}
-                ctaDisabled={!!hasActiveSub}
-                loading={isLoading && activePlan === "plan_a_subscription"}
-                onCta={() => handleRazorpay("plan_a_subscription")}
+                disabled={!!hasActiveSub}
+                disabledLabel="Already subscribed"
+                onRazorpay={() => handleRazorpay("plan_a_subscription")}
+                onStripe={() => handleStripe("plan_a_subscription")}
+                loadingKey={loadingKey}
+                planId="plan_a_subscription"
               />
+              {/* Plan B — Per contact (parents) */}
               <PlanCard
                 plan={plans.planB}
                 icon={<CreditCard size={20} className="text-muted-foreground" />}
@@ -144,10 +186,13 @@ export default function PricingPage() {
                   "Never expires",
                   "Instant access",
                 ]}
-                ctaLabel="Unlock contact"
-                loading={isLoading && activePlan === "plan_b_per_contact"}
-                onCta={() => handleRazorpay("plan_b_per_contact")}
+                onRazorpay={() => handleRazorpay("plan_b_per_contact")}
+                onStripe={() => handleStripe("plan_b_per_contact")}
+                loadingKey={loadingKey}
+                planId="plan_b_per_contact"
+                note="Tip: unlock from a specialist's profile for direct one-click payment."
               />
+              {/* Plan C — Featured (professionals only, Stripe only) */}
               <PlanCard
                 plan={plans.planC}
                 icon={<Shield size={20} className="text-accent" />}
@@ -158,9 +203,10 @@ export default function PricingPage() {
                   "More parent inquiries",
                   "Build your practice",
                 ]}
-                ctaLabel="Get featured"
-                loading={isLoading && activePlan === "plan_c_featured"}
-                onCta={() => handleRazorpay("plan_c_featured")}
+                onStripe={() => handleStripe("plan_c_featured")}
+                loadingKey={loadingKey}
+                planId="plan_c_featured"
+                stripeOnly
               />
             </>
           )}
@@ -168,7 +214,7 @@ export default function PricingPage() {
 
         <div className="bg-card border border-border rounded-xl p-6 text-center">
           <p className="text-sm text-muted-foreground mb-1">
-            Payments are processed securely via Razorpay. All major UPI apps, cards, and netbanking supported.
+            Payments are processed securely via Razorpay (UPI, cards, netbanking) or Stripe (international cards).
           </p>
           <p className="text-xs text-muted-foreground">
             Need help?{" "}
@@ -195,21 +241,32 @@ function PlanCard({
   highlight,
   badge,
   features,
-  ctaLabel,
-  ctaDisabled,
-  loading,
-  onCta,
+  disabled,
+  disabledLabel,
+  onRazorpay,
+  onStripe,
+  loadingKey,
+  planId,
+  stripeOnly,
+  note,
 }: {
   plan: PlanDetails;
   icon: React.ReactNode;
   highlight?: boolean;
   badge?: string;
   features: string[];
-  ctaLabel: string;
-  ctaDisabled?: boolean;
-  loading?: boolean;
-  onCta: () => void;
+  disabled?: boolean;
+  disabledLabel?: string;
+  onRazorpay?: () => void;
+  onStripe?: () => void;
+  loadingKey: string | null;
+  planId: string;
+  stripeOnly?: boolean;
+  note?: string;
 }) {
+  const rzpLoading = loadingKey === `rzp-${planId}`;
+  const stripeLoading = loadingKey === `stripe-${planId}`;
+
   return (
     <div
       className={`relative bg-card border rounded-2xl p-6 shadow-sm flex flex-col ${
@@ -241,16 +298,43 @@ function PlanCard({
           </li>
         ))}
       </ul>
-      <Button
-        className="w-full"
-        variant={highlight ? "default" : "outline"}
-        disabled={ctaDisabled || loading}
-        onClick={onCta}
-        data-testid={`cta-${plan.id}`}
-      >
-        {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
-        {ctaLabel}
-      </Button>
+
+      {note && (
+        <p className="text-xs text-muted-foreground/70 italic mb-3">{note}</p>
+      )}
+
+      {disabled ? (
+        <Button className="w-full" disabled>
+          {disabledLabel ?? "Unavailable"}
+        </Button>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {!stripeOnly && onRazorpay && (
+            <Button
+              className="w-full"
+              variant={highlight ? "default" : "outline"}
+              disabled={!!loadingKey}
+              onClick={onRazorpay}
+              data-testid={`cta-rzp-${planId}`}
+            >
+              {rzpLoading ? <Loader2 size={14} className="animate-spin mr-2" /> : null}
+              {rzpLoading ? "Processing…" : "Pay via Razorpay"}
+            </Button>
+          )}
+          {onStripe && (
+            <Button
+              className="w-full"
+              variant="outline"
+              disabled={!!loadingKey}
+              onClick={onStripe}
+              data-testid={`cta-stripe-${planId}`}
+            >
+              {stripeLoading ? <Loader2 size={14} className="animate-spin mr-2" /> : null}
+              {stripeLoading ? "Redirecting…" : stripeOnly ? "Pay with Stripe" : "Pay via Stripe (international)"}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
