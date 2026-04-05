@@ -39,7 +39,11 @@ export default function ProfessionalProfilePage() {
   const { data: professional, isLoading } = useGetProfessional(professionalId);
   const { data: ratingsData } = useGetRatingsForProfessional(professionalId);
   const { data: unlockStatus } = useCheckUnlockStatus(professionalId, {
-    query: { enabled: isSignedIn === true, retry: false },
+    query: {
+      enabled: isSignedIn === true,
+      retry: false,
+      queryKey: getCheckUnlockStatusQueryKey(professionalId),
+    },
   });
 
   const isUnlocked = unlockStatus?.isUnlocked ?? false;
@@ -85,7 +89,7 @@ export default function ProfessionalProfilePage() {
 
   const p = professional;
   const specialtyColor = SPECIALTY_COLORS[p.specialty] ?? "bg-gray-100 text-gray-800";
-  const ratings = ratingsData?.ratings ?? [];
+  const ratings = ratingsData ?? [];
 
   return (
     <div className="min-h-screen bg-background">

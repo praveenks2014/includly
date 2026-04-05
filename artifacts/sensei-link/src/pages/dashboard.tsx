@@ -4,9 +4,10 @@ import {
   useGetMe,
   useGetParentDashboard,
   useGetProfessionalDashboard,
+  type ParentDashboard,
+  type ProfessionalDashboard,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel } from "@/lib/specialties";
@@ -56,7 +57,7 @@ export default function DashboardPage() {
   );
 }
 
-function ParentDashboard({ data, isLoading }: { data: any; isLoading: boolean }) {
+function ParentDashboard({ data, isLoading }: { data: ParentDashboard | undefined; isLoading: boolean }) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -109,7 +110,7 @@ function ParentDashboard({ data, isLoading }: { data: any; isLoading: boolean })
             </div>
           ) : (
             <div className="space-y-3">
-              {data.recentUnlocks.map((unlock: any) => (
+              {data.recentUnlocks.map((unlock) => (
                 <div key={unlock.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
                   <div>
                     <p className="font-medium text-sm">{unlock.professional?.fullName ?? "Professional"}</p>
@@ -135,7 +136,7 @@ function ParentDashboard({ data, isLoading }: { data: any; isLoading: boolean })
   );
 }
 
-function ProfessionalDashboard({ data, isLoading }: { data: any; isLoading: boolean }) {
+function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboard | undefined; isLoading: boolean }) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -144,9 +145,9 @@ function ProfessionalDashboard({ data, isLoading }: { data: any; isLoading: bool
     );
   }
 
-  const hasProfile = !!data?.profile;
+  const profile = data?.profile;
 
-  if (!hasProfile) {
+  if (!profile) {
     return (
       <div className="bg-card border border-border rounded-xl p-8 text-center shadow-sm">
         <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -160,8 +161,6 @@ function ProfessionalDashboard({ data, isLoading }: { data: any; isLoading: bool
       </div>
     );
   }
-
-  const profile = data.profile;
 
   return (
     <div className="space-y-6">
@@ -209,7 +208,7 @@ function ProfessionalDashboard({ data, isLoading }: { data: any; isLoading: bool
             <p className="text-muted-foreground text-sm text-center py-4">No reviews yet.</p>
           ) : (
             <div className="space-y-3">
-              {data.recentRatings.map((r: any) => (
+              {data.recentRatings.map((r) => (
                 <div key={r.id} className="pb-3 border-b border-border/60 last:border-0 last:pb-0">
                   <div className="flex items-center gap-2 mb-1">
                     <StarRating value={r.score} size={13} />

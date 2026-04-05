@@ -1,8 +1,12 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useSearchProfessionals, getCreateUnlockMutationOptions } from "@workspace/api-client-react";
+import {
+  useSearchProfessionals,
+  getCreateUnlockMutationOptions,
+  getSearchProfessionalsQueryKey,
+  type SearchProfessionalsSpecialty,
+} from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { getSearchProfessionalsQueryKey } from "@workspace/api-client-react";
 import { ProfessionalCard } from "@/components/ProfessionalCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -36,7 +40,7 @@ export default function SearchPage() {
   const [showFilters, setShowFilters] = useState(false);
 
   const searchParams = {
-    ...(specialty ? { specialty } : {}),
+    ...(specialty ? { specialty: specialty as SearchProfessionalsSpecialty } : {}),
     ...(city ? { city } : {}),
     ...(minExperience ? { minExperience: Number(minExperience) } : {}),
     ...(willingToTravel ? { willingToTravel: true } : {}),

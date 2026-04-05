@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, contactUnlocksTable, professionalProfilesTable } from "@workspace/db";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import {
   CheckUnlockStatusParams,
   CheckUnlockStatusResponse,
@@ -20,7 +20,7 @@ function blurContact(value: string | null | undefined): string {
   return value.slice(0, 3) + "•".repeat(value.length - 3);
 }
 
-router.get("/unlocks/check/:professionalId", requireAuth, async (req, res): Promise<void> => {
+router.get("/unlocks/check/:professionalId", requireAuth, requireRole("parent", "admin"), async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.professionalId) ? req.params.professionalId[0] : req.params.professionalId;
   const params = CheckUnlockStatusParams.safeParse({ professionalId: parseInt(raw, 10) });
   if (!params.success) {
@@ -46,7 +46,7 @@ router.get("/unlocks/check/:professionalId", requireAuth, async (req, res): Prom
   );
 });
 
-router.get("/unlocks", requireAuth, async (req, res): Promise<void> => {
+router.get("/unlocks", requireAuth, requireRole("parent", "admin"), async (req, res): Promise<void> => {
   const unlocks = await db
     .select({
       id: contactUnlocksTable.id,
@@ -98,7 +98,7 @@ router.get("/unlocks", requireAuth, async (req, res): Promise<void> => {
   res.json(GetMyUnlocksResponse.parse(result));
 });
 
-router.post("/unlocks", requireAuth, async (req, res): Promise<void> => {
+router.post("/unlocks", requireAuth, requireRole("parent", "admin"), async (req, res): Promise<void> => {
   const parsed = CreateUnlockBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

@@ -5,6 +5,7 @@ import {
   getCreateProfessionalProfileMutationOptions,
   getUpdateProfessionalProfileMutationOptions,
   getGetMyProfessionalProfileQueryKey,
+  type CreateProfessionalProfileBodySpecialty,
 } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -94,7 +95,7 @@ export default function OnboardPage() {
   function handleSubmit() {
     const payload = {
       fullName: form.fullName,
-      specialty: form.specialty as any,
+      specialty: form.specialty as CreateProfessionalProfileBodySpecialty,
       bio: form.bio,
       qualifications: form.qualifications,
       yearsExperience: Number(form.yearsExperience),

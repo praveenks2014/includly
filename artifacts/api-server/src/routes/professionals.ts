@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, ilike, or } from "drizzle-orm";
-import { db, usersTable, professionalProfilesTable, contactUnlocksTable } from "@workspace/db";
-import { requireAuth, optionalAuth } from "../middlewares/requireAuth";
+import { db, usersTable, professionalProfilesTable, contactUnlocksTable, specialtyEnum } from "@workspace/db";
+import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
 import {
   GetMyProfessionalProfileResponse,
   CreateProfessionalProfileBody,
@@ -12,6 +12,8 @@ import {
   SearchProfessionalsQueryParams,
   SearchProfessionalsResponse,
 } from "@workspace/api-zod";
+
+type SpecialtyValue = (typeof specialtyEnum.enumValues)[number];
 
 const router: IRouter = Router();
 
@@ -38,7 +40,7 @@ router.get("/professionals/me", requireAuth, async (req, res): Promise<void> => 
   res.json(GetMyProfessionalProfileResponse.parse(profile));
 });
 
-router.post("/professionals/me", requireAuth, async (req, res): Promise<void> => {
+router.post("/professionals/me", requireAuth, requireRole("professional", "admin"), async (req, res): Promise<void> => {
   const parsed = CreateProfessionalProfileBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -68,7 +70,7 @@ router.post("/professionals/me", requireAuth, async (req, res): Promise<void> =>
   res.status(201).json(GetMyProfessionalProfileResponse.parse(profile));
 });
 
-router.patch("/professionals/me", requireAuth, async (req, res): Promise<void> => {
+router.patch("/professionals/me", requireAuth, requireRole("professional", "admin"), async (req, res): Promise<void> => {
   const parsed = UpdateProfessionalProfileBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -101,7 +103,7 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
   const conditions = [];
 
   if (specialty) {
-    conditions.push(eq(professionalProfilesTable.specialty, specialty as any));
+    conditions.push(eq(professionalProfilesTable.specialty, specialty as SpecialtyValue));
   }
 
   if (city) {
