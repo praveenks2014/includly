@@ -92,6 +92,19 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
   res.json(UpdateProfessionalProfileResponse.parse(profile));
 });
 
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 router.get("/professionals/search", optionalAuth, async (req, res): Promise<void> => {
   const parsed = SearchProfessionalsQueryParams.safeParse(req.query);
   if (!parsed.success) {
@@ -99,7 +112,7 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
     return;
   }
 
-  const { specialty, city, minExperience, minRating, willingToTravel, page, limit } = parsed.data;
+  const { specialty, city, minExperience, minRating, willingToTravel, lat, lng, radiusKm, page, limit } = parsed.data;
 
   const conditions = [];
 
@@ -133,10 +146,28 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
     .from(professionalProfilesTable)
     .where(conditions.length > 0 ? and(...conditions) : undefined);
 
-  let filtered = allProfiles;
+  type ProfileWithDistance = (typeof allProfiles)[number] & { distanceKm: number | null };
+
+  let filtered: ProfileWithDistance[] = allProfiles.map((p) => ({ ...p, distanceKm: null }));
 
   if (minRating !== undefined) {
     filtered = filtered.filter((p) => p.averageRating !== null && p.averageRating >= minRating);
+  }
+
+  if (lat !== undefined && lng !== undefined && radiusKm !== undefined) {
+    filtered = filtered
+      .map((p) => {
+        if (p.latitude === null || p.latitude === undefined || p.longitude === null || p.longitude === undefined) {
+          return null;
+        }
+        const dist = haversineKm(lat, lng, p.latitude, p.longitude);
+        if (dist <= radiusKm) {
+          return { ...p, distanceKm: Math.round(dist * 10) / 10 };
+        }
+        return null;
+      })
+      .filter((p): p is ProfileWithDistance => p !== null)
+      .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
   }
 
   const total = filtered.length;
@@ -176,6 +207,8 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       yearsExperience: p.yearsExperience,
       city: p.city,
       country: p.country,
+      latitude: p.latitude ?? null,
+      longitude: p.longitude ?? null,
       travelRadiusKm: p.travelRadiusKm,
       willingToTravel: p.willingToTravel,
       isVerified: p.isVerified,
@@ -187,6 +220,7 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       isUnlocked,
       phone: isUnlocked ? p.phone : null,
       email: isUnlocked ? p.email : null,
+      distanceKm: p.distanceKm ?? null,
     };
   });
 

@@ -265,6 +265,24 @@ paths:
           required: false
           schema:
             type: boolean
+        - name: lat
+          in: query
+          required: false
+          schema:
+            type: number
+          description: Latitude for geo-radius search
+        - name: lng
+          in: query
+          required: false
+          schema:
+            type: number
+          description: Longitude for geo-radius search
+        - name: radiusKm
+          in: query
+          required: false
+          schema:
+            type: number
+          description: Search radius in km (used with lat/lng)
         - name: page
           in: query
           required: false
@@ -904,6 +922,10 @@ components:
           type: ["string", "null"]
         country:
           type: ["string", "null"]
+        latitude:
+          type: ["number", "null"]
+        longitude:
+          type: ["number", "null"]
         travelRadiusKm:
           type: integer
         willingToTravel:
@@ -920,8 +942,15 @@ components:
           type: string
         emailBlurred:
           type: string
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
         isUnlocked:
           type: boolean
+        distanceKm:
+          type: ["number", "null"]
+          description: Distance from search location in km (present when lat/lng/radiusKm provided)
       required:
         - id
         - userId
@@ -980,6 +1009,10 @@ components:
           type: string
         country:
           type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
         travelRadiusKm:
           type: integer
         willingToTravel:
@@ -1019,6 +1052,10 @@ components:
           type: string
         country:
           type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
         travelRadiusKm:
           type: integer
         willingToTravel:

@@ -134,6 +134,8 @@ export const CreateProfessionalProfileBody = zod.object({
   qualifications: zod.string(),
   city: zod.string().optional(),
   country: zod.string().optional(),
+  latitude: zod.number().optional(),
+  longitude: zod.number().optional(),
   travelRadiusKm: zod.number().optional(),
   willingToTravel: zod.boolean().optional(),
   phone: zod.string().optional(),
@@ -161,6 +163,8 @@ export const UpdateProfessionalProfileBody = zod.object({
   qualifications: zod.string().optional(),
   city: zod.string().optional(),
   country: zod.string().optional(),
+  latitude: zod.number().optional(),
+  longitude: zod.number().optional(),
   travelRadiusKm: zod.number().optional(),
   willingToTravel: zod.boolean().optional(),
   phone: zod.string().optional(),
@@ -256,6 +260,18 @@ export const SearchProfessionalsQueryParams = zod.object({
   minExperience: zod.coerce.number().optional(),
   minRating: zod.coerce.number().optional(),
   willingToTravel: zod.coerce.boolean().optional(),
+  lat: zod.coerce
+    .number()
+    .optional()
+    .describe("Latitude for geo-radius search"),
+  lng: zod.coerce
+    .number()
+    .optional()
+    .describe("Longitude for geo-radius search"),
+  radiusKm: zod.coerce
+    .number()
+    .optional()
+    .describe("Search radius in km (used with lat\/lng)"),
   page: zod.coerce.number().default(searchProfessionalsQueryPageDefault),
   limit: zod.coerce.number().default(searchProfessionalsQueryLimitDefault),
 });
@@ -271,6 +287,8 @@ export const SearchProfessionalsResponse = zod.object({
       yearsExperience: zod.number(),
       city: zod.string().nullish(),
       country: zod.string().nullish(),
+      latitude: zod.number().nullish(),
+      longitude: zod.number().nullish(),
       travelRadiusKm: zod.number(),
       willingToTravel: zod.boolean(),
       isVerified: zod.boolean(),
@@ -279,7 +297,15 @@ export const SearchProfessionalsResponse = zod.object({
       totalRatings: zod.number(),
       phoneBlurred: zod.string(),
       emailBlurred: zod.string(),
+      phone: zod.string().nullish(),
+      email: zod.string().nullish(),
       isUnlocked: zod.boolean(),
+      distanceKm: zod
+        .number()
+        .nullish()
+        .describe(
+          "Distance from search location in km (present when lat\/lng\/radiusKm provided)",
+        ),
     }),
   ),
   total: zod.number(),
@@ -344,6 +370,8 @@ export const GetMyUnlocksResponseItem = zod.object({
       yearsExperience: zod.number(),
       city: zod.string().nullish(),
       country: zod.string().nullish(),
+      latitude: zod.number().nullish(),
+      longitude: zod.number().nullish(),
       travelRadiusKm: zod.number(),
       willingToTravel: zod.boolean(),
       isVerified: zod.boolean(),
@@ -352,7 +380,15 @@ export const GetMyUnlocksResponseItem = zod.object({
       totalRatings: zod.number(),
       phoneBlurred: zod.string(),
       emailBlurred: zod.string(),
+      phone: zod.string().nullish(),
+      email: zod.string().nullish(),
       isUnlocked: zod.boolean(),
+      distanceKm: zod
+        .number()
+        .nullish()
+        .describe(
+          "Distance from search location in km (present when lat\/lng\/radiusKm provided)",
+        ),
     })
     .optional(),
   unlockedAt: zod.coerce.date(),
@@ -386,6 +422,8 @@ export const GetParentDashboardResponse = zod.object({
           yearsExperience: zod.number(),
           city: zod.string().nullish(),
           country: zod.string().nullish(),
+          latitude: zod.number().nullish(),
+          longitude: zod.number().nullish(),
           travelRadiusKm: zod.number(),
           willingToTravel: zod.boolean(),
           isVerified: zod.boolean(),
@@ -394,7 +432,15 @@ export const GetParentDashboardResponse = zod.object({
           totalRatings: zod.number(),
           phoneBlurred: zod.string(),
           emailBlurred: zod.string(),
+          phone: zod.string().nullish(),
+          email: zod.string().nullish(),
           isUnlocked: zod.boolean(),
+          distanceKm: zod
+            .number()
+            .nullish()
+            .describe(
+              "Distance from search location in km (present when lat\/lng\/radiusKm provided)",
+            ),
         })
         .optional(),
       unlockedAt: zod.coerce.date(),

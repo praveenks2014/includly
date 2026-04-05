@@ -30,9 +30,10 @@ interface ProfessionalCardProps {
   professional: Professional;
   onUnlock?: (id: number) => void;
   unlocking?: boolean;
+  distanceKm?: number;
 }
 
-export function ProfessionalCard({ professional: p, onUnlock, unlocking }: ProfessionalCardProps) {
+export function ProfessionalCard({ professional: p, onUnlock, unlocking, distanceKm }: ProfessionalCardProps) {
   const specialtyColor = SPECIALTY_COLORS[p.specialty] ?? "bg-gray-100 text-gray-800";
   const phone = p.isUnlocked ? p.phone : p.phoneBlurred;
   const email = p.isUnlocked ? p.email : p.emailBlurred;
@@ -92,6 +93,12 @@ export function ProfessionalCard({ professional: p, onUnlock, unlocking }: Profe
             <span className="flex items-center gap-1">
               <Navigation size={12} />
               Travels up to {p.travelRadiusKm}km
+            </span>
+          )}
+          {distanceKm !== undefined && (
+            <span className="flex items-center gap-1 text-primary font-medium">
+              <Navigation size={12} />
+              {distanceKm} km away
             </span>
           )}
         </div>

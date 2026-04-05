@@ -13,6 +13,18 @@ export type SearchProfessionalsParams = {
   minExperience?: number;
   minRating?: number;
   willingToTravel?: boolean;
+  /**
+   * Latitude for geo-radius search
+   */
+  lat?: number;
+  /**
+   * Longitude for geo-radius search
+   */
+  lng?: number;
+  /**
+   * Search radius in km (used with lat/lng)
+   */
+  radiusKm?: number;
   page?: number;
   limit?: number;
 };

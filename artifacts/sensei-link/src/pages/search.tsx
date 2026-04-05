@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useState } from "react";
 import {
   useSearchProfessionals,
   getSearchProfessionalsQueryKey,
@@ -18,14 +17,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Search, SlidersHorizontal, X } from "lucide-react";
+import { Loader2, Search, SlidersHorizontal, X, Map, List, Navigation2 } from "lucide-react";
 import { SPECIALTY_OPTIONS } from "@/lib/specialties";
 import { UnlockPaymentModal } from "@/components/UnlockPaymentModal";
+import { PlacesAutocomplete, type PlaceResult } from "@/components/PlacesAutocomplete";
+import { ProfessionalsMap } from "@/components/ProfessionalsMap";
+
+const RADIUS_OPTIONS = [5, 10, 20, 50, 100];
 
 export default function SearchPage() {
-  const [location] = useLocation();
   const queryClient = useQueryClient();
   const [unlockTarget, setUnlockTarget] = useState<{ id: number; name?: string } | null>(null);
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
 
   const params = new URLSearchParams(
     typeof window !== "undefined" ? window.location.search : ""
@@ -37,15 +40,36 @@ export default function SearchPage() {
   const [willingToTravel, setWillingToTravel] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
+  const [geoLocation, setGeoLocation] = useState<{ lat: number; lng: number; city: string } | null>(null);
+  const [radiusKm, setRadiusKm] = useState(20);
+  const [geoMode, setGeoMode] = useState(false);
+
   const searchParams = {
     ...(specialty ? { specialty: specialty as SearchProfessionalsSpecialty } : {}),
-    ...(city ? { city } : {}),
+    ...(!geoMode && city ? { city } : {}),
     ...(minExperience ? { minExperience: Number(minExperience) } : {}),
     ...(willingToTravel ? { willingToTravel: true } : {}),
-    limit: 20,
+    ...(geoMode && geoLocation
+      ? { lat: geoLocation.lat, lng: geoLocation.lng, radiusKm }
+      : {}),
+    limit: 40,
   };
 
   const { data, isLoading, isFetching } = useSearchProfessionals(searchParams);
+
+  function handlePlaceSelect(place: PlaceResult) {
+    setGeoLocation({ lat: place.lat, lng: place.lng, city: place.city });
+    setCity(place.city);
+    setGeoMode(true);
+  }
+
+  function handleCityTextChange(value: string) {
+    setCity(value);
+    if (geoMode && value !== geoLocation?.city) {
+      setGeoMode(false);
+      setGeoLocation(null);
+    }
+  }
 
   function handleUnlock(professionalId: number, name?: string) {
     setUnlockTarget({ id: professionalId, name });
@@ -61,33 +85,52 @@ export default function SearchPage() {
     setCity("");
     setMinExperience("");
     setWillingToTravel(false);
+    setGeoMode(false);
+    setGeoLocation(null);
   }
 
-  const hasFilters = specialty || city || minExperience || willingToTravel;
+  const hasFilters = specialty || city || minExperience || willingToTravel || geoMode;
   const professionals = data?.professionals ?? [];
 
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-serif font-semibold text-foreground">Find a specialist</h1>
-          <p className="text-muted-foreground mt-1">Search from our network of verified professionals across India.</p>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-serif font-semibold text-foreground">Find a specialist</h1>
+            <p className="text-muted-foreground mt-1">Search from our network of verified professionals across India.</p>
+          </div>
+          <div className="flex items-center bg-muted rounded-lg p-0.5 shrink-0">
+            <button
+              onClick={() => setViewMode("list")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === "list" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              data-testid="view-list"
+            >
+              <List size={15} />
+              List
+            </button>
+            <button
+              onClick={() => setViewMode("map")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === "map" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              data-testid="view-map"
+            >
+              <Map size={15} />
+              Map
+            </button>
+          </div>
         </div>
 
         {/* Search + filter bar */}
         <div className="bg-card border border-border rounded-xl p-4 mb-6 shadow-sm">
           <div className="flex gap-3 flex-wrap">
             <div className="flex-1 min-w-[200px]">
-              <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search by city..."
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  className="pl-9"
-                  data-testid="city-input"
-                />
-              </div>
+              <PlacesAutocomplete
+                value={city}
+                onChange={handleCityTextChange}
+                onPlaceSelect={handlePlaceSelect}
+                placeholder="Search by city or area..."
+                data-testid="city-input"
+              />
             </div>
             <Select value={specialty || "all"} onValueChange={(v) => setSpecialty(v === "all" ? "" : v)}>
               <SelectTrigger className="w-[220px]" data-testid="specialty-select">
@@ -119,7 +162,7 @@ export default function SearchPage() {
           </div>
 
           {showFilters && (
-            <div className="mt-4 pt-4 border-t border-border flex flex-wrap gap-5">
+            <div className="mt-4 pt-4 border-t border-border flex flex-wrap gap-5 items-end">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="min-exp">Min. years experience</Label>
                 <Input
@@ -145,12 +188,68 @@ export default function SearchPage() {
                   <span className="text-sm text-muted-foreground">{willingToTravel ? "Yes" : "Any"}</span>
                 </div>
               </div>
+
+              {geoLocation && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="radius-select">Search radius</Label>
+                  <div className="flex items-center gap-2">
+                    <Navigation2 size={14} className="text-primary" />
+                    <Select
+                      value={radiusKm.toString()}
+                      onValueChange={(v) => {
+                        setRadiusKm(Number(v));
+                        setGeoMode(true);
+                      }}
+                    >
+                      <SelectTrigger className="w-28" data-testid="radius-select">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RADIUS_OPTIONS.map((r) => (
+                          <SelectItem key={r} value={r.toString()}>{r} km</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Switch
+                      checked={geoMode}
+                      onCheckedChange={(v) => setGeoMode(v && !!geoLocation)}
+                      data-testid="geo-toggle"
+                    />
+                    <span className="text-sm text-muted-foreground">Geo search</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {geoMode && geoLocation && (
+            <div className="mt-3 pt-3 border-t border-border flex items-center gap-2 text-sm text-primary">
+              <Navigation2 size={14} />
+              <span>Showing specialists within <strong>{radiusKm} km</strong> of <strong>{geoLocation.city || "selected location"}</strong></span>
             </div>
           )}
         </div>
 
-        {/* Results */}
-        {isLoading || isFetching ? (
+        {/* View */}
+        {viewMode === "map" ? (
+          <div className="relative h-[60vh] min-h-[400px] rounded-xl overflow-hidden border border-border shadow-sm">
+            {isLoading || isFetching ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-muted/60 z-10">
+                <Loader2 size={24} className="animate-spin text-primary" />
+              </div>
+            ) : null}
+            <ProfessionalsMap
+              professionals={professionals}
+              searchLat={geoMode && geoLocation ? geoLocation.lat : undefined}
+              searchLng={geoMode && geoLocation ? geoLocation.lng : undefined}
+              radiusKm={geoMode ? radiusKm : undefined}
+              onMarkerClick={(id) => {
+                const p = professionals.find((pr) => pr.id === id);
+                if (p && !p.isUnlocked) handleUnlock(id, p.fullName ?? undefined);
+              }}
+            />
+          </div>
+        ) : isLoading || isFetching ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 size={24} className="animate-spin text-primary mr-2" />
             <span className="text-muted-foreground">Searching...</span>
@@ -165,7 +264,10 @@ export default function SearchPage() {
           </div>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground mb-4">{professionals.length} specialist{professionals.length !== 1 ? "s" : ""} found</p>
+            <p className="text-sm text-muted-foreground mb-4">
+              {data?.total ?? professionals.length} specialist{(data?.total ?? professionals.length) !== 1 ? "s" : ""} found
+              {geoMode && geoLocation && ` within ${radiusKm} km`}
+            </p>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {professionals.map((p) => (
                 <ProfessionalCard
@@ -173,6 +275,7 @@ export default function SearchPage() {
                   professional={p}
                   onUnlock={(id) => handleUnlock(id, p.fullName ?? undefined)}
                   unlocking={false}
+                  distanceKm={p.distanceKm ?? undefined}
                 />
               ))}
             </div>

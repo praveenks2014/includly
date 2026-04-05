@@ -76,6 +76,7 @@
   },
   "dependencies": {
     "@clerk/react": "^6.1.4",
-    "@stripe/stripe-js": "^9.0.1"
+    "@stripe/stripe-js": "^9.0.1",
+    "@vis.gl/react-google-maps": "^1.8.2"
   }
 }

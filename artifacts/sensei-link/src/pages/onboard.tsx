@@ -23,9 +23,10 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { SPECIALTY_OPTIONS } from "@/lib/specialties";
 import { Loader2, CheckCircle2 } from "lucide-react";
+import { LocationPicker, type PickedLocation } from "@/components/LocationPicker";
 
 const TRAVEL_RADIUS_OPTIONS = [5, 10, 15, 25, 50];
-const STEPS = ["Basic info", "Details", "Contact"];
+const STEPS = ["Basic info", "Details", "Location", "Contact"];
 
 export default function OnboardPage() {
   const [, setLocation] = useLocation();
@@ -42,6 +43,8 @@ export default function OnboardPage() {
     yearsExperience: existingProfile?.yearsExperience?.toString() ?? "0",
     city: existingProfile?.city ?? "",
     country: existingProfile?.country ?? "India",
+    latitude: existingProfile?.latitude ?? undefined as number | undefined,
+    longitude: existingProfile?.longitude ?? undefined as number | undefined,
     willingToTravel: existingProfile?.willingToTravel ?? false,
     travelRadiusKm: existingProfile?.travelRadiusKm?.toString() ?? "10",
     phone: existingProfile?.phone ?? "",
@@ -80,8 +83,18 @@ export default function OnboardPage() {
     );
   }
 
-  function set(field: string, value: string | boolean) {
+  function set(field: string, value: string | boolean | number | undefined) {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function handleLocationChange(loc: PickedLocation) {
+    setForm((prev) => ({
+      ...prev,
+      latitude: loc.lat,
+      longitude: loc.lng,
+      city: loc.city || prev.city,
+      country: loc.country || prev.country,
+    }));
   }
 
   function handleNext() {
@@ -101,6 +114,8 @@ export default function OnboardPage() {
       yearsExperience: Number(form.yearsExperience),
       city: form.city,
       country: form.country,
+      latitude: form.latitude,
+      longitude: form.longitude,
       willingToTravel: form.willingToTravel,
       travelRadiusKm: form.willingToTravel ? Number(form.travelRadiusKm) : undefined,
       phone: form.phone,
@@ -205,30 +220,6 @@ export default function OnboardPage() {
                   data-testid="input-qualifications"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="city">City</Label>
-                  <Input
-                    id="city"
-                    value={form.city}
-                    onChange={(e) => set("city", e.target.value)}
-                    placeholder="Mumbai"
-                    className="mt-1"
-                    data-testid="input-city"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="country">Country</Label>
-                  <Input
-                    id="country"
-                    value={form.country}
-                    onChange={(e) => set("country", e.target.value)}
-                    placeholder="India"
-                    className="mt-1"
-                    data-testid="input-country"
-                  />
-                </div>
-              </div>
               <div className="flex items-center justify-between py-2">
                 <div>
                   <Label>Willing to travel</Label>
@@ -258,8 +249,48 @@ export default function OnboardPage() {
             </div>
           )}
 
-          {/* Step 2: Contact */}
+          {/* Step 2: Location */}
           {step === 2 && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Pin your location so parents can find you on the map and in nearby searches.
+              </p>
+              <LocationPicker
+                lat={form.latitude}
+                lng={form.longitude}
+                city={form.city}
+                country={form.country}
+                onLocationChange={handleLocationChange}
+              />
+              <div className="grid grid-cols-2 gap-4 mt-2">
+                <div>
+                  <Label htmlFor="city">City</Label>
+                  <Input
+                    id="city"
+                    value={form.city}
+                    onChange={(e) => set("city", e.target.value)}
+                    placeholder="Mumbai"
+                    className="mt-1"
+                    data-testid="input-city"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="country">Country</Label>
+                  <Input
+                    id="country"
+                    value={form.country}
+                    onChange={(e) => set("country", e.target.value)}
+                    placeholder="India"
+                    className="mt-1"
+                    data-testid="input-country"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Contact */}
+          {step === 3 && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground bg-muted/50 rounded-lg p-3 border border-border">
                 Your contact details will only be visible to parents who unlock your profile.

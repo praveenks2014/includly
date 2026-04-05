@@ -19,6 +19,10 @@ export interface ProfessionalSearchResult {
   city?: string | null;
   /** @nullable */
   country?: string | null;
+  /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
   travelRadiusKm: number;
   willingToTravel: boolean;
   isVerified: boolean;
@@ -28,5 +32,14 @@ export interface ProfessionalSearchResult {
   totalRatings: number;
   phoneBlurred: string;
   emailBlurred: string;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
   isUnlocked: boolean;
+  /**
+   * Distance from search location in km (present when lat/lng/radiusKm provided)
+   * @nullable
+   */
+  distanceKm?: number | null;
 }

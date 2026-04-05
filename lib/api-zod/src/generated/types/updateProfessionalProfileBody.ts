@@ -15,6 +15,8 @@ export interface UpdateProfessionalProfileBody {
   qualifications?: string;
   city?: string;
   country?: string;
+  latitude?: number;
+  longitude?: number;
   travelRadiusKm?: number;
   willingToTravel?: boolean;
   phone?: string;
