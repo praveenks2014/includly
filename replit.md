@@ -42,7 +42,7 @@ Tables:
 - `identity_verifications` — professional_id FK, document_type (aadhar/passport/driving_licence/national_id), file_key (object storage path), status (pending/verified/rejected), dpdp_consent, submitted_at, reviewed_at
 
 Enums:
-- `specialty`: shadow_teacher, special_tutor, occupational_therapy, speech_therapy, psychiatrist, developmental_pediatrician, neurologist
+- `specialty`: shadow_teacher, special_tutor, occupational_therapy, speech_therapy, psychiatrist, developmental_pediatrician, neurologist, therapy_centre
 - `verification_status`: unsubmitted, pending, verified, rejected
 - `id_document_type`: aadhar, passport, driving_licence, national_id
 - `id_verification_status`: pending, verified, rejected

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useGetPlatformStats } from "@workspace/api-client-react";
 import { getSpecialtyLabel } from "@/lib/specialties";
-import { Search, ShieldCheck, Heart, ArrowRight } from "lucide-react";
+import { Search, ShieldCheck, Heart, ArrowRight, Stethoscope, Building2, UserCheck } from "lucide-react";
 
 const SPECIALTIES = [
   { value: "shadow_teacher", icon: "👨‍🏫" },
@@ -130,6 +130,55 @@ export default function HomePage() {
               <p className="text-sm text-muted-foreground">Read honest reviews from other parents who've worked with each specialist.</p>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Join as Professional / Therapy Centre */}
+      <section className="py-16 px-4">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-10">
+            <h2 className="text-2xl font-serif font-semibold text-foreground mb-2">Are you a specialist or therapy centre?</h2>
+            <p className="text-muted-foreground">Join thousands of professionals already helping families through Sproutly.</p>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-6">
+            <div className="bg-card border border-border rounded-xl p-6 flex flex-col gap-3 hover:border-primary/40 hover:shadow-sm transition-all">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <UserCheck size={20} className="text-blue-600" />
+              </div>
+              <h3 className="font-semibold text-foreground">Individual Specialist</h3>
+              <p className="text-sm text-muted-foreground flex-1">Shadow Teachers, Special Tutors, Speech Therapists, OTs, and more. One-time ₹999 listing fee.</p>
+              <Link href="/sign-up">
+                <Button className="w-full" size="sm">Get listed →</Button>
+              </Link>
+            </div>
+            <div className="bg-card border border-primary/30 rounded-xl p-6 flex flex-col gap-3 hover:shadow-sm transition-all ring-1 ring-primary/20">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <Building2 size={20} className="text-purple-600" />
+              </div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-foreground">Therapy Centre</h3>
+                <Badge variant="secondary" className="text-xs">₹499/mo</Badge>
+              </div>
+              <p className="text-sm text-muted-foreground flex-1">ABA centres, multi-discipline therapy hubs, and special education centres. Monthly subscription with premium placement.</p>
+              <Link href="/sign-up">
+                <Button className="w-full" size="sm" variant="outline">Register centre →</Button>
+              </Link>
+            </div>
+            <div className="bg-card border border-border rounded-xl p-6 flex flex-col gap-3 hover:border-primary/40 hover:shadow-sm transition-all">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <Stethoscope size={20} className="text-green-600" />
+              </div>
+              <h3 className="font-semibold text-foreground">Medical Specialist</h3>
+              <p className="text-sm text-muted-foreground flex-1">Neurologists, Psychiatrists, Developmental Pediatricians. Monthly ₹499 subscription with premium listing.</p>
+              <Link href="/sign-up">
+                <Button className="w-full" size="sm" variant="outline">Join as specialist →</Button>
+              </Link>
+            </div>
+          </div>
+          <p className="text-center text-xs text-muted-foreground mt-6">
+            Already have an account?{" "}
+            <Link href="/sign-in" className="text-primary hover:underline">Sign in</Link> and go to your dashboard to set up your profile.
+          </p>
         </div>
       </section>
 

@@ -73,6 +73,8 @@ export default function OnboardPage() {
     email: existingProfile?.email ?? "",
     pricingMinINR: existingProfile?.pricingMinINR?.toString() ?? "",
     pricingMaxINR: existingProfile?.pricingMaxINR?.toString() ?? "",
+    centreRegistrationNo: "",
+    numTherapists: "",
   });
 
   const { mutateAsync: createOrderAsync } = useCreateRazorpayOrder();
@@ -140,11 +142,20 @@ export default function OnboardPage() {
   }
 
   function handleSubmit() {
+    // For therapy centres, append registration number and therapist count into qualifications
+    const qualificationsValue = isTherapyCentre
+      ? [
+          form.qualifications,
+          form.numTherapists ? `Staff: ${form.numTherapists} therapists` : "",
+          form.centreRegistrationNo ? `Reg. No: ${form.centreRegistrationNo}` : "",
+        ].filter(Boolean).join(" | ")
+      : form.qualifications;
+
     const payload = {
       fullName: form.fullName,
       specialty: form.specialty as CreateProfessionalProfileBodySpecialty,
       bio: form.bio,
-      qualifications: form.qualifications,
+      qualifications: qualificationsValue,
       yearsExperience: Number(form.yearsExperience),
       city: form.city,
       country: form.country,
@@ -175,7 +186,7 @@ export default function OnboardPage() {
     setPaymentLoading(true);
     try {
       const order = await createOrderAsync({
-        data: { plan: "plan_d_pro_onetime" },
+        data: { plan: activationPlan as "plan_d_pro_onetime" | "plan_e_pro_monthly" },
       });
 
       const rzp = new window.Razorpay({
@@ -264,6 +275,12 @@ export default function OnboardPage() {
   const isActivationStep = step === 6;
   const alreadyActivated = existingProfile?.paymentActivated ?? false;
 
+  const isTherapyCentre = form.specialty === "therapy_centre";
+  const isPremiumPlan = ["therapy_centre", "neurologist"].includes(form.specialty);
+  const activationPlan = isPremiumPlan ? "plan_e_pro_monthly" : "plan_d_pro_onetime";
+  const activationAmount = isPremiumPlan ? "₹499/month" : "₹999";
+  const activationLabel = isPremiumPlan ? "Monthly subscription — renews every 30 days" : "One-time payment";
+
   const stepsToShow = existingProfile && alreadyActivated ? STEPS.slice(0, 5) : STEPS;
 
   return (
@@ -291,18 +308,9 @@ export default function OnboardPage() {
           {step === 0 && (
             <div className="space-y-4">
               <div>
-                <Label htmlFor="fullName">Full name</Label>
-                <Input
-                  id="fullName"
-                  value={form.fullName}
-                  onChange={(e) => set("fullName", e.target.value)}
-                  placeholder="Dr. Priya Sharma"
-                  className="mt-1"
-                  data-testid="input-fullName"
-                />
-              </div>
-              <div>
-                <Label htmlFor="specialty">Specialty</Label>
+                <Label htmlFor="specialty">
+                  {isTherapyCentre ? "Centre type" : "Specialty"}
+                </Label>
                 <Select value={form.specialty} onValueChange={(v) => set("specialty", v)}>
                   <SelectTrigger className="mt-1" data-testid="select-specialty">
                     <SelectValue placeholder="Select your specialty" />
@@ -315,18 +323,49 @@ export default function OnboardPage() {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="yearsExperience">Years of experience</Label>
+                <Label htmlFor="fullName">
+                  {isTherapyCentre ? "Centre name" : "Full name"}
+                </Label>
                 <Input
-                  id="yearsExperience"
-                  type="number"
-                  min={0}
-                  max={60}
-                  value={form.yearsExperience}
-                  onChange={(e) => set("yearsExperience", e.target.value)}
+                  id="fullName"
+                  value={form.fullName}
+                  onChange={(e) => set("fullName", e.target.value)}
+                  placeholder={isTherapyCentre ? "e.g. Bloom Therapy Centre" : "Dr. Priya Sharma"}
                   className="mt-1"
-                  data-testid="input-yearsExperience"
+                  data-testid="input-fullName"
                 />
               </div>
+              {!isTherapyCentre && (
+                <div>
+                  <Label htmlFor="yearsExperience">Years of experience</Label>
+                  <Input
+                    id="yearsExperience"
+                    type="number"
+                    min={0}
+                    max={60}
+                    value={form.yearsExperience}
+                    onChange={(e) => set("yearsExperience", e.target.value)}
+                    className="mt-1"
+                    data-testid="input-yearsExperience"
+                  />
+                </div>
+              )}
+              {isTherapyCentre && (
+                <div>
+                  <Label htmlFor="yearsExperience">Years in operation</Label>
+                  <Input
+                    id="yearsExperience"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={form.yearsExperience}
+                    onChange={(e) => set("yearsExperience", e.target.value)}
+                    placeholder="e.g. 5"
+                    className="mt-1"
+                    data-testid="input-yearsExperience"
+                  />
+                </div>
+              )}
             </div>
           )}
 
@@ -334,52 +373,103 @@ export default function OnboardPage() {
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <Label htmlFor="bio">Bio</Label>
+                <Label htmlFor="bio">
+                  {isTherapyCentre ? "About your centre" : "Bio"}
+                </Label>
                 <Textarea
                   id="bio"
                   value={form.bio}
                   onChange={(e) => set("bio", e.target.value)}
-                  placeholder="Tell parents about your approach, methods, and experience..."
+                  placeholder={
+                    isTherapyCentre
+                      ? "Describe your centre's mission, facilities, and approach to therapy..."
+                      : "Tell parents about your approach, methods, and experience..."
+                  }
                   className="mt-1 min-h-[120px]"
                   data-testid="input-bio"
                 />
               </div>
               <div>
-                <Label htmlFor="qualifications">Qualifications</Label>
+                <Label htmlFor="qualifications">
+                  {isTherapyCentre ? "Therapies & services offered" : "Qualifications"}
+                </Label>
                 <Textarea
                   id="qualifications"
                   value={form.qualifications}
                   onChange={(e) => set("qualifications", e.target.value)}
-                  placeholder="B.Ed Special Education, ASHA Certified, etc."
+                  placeholder={
+                    isTherapyCentre
+                      ? "ABA Therapy, Speech Therapy, Occupational Therapy, Behaviour Intervention..."
+                      : "B.Ed Special Education, ASHA Certified, etc."
+                  }
                   className="mt-1 min-h-[80px]"
                   data-testid="input-qualifications"
                 />
               </div>
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <Label>Willing to travel</Label>
-                  <p className="text-xs text-muted-foreground">Do you offer home visits or travel to clients?</p>
-                </div>
-                <Switch
-                  checked={form.willingToTravel}
-                  onCheckedChange={(v) => set("willingToTravel", v)}
-                  data-testid="switch-travel"
-                />
-              </div>
-              {form.willingToTravel && (
-                <div>
-                  <Label htmlFor="travelRadius">Travel radius</Label>
-                  <Select value={form.travelRadiusKm} onValueChange={(v) => set("travelRadiusKm", v)}>
-                    <SelectTrigger className="mt-1" data-testid="select-travel-radius">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TRAVEL_RADIUS_OPTIONS.map((r) => (
-                        <SelectItem key={r} value={r.toString()}>{r} km</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+
+              {isTherapyCentre && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="numTherapists">No. of therapists</Label>
+                      <Input
+                        id="numTherapists"
+                        type="number"
+                        min={1}
+                        value={form.numTherapists}
+                        onChange={(e) => set("numTherapists", e.target.value)}
+                        placeholder="e.g. 8"
+                        className="mt-1"
+                        data-testid="input-numTherapists"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="centreRegistrationNo">Registration No. <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                      <Input
+                        id="centreRegistrationNo"
+                        value={form.centreRegistrationNo}
+                        onChange={(e) => set("centreRegistrationNo", e.target.value)}
+                        placeholder="e.g. MH/TC/2020/1234"
+                        className="mt-1"
+                        data-testid="input-centreRegistrationNo"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Registration number will be shown on your centre's profile page to build parent trust.
+                  </p>
+                </>
+              )}
+
+              {!isTherapyCentre && (
+                <>
+                  <div className="flex items-center justify-between py-2">
+                    <div>
+                      <Label>Willing to travel</Label>
+                      <p className="text-xs text-muted-foreground">Do you offer home visits or travel to clients?</p>
+                    </div>
+                    <Switch
+                      checked={form.willingToTravel}
+                      onCheckedChange={(v) => set("willingToTravel", v)}
+                      data-testid="switch-travel"
+                    />
+                  </div>
+                  {form.willingToTravel && (
+                    <div>
+                      <Label htmlFor="travelRadius">Travel radius</Label>
+                      <Select value={form.travelRadiusKm} onValueChange={(v) => set("travelRadiusKm", v)}>
+                        <SelectTrigger className="mt-1" data-testid="select-travel-radius">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TRAVEL_RADIUS_OPTIONS.map((r) => (
+                            <SelectItem key={r} value={r.toString()}>{r} km</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -623,27 +713,46 @@ export default function OnboardPage() {
               {alreadyActivated || paymentDone ? (
                 <div className="text-center py-4">
                   <CheckCircle2 size={48} className="text-green-500 mx-auto mb-3" />
-                  <h3 className="text-lg font-semibold text-foreground mb-1">Profile is Live!</h3>
-                  <p className="text-muted-foreground text-sm">Your profile is active and visible to parents.</p>
+                  <h3 className="text-lg font-semibold text-foreground mb-1">
+                    {isTherapyCentre ? "Centre is Live!" : "Profile is Live!"}
+                  </h3>
+                  <p className="text-muted-foreground text-sm">
+                    {isTherapyCentre
+                      ? "Your centre is active and visible to families searching for therapy services."
+                      : "Your profile is active and visible to parents."}
+                  </p>
                 </div>
               ) : (
                 <>
                   <div className="text-center py-2">
-                    <h3 className="text-lg font-semibold text-foreground mb-2">Activate Your Profile</h3>
+                    <h3 className="text-lg font-semibold text-foreground mb-2">
+                      {isTherapyCentre ? "Activate Your Centre Listing" : "Activate Your Profile"}
+                    </h3>
                     <p className="text-muted-foreground text-sm mb-4">
-                      A one-time listing fee of ₹999 is required to make your profile live and visible to parents searching for specialists.
+                      {isPremiumPlan
+                        ? `A monthly subscription of ${activationAmount} is required to keep your listing active and visible to families.`
+                        : `A one-time listing fee of ${activationAmount} is required to make your profile live and visible to parents.`}
                     </p>
                   </div>
                   <div className="bg-muted/40 border border-border rounded-xl p-5 space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-foreground">Professional Listing Fee</span>
-                      <span className="text-lg font-bold text-foreground">₹999</span>
+                      <span className="text-sm font-medium text-foreground">
+                        {isTherapyCentre ? "Therapy Centre Listing" : isPremiumPlan ? "Premium Listing" : "Professional Listing Fee"}
+                      </span>
+                      <span className="text-lg font-bold text-foreground">{activationAmount}</span>
                     </div>
                     <ul className="space-y-1.5 text-sm text-muted-foreground">
-                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> One-time payment</li>
-                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> Profile goes live immediately</li>
-                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> Visible to parents searching in your city</li>
-                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> No recurring charges</li>
+                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> {activationLabel}</li>
+                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> Listing goes live immediately</li>
+                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" />
+                        {isTherapyCentre ? "Visible to families searching in your area" : "Visible to parents searching in your city"}
+                      </li>
+                      {isPremiumPlan && (
+                        <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> Premium placement in search results</li>
+                      )}
+                      {!isPremiumPlan && (
+                        <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> No recurring charges</li>
+                      )}
                     </ul>
                   </div>
                   <Button
@@ -653,7 +762,9 @@ export default function OnboardPage() {
                     data-testid="pay-listing-fee-btn"
                   >
                     {paymentLoading ? <Loader2 size={15} className="animate-spin" /> : <IndianRupee size={15} />}
-                    {paymentLoading ? "Processing…" : "Pay ₹999 & Activate Profile"}
+                    {paymentLoading
+                      ? "Processing…"
+                      : `Pay ${activationAmount} & Activate ${isTherapyCentre ? "Centre" : "Profile"}`}
                   </Button>
                   <p className="text-xs text-center text-muted-foreground">
                     Secured by Razorpay. UPI, cards & netbanking accepted.
@@ -664,7 +775,7 @@ export default function OnboardPage() {
                     className="w-full text-muted-foreground"
                     onClick={() => setLocation("/dashboard")}
                   >
-                    Skip for now (profile won't be visible)
+                    Skip for now ({isTherapyCentre ? "centre" : "profile"} won't be visible)
                   </Button>
                 </>
               )}

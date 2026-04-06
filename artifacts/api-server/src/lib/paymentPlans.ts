@@ -29,7 +29,7 @@ export const PLANS = {
   plan_d_pro_onetime: {
     id: "plan_d_pro_onetime",
     name: "Professional Listing Fee (One-time)",
-    description: "One-time fee to activate your professional profile and get listed on SenseiLink.",
+    description: "One-time fee to activate your professional profile and get listed on Sproutly.",
     amountPaise: 99900,
     currency: "INR",
     durationDays: null,
