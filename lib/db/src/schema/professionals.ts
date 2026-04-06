@@ -11,6 +11,7 @@ export const specialtyEnum = pgEnum("specialty", [
   "psychiatrist",
   "developmental_pediatrician",
   "neurologist",
+  "therapy_centre",
 ]);
 
 export const verificationStatusEnum = pgEnum("verification_status", [

@@ -40,7 +40,7 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
     }
     const script = document.createElement("script");
     script.id = "google-maps-script";
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`;
     script.async = true;
     script.defer = true;
     script.onload = () => resolve();
@@ -62,6 +62,15 @@ async function reverseGeocode(lat: number, lng: number): Promise<{ city: string;
   return { city, country };
 }
 
+type GmpPlaceSelectEvent = Event & {
+  place: {
+    fetchFields: (opts: { fields: string[] }) => Promise<void>;
+    location?: google.maps.LatLng;
+    displayName?: string;
+    addressComponents?: Array<{ types: string[]; longText: string }>;
+  };
+};
+
 export function LocationPicker({ lat, lng, city, country, onLocationChange }: LocationPickerProps) {
   const [mapsReady, setMapsReady] = useState(false);
   const [detecting, setDetecting] = useState(false);
@@ -69,7 +78,9 @@ export function LocationPicker({ lat, lng, city, country, onLocationChange }: Lo
     lat != null && lng != null ? { lat, lng } : null,
   );
   const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(false);
+  const [useNewApi, setUseNewApi] = useState(false);
 
   useEffect(() => {
     if (!GOOGLE_MAPS_KEY) return;
@@ -79,25 +90,60 @@ export function LocationPicker({ lat, lng, city, country, onLocationChange }: Lo
   }, []);
 
   useEffect(() => {
-    if (!mapsReady || !inputRef.current || autocompleteRef.current) return;
-    const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
-      types: ["(cities)"],
-      fields: ["geometry", "name", "address_components"],
-    });
-    ac.addListener("place_changed", async () => {
-      const place = ac.getPlace();
-      if (!place.geometry?.location) return;
-      const newLat = place.geometry.location.lat();
-      const newLng = place.geometry.location.lng();
-      setMarkerPos({ lat: newLat, lng: newLng });
-      const comps = place.address_components ?? [];
-      const newCity =
-        comps.find((c) => c.types.includes("locality"))?.long_name ?? place.name ?? "";
-      const newCountry =
-        comps.find((c) => c.types.includes("country"))?.long_name ?? "India";
-      onLocationChange({ lat: newLat, lng: newLng, city: newCity, country: newCountry });
-    });
-    autocompleteRef.current = ac;
+    if (!mapsReady || mountedRef.current) return;
+
+    const places = window.google?.maps?.places as unknown as Record<string, unknown> | undefined;
+    const PlaceAutocompleteElement = places?.["PlaceAutocompleteElement"] as
+      | (new (opts: object) => HTMLElement & EventTarget)
+      | undefined;
+
+    if (PlaceAutocompleteElement && containerRef.current) {
+      mountedRef.current = true;
+      setUseNewApi(true);
+      const el = new PlaceAutocompleteElement({ types: ["(cities)"] });
+      containerRef.current.appendChild(el);
+
+      el.addEventListener("gmp-placeselect", async (event: Event) => {
+        const e = event as GmpPlaceSelectEvent;
+        await e.place.fetchFields({ fields: ["location", "displayName", "addressComponents"] });
+
+        if (!e.place.location) return;
+        const newLat = e.place.location.lat();
+        const newLng = e.place.location.lng();
+        setMarkerPos({ lat: newLat, lng: newLng });
+
+        const comps = e.place.addressComponents ?? [];
+        const newCity =
+          comps.find((c) => c.types.includes("locality"))?.longText ??
+          e.place.displayName ??
+          "";
+        const newCountry =
+          comps.find((c) => c.types.includes("country"))?.longText ?? "India";
+
+        onLocationChange({ lat: newLat, lng: newLng, city: newCity, country: newCountry });
+      });
+    } else if (inputRef.current) {
+      mountedRef.current = true;
+      const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
+        types: ["(cities)"],
+        fields: ["geometry", "name", "address_components"],
+      });
+      ac.addListener("place_changed", async () => {
+        const place = ac.getPlace();
+        if (!place.geometry?.location) return;
+        const newLat = place.geometry.location.lat();
+        const newLng = place.geometry.location.lng();
+        setMarkerPos({ lat: newLat, lng: newLng });
+        const comps = place.address_components ?? [];
+        const newCity =
+          comps.find((c: { types: string[] }) => c.types.includes("locality"))?.long_name ??
+          place.name ??
+          "";
+        const newCountry =
+          comps.find((c: { types: string[] }) => c.types.includes("country"))?.long_name ?? "India";
+        onLocationChange({ lat: newLat, lng: newLng, city: newCity, country: newCountry });
+      });
+    }
   }, [mapsReady, onLocationChange]);
 
   function handleDetectLocation() {
@@ -140,9 +186,15 @@ export function LocationPicker({ lat, lng, city, country, onLocationChange }: Lo
             ref={inputRef}
             defaultValue={city}
             placeholder="Search your city..."
-            className="pl-9"
+            className={`pl-9 ${useNewApi ? "hidden" : ""}`}
             data-testid="location-search-input"
             autoComplete="off"
+          />
+          <div
+            ref={containerRef}
+            className={`pl-9 ${useNewApi ? "" : "hidden"}`}
+            data-testid={useNewApi ? "location-search-input" : undefined}
+            style={{ minHeight: "2.5rem" }}
           />
         </div>
         <Button

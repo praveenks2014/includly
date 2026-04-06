@@ -72,6 +72,7 @@ export const ProfessionalProfileSpecialty = {
   psychiatrist: "psychiatrist",
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
+  therapy_centre: "therapy_centre",
 } as const;
 
 export type ProfessionalProfileVerificationStatus =
@@ -203,6 +204,7 @@ export const CreateProfessionalProfileBodySpecialty = {
   psychiatrist: "psychiatrist",
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
+  therapy_centre: "therapy_centre",
 } as const;
 
 export interface CreateProfessionalProfileBody {
@@ -232,6 +234,7 @@ export const UpdateProfessionalProfileBodySpecialty = {
   psychiatrist: "psychiatrist",
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
+  therapy_centre: "therapy_centre",
 } as const;
 
 export interface UpdateProfessionalProfileBody {
@@ -453,6 +456,7 @@ export const SearchProfessionalsSpecialty = {
   psychiatrist: "psychiatrist",
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
+  therapy_centre: "therapy_centre",
 } as const;
 
 export type StripeWebhookBody = { [key: string]: unknown };

@@ -245,6 +245,7 @@ paths:
               - psychiatrist
               - developmental_pediatrician
               - neurologist
+              - therapy_centre
         - name: city
           in: query
           required: false
@@ -794,6 +795,7 @@ components:
             - psychiatrist
             - developmental_pediatrician
             - neurologist
+            - therapy_centre
         bio:
           type: ["string", "null"]
         yearsExperience:
@@ -999,6 +1001,7 @@ components:
             - psychiatrist
             - developmental_pediatrician
             - neurologist
+            - therapy_centre
         bio:
           type: string
         yearsExperience:
@@ -1042,6 +1045,7 @@ components:
             - psychiatrist
             - developmental_pediatrician
             - neurologist
+            - therapy_centre
         bio:
           type: string
         yearsExperience:

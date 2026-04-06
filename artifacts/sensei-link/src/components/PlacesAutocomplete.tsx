@@ -40,7 +40,7 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
     }
     const script = document.createElement("script");
     script.id = "google-maps-script";
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`;
     script.async = true;
     script.defer = true;
     script.onload = () => resolve();
@@ -48,6 +48,15 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
     document.head.appendChild(script);
   });
 }
+
+type GmpPlaceSelectEvent = Event & {
+  place: {
+    fetchFields: (opts: { fields: string[] }) => Promise<void>;
+    location?: google.maps.LatLng;
+    displayName?: string;
+    addressComponents?: Array<{ types: string[]; longText: string }>;
+  };
+};
 
 export function PlacesAutocomplete({
   value,
@@ -58,8 +67,10 @@ export function PlacesAutocomplete({
   "data-testid": testId,
 }: PlacesAutocompleteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(false);
   const [mapsReady, setMapsReady] = useState(false);
+  const [useNewApi, setUseNewApi] = useState(false);
 
   useEffect(() => {
     if (!GOOGLE_MAPS_KEY) return;
@@ -69,44 +80,89 @@ export function PlacesAutocomplete({
   }, []);
 
   useEffect(() => {
-    if (!mapsReady || !inputRef.current || autocompleteRef.current) return;
+    if (!mapsReady || mountedRef.current) return;
 
-    const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
-      types: ["(cities)"],
-      componentRestrictions: { country: ["in", "us", "gb", "ca", "au", "sg"] },
-      fields: ["geometry", "name", "address_components"],
-    });
+    const places = window.google?.maps?.places as unknown as Record<string, unknown> | undefined;
+    const PlaceAutocompleteElement = places?.["PlaceAutocompleteElement"] as
+      | (new (opts: object) => HTMLElement & EventTarget)
+      | undefined;
 
-    ac.addListener("place_changed", () => {
-      const place = ac.getPlace();
-      if (!place.geometry?.location) return;
+    if (PlaceAutocompleteElement && containerRef.current) {
+      mountedRef.current = true;
+      setUseNewApi(true);
+      const el = new PlaceAutocompleteElement({ types: ["(cities)"] });
+      containerRef.current.appendChild(el);
 
-      const lat = place.geometry.location.lat();
-      const lng = place.geometry.location.lng();
+      el.addEventListener("gmp-placeselect", async (event: Event) => {
+        const e = event as GmpPlaceSelectEvent;
+        await e.place.fetchFields({ fields: ["location", "displayName", "addressComponents"] });
 
-      const city =
-        place.address_components?.find((c) => c.types.includes("locality"))?.long_name ??
-        place.name ??
-        "";
+        if (!e.place.location) return;
+        const lat = e.place.location.lat();
+        const lng = e.place.location.lng();
+        const city =
+          e.place.addressComponents?.find((c) => c.types.includes("locality"))?.longText ??
+          e.place.displayName ??
+          "";
 
-      onPlaceSelect({ description: place.name ?? city, lat, lng, city });
-      onChange(place.name ?? city);
-    });
+        onPlaceSelect({ description: e.place.displayName ?? city, lat, lng, city });
+        onChange(e.place.displayName ?? city);
+      });
+    } else if (inputRef.current) {
+      mountedRef.current = true;
+      const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
+        types: ["(cities)"],
+        componentRestrictions: { country: ["in", "us", "gb", "ca", "au", "sg"] },
+        fields: ["geometry", "name", "address_components"],
+      });
 
-    autocompleteRef.current = ac;
+      ac.addListener("place_changed", () => {
+        const place = ac.getPlace();
+        if (!place.geometry?.location) return;
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+        const city =
+          place.address_components?.find((c: { types: string[] }) => c.types.includes("locality"))
+            ?.long_name ??
+          place.name ??
+          "";
+        onPlaceSelect({ description: place.name ?? city, lat, lng, city });
+        onChange(place.name ?? city);
+      });
+    }
   }, [mapsReady, onPlaceSelect, onChange]);
 
+  if (!GOOGLE_MAPS_KEY) {
+    return (
+      <div className="relative">
+        <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10 pointer-events-none" />
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={`${placeholder} (type city name)`}
+          className={`pl-9 ${className ?? ""}`}
+          data-testid={testId}
+          autoComplete="off"
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="relative">
+    <div className="relative" data-testid={testId}>
       <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10 pointer-events-none" />
       <Input
         ref={inputRef}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={GOOGLE_MAPS_KEY ? placeholder : `${placeholder} (type city name)`}
-        className={`pl-9 ${className ?? ""}`}
-        data-testid={testId}
+        placeholder={placeholder}
+        className={`pl-9 ${className ?? ""} ${useNewApi ? "hidden" : ""}`}
         autoComplete="off"
+      />
+      <div
+        ref={containerRef}
+        className={`pl-9 ${className ?? ""} ${useNewApi ? "" : "hidden"}`}
+        style={{ minHeight: "2.5rem" }}
       />
     </div>
   );

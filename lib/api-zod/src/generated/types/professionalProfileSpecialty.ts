@@ -17,4 +17,5 @@ export const ProfessionalProfileSpecialty = {
   psychiatrist: "psychiatrist",
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
+  therapy_centre: "therapy_centre",
 } as const;

@@ -6,6 +6,7 @@ export const SPECIALTY_LABELS: Record<string, string> = {
   psychiatrist: "Psychiatrist",
   developmental_pediatrician: "Developmental Pediatrician",
   neurologist: "Neurologist",
+  therapy_centre: "Therapy Centre",
 };
 
 export const SPECIALTY_OPTIONS = Object.entries(SPECIALTY_LABELS).map(
@@ -24,4 +25,5 @@ export const SPECIALTY_COLORS: Record<string, string> = {
   psychiatrist: "bg-indigo-100 text-indigo-800",
   developmental_pediatrician: "bg-emerald-100 text-emerald-800",
   neurologist: "bg-purple-100 text-purple-800",
+  therapy_centre: "bg-rose-100 text-rose-800",
 };

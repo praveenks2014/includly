@@ -15,6 +15,7 @@ const SPECIALTIES = [
   { value: "psychiatrist", icon: "🧠" },
   { value: "developmental_pediatrician", icon: "🩺" },
   { value: "neurologist", icon: "🔬" },
+  { value: "therapy_centre", icon: "🏥" },
 ];
 
 export default function HomePage() {
