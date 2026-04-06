@@ -108,7 +108,7 @@ export function PlacesAutocomplete({
         onPlaceSelect({ description: e.place.displayName ?? city, lat, lng, city });
         onChange(e.place.displayName ?? city);
       });
-    } else if (inputRef.current) {
+    } else if (inputRef.current && window.google?.maps?.places?.Autocomplete) {
       mountedRef.current = true;
       const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
         types: ["(cities)"],

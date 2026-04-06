@@ -10,7 +10,7 @@ import {
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import {
   AdminListProfessionalsQueryParams,
-  AdminUpdateSettingsBody,
+  UpdateAdminSettingsBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -158,7 +158,7 @@ router.get("/admin/settings", ...adminGuard, async (_req, res): Promise<void> =>
 });
 
 router.patch("/admin/settings", ...adminGuard, async (req, res): Promise<void> => {
-  const parsed = AdminUpdateSettingsBody.safeParse(req.body);
+  const parsed = UpdateAdminSettingsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;

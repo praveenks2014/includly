@@ -5,13 +5,13 @@ import {
   useGetMe,
   useAdminListProfessionals,
   useAdminGetStats,
-  useAdminGetSettings,
+  useGetAdminSettings,
   useAdminApproveProfessional,
   useAdminRejectProfessional,
-  useAdminUpdateSettings,
+  useUpdateAdminSettings,
   getAdminListProfessionalsQueryKey,
   getAdminGetStatsQueryKey,
-  getAdminGetSettingsQueryKey,
+  getGetAdminSettingsQueryKey,
   type AdminProfessionalRow,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -345,10 +345,10 @@ function StatsTab() {
 function SettingsTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: settings, isLoading } = useAdminGetSettings({
-    query: { queryKey: getAdminGetSettingsQueryKey() },
+  const { data: settings, isLoading } = useGetAdminSettings({
+    query: { queryKey: getGetAdminSettingsQueryKey() },
   });
-  const { mutateAsync: updateSettings, isPending: saving } = useAdminUpdateSettings();
+  const { mutateAsync: updateSettings, isPending: saving } = useUpdateAdminSettings();
 
   const [contactLimit, setContactLimit] = useState<number | null>(null);
 
@@ -357,7 +357,7 @@ function SettingsTab() {
   async function handleSave() {
     try {
       await updateSettings({ data: { contactLimitPerParent: currentLimit } });
-      queryClient.invalidateQueries({ queryKey: getAdminGetSettingsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() });
       toast({ title: "Settings saved", description: "Contact unlock limit has been updated." });
     } catch {
       toast({ title: "Error", description: "Failed to save settings.", variant: "destructive" });
