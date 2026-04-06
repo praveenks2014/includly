@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, ilike, or, gt, lte } from "drizzle-orm";
+import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc } from "drizzle-orm";
 import { db, usersTable, professionalProfilesTable, contactUnlocksTable, specialtyEnum, professionalSubscriptionsTable } from "@workspace/db";
 import { subscriptionsTable } from "@workspace/db";
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
@@ -103,19 +103,6 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
   res.json(UpdateProfessionalProfileResponse.parse(profile));
 });
 
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 router.get("/professionals/search", optionalAuth, async (req, res): Promise<void> => {
   const parsed = SearchProfessionalsQueryParams.safeParse(req.query);
   if (!parsed.success) {
@@ -124,6 +111,10 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
   }
 
   const { specialty, city, minExperience, minRating, willingToTravel, lat, lng, radiusKm, budgetMaxINR, page, limit } = parsed.data;
+
+  const pageNum = page ?? 1;
+  const limitNum = limit ?? 20;
+  const offsetNum = (pageNum - 1) * limitNum;
 
   const conditions = [];
 
@@ -144,53 +135,59 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
     conditions.push(gte(professionalProfilesTable.yearsExperience, minExperience));
   }
 
+  if (minRating !== undefined) {
+    conditions.push(gte(professionalProfilesTable.averageRating, minRating));
+  }
+
   if (willingToTravel !== undefined) {
     conditions.push(eq(professionalProfilesTable.willingToTravel, willingToTravel));
   }
 
   if (budgetMaxINR !== undefined) {
+    conditions.push(lte(professionalProfilesTable.pricingMinINR, budgetMaxINR));
+  }
+
+  const useGeo = lat !== undefined && lng !== undefined && radiusKm !== undefined;
+
+  if (useGeo) {
+    conditions.push(sql`${professionalProfilesTable.latitude} IS NOT NULL`);
+    conditions.push(sql`${professionalProfilesTable.longitude} IS NOT NULL`);
     conditions.push(
-      and(
-        lte(professionalProfilesTable.pricingMinINR, budgetMaxINR),
-      ),
+      sql`6371 * acos(LEAST(1.0,
+          cos(radians(${lat}::float8)) * cos(radians(${professionalProfilesTable.latitude}::float8)) *
+          cos(radians(${professionalProfilesTable.longitude}::float8) - radians(${lng}::float8)) +
+          sin(radians(${lat}::float8)) * sin(radians(${professionalProfilesTable.latitude}::float8))
+        )) <= ${radiusKm}`,
     );
   }
 
-  const pageNum = page ?? 1;
-  const limitNum = limit ?? 20;
-  const offset = (pageNum - 1) * limitNum;
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const allProfiles = await db
-    .select()
+  const distanceSql = useGeo
+    ? sql<number | null>`ROUND((6371 * acos(LEAST(1.0,
+          cos(radians(${lat}::float8)) * cos(radians(${professionalProfilesTable.latitude}::float8)) *
+          cos(radians(${professionalProfilesTable.longitude}::float8) - radians(${lng}::float8)) +
+          sin(radians(${lat}::float8)) * sin(radians(${professionalProfilesTable.latitude}::float8))
+        )))::numeric, 1)::float8`.as("distance_km")
+    : sql<number | null>`null`.as("distance_km");
+
+  const [{ count: totalStr }] = await db
+    .select({ count: sql<string>`count(*)` })
     .from(professionalProfilesTable)
-    .where(conditions.length > 0 ? and(...conditions) : undefined);
+    .where(whereClause);
+  const total = parseInt(totalStr, 10);
 
-  type ProfileWithDistance = (typeof allProfiles)[number] & { distanceKm: number | null };
+  const orderByClauses = useGeo
+    ? [asc(distanceSql)]
+    : [desc(professionalProfilesTable.id)];
 
-  let filtered: ProfileWithDistance[] = allProfiles.map((p) => ({ ...p, distanceKm: null }));
-
-  if (minRating !== undefined) {
-    filtered = filtered.filter((p) => p.averageRating !== null && p.averageRating >= minRating);
-  }
-
-  if (lat !== undefined && lng !== undefined && radiusKm !== undefined) {
-    filtered = filtered
-      .map((p) => {
-        if (p.latitude === null || p.latitude === undefined || p.longitude === null || p.longitude === undefined) {
-          return null;
-        }
-        const dist = haversineKm(lat, lng, p.latitude, p.longitude);
-        if (dist <= radiusKm) {
-          return { ...p, distanceKm: Math.round(dist * 10) / 10 };
-        }
-        return null;
-      })
-      .filter((p): p is ProfileWithDistance => p !== null)
-      .sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
-  }
-
-  const total = filtered.length;
-  const paginated = filtered.slice(offset, offset + limitNum);
+  const paginated = await db
+    .select({ ...professionalProfilesTable, distanceKm: distanceSql })
+    .from(professionalProfilesTable)
+    .where(whereClause)
+    .orderBy(...orderByClauses)
+    .limit(limitNum)
+    .offset(offsetNum);
 
   const unlockSet = new Set<number>();
   let hasActiveSubscription = false;

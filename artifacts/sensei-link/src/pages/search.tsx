@@ -23,7 +23,7 @@ import { UnlockPaymentModal } from "@/components/UnlockPaymentModal";
 import { PlacesAutocomplete, type PlaceResult } from "@/components/PlacesAutocomplete";
 import { ProfessionalsMap } from "@/components/ProfessionalsMap";
 
-const RADIUS_OPTIONS = [5, 10, 20, 50, 100];
+const RADIUS_OPTIONS = [5, 10, 25];
 
 export default function SearchPage() {
   const queryClient = useQueryClient();

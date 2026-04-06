@@ -31,6 +31,5 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
-VAPID_PUBLIC_KEY = "BMgWRi9I3BzzKSvI5avmO6fxopfSLX_MHSwP5k19LER6NM0xWIyrJLJoeRComLRsItYeRDijG26DvffnJy5nM3A"
-VAPID_PRIVATE_KEY = "yguGAGpnjvh6c3hQDMNJaHjnZwClCTfui-Mq8gqGlXk"
+VAPID_PUBLIC_KEY = "BBZwJ6mAeSF3QAdCKjVTrhiF8UFde34DWomAK6Kkxneu3ia80lnpCXbYuVLtQiRNlPBzi3NrU7K1zJHOnIjxsO0"
 VAPID_SUBJECT = "mailto:admin@senseilink.com"
