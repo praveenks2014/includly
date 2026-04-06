@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "SenseiLink"
+title = "Sproutly"
 version = "1.0.0"
 id = "artifacts/sensei-link"
 router = "path"
