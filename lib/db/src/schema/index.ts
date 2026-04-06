@@ -3,6 +3,7 @@ export * from "./professionals";
 export * from "./ratings";
 export * from "./unlocks";
 export * from "./certifications";
+export * from "./professionalCertifications";
 export * from "./identityVerifications";
 export * from "./uploads";
 export * from "./payments";

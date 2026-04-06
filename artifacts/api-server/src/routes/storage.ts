@@ -9,7 +9,7 @@ import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage"
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   db,
-  userCertificationsTable,
+  professionalCertificationsTable,
   identityVerificationsTable,
   professionalProfilesTable,
   pendingUploadsTable,
@@ -25,15 +25,17 @@ const ALLOWED_CONTENT_TYPES = new Set([
   "image/png",
 ]);
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 
 /**
  * POST /storage/uploads/request-url
  *
- * Request a presigned URL for file upload. Requires authentication.
- * Enforces server-side MIME allowlist (PDF, JPG, PNG) and 10MB size limit.
- * Records the upload intent in the pending_uploads ledger (userId + objectPath)
- * so that verification endpoints can verify the caller owns the file before accepting it.
+ * Request a presigned PUT URL for a private file upload. Requires authentication.
+ * Enforces server-side MIME allowlist (PDF, JPG, PNG) and 10 MB size limit on declared values.
+ * Actual object content-type and size are re-validated from GCS metadata when the caller
+ * submits the fileKey to a verification endpoint (see verifications.ts → claimAndValidateUpload).
+ * Records the upload intent in the pending_uploads ledger so verification routes can
+ * confirm ownership before accepting the fileKey.
  */
 router.post("/storage/uploads/request-url", requireAuth, async (req: Request, res: Response) => {
   const parsed = RequestUploadUrlBody.safeParse(req.body);
@@ -50,7 +52,7 @@ router.post("/storage/uploads/request-url", requireAuth, async (req: Request, re
   }
 
   if (size > MAX_UPLOAD_BYTES) {
-    res.status(400).json({ error: "File size must be 10MB or less" });
+    res.status(400).json({ error: "File size must be 10 MB or less" });
     return;
   }
 
@@ -63,7 +65,7 @@ router.post("/storage/uploads/request-url", requireAuth, async (req: Request, re
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
     const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
 
-    // Record the upload in the ledger so verification routes can confirm ownership
+    // Record in upload ledger — verification endpoints use this to confirm ownership
     await db.insert(pendingUploadsTable).values({
       userId: req.userId!,
       objectPath,
@@ -87,8 +89,7 @@ router.post("/storage/uploads/request-url", requireAuth, async (req: Request, re
 /**
  * GET /storage/public-objects/*
  *
- * Serve public assets from PUBLIC_OBJECT_SEARCH_PATHS.
- * These are unconditionally public — no authentication or ACL checks.
+ * Serve public assets from PUBLIC_OBJECT_SEARCH_PATHS. No auth required.
  */
 router.get("/storage/public-objects/*filePath", async (req: Request, res: Response) => {
   try {
@@ -101,7 +102,6 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
     }
 
     const response = await objectStorageService.downloadObject(file);
-
     res.status(response.status);
     response.headers.forEach((value, key) => res.setHeader(key, value));
 
@@ -121,8 +121,10 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
  * GET /storage/objects/*
  *
  * Serve private object entities. Requires authentication.
- * Authorization: user must own the object (via certification or identity_verification record),
- * or be an admin. Double-keyed check: both fileKey match AND userId/professionalId match.
+ * Authorization (non-admins): caller must own the object via:
+ *   - professional_certifications: fileKey = objectPath AND professionalId matches caller's profile
+ *   - identity_verifications:      fileKey = objectPath AND professionalId matches caller's profile
+ * Admins bypass the owner check.
  */
 router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Response) => {
   try {
@@ -134,28 +136,31 @@ router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Resp
     const userRole = req.userRole;
 
     if (userRole !== "admin") {
-      // Check: does the calling user own a certification with this exact path?
-      const certMatch = await db
-        .select({ id: userCertificationsTable.id })
-        .from(userCertificationsTable)
-        .where(
-          and(
-            eq(userCertificationsTable.documentUrl, objectPath),
-            eq(userCertificationsTable.userId, userId),
+      // Resolve caller's professional profile (needed for both ownership checks)
+      const [profile] = await db
+        .select({ id: professionalProfilesTable.id })
+        .from(professionalProfilesTable)
+        .where(eq(professionalProfilesTable.userId, userId));
+
+      let isOwner = false;
+
+      if (profile) {
+        // Check certification ownership
+        const certMatch = await db
+          .select({ id: professionalCertificationsTable.id })
+          .from(professionalCertificationsTable)
+          .where(
+            and(
+              eq(professionalCertificationsTable.fileKey, objectPath),
+              eq(professionalCertificationsTable.professionalId, profile.id),
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      let isOwner = certMatch.length > 0;
+        isOwner = certMatch.length > 0;
 
-      if (!isOwner) {
-        // Check: does the calling professional own an identity_verification with this exact path?
-        const [profile] = await db
-          .select({ id: professionalProfilesTable.id })
-          .from(professionalProfilesTable)
-          .where(eq(professionalProfilesTable.userId, userId));
-
-        if (profile) {
+        if (!isOwner) {
+          // Check identity verification ownership
           const idVerifMatch = await db
             .select({ id: identityVerificationsTable.id })
             .from(identityVerificationsTable)

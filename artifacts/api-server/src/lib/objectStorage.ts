@@ -128,6 +128,20 @@ export class ObjectStorageService {
     });
   }
 
+  /**
+   * Fetch the real content-type and size of an already-uploaded object from GCS metadata.
+   * Used to server-side validate that the client actually uploaded an allowed file type and
+   * did not exceed the size limit after obtaining a presigned URL.
+   */
+  async getObjectEntityMetadata(objectPath: string): Promise<{ contentType: string; size: number }> {
+    const file = await this.getObjectEntityFile(objectPath);
+    const [metadata] = await file.getMetadata();
+    return {
+      contentType: (metadata.contentType as string) || "",
+      size: Number(metadata.size) || 0,
+    };
+  }
+
   async getObjectEntityFile(objectPath: string): Promise<File> {
     if (!objectPath.startsWith("/objects/")) {
       throw new ObjectNotFoundError();

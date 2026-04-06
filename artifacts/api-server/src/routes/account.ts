@@ -4,8 +4,8 @@ import {
   db,
   usersTable,
   professionalProfilesTable,
-  userCertificationsTable,
   identityVerificationsTable,
+  professionalCertificationsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -18,13 +18,13 @@ const router: IRouter = Router();
  * GDPR/DPDP right-to-erasure: anonymizes the user record and removes uploaded files.
  * Implements soft-delete by:
  *   1. Removing uploaded identity + certification documents from object storage
- *   2. Nullifying all PII fields on the users row (name, email, phone, avatarUrl, city, country)
- *   3. Setting clerkId to a tombstone value so the Clerk account can no longer sign in and
- *      create a new linked record (clerk-<userId>-deleted)
- *   4. Nullifying PII on the professional_profiles row if present (bio, qualifications, phone, email)
+ *   2. Nullifying file references in identity_verifications and professional_certifications rows
+ *   3. Nullifying all PII fields on the professional_profiles row (bio, qualifications, phone, email…)
+ *   4. Nullifying all PII fields on the users row (name, email, phone, avatarUrl, city, country)
+ *   5. Tombstoning clerkId as deleted-{userId}-{ts} so no live Clerk account can re-link
  *
- * This approach keeps FK integrity intact (no cascade deletes) while removing all personal data,
- * satisfying DPDP Article 12 & GDPR Article 17 without breaking relational history.
+ * FK integrity is preserved (no cascade deletes). Relational history (ratings, unlocks,
+ * payments) stays intact but all PII and document references are erased.
  */
 router.post("/account/delete", requireAuth, async (req, res): Promise<void> => {
   const { confirmPhrase } = (req.body ?? {}) as { confirmPhrase?: string };
@@ -43,6 +43,7 @@ router.post("/account/delete", requireAuth, async (req, res): Promise<void> => {
     .where(eq(professionalProfilesTable.userId, userId));
 
   if (profile) {
+    // --- Delete identity verification files + null file references ---
     const idVerifs = await db
       .select()
       .from(identityVerificationsTable)
@@ -53,25 +54,38 @@ router.post("/account/delete", requireAuth, async (req, res): Promise<void> => {
         const file = await storageService.getObjectEntityFile(v.fileKey);
         await file.delete();
       } catch {
-        // Ignore missing files — object may have been deleted already
+        // Ignore missing files — already deleted or never uploaded
       }
     }
 
+    // Null the file reference so the path cannot be used to infer document identity
+    await db
+      .update(identityVerificationsTable)
+      .set({ fileKey: "[deleted]", status: "rejected" })
+      .where(eq(identityVerificationsTable.professionalId, profile.id));
+
+    // --- Delete certification files + null file references ---
     const certs = await db
       .select()
-      .from(userCertificationsTable)
-      .where(eq(userCertificationsTable.userId, userId));
+      .from(professionalCertificationsTable)
+      .where(eq(professionalCertificationsTable.professionalId, profile.id));
 
     for (const c of certs) {
       try {
-        const file = await storageService.getObjectEntityFile(c.documentUrl);
+        const file = await storageService.getObjectEntityFile(c.fileKey);
         await file.delete();
       } catch {
         // Ignore missing files
       }
     }
 
-    // Anonymize professional profile PII fields
+    // Null the file reference on each certification row
+    await db
+      .update(professionalCertificationsTable)
+      .set({ fileKey: "[deleted]" })
+      .where(eq(professionalCertificationsTable.professionalId, profile.id));
+
+    // Anonymize professional profile PII
     await db
       .update(professionalProfilesTable)
       .set({
@@ -89,7 +103,7 @@ router.post("/account/delete", requireAuth, async (req, res): Promise<void> => {
       .where(eq(professionalProfilesTable.userId, userId));
   }
 
-  // Anonymize user PII fields (soft-delete: row stays for FK integrity, all PII wiped)
+  // Anonymize user PII (soft-delete: row stays for FK integrity, all PII wiped)
   await db
     .update(usersTable)
     .set({
@@ -99,7 +113,6 @@ router.post("/account/delete", requireAuth, async (req, res): Promise<void> => {
       avatarUrl: null,
       city: null,
       country: null,
-      // Replace clerkId with a tombstone so no live Clerk account can re-link
       clerkId: `deleted-${userId}-${Date.now()}`,
     })
     .where(eq(usersTable.id, userId));

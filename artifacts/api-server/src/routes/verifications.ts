@@ -3,21 +3,36 @@ import { eq, and } from "drizzle-orm";
 import {
   db,
   professionalProfilesTable,
-  userCertificationsTable,
+  professionalCertificationsTable,
   identityVerificationsTable,
   pendingUploadsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { SubmitIdentityVerificationBody, SubmitCertificationBody } from "@workspace/api-zod";
+import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 
 const router: IRouter = Router();
+const storageService = new ObjectStorageService();
+
+const ALLOWED_CONTENT_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+]);
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 
 /**
- * Verify the calling user owns a given objectPath by checking the pending_uploads ledger.
- * Marks the upload as consumed so it cannot be claimed again.
- * Returns false if the file was uploaded by a different user or not found.
+ * Claim a pending upload: verify the caller owns the fileKey (was issued to this userId),
+ * then validate the ACTUAL GCS object content-type and size from metadata.
+ * Marks the record consumed so it cannot be claimed again.
+ * Returns an error string on failure, or null on success.
  */
-async function claimUpload(userId: number, objectPath: string): Promise<boolean> {
+async function claimAndValidateUpload(
+  userId: number,
+  objectPath: string
+): Promise<string | null> {
+  // 1. Ownership: find an unconsumed ledger entry for this user + path
   const [record] = await db
     .select()
     .from(pendingUploadsTable)
@@ -30,20 +45,46 @@ async function claimUpload(userId: number, objectPath: string): Promise<boolean>
     )
     .limit(1);
 
-  if (!record) return false;
+  if (!record) {
+    return "File was not uploaded by you or has already been claimed";
+  }
 
+  // 2. Server-side validation: read real metadata from GCS (prevents bypass via forged JSON)
+  let realContentType: string;
+  let realSize: number;
+  try {
+    const meta = await storageService.getObjectEntityMetadata(objectPath);
+    realContentType = meta.contentType;
+    realSize = meta.size;
+  } catch (err) {
+    if (err instanceof ObjectNotFoundError) {
+      return "Uploaded file not found in storage — please try uploading again";
+    }
+    throw err;
+  }
+
+  if (!ALLOWED_CONTENT_TYPES.has(realContentType)) {
+    return `File type '${realContentType}' is not allowed. Only PDF, JPG, and PNG are accepted`;
+  }
+
+  if (realSize > MAX_UPLOAD_BYTES) {
+    return `File size ${(realSize / 1024 / 1024).toFixed(1)} MB exceeds the 10 MB limit`;
+  }
+
+  // 3. Mark consumed so the path cannot be re-claimed
   await db
     .update(pendingUploadsTable)
     .set({ consumed: true })
     .where(eq(pendingUploadsTable.id, record.id));
 
-  return true;
+  return null; // success
 }
 
 function validateFileKey(fileKey: string): boolean {
-  return fileKey.startsWith("/objects/");
+  return typeof fileKey === "string" && fileKey.startsWith("/objects/");
 }
 
+/** POST /verifications/identity — submit KYC document */
 router.post(
   "/verifications/identity",
   requireAuth,
@@ -77,10 +118,10 @@ router.post(
       return;
     }
 
-    // Verify the calling user uploaded this file (ownership check via upload ledger)
-    const owned = await claimUpload(req.userId!, fileKey);
-    if (!owned) {
-      res.status(403).json({ error: "File was not uploaded by you or has already been claimed" });
+    // Verify upload ownership + validate actual GCS content-type / size
+    const claimError = await claimAndValidateUpload(req.userId!, fileKey);
+    if (claimError) {
+      res.status(403).json({ error: claimError });
       return;
     }
 
@@ -133,6 +174,7 @@ router.post(
   }
 );
 
+/** GET /verifications/identity — fetch current KYC status */
 router.get(
   "/verifications/identity",
   requireAuth,
@@ -170,6 +212,7 @@ router.get(
   }
 );
 
+/** POST /verifications/certifications — upload qualification certificate */
 router.post(
   "/verifications/certifications",
   requireAuth,
@@ -198,33 +241,33 @@ router.post(
       return;
     }
 
-    // Verify the calling user uploaded this file (ownership check via upload ledger)
-    const owned = await claimUpload(req.userId!, fileKey);
-    if (!owned) {
-      res.status(403).json({ error: "File was not uploaded by you or has already been claimed" });
+    // Verify upload ownership + validate actual GCS content-type / size
+    const claimError = await claimAndValidateUpload(req.userId!, fileKey);
+    if (claimError) {
+      res.status(403).json({ error: claimError });
       return;
     }
 
     const [record] = await db
-      .insert(userCertificationsTable)
+      .insert(professionalCertificationsTable)
       .values({
-        userId: req.userId!,
+        professionalId: profile.id,
         documentType,
-        documentUrl: fileKey,
-        status: "pending",
+        fileKey,
       })
       .returning();
 
     res.status(201).json({
       id: record.id,
-      professionalId: profile.id,
+      professionalId: record.professionalId,
       documentType: record.documentType,
-      fileKey: record.documentUrl,
-      uploadedAt: record.createdAt.toISOString(),
+      fileKey: record.fileKey,
+      uploadedAt: record.uploadedAt.toISOString(),
     });
   }
 );
 
+/** GET /verifications/certifications — list professional's certificates */
 router.get(
   "/verifications/certifications",
   requireAuth,
@@ -242,16 +285,16 @@ router.get(
 
     const records = await db
       .select()
-      .from(userCertificationsTable)
-      .where(eq(userCertificationsTable.userId, req.userId!));
+      .from(professionalCertificationsTable)
+      .where(eq(professionalCertificationsTable.professionalId, profile.id));
 
     res.json(
       records.map((r) => ({
         id: r.id,
-        professionalId: profile.id,
+        professionalId: r.professionalId,
         documentType: r.documentType,
-        fileKey: r.documentUrl,
-        uploadedAt: r.createdAt.toISOString(),
+        fileKey: r.fileKey,
+        uploadedAt: r.uploadedAt.toISOString(),
       }))
     );
   }
