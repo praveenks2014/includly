@@ -5,7 +5,10 @@
  * SenseiLink API specification — marketplace for parents to find Shadow Teachers, Special Educators, and Medical Specialists
  * OpenAPI spec version: 0.1.0
  */
+import type { BroadcastNotificationBodyAudience } from "./broadcastNotificationBodyAudience";
 
-export interface UpdateAdminSettingsBody {
-  contactLimitPerParent?: number;
+export interface BroadcastNotificationBody {
+  title: string;
+  body: string;
+  audience: BroadcastNotificationBodyAudience;
 }

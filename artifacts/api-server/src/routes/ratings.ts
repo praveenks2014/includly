@@ -6,6 +6,7 @@ import {
   CreateRatingBody,
   GetRatingsForProfessionalParams,
 } from "@workspace/api-zod";
+import { notifyProfessionalOnReview } from "../lib/notificationService";
 
 const router: IRouter = Router();
 
@@ -29,6 +30,12 @@ async function recalcRating(professionalId: number): Promise<void> {
     totalRatings > 0
       ? allRatings.reduce((sum, r) => sum + r.score, 0) / totalRatings
       : null;
+
+  const [profile] = await db
+    .select()
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, professionalId))
+    .limit(1);
 
   await db
     .update(professionalProfilesTable)
@@ -83,6 +90,15 @@ router.post("/ratings", requireAuth, requireRole("parent", "admin"), async (req,
   }
 
   await recalcRating(professionalId);
+
+  const [professional] = await db
+    .select({ userId: professionalProfilesTable.userId })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, professionalId))
+    .limit(1);
+  if (professional) {
+    void notifyProfessionalOnReview(professional.userId).catch(() => {});
+  }
 
   const [reviewer] = await db
     .select({ fullName: usersTable.fullName })

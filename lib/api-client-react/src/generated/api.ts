@@ -22,6 +22,8 @@ import type {
   AdminProfessionalsResponse,
   AdminSettings,
   AdminStats,
+  BroadcastNotificationBody,
+  BroadcastNotificationResult,
   ComplianceContent,
   ContactUnlock,
   ContactUsage,
@@ -33,6 +35,7 @@ import type {
   ErrorResponse,
   HealthStatus,
   MyRatingResponse,
+  NotificationPreferences,
   ParentDashboard,
   PaymentPlans,
   PaymentRecord,
@@ -41,6 +44,7 @@ import type {
   ProfessionalDashboard,
   ProfessionalDetail,
   ProfessionalProfile,
+  PushSubscriptionBody,
   Rating,
   RazorpayOrder,
   RazorpayWebhookBody,
@@ -50,11 +54,15 @@ import type {
   StripeCheckoutSession,
   StripeWebhookBody,
   SubscriptionStatus,
+  SuccessResponse,
   UnlockStatus,
+  UnsubscribeBody,
   UpdateAdminSettingsBody,
+  UpdateNotificationPreferencesBody,
   UpdateProfessionalProfileBody,
   UpdateUserBody,
   UserProfile,
+  VapidPublicKeyResponse,
   VerifyRazorpayBody,
 } from "./api.schemas";
 
@@ -2872,6 +2880,81 @@ export function useAdminListProfessionals<
 }
 
 /**
+ * @summary Get VAPID public key for Web Push subscription
+ */
+export const getGetVapidPublicKeyUrl = () => {
+  return `/api/notifications/vapid-public-key`;
+};
+
+export const getVapidPublicKey = async (
+  options?: RequestInit,
+): Promise<VapidPublicKeyResponse> => {
+  return customFetch<VapidPublicKeyResponse>(getGetVapidPublicKeyUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetVapidPublicKeyQueryKey = () => {
+  return [`/api/notifications/vapid-public-key`] as const;
+};
+
+export const getGetVapidPublicKeyQueryOptions = <
+  TData = Awaited<ReturnType<typeof getVapidPublicKey>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getVapidPublicKey>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetVapidPublicKeyQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getVapidPublicKey>>
+  > = ({ signal }) => getVapidPublicKey({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getVapidPublicKey>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetVapidPublicKeyQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getVapidPublicKey>>
+>;
+export type GetVapidPublicKeyQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get VAPID public key for Web Push subscription
+ */
+
+export function useGetVapidPublicKey<
+  TData = Awaited<ReturnType<typeof getVapidPublicKey>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getVapidPublicKey>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetVapidPublicKeyQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Approve a professional's onboarding (admin only)
  */
 export const getAdminApproveProfessionalUrl = (id: number) => {
@@ -3115,117 +3198,42 @@ export function useAdminGetStats<
 }
 
 /**
- * @summary Get admin settings (admin only)
+ * @summary Subscribe to push notifications
  */
-export const getAdminGetSettingsUrl = () => {
-  return `/api/admin/settings`;
+export const getSubscribePushNotificationsUrl = () => {
+  return `/api/notifications/subscribe`;
 };
 
-export const adminGetSettings = async (
+export const subscribePushNotifications = async (
+  pushSubscriptionBody: PushSubscriptionBody,
   options?: RequestInit,
-): Promise<AdminSettings> => {
-  return customFetch<AdminSettings>(getAdminGetSettingsUrl(), {
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getSubscribePushNotificationsUrl(), {
     ...options,
-    method: "GET",
-  });
-};
-
-export const getAdminGetSettingsQueryKey = () => {
-  return [`/api/admin/settings`] as const;
-};
-
-export const getAdminGetSettingsQueryOptions = <
-  TData = Awaited<ReturnType<typeof adminGetSettings>>,
-  TError = ErrorType<ErrorResponse>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof adminGetSettings>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-
-  const queryKey = queryOptions?.queryKey ?? getAdminGetSettingsQueryKey();
-
-  const queryFn: QueryFunction<
-    Awaited<ReturnType<typeof adminGetSettings>>
-  > = ({ signal }) => adminGetSettings({ signal, ...requestOptions });
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof adminGetSettings>>,
-    TError,
-    TData
-  > & { queryKey: QueryKey };
-};
-
-export type AdminGetSettingsQueryResult = NonNullable<
-  Awaited<ReturnType<typeof adminGetSettings>>
->;
-export type AdminGetSettingsQueryError = ErrorType<ErrorResponse>;
-
-/**
- * @summary Get admin settings (admin only)
- */
-
-export function useAdminGetSettings<
-  TData = Awaited<ReturnType<typeof adminGetSettings>>,
-  TError = ErrorType<ErrorResponse>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof adminGetSettings>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getAdminGetSettingsQueryOptions(options);
-
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-  };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}
-
-/**
- * @summary Update admin settings (admin only)
- */
-export const getAdminUpdateSettingsUrl = () => {
-  return `/api/admin/settings`;
-};
-
-export const adminUpdateSettings = async (
-  updateAdminSettingsBody: UpdateAdminSettingsBody,
-  options?: RequestInit,
-): Promise<AdminSettings> => {
-  return customFetch<AdminSettings>(getAdminUpdateSettingsUrl(), {
-    ...options,
-    method: "PATCH",
+    method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(updateAdminSettingsBody),
+    body: JSON.stringify(pushSubscriptionBody),
   });
 };
 
-export const getAdminUpdateSettingsMutationOptions = <
+export const getSubscribePushNotificationsMutationOptions = <
   TError = ErrorType<ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof adminUpdateSettings>>,
+    Awaited<ReturnType<typeof subscribePushNotifications>>,
     TError,
-    { data: BodyType<UpdateAdminSettingsBody> },
+    { data: BodyType<PushSubscriptionBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof adminUpdateSettings>>,
+  Awaited<ReturnType<typeof subscribePushNotifications>>,
   TError,
-  { data: BodyType<UpdateAdminSettingsBody> },
+  { data: BodyType<PushSubscriptionBody> },
   TContext
 > => {
-  const mutationKey = ["adminUpdateSettings"];
+  const mutationKey = ["subscribePushNotifications"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -3235,42 +3243,391 @@ export const getAdminUpdateSettingsMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof adminUpdateSettings>>,
-    { data: BodyType<UpdateAdminSettingsBody> }
+    Awaited<ReturnType<typeof subscribePushNotifications>>,
+    { data: BodyType<PushSubscriptionBody> }
   > = (props) => {
     const { data } = props ?? {};
 
-    return adminUpdateSettings(data, requestOptions);
+    return subscribePushNotifications(data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type AdminUpdateSettingsMutationResult = NonNullable<
-  Awaited<ReturnType<typeof adminUpdateSettings>>
+export type SubscribePushNotificationsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof subscribePushNotifications>>
 >;
-export type AdminUpdateSettingsMutationBody = BodyType<UpdateAdminSettingsBody>;
-export type AdminUpdateSettingsMutationError = ErrorType<ErrorResponse>;
+export type SubscribePushNotificationsMutationBody =
+  BodyType<PushSubscriptionBody>;
+export type SubscribePushNotificationsMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Update admin settings (admin only)
+ * @summary Subscribe to push notifications
  */
-export const useAdminUpdateSettings = <
+export const useSubscribePushNotifications = <
   TError = ErrorType<ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof adminUpdateSettings>>,
+    Awaited<ReturnType<typeof subscribePushNotifications>>,
     TError,
-    { data: BodyType<UpdateAdminSettingsBody> },
+    { data: BodyType<PushSubscriptionBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
-  Awaited<ReturnType<typeof adminUpdateSettings>>,
+  Awaited<ReturnType<typeof subscribePushNotifications>>,
   TError,
-  { data: BodyType<UpdateAdminSettingsBody> },
+  { data: BodyType<PushSubscriptionBody> },
   TContext
 > => {
-  return useMutation(getAdminUpdateSettingsMutationOptions(options));
+  return useMutation(getSubscribePushNotificationsMutationOptions(options));
+};
+
+/**
+ * @summary Unsubscribe from push notifications
+ */
+export const getUnsubscribePushNotificationsUrl = () => {
+  return `/api/notifications/subscribe`;
+};
+
+export const unsubscribePushNotifications = async (
+  unsubscribeBody?: UnsubscribeBody,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getUnsubscribePushNotificationsUrl(), {
+    ...options,
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(unsubscribeBody),
+  });
+};
+
+export const getUnsubscribePushNotificationsMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unsubscribePushNotifications>>,
+    TError,
+    { data: BodyType<UnsubscribeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unsubscribePushNotifications>>,
+  TError,
+  { data: BodyType<UnsubscribeBody> },
+  TContext
+> => {
+  const mutationKey = ["unsubscribePushNotifications"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unsubscribePushNotifications>>,
+    { data: BodyType<UnsubscribeBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return unsubscribePushNotifications(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnsubscribePushNotificationsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unsubscribePushNotifications>>
+>;
+export type UnsubscribePushNotificationsMutationBody =
+  BodyType<UnsubscribeBody>;
+export type UnsubscribePushNotificationsMutationError =
+  ErrorType<ErrorResponse>;
+
+/**
+ * @summary Unsubscribe from push notifications
+ */
+export const useUnsubscribePushNotifications = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unsubscribePushNotifications>>,
+    TError,
+    { data: BodyType<UnsubscribeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unsubscribePushNotifications>>,
+  TError,
+  { data: BodyType<UnsubscribeBody> },
+  TContext
+> => {
+  return useMutation(getUnsubscribePushNotificationsMutationOptions(options));
+};
+
+/**
+ * @summary Get notification preferences for current user
+ */
+export const getGetNotificationPreferencesUrl = () => {
+  return `/api/notifications/preferences`;
+};
+
+export const getNotificationPreferences = async (
+  options?: RequestInit,
+): Promise<NotificationPreferences> => {
+  return customFetch<NotificationPreferences>(
+    getGetNotificationPreferencesUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetNotificationPreferencesQueryKey = () => {
+  return [`/api/notifications/preferences`] as const;
+};
+
+export const getGetNotificationPreferencesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getNotificationPreferences>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getNotificationPreferences>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetNotificationPreferencesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getNotificationPreferences>>
+  > = ({ signal }) => getNotificationPreferences({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getNotificationPreferences>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetNotificationPreferencesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getNotificationPreferences>>
+>;
+export type GetNotificationPreferencesQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get notification preferences for current user
+ */
+
+export function useGetNotificationPreferences<
+  TData = Awaited<ReturnType<typeof getNotificationPreferences>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getNotificationPreferences>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetNotificationPreferencesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update notification preferences
+ */
+export const getUpdateNotificationPreferencesUrl = () => {
+  return `/api/notifications/preferences`;
+};
+
+export const updateNotificationPreferences = async (
+  updateNotificationPreferencesBody: UpdateNotificationPreferencesBody,
+  options?: RequestInit,
+): Promise<NotificationPreferences> => {
+  return customFetch<NotificationPreferences>(
+    getUpdateNotificationPreferencesUrl(),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateNotificationPreferencesBody),
+    },
+  );
+};
+
+export const getUpdateNotificationPreferencesMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateNotificationPreferences>>,
+    TError,
+    { data: BodyType<UpdateNotificationPreferencesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateNotificationPreferences>>,
+  TError,
+  { data: BodyType<UpdateNotificationPreferencesBody> },
+  TContext
+> => {
+  const mutationKey = ["updateNotificationPreferences"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateNotificationPreferences>>,
+    { data: BodyType<UpdateNotificationPreferencesBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateNotificationPreferences(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateNotificationPreferencesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateNotificationPreferences>>
+>;
+export type UpdateNotificationPreferencesMutationBody =
+  BodyType<UpdateNotificationPreferencesBody>;
+export type UpdateNotificationPreferencesMutationError =
+  ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update notification preferences
+ */
+export const useUpdateNotificationPreferences = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateNotificationPreferences>>,
+    TError,
+    { data: BodyType<UpdateNotificationPreferencesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateNotificationPreferences>>,
+  TError,
+  { data: BodyType<UpdateNotificationPreferencesBody> },
+  TContext
+> => {
+  return useMutation(getUpdateNotificationPreferencesMutationOptions(options));
+};
+
+/**
+ * @summary Admin — send push notification to all users in an audience
+ */
+export const getBroadcastNotificationUrl = () => {
+  return `/api/admin/notifications/broadcast`;
+};
+
+export const broadcastNotification = async (
+  broadcastNotificationBody: BroadcastNotificationBody,
+  options?: RequestInit,
+): Promise<BroadcastNotificationResult> => {
+  return customFetch<BroadcastNotificationResult>(
+    getBroadcastNotificationUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(broadcastNotificationBody),
+    },
+  );
+};
+
+export const getBroadcastNotificationMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof broadcastNotification>>,
+    TError,
+    { data: BodyType<BroadcastNotificationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof broadcastNotification>>,
+  TError,
+  { data: BodyType<BroadcastNotificationBody> },
+  TContext
+> => {
+  const mutationKey = ["broadcastNotification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof broadcastNotification>>,
+    { data: BodyType<BroadcastNotificationBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return broadcastNotification(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BroadcastNotificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof broadcastNotification>>
+>;
+export type BroadcastNotificationMutationBody =
+  BodyType<BroadcastNotificationBody>;
+export type BroadcastNotificationMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Admin — send push notification to all users in an audience
+ */
+export const useBroadcastNotification = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof broadcastNotification>>,
+    TError,
+    { data: BodyType<BroadcastNotificationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof broadcastNotification>>,
+  TError,
+  { data: BodyType<BroadcastNotificationBody> },
+  TContext
+> => {
+  return useMutation(getBroadcastNotificationMutationOptions(options));
 };

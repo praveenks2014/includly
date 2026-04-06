@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { useState } from "react";
 import { useUser } from "@clerk/react";
 import {
   useGetMe,
@@ -8,6 +9,7 @@ import {
   useGetPaymentHistory,
   useGetContactUsage,
   useCreateStripeCheckout,
+  useBroadcastNotification,
   getGetMySubscriptionQueryKey,
   getGetPaymentHistoryQueryKey,
   getGetContactUsageQueryKey,
@@ -19,10 +21,14 @@ import {
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle, AlertCircle } from "lucide-react";
+import { NotificationBanner } from "@/components/NotificationBanner";
+import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle, AlertCircle, Bell } from "lucide-react";
 
 export default function DashboardPage() {
   const { user } = useUser();
@@ -61,6 +67,8 @@ export default function DashboardPage() {
           </p>
         </div>
 
+        <NotificationBanner />
+
         {role === "parent" && (
           <ParentDashboard
             data={parentDash}
@@ -72,6 +80,9 @@ export default function DashboardPage() {
         )}
         {role === "professional" && (
           <ProfessionalDashboard data={proDash} isLoading={proLoading} />
+        )}
+        {role === "admin" && (
+          <AdminDashboard />
         )}
         {!role && (
           <div className="text-center py-12">
@@ -446,6 +457,92 @@ function ContactUsageCard({ usage }: { usage: ContactUsage }) {
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+
+function AdminDashboard() {
+  const { toast } = useToast();
+  const { mutateAsync: broadcast, isPending } = useBroadcastNotification();
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [audience, setAudience] = useState<"all" | "professionals" | "parents">("all");
+
+  async function handleBroadcast() {
+    if (!title.trim() || !body.trim()) {
+      toast({ title: "Title and message are required", variant: "destructive" });
+      return;
+    }
+    try {
+      const result = await broadcast({ data: { title: title.trim(), body: body.trim(), audience } });
+      toast({ title: "Notification sent", description: `Sent to ${result.sent} device(s).` });
+      setTitle("");
+      setBody("");
+    } catch {
+      toast({ title: "Failed to send", description: "An error occurred.", variant: "destructive" });
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+        <div className="flex items-center gap-2 mb-4">
+          <Bell size={18} className="text-primary" />
+          <h2 className="font-semibold">Send push notification</h2>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="broadcast-title">Title</Label>
+            <Input
+              id="broadcast-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Notification title"
+              className="mt-1"
+              data-testid="broadcast-title"
+            />
+          </div>
+          <div>
+            <Label htmlFor="broadcast-body">Message</Label>
+            <Textarea
+              id="broadcast-body"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Notification message"
+              className="mt-1"
+              rows={3}
+              data-testid="broadcast-body"
+            />
+          </div>
+          <div>
+            <Label>Audience</Label>
+            <div className="flex gap-2 mt-1">
+              {(["all", "professionals", "parents"] as const).map((a) => (
+                <Button
+                  key={a}
+                  size="sm"
+                  variant={audience === a ? "default" : "outline"}
+                  onClick={() => setAudience(a)}
+                  className="capitalize"
+                  data-testid={`audience-${a}`}
+                >
+                  {a}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <Button
+            onClick={handleBroadcast}
+            disabled={isPending || !title.trim() || !body.trim()}
+            className="gap-2"
+            data-testid="send-broadcast-btn"
+          >
+            {isPending && <Loader2 size={14} className="animate-spin" />}
+            Send notification
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

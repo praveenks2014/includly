@@ -3,6 +3,7 @@ import { eq, and, gte, ilike, or, gt, lte } from "drizzle-orm";
 import { db, usersTable, professionalProfilesTable, contactUnlocksTable, specialtyEnum, professionalSubscriptionsTable } from "@workspace/db";
 import { subscriptionsTable } from "@workspace/db";
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
+import { notifyParentsOnProfileUpdate } from "../lib/notificationService";
 import {
   GetMyProfessionalProfileResponse,
   CreateProfessionalProfileBody,
@@ -87,6 +88,16 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
   if (!profile) {
     res.status(404).json({ error: "Professional profile not found" });
     return;
+  }
+
+  const unlocks = await db
+    .select({ parentId: contactUnlocksTable.parentId })
+    .from(contactUnlocksTable)
+    .where(eq(contactUnlocksTable.professionalId, profile.id));
+
+  const parentIds = unlocks.map((u) => u.parentId);
+  if (parentIds.length > 0) {
+    void notifyParentsOnProfileUpdate(parentIds).catch(() => {});
   }
 
   res.json(UpdateProfessionalProfileResponse.parse(profile));

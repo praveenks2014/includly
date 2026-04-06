@@ -418,27 +418,22 @@ export const GetContactUsageResponse = zod.object({
  * @summary Admin — get global settings
  */
 export const GetAdminSettingsResponse = zod.object({
-  contactLimitPerMonth: zod
-    .number()
-    .describe(
-      "Maximum contacts a parent can unlock per calendar month (for Plan B)",
-    ),
+  id: zod.number(),
+  contactLimitPerParent: zod.number(),
+  updatedAt: zod.coerce.date(),
 });
 
 /**
  * @summary Admin — update global settings
  */
-
 export const UpdateAdminSettingsBody = zod.object({
-  contactLimitPerMonth: zod.number().min(1).optional(),
+  contactLimitPerParent: zod.number().optional(),
 });
 
 export const UpdateAdminSettingsResponse = zod.object({
-  contactLimitPerMonth: zod
-    .number()
-    .describe(
-      "Maximum contacts a parent can unlock per calendar month (for Plan B)",
-    ),
+  id: zod.number(),
+  contactLimitPerParent: zod.number(),
+  updatedAt: zod.coerce.date(),
 });
 
 /**
@@ -881,6 +876,13 @@ export const AdminListProfessionalsResponse = zod.object({
 });
 
 /**
+ * @summary Get VAPID public key for Web Push subscription
+ */
+export const GetVapidPublicKeyResponse = zod.object({
+  publicKey: zod.string(),
+});
+
+/**
  * @summary Approve a professional's onboarding (admin only)
  */
 export const AdminApproveProfessionalParams = zod.object({
@@ -988,23 +990,64 @@ export const AdminGetStatsResponse = zod.object({
 });
 
 /**
- * @summary Get admin settings (admin only)
+ * @summary Subscribe to push notifications
  */
-export const AdminGetSettingsResponse = zod.object({
-  id: zod.number(),
-  contactLimitPerParent: zod.number(),
-  updatedAt: zod.coerce.date(),
+export const SubscribePushNotificationsBody = zod.object({
+  endpoint: zod.string(),
+  p256dh: zod.string(),
+  auth: zod.string(),
+});
+
+export const SubscribePushNotificationsResponse = zod.object({
+  success: zod.boolean(),
 });
 
 /**
- * @summary Update admin settings (admin only)
+ * @summary Unsubscribe from push notifications
  */
-export const AdminUpdateSettingsBody = zod.object({
-  contactLimitPerParent: zod.number().optional(),
+export const UnsubscribePushNotificationsBody = zod.object({
+  endpoint: zod.string().optional(),
 });
 
-export const AdminUpdateSettingsResponse = zod.object({
-  id: zod.number(),
-  contactLimitPerParent: zod.number(),
-  updatedAt: zod.coerce.date(),
+export const UnsubscribePushNotificationsResponse = zod.object({
+  success: zod.boolean(),
+});
+
+/**
+ * @summary Get notification preferences for current user
+ */
+export const GetNotificationPreferencesResponse = zod.object({
+  onUnlock: zod.boolean(),
+  onReview: zod.boolean(),
+  onProfileUpdate: zod.boolean(),
+});
+
+/**
+ * @summary Update notification preferences
+ */
+export const UpdateNotificationPreferencesBody = zod.object({
+  onUnlock: zod.boolean().optional(),
+  onReview: zod.boolean().optional(),
+  onProfileUpdate: zod.boolean().optional(),
+});
+
+export const UpdateNotificationPreferencesResponse = zod.object({
+  onUnlock: zod.boolean(),
+  onReview: zod.boolean(),
+  onProfileUpdate: zod.boolean(),
+});
+
+/**
+ * @summary Admin — send push notification to all users in an audience
+ */
+export const BroadcastNotificationBody = zod.object({
+  title: zod.string(),
+  body: zod.string(),
+  audience: zod.enum(["all", "professionals", "parents"]),
+});
+
+export const BroadcastNotificationResponse = zod.object({
+  sent: zod.number(),
+  total: zod.number(),
+  message: zod.string(),
 });

@@ -5,3 +5,4 @@ export * from "./unlocks";
 export * from "./certifications";
 export * from "./payments";
 export * from "./adminSettings";
+export * from "./notifications";

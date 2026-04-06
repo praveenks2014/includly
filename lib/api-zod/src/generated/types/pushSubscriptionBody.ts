@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface UpdateAdminSettingsBody {
-  contactLimitPerParent?: number;
+export interface PushSubscriptionBody {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
 }

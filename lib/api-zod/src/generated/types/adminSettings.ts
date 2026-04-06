@@ -8,7 +8,6 @@
 
 export interface AdminSettings {
   id: number;
-  /** Maximum contacts a parent can unlock per calendar month (for Plan B) */
   contactLimitPerParent: number;
   updatedAt: Date;
 }

@@ -303,16 +303,6 @@ export interface ContactUsage {
   hasActiveSubscription: boolean;
 }
 
-export interface AdminSettings {
-  /** Maximum contacts a parent can unlock per calendar month (for Plan B) */
-  contactLimitPerMonth: number;
-}
-
-export interface UpdateAdminSettingsBody {
-  /** @minimum 1 */
-  contactLimitPerMonth?: number;
-}
-
 export interface CreateRatingBody {
   professionalId: number;
   score: number;
@@ -549,6 +539,57 @@ export interface AdminSettings {
 
 export interface UpdateAdminSettingsBody {
   contactLimitPerParent?: number;
+}
+
+export interface VapidPublicKeyResponse {
+  publicKey: string;
+}
+
+export interface PushSubscriptionBody {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
+
+export interface UnsubscribeBody {
+  endpoint?: string;
+}
+
+export interface SuccessResponse {
+  success: boolean;
+}
+
+export interface NotificationPreferences {
+  onUnlock: boolean;
+  onReview: boolean;
+  onProfileUpdate: boolean;
+}
+
+export interface UpdateNotificationPreferencesBody {
+  onUnlock?: boolean;
+  onReview?: boolean;
+  onProfileUpdate?: boolean;
+}
+
+export type BroadcastNotificationBodyAudience =
+  (typeof BroadcastNotificationBodyAudience)[keyof typeof BroadcastNotificationBodyAudience];
+
+export const BroadcastNotificationBodyAudience = {
+  all: "all",
+  professionals: "professionals",
+  parents: "parents",
+} as const;
+
+export interface BroadcastNotificationBody {
+  title: string;
+  body: string;
+  audience: BroadcastNotificationBodyAudience;
+}
+
+export interface BroadcastNotificationResult {
+  sent: number;
+  total: number;
+  message: string;
 }
 
 export type SearchProfessionalsParams = {

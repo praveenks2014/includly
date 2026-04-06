@@ -11,6 +11,7 @@ import {
   CreateRazorpayOrderBody,
   VerifyRazorpayPaymentBody,
 } from "@workspace/api-zod";
+import { notifyProfessionalOnUnlock } from "../lib/notificationService";
 
 const router: IRouter = Router();
 
@@ -568,6 +569,16 @@ export async function activatePayment(
 
     if (existing.length === 0) {
       await db.insert(contactUnlocksTable).values({ parentId: userId, professionalId });
+
+      const [prof] = await db
+        .select({ userId: professionalProfilesTable.userId })
+        .from(professionalProfilesTable)
+        .where(eq(professionalProfilesTable.id, professionalId))
+        .limit(1);
+
+      if (prof) {
+        void notifyProfessionalOnUnlock(prof.userId).catch(() => {});
+      }
     }
     return { isSubscriptionActive: false, unlockedProfessionalId: professionalId };
   }

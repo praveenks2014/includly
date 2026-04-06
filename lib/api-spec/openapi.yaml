@@ -30,6 +30,8 @@ tags:
     description: Payment webhook handlers
   - name: admin
     description: Admin-only platform management
+  - name: notifications
+    description: Push notification subscription and preferences
 
 paths:
   /healthz:
@@ -890,6 +892,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /notifications/vapid-public-key:
+    get:
+      operationId: getVapidPublicKey
+      tags: [notifications]
+      summary: Get VAPID public key for Web Push subscription
+      responses:
+        "200":
+          description: VAPID public key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VapidPublicKeyResponse"
+        "503":
+          description: Push notifications not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /admin/professionals/{id}/approve:
     patch:
       operationId: adminApproveProfessional
@@ -995,36 +1016,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /admin/settings:
-    get:
-      operationId: adminGetSettings
-      tags: [admin]
-      summary: Get admin settings (admin only)
-      security:
-        - clerkAuth: []
-      responses:
-        "200":
-          description: Admin settings
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AdminSettings"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-    patch:
-      operationId: adminUpdateSettings
-      tags: [admin]
-      summary: Update admin settings (admin only)
+  /notifications/subscribe:
+    post:
+      operationId: subscribePushNotifications
+      tags: [notifications]
+      summary: Subscribe to push notifications
       security:
         - clerkAuth: []
       requestBody:
@@ -1032,14 +1028,118 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateAdminSettingsBody"
+              $ref: "#/components/schemas/PushSubscriptionBody"
       responses:
         "200":
-          description: Updated admin settings
+          description: Subscribed successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AdminSettings"
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: unsubscribePushNotifications
+      tags: [notifications]
+      summary: Unsubscribe from push notifications
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnsubscribeBody"
+      responses:
+        "200":
+          description: Unsubscribed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/preferences:
+    get:
+      operationId: getNotificationPreferences
+      tags: [notifications]
+      summary: Get notification preferences for current user
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Notification preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferences"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateNotificationPreferences
+      tags: [notifications]
+      summary: Update notification preferences
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationPreferencesBody"
+      responses:
+        "200":
+          description: Updated notification preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferences"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/notifications/broadcast:
+    post:
+      operationId: broadcastNotification
+      tags: [notifications]
+      summary: Admin — send push notification to all users in an audience
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BroadcastNotificationBody"
+      responses:
+        "200":
+          description: Broadcast result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BroadcastNotificationResult"
         "400":
           description: Validation error
           content:
@@ -1989,3 +2089,95 @@ components:
       properties:
         contactLimitPerParent:
           type: integer
+
+    VapidPublicKeyResponse:
+      type: object
+      properties:
+        publicKey:
+          type: string
+      required:
+        - publicKey
+
+    PushSubscriptionBody:
+      type: object
+      properties:
+        endpoint:
+          type: string
+        p256dh:
+          type: string
+        auth:
+          type: string
+      required:
+        - endpoint
+        - p256dh
+        - auth
+
+    UnsubscribeBody:
+      type: object
+      properties:
+        endpoint:
+          type: string
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
+
+    NotificationPreferences:
+      type: object
+      properties:
+        onUnlock:
+          type: boolean
+        onReview:
+          type: boolean
+        onProfileUpdate:
+          type: boolean
+      required:
+        - onUnlock
+        - onReview
+        - onProfileUpdate
+
+    UpdateNotificationPreferencesBody:
+      type: object
+      properties:
+        onUnlock:
+          type: boolean
+        onReview:
+          type: boolean
+        onProfileUpdate:
+          type: boolean
+
+    BroadcastNotificationBody:
+      type: object
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+        audience:
+          type: string
+          enum:
+            - all
+            - professionals
+            - parents
+      required:
+        - title
+        - body
+        - audience
+
+    BroadcastNotificationResult:
+      type: object
+      properties:
+        sent:
+          type: integer
+        total:
+          type: integer
+        message:
+          type: string
+      required:
+        - sent
+        - total
+        - message

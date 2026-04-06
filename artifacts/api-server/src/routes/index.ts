@@ -8,6 +8,7 @@ import dashboardRouter from "./dashboard";
 import complianceRouter from "./compliance";
 import paymentsRouter from "./payments";
 import adminRouter from "./admin";
+import notificationsRouter from "./notifications";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(dashboardRouter);
 router.use(complianceRouter);
 router.use(paymentsRouter);
 router.use(adminRouter);
+router.use(notificationsRouter);
 
 export default router;

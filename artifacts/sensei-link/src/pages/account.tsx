@@ -4,6 +4,9 @@ import {
   useGetMe,
   getUpdateMeMutationOptions,
   getGetMeQueryKey,
+  useGetNotificationPreferences,
+  useUpdateNotificationPreferences,
+  getGetNotificationPreferencesQueryKey,
 } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -11,19 +14,31 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, User } from "lucide-react";
+import { Loader2, User, Bell } from "lucide-react";
 import { Link } from "wouter";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 export default function AccountPage() {
   const { user } = useUser();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: me, isLoading } = useGetMe();
+  const { data: notifPrefs } = useGetNotificationPreferences();
 
   const [fullName, setFullName] = useState("");
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
+
+  const {
+    isSupported: pushSupported,
+    permission,
+    isSubscribed,
+    isLoading: pushLoading,
+    requestPermissionAndSubscribe,
+    unsubscribe,
+  } = usePushNotifications();
 
   useEffect(() => {
     if (me) {
@@ -44,8 +59,37 @@ export default function AccountPage() {
     },
   });
 
+  const updatePrefsMutation = useUpdateNotificationPreferences({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetNotificationPreferencesQueryKey() });
+      },
+      onError: () => {
+        toast({ title: "Error", description: "Could not update preferences.", variant: "destructive" });
+      },
+    },
+  });
+
   function handleSave() {
     updateMutation.mutate({ data: { fullName, city, country } });
+  }
+
+  async function handleToggleNotifications() {
+    if (isSubscribed) {
+      await unsubscribe();
+      toast({ title: "Notifications disabled" });
+    } else {
+      const ok = await requestPermissionAndSubscribe();
+      if (ok) {
+        toast({ title: "Notifications enabled" });
+      } else if (permission === "denied") {
+        toast({ title: "Blocked", description: "Allow notifications in your browser settings.", variant: "destructive" });
+      }
+    }
+  }
+
+  function handleTogglePref(key: "onUnlock" | "onReview" | "onProfileUpdate", value: boolean) {
+    updatePrefsMutation.mutate({ data: { [key]: value } });
   }
 
   if (isLoading) {
@@ -55,6 +99,12 @@ export default function AccountPage() {
       </div>
     );
   }
+
+  const prefs = {
+    onUnlock: notifPrefs?.onUnlock ?? true,
+    onReview: notifPrefs?.onReview ?? true,
+    onProfileUpdate: notifPrefs?.onProfileUpdate ?? true,
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -128,6 +178,98 @@ export default function AccountPage() {
             Save changes
           </Button>
         </div>
+
+        {/* Notifications */}
+        {pushSupported && (
+          <div className="bg-card border border-border rounded-xl p-6 shadow-sm mb-6" data-testid="notifications-section">
+            <div className="flex items-center gap-2 mb-4">
+              <Bell size={18} className="text-primary" />
+              <h2 className="font-semibold">Notifications</h2>
+            </div>
+
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm font-medium">Push notifications</p>
+                <p className="text-xs text-muted-foreground">
+                  {permission === "denied"
+                    ? "Blocked in browser — enable in browser settings"
+                    : isSubscribed
+                      ? "Active on this device"
+                      : "Not enabled on this device"}
+                </p>
+              </div>
+              <Switch
+                checked={isSubscribed}
+                onCheckedChange={handleToggleNotifications}
+                disabled={pushLoading || permission === "denied"}
+                data-testid="notifications-toggle"
+              />
+            </div>
+
+            {isSubscribed && (
+              <>
+                <Separator className="mb-4" />
+                <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wide">Notification types</p>
+                <div className="space-y-3">
+                  {me?.role === "professional" && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm">Contact views</p>
+                          <p className="text-xs text-muted-foreground">When a parent views your contact info</p>
+                        </div>
+                        <Switch
+                          checked={prefs.onUnlock}
+                          onCheckedChange={(v) => handleTogglePref("onUnlock", v)}
+                          disabled={updatePrefsMutation.isPending}
+                          data-testid="pref-on-unlock"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm">New reviews</p>
+                          <p className="text-xs text-muted-foreground">When a parent submits a review</p>
+                        </div>
+                        <Switch
+                          checked={prefs.onReview}
+                          onCheckedChange={(v) => handleTogglePref("onReview", v)}
+                          disabled={updatePrefsMutation.isPending}
+                          data-testid="pref-on-review"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {me?.role === "parent" && (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm">Profile updates</p>
+                        <p className="text-xs text-muted-foreground">When a professional you unlocked updates their profile</p>
+                      </div>
+                      <Switch
+                        checked={prefs.onProfileUpdate}
+                        onCheckedChange={(v) => handleTogglePref("onProfileUpdate", v)}
+                        disabled={updatePrefsMutation.isPending}
+                        data-testid="pref-on-profile-update"
+                      />
+                    </div>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 text-xs"
+                  onClick={() => {
+                    updatePrefsMutation.mutate({ data: { onUnlock: false, onReview: false, onProfileUpdate: false } });
+                  }}
+                  disabled={updatePrefsMutation.isPending}
+                  data-testid="disable-all-notifs-btn"
+                >
+                  Disable all
+                </Button>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Professional profile link */}
         {me?.role === "professional" && (
