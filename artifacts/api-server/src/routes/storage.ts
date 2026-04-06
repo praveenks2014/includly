@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
-import { eq, or } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
@@ -118,15 +118,22 @@ router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Resp
     const userRole = req.userRole;
 
     if (userRole !== "admin") {
+      // Check: does the calling user own a certification with this objectPath?
       const certMatch = await db
         .select({ id: userCertificationsTable.id })
         .from(userCertificationsTable)
-        .where(eq(userCertificationsTable.documentUrl, objectPath))
+        .where(
+          and(
+            eq(userCertificationsTable.documentUrl, objectPath),
+            eq(userCertificationsTable.userId, userId),
+          )
+        )
         .limit(1);
 
-      let isOwner = certMatch.length > 0 && certMatch.some(() => true);
+      let isOwner = certMatch.length > 0;
 
       if (!isOwner) {
+        // Check: does the calling professional own an identity_verification with this objectPath?
         const [profile] = await db
           .select({ id: professionalProfilesTable.id })
           .from(professionalProfilesTable)
@@ -136,7 +143,12 @@ router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Resp
           const idVerifMatch = await db
             .select({ id: identityVerificationsTable.id })
             .from(identityVerificationsTable)
-            .where(eq(identityVerificationsTable.fileKey, objectPath))
+            .where(
+              and(
+                eq(identityVerificationsTable.fileKey, objectPath),
+                eq(identityVerificationsTable.professionalId, profile.id),
+              )
+            )
             .limit(1);
 
           isOwner = idVerifMatch.length > 0;
