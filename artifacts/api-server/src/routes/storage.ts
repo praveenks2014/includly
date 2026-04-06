@@ -1,32 +1,57 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
+import { eq, or } from "drizzle-orm";
 import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
-import { ObjectPermission } from "../lib/objectAcl";
+import { requireAuth } from "../middlewares/requireAuth";
+import { db, userCertificationsTable, identityVerificationsTable, professionalProfilesTable } from "@workspace/db";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
 
+const ALLOWED_CONTENT_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+]);
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB
+
 /**
  * POST /storage/uploads/request-url
  *
- * Request a presigned URL for file upload.
- * The client sends JSON metadata (name, size, contentType) — NOT the file.
- * Then uploads the file directly to the returned presigned URL.
+ * Request a presigned URL for file upload. Requires authentication.
+ * Enforces server-side MIME allowlist (PDF, JPG, PNG) and 10MB size limit.
  */
-router.post("/storage/uploads/request-url", async (req: Request, res: Response) => {
+router.post("/storage/uploads/request-url", requireAuth, async (req: Request, res: Response) => {
   const parsed = RequestUploadUrlBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Missing or invalid required fields" });
     return;
   }
 
-  try {
-    const { name, size, contentType } = parsed.data;
+  const { name, size, contentType } = parsed.data;
 
+  if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
+    res.status(400).json({ error: "Only PDF, JPG, and PNG files are allowed" });
+    return;
+  }
+
+  if (size > MAX_UPLOAD_BYTES) {
+    res.status(400).json({ error: "File size must be 10MB or less" });
+    return;
+  }
+
+  if (!name || name.trim().length === 0) {
+    res.status(400).json({ error: "File name is required" });
+    return;
+  }
+
+  try {
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
     const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
 
@@ -48,7 +73,6 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
  *
  * Serve public assets from PUBLIC_OBJECT_SEARCH_PATHS.
  * These are unconditionally public — no authentication or ACL checks.
- * IMPORTANT: Always provide this endpoint when object storage is set up.
  */
 router.get("/storage/public-objects/*filePath", async (req: Request, res: Response) => {
   try {
@@ -80,32 +104,52 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
 /**
  * GET /storage/objects/*
  *
- * Serve object entities from PRIVATE_OBJECT_DIR.
- * These are served from a separate path from /public-objects and can optionally
- * be protected with authentication or ACL checks based on the use case.
+ * Serve private object entities. Requires authentication.
+ * Authorization: user must own the object (via certification or identity_verification record),
+ * or be an admin. This prevents any authenticated user from reading another user's KYC docs.
  */
-router.get("/storage/objects/*path", async (req: Request, res: Response) => {
+router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Response) => {
   try {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
     const objectPath = `/objects/${wildcardPath}`;
+
+    const userId = req.userId!;
+    const userRole = req.userRole;
+
+    if (userRole !== "admin") {
+      const certMatch = await db
+        .select({ id: userCertificationsTable.id })
+        .from(userCertificationsTable)
+        .where(eq(userCertificationsTable.documentUrl, objectPath))
+        .limit(1);
+
+      let isOwner = certMatch.length > 0 && certMatch.some(() => true);
+
+      if (!isOwner) {
+        const [profile] = await db
+          .select({ id: professionalProfilesTable.id })
+          .from(professionalProfilesTable)
+          .where(eq(professionalProfilesTable.userId, userId));
+
+        if (profile) {
+          const idVerifMatch = await db
+            .select({ id: identityVerificationsTable.id })
+            .from(identityVerificationsTable)
+            .where(eq(identityVerificationsTable.fileKey, objectPath))
+            .limit(1);
+
+          isOwner = idVerifMatch.length > 0;
+        }
+      }
+
+      if (!isOwner) {
+        res.status(403).json({ error: "Forbidden: you do not own this object" });
+        return;
+      }
+    }
+
     const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
-
-    // --- Protected route example (uncomment when using replit-auth) ---
-    // if (!req.isAuthenticated()) {
-    //   res.status(401).json({ error: "Unauthorized" });
-    //   return;
-    // }
-    // const canAccess = await objectStorageService.canAccessObjectEntity({
-    //   userId: req.user.id,
-    //   objectFile,
-    //   requestedPermission: ObjectPermission.READ,
-    // });
-    // if (!canAccess) {
-    //   res.status(403).json({ error: "Forbidden" });
-    //   return;
-    // }
-
     const response = await objectStorageService.downloadObject(objectFile);
 
     res.status(response.status);
