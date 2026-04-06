@@ -80,7 +80,7 @@ export function UnlockPaymentModal({
         key: order.keyId,
         amount: order.amount,
         currency: order.currency,
-        name: "SenseiLink",
+        name: "Sproutly",
         description: order.planName,
         order_id: order.orderId,
         handler: async (response: RazorpayResponse) => {

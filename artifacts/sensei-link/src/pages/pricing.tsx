@@ -63,7 +63,7 @@ export default function PricingPage() {
         key: order.keyId,
         amount: order.amount,
         currency: order.currency,
-        name: "SenseiLink",
+        name: "Sproutly",
         description: order.planName,
         order_id: order.orderId,
         handler: async (response: RazorpayResponse) => {
@@ -216,7 +216,7 @@ export default function PricingPage() {
             <div className="text-center mb-8">
               <h2 className="text-2xl font-serif font-bold text-foreground mb-2">For Professionals</h2>
               <p className="text-muted-foreground max-w-xl mx-auto">
-                Join SenseiLink as a specialist. Simple, transparent pricing to get your profile live and visible to parents.
+                Join Sproutly as a specialist. Simple, transparent pricing to get your profile live and visible to parents.
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

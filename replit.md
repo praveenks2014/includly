@@ -1,8 +1,8 @@
-# SenseiLink
+# Sproutly
 
 ## Overview
 
-SenseiLink is a marketplace connecting parents with Shadow Teachers, Special Educators (OT, Speech Therapy, Special Tutors), and Medical Specialists (Psychiatrist, Developmental Pediatrician, Neurologist) for children with special needs.
+Sproutly is a marketplace connecting parents with Shadow Teachers, Special Educators (OT, Speech Therapy, Special Tutors), and Medical Specialists (Psychiatrist, Developmental Pediatrician, Neurologist) for children with special needs.
 
 pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
 

@@ -182,7 +182,7 @@ export default function OnboardPage() {
         key: order.keyId,
         amount: order.amount,
         currency: order.currency,
-        name: "SenseiLink",
+        name: "Sproutly",
         description: order.planName,
         order_id: order.orderId,
         handler: async (response: RazorpayPaymentResponse) => {
@@ -572,7 +572,7 @@ export default function OnboardPage() {
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
                     <p className="text-xs font-semibold text-amber-900">Data Processing Consent — DPDP / GDPR</p>
                     <p className="text-xs text-amber-800 leading-relaxed">
-                      Your identity and qualification documents are collected solely for professional verification purposes on SenseiLink.
+                      Your identity and qualification documents are collected solely for professional verification purposes on Sproutly.
                       Documents are stored securely and will not be shared with third parties.
                       Under India's DPDP Act 2023 and GDPR, you have the right to request deletion of your documents at any time
                       by using the "Delete My Account" option in Account Settings.
@@ -585,7 +585,7 @@ export default function OnboardPage() {
                         data-testid="dpdp-consent-checkbox"
                       />
                       <label htmlFor="dpdp-consent" className="text-xs text-amber-900 leading-relaxed cursor-pointer">
-                        I consent to SenseiLink processing my documents for identity verification as described above.
+                        I consent to Sproutly processing my documents for identity verification as described above.
                       </label>
                     </div>
                   </div>

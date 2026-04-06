@@ -18,11 +18,11 @@ export default function TermsPage() {
           <p className="text-muted-foreground text-sm mb-8">Last updated: April 2026</p>
 
           <Section title="1. Acceptance of Terms">
-            <p>By accessing or using SenseiLink ("the Platform"), you agree to be bound by these Terms of Service and our Privacy Policy. If you do not agree to these terms, please do not use the Platform.</p>
+            <p>By accessing or using Sproutly ("the Platform"), you agree to be bound by these Terms of Service and our Privacy Policy. If you do not agree to these terms, please do not use the Platform.</p>
           </Section>
 
           <Section title="2. Description of Service">
-            <p>SenseiLink is an online marketplace that connects parents and guardians ("Parents") with special education professionals and medical specialists ("Professionals"). We provide a platform for discovery and contact — we are not a party to any direct service agreement between Parents and Professionals.</p>
+            <p>Sproutly is an online marketplace that connects parents and guardians ("Parents") with special education professionals and medical specialists ("Professionals"). We provide a platform for discovery and contact — we are not a party to any direct service agreement between Parents and Professionals.</p>
           </Section>
 
           <Section title="3. Account Registration">
@@ -40,7 +40,7 @@ export default function TermsPage() {
           </Section>
 
           <Section title="5. Professional Responsibility Disclaimer">
-            <p>SenseiLink acts solely as a marketplace platform. We do not employ, endorse, guarantee, or assume responsibility for any Professional listed on the Platform. Parents are solely responsible for:</p>
+            <p>Sproutly acts solely as a marketplace platform. We do not employ, endorse, guarantee, or assume responsibility for any Professional listed on the Platform. Parents are solely responsible for:</p>
             <ul>
               <li>Verifying a Professional's credentials independently before engaging their services.</li>
               <li>Negotiating and agreeing on service terms, fees, and schedules directly with Professionals.</li>
@@ -85,11 +85,11 @@ export default function TermsPage() {
           </Section>
 
           <Section title="9. Intellectual Property">
-            <p>All content on the Platform, including the SenseiLink name, logo, design, and software, is owned by SenseiLink and protected by intellectual property laws. You may not reproduce or distribute our content without written permission.</p>
+            <p>All content on the Platform, including the Sproutly name, logo, design, and software, is owned by Sproutly and protected by intellectual property laws. You may not reproduce or distribute our content without written permission.</p>
           </Section>
 
           <Section title="10. Limitation of Liability">
-            <p>To the maximum extent permitted by applicable law, SenseiLink shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the Platform or any services obtained through it.</p>
+            <p>To the maximum extent permitted by applicable law, Sproutly shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the Platform or any services obtained through it.</p>
           </Section>
 
           <Section title="11. Governing Law">
@@ -101,7 +101,7 @@ export default function TermsPage() {
           </Section>
 
           <Section title="13. Contact">
-            <p><strong>SenseiLink</strong><br />Email: <a href="mailto:legal@senseilink.in">legal@senseilink.in</a></p>
+            <p><strong>Sproutly</strong><br />Email: <a href="mailto:legal@senseilink.in">legal@senseilink.in</a></p>
           </Section>
         </div>
       </div>

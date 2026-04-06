@@ -18,8 +18,8 @@ export default function PrivacyPage() {
           <p className="text-muted-foreground text-sm mb-8">Last updated: April 2026</p>
 
           <Section title="1. Introduction">
-            <p>SenseiLink ("we", "us", or "our") operates the SenseiLink platform, which connects parents and guardians with special education professionals and medical specialists. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our service.</p>
-            <p>By using SenseiLink, you agree to the collection and use of information in accordance with this policy.</p>
+            <p>Sproutly ("we", "us", or "our") operates the Sproutly platform, which connects parents and guardians with special education professionals and medical specialists. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our service.</p>
+            <p>By using Sproutly, you agree to the collection and use of information in accordance with this policy.</p>
           </Section>
 
           <Section title="2. Information We Collect">
@@ -97,7 +97,7 @@ export default function PrivacyPage() {
 
           <Section title="10. Contact Us">
             <p>For privacy-related queries, contact us at:</p>
-            <p><strong>SenseiLink</strong><br />Email: <a href="mailto:privacy@senseilink.in">privacy@senseilink.in</a></p>
+            <p><strong>Sproutly</strong><br />Email: <a href="mailto:privacy@senseilink.in">privacy@senseilink.in</a></p>
           </Section>
         </div>
       </div>

@@ -35,7 +35,7 @@ export function Navbar() {
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
             <span className="text-white font-bold text-sm">SL</span>
           </div>
-          <span className="font-serif font-semibold text-lg text-foreground">SenseiLink</span>
+          <span className="font-serif font-semibold text-lg text-foreground">Sproutly</span>
         </Link>
 
         {/* Desktop nav */}

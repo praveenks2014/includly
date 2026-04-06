@@ -40,7 +40,7 @@ export default function HomePage() {
             <span className="text-primary">for your child's journey</span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed">
-            SenseiLink connects parents with verified Shadow Teachers, Special Educators, and Medical Specialists — so every child gets the support they deserve.
+            Sproutly connects parents with verified Shadow Teachers, Special Educators, and Medical Specialists — so every child gets the support they deserve.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link href="/sign-up">
@@ -87,7 +87,7 @@ export default function HomePage() {
       <section className="py-16 px-4">
         <div className="max-w-5xl mx-auto">
           <h2 className="text-2xl font-serif font-semibold text-center text-foreground mb-2">Browse by specialty</h2>
-          <p className="text-muted-foreground text-center mb-10">Every specialist on SenseiLink is background-checked and reviewed by parents like you.</p>
+          <p className="text-muted-foreground text-center mb-10">Every specialist on Sproutly is background-checked and reviewed by parents like you.</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {SPECIALTIES.map((s) => (
               <Link key={s.value} href={`/search?specialty=${s.value}`}>
@@ -103,10 +103,10 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Why SenseiLink */}
+      {/* Why Sproutly */}
       <section className="py-16 px-4 bg-muted/20 border-y border-border">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-2xl font-serif font-semibold text-center mb-10">Why parents choose SenseiLink</h2>
+          <h2 className="text-2xl font-serif font-semibold text-center mb-10">Why parents choose Sproutly</h2>
           <div className="grid sm:grid-cols-3 gap-8">
             <div className="text-center">
               <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -137,7 +137,7 @@ export default function HomePage() {
       <section className="py-20 px-4 text-center">
         <div className="max-w-2xl mx-auto">
           <h2 className="text-3xl font-serif font-semibold mb-4">Ready to find the right support?</h2>
-          <p className="text-muted-foreground mb-8">Join thousands of families who've found the perfect specialist through SenseiLink.</p>
+          <p className="text-muted-foreground mb-8">Join thousands of families who've found the perfect specialist through Sproutly.</p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link href="/sign-up">
               <Button size="lg" className="gap-2 px-8">
@@ -157,13 +157,13 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t border-border py-8 px-4 text-center text-sm text-muted-foreground">
         <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="font-serif font-semibold text-foreground">SenseiLink</div>
+          <div className="font-serif font-semibold text-foreground">Sproutly</div>
           <div className="flex gap-4">
             <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
             <Link href="/terms" className="hover:text-foreground transition-colors">Terms</Link>
             <Link href="/support" className="hover:text-foreground transition-colors">Support</Link>
           </div>
-          <div>2026 SenseiLink. All rights reserved.</div>
+          <div>2026 Sproutly. All rights reserved.</div>
         </div>
       </footer>
     </div>
