@@ -240,11 +240,15 @@ export default function OnboardPage() {
       if (!idRes.ok) throw new Error("Failed to submit identity verification");
 
       if (certFileKey) {
-        await fetch("/api/verifications/certifications", {
+        const certRes = await fetch("/api/verifications/certifications", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ documentType: certDocType, fileKey: certFileKey }),
         });
+        if (!certRes.ok) {
+          const body = await certRes.json().catch(() => ({}));
+          throw new Error((body as { error?: string }).error ?? "Failed to submit certification document");
+        }
       }
       setVerificationDone(true);
       toast({ title: "Documents submitted", description: "Your profile will show Verified once reviewed (2-3 business days)." });
