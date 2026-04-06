@@ -7,7 +7,13 @@ import {
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { requireAuth } from "../middlewares/requireAuth";
-import { db, userCertificationsTable, identityVerificationsTable, professionalProfilesTable } from "@workspace/db";
+import {
+  db,
+  userCertificationsTable,
+  identityVerificationsTable,
+  professionalProfilesTable,
+  pendingUploadsTable,
+} from "@workspace/db";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
@@ -26,6 +32,8 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB
  *
  * Request a presigned URL for file upload. Requires authentication.
  * Enforces server-side MIME allowlist (PDF, JPG, PNG) and 10MB size limit.
+ * Records the upload intent in the pending_uploads ledger (userId + objectPath)
+ * so that verification endpoints can verify the caller owns the file before accepting it.
  */
 router.post("/storage/uploads/request-url", requireAuth, async (req: Request, res: Response) => {
   const parsed = RequestUploadUrlBody.safeParse(req.body);
@@ -54,6 +62,14 @@ router.post("/storage/uploads/request-url", requireAuth, async (req: Request, re
   try {
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
     const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+
+    // Record the upload in the ledger so verification routes can confirm ownership
+    await db.insert(pendingUploadsTable).values({
+      userId: req.userId!,
+      objectPath,
+      contentType,
+      fileSizeBytes: size,
+    });
 
     res.json(
       RequestUploadUrlResponse.parse({
@@ -106,7 +122,7 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
  *
  * Serve private object entities. Requires authentication.
  * Authorization: user must own the object (via certification or identity_verification record),
- * or be an admin. This prevents any authenticated user from reading another user's KYC docs.
+ * or be an admin. Double-keyed check: both fileKey match AND userId/professionalId match.
  */
 router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Response) => {
   try {
@@ -118,7 +134,7 @@ router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Resp
     const userRole = req.userRole;
 
     if (userRole !== "admin") {
-      // Check: does the calling user own a certification with this objectPath?
+      // Check: does the calling user own a certification with this exact path?
       const certMatch = await db
         .select({ id: userCertificationsTable.id })
         .from(userCertificationsTable)
@@ -133,7 +149,7 @@ router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Resp
       let isOwner = certMatch.length > 0;
 
       if (!isOwner) {
-        // Check: does the calling professional own an identity_verification with this objectPath?
+        // Check: does the calling professional own an identity_verification with this exact path?
         const [profile] = await db
           .select({ id: professionalProfilesTable.id })
           .from(professionalProfilesTable)

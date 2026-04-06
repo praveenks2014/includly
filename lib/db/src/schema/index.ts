@@ -4,6 +4,7 @@ export * from "./ratings";
 export * from "./unlocks";
 export * from "./certifications";
 export * from "./identityVerifications";
+export * from "./uploads";
 export * from "./payments";
 export * from "./adminSettings";
 export * from "./notifications";

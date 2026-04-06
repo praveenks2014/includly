@@ -1,17 +1,44 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, professionalProfilesTable, userCertificationsTable, identityVerificationsTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
+import {
+  db,
+  professionalProfilesTable,
+  userCertificationsTable,
+  identityVerificationsTable,
+  pendingUploadsTable,
+} from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { SubmitIdentityVerificationBody, SubmitCertificationBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-const ALLOWED_CONTENT_TYPES = new Set([
-  "application/pdf",
-  "image/jpeg",
-  "image/jpg",
-  "image/png",
-]);
+/**
+ * Verify the calling user owns a given objectPath by checking the pending_uploads ledger.
+ * Marks the upload as consumed so it cannot be claimed again.
+ * Returns false if the file was uploaded by a different user or not found.
+ */
+async function claimUpload(userId: number, objectPath: string): Promise<boolean> {
+  const [record] = await db
+    .select()
+    .from(pendingUploadsTable)
+    .where(
+      and(
+        eq(pendingUploadsTable.objectPath, objectPath),
+        eq(pendingUploadsTable.userId, userId),
+        eq(pendingUploadsTable.consumed, false),
+      )
+    )
+    .limit(1);
+
+  if (!record) return false;
+
+  await db
+    .update(pendingUploadsTable)
+    .set({ consumed: true })
+    .where(eq(pendingUploadsTable.id, record.id));
+
+  return true;
+}
 
 function validateFileKey(fileKey: string): boolean {
   return fileKey.startsWith("/objects/");
@@ -47,6 +74,13 @@ router.post(
 
     if (!profile) {
       res.status(404).json({ error: "Professional profile not found" });
+      return;
+    }
+
+    // Verify the calling user uploaded this file (ownership check via upload ledger)
+    const owned = await claimUpload(req.userId!, fileKey);
+    if (!owned) {
+      res.status(403).json({ error: "File was not uploaded by you or has already been claimed" });
       return;
     }
 
@@ -161,6 +195,13 @@ router.post(
 
     if (!profile) {
       res.status(404).json({ error: "Professional profile not found" });
+      return;
+    }
+
+    // Verify the calling user uploaded this file (ownership check via upload ledger)
+    const owned = await claimUpload(req.userId!, fileKey);
+    if (!owned) {
+      res.status(403).json({ error: "File was not uploaded by you or has already been claimed" });
       return;
     }
 
