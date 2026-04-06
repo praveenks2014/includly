@@ -28,7 +28,7 @@ import { Loader2, CheckCircle2, IndianRupee } from "lucide-react";
 import { LocationPicker, type PickedLocation } from "@/components/LocationPicker";
 import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
 
-const TRAVEL_RADIUS_OPTIONS = [5, 10, 15, 25, 50];
+const TRAVEL_RADIUS_OPTIONS = [5, 10, 25, 50];
 const STEPS = ["Basic info", "Details", "Location", "Contact", "Pricing", "Activate"];
 
 export default function OnboardPage() {

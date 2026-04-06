@@ -42,8 +42,9 @@ export default function SearchPage() {
   const [showFilters, setShowFilters] = useState(false);
 
   const [geoLocation, setGeoLocation] = useState<{ lat: number; lng: number; city: string } | null>(null);
-  const [radiusKm, setRadiusKm] = useState(20);
+  const [radiusKm, setRadiusKm] = useState(5);
   const [geoMode, setGeoMode] = useState(false);
+  const [geoLocating, setGeoLocating] = useState(false);
 
   const searchParams = {
     ...(specialty ? { specialty: specialty as SearchProfessionalsSpecialty } : {}),
@@ -63,6 +64,21 @@ export default function SearchPage() {
     setGeoLocation({ lat: place.lat, lng: place.lng, city: place.city });
     setCity(place.city);
     setGeoMode(true);
+  }
+
+  function handleUseCurrentLocation() {
+    if (!navigator.geolocation) return;
+    setGeoLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGeoLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, city: "Your location" });
+        setCity("Your location");
+        setGeoMode(true);
+        setGeoLocating(false);
+      },
+      () => setGeoLocating(false),
+      { timeout: 8000 },
+    );
   }
 
   function handleCityTextChange(value: string) {
@@ -126,14 +142,27 @@ export default function SearchPage() {
         {/* Search + filter bar */}
         <div className="bg-card border border-border rounded-xl p-4 mb-6 shadow-sm">
           <div className="flex gap-3 flex-wrap">
-            <div className="flex-1 min-w-[200px]">
-              <PlacesAutocomplete
-                value={city}
-                onChange={handleCityTextChange}
-                onPlaceSelect={handlePlaceSelect}
-                placeholder="Search by city or area..."
-                data-testid="city-input"
-              />
+            <div className="flex-1 min-w-[200px] flex gap-2">
+              <div className="flex-1">
+                <PlacesAutocomplete
+                  value={city}
+                  onChange={handleCityTextChange}
+                  onPlaceSelect={handlePlaceSelect}
+                  placeholder="Search by city or area..."
+                  data-testid="city-input"
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                className="shrink-0 h-10 w-10"
+                onClick={handleUseCurrentLocation}
+                disabled={geoLocating}
+                title="Use my current location"
+                data-testid="use-location-btn"
+              >
+                {geoLocating ? <Loader2 size={16} className="animate-spin" /> : <Navigation2 size={16} />}
+              </Button>
             </div>
             <Select value={specialty || "all"} onValueChange={(v) => setSpecialty(v === "all" ? "" : v)}>
               <SelectTrigger className="w-[220px]" data-testid="specialty-select">
