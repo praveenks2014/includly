@@ -339,7 +339,7 @@ export const SearchProfessionalsResponse = zod.object({
 });
 
 /**
- * @summary Submit a rating for a professional
+ * @summary Submit or update a rating for a professional (upsert — one per parent per professional)
  */
 export const CreateRatingBody = zod.object({
   professionalId: zod.number(),
@@ -348,7 +348,7 @@ export const CreateRatingBody = zod.object({
 });
 
 /**
- * @summary Get all ratings for a professional
+ * @summary Get all ratings for a professional (includes anonymized reviewer name)
  */
 export const GetRatingsForProfessionalParams = zod.object({
   id: zod.coerce.number(),
@@ -360,11 +360,86 @@ export const GetRatingsForProfessionalResponseItem = zod.object({
   professionalId: zod.number(),
   score: zod.number(),
   comment: zod.string().nullish(),
+  reviewerName: zod
+    .string()
+    .nullish()
+    .describe("Anonymized reviewer name (first name + initial of surname)"),
   createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
 });
 export const GetRatingsForProfessionalResponse = zod.array(
   GetRatingsForProfessionalResponseItem,
 );
+
+/**
+ * @summary Get the authenticated parent's rating for a specific professional
+ */
+export const GetMyRatingForProfessionalParams = zod.object({
+  professionalId: zod.coerce.number(),
+});
+
+export const GetMyRatingForProfessionalResponse = zod.object({
+  rating: zod
+    .object({
+      id: zod.number(),
+      parentId: zod.number(),
+      professionalId: zod.number(),
+      score: zod.number(),
+      comment: zod.string().nullish(),
+      reviewerName: zod
+        .string()
+        .nullish()
+        .describe("Anonymized reviewer name (first name + initial of surname)"),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+    })
+    .nullable(),
+});
+
+/**
+ * @summary Get the authenticated parent's contact unlock usage for the current calendar month
+ */
+export const GetContactUsageResponse = zod.object({
+  used: zod
+    .number()
+    .describe("Number of contacts unlocked this calendar month"),
+  limit: zod.number().describe("Monthly contact unlock limit"),
+  resetsAt: zod.coerce
+    .date()
+    .describe("When the monthly counter resets (start of next month)"),
+  hasActiveSubscription: zod
+    .boolean()
+    .describe(
+      "If true, the parent has unlimited access and the limit does not apply",
+    ),
+});
+
+/**
+ * @summary Admin — get global settings
+ */
+export const GetAdminSettingsResponse = zod.object({
+  contactLimitPerMonth: zod
+    .number()
+    .describe(
+      "Maximum contacts a parent can unlock per calendar month (for Plan B)",
+    ),
+});
+
+/**
+ * @summary Admin — update global settings
+ */
+
+export const UpdateAdminSettingsBody = zod.object({
+  contactLimitPerMonth: zod.number().min(1).optional(),
+});
+
+export const UpdateAdminSettingsResponse = zod.object({
+  contactLimitPerMonth: zod
+    .number()
+    .describe(
+      "Maximum contacts a parent can unlock per calendar month (for Plan B)",
+    ),
+});
 
 /**
  * @summary Check if parent has unlocked a professional's contact
@@ -537,7 +612,12 @@ export const GetProfessionalDashboardResponse = zod.object({
       professionalId: zod.number(),
       score: zod.number(),
       comment: zod.string().nullish(),
+      reviewerName: zod
+        .string()
+        .nullish()
+        .describe("Anonymized reviewer name (first name + initial of surname)"),
       createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
     }),
   ),
 });

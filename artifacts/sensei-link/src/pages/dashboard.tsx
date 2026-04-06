@@ -6,20 +6,23 @@ import {
   useGetProfessionalDashboard,
   useGetMySubscription,
   useGetPaymentHistory,
+  useGetContactUsage,
   useCreateStripeCheckout,
   getGetMySubscriptionQueryKey,
   getGetPaymentHistoryQueryKey,
+  getGetContactUsageQueryKey,
   type ParentDashboard,
   type ProfessionalDashboard,
   type SubscriptionStatus,
   type PaymentRecord,
+  type ContactUsage,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle } from "lucide-react";
+import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle, AlertCircle } from "lucide-react";
 
 export default function DashboardPage() {
   const { user } = useUser();
@@ -33,6 +36,9 @@ export default function DashboardPage() {
   });
   const { data: paymentHistory } = useGetPaymentHistory({
     query: { enabled: role === "parent", queryKey: getGetPaymentHistoryQueryKey() },
+  });
+  const { data: contactUsage } = useGetContactUsage({
+    query: { enabled: role === "parent", queryKey: getGetContactUsageQueryKey() },
   });
 
   if (meLoading) {
@@ -61,6 +67,7 @@ export default function DashboardPage() {
             isLoading={parentLoading}
             subscription={subscription}
             paymentHistory={paymentHistory ?? []}
+            contactUsage={contactUsage}
           />
         )}
         {role === "professional" && (
@@ -81,11 +88,13 @@ function ParentDashboard({
   isLoading,
   subscription,
   paymentHistory,
+  contactUsage,
 }: {
   data: ParentDashboard | undefined;
   isLoading: boolean;
   subscription: SubscriptionStatus | undefined;
   paymentHistory: PaymentRecord[];
+  contactUsage: ContactUsage | undefined;
 }) {
   if (isLoading) {
     return (
@@ -126,6 +135,11 @@ function ParentDashboard({
             </p>
           </div>
         </div>
+      )}
+
+      {/* Contact usage card (non-premium parents only) */}
+      {contactUsage && !contactUsage.hasActiveSubscription && (
+        <ContactUsageCard usage={contactUsage} />
       )}
 
       {/* Quick stats */}
@@ -378,6 +392,60 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ContactUsageCard({ usage }: { usage: ContactUsage }) {
+  const { used, limit, resetsAt } = usage;
+  const pct = Math.min((used / limit) * 100, 100);
+  const isNearLimit = used >= limit - 1;
+  const isAtLimit = used >= limit;
+
+  const resetsAtDate = new Date(resetsAt);
+
+  return (
+    <div
+      className={`border rounded-xl p-4 ${isAtLimit ? "bg-red-50 border-red-200" : isNearLimit ? "bg-yellow-50 border-yellow-200" : "bg-card border-border"}`}
+      data-testid="contact-usage-card"
+    >
+      <div className="flex items-start justify-between gap-4 mb-3">
+        <div>
+          <p className={`font-semibold text-sm ${isAtLimit ? "text-red-800" : isNearLimit ? "text-yellow-800" : "text-foreground"}`}>
+            Contacts used this month
+          </p>
+          <p className={`text-xs mt-0.5 ${isAtLimit ? "text-red-700" : isNearLimit ? "text-yellow-700" : "text-muted-foreground"}`}>
+            Resets {resetsAtDate.toLocaleDateString("en-IN", { month: "long", day: "numeric" })}
+          </p>
+        </div>
+        <span className={`text-xl font-bold ${isAtLimit ? "text-red-700" : isNearLimit ? "text-yellow-700" : "text-foreground"}`}>
+          {used} / {limit}
+        </span>
+      </div>
+
+      <div className="w-full bg-muted rounded-full h-2 mb-3">
+        <div
+          className={`h-2 rounded-full transition-all ${isAtLimit ? "bg-red-500" : isNearLimit ? "bg-yellow-400" : "bg-primary"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      {isAtLimit && (
+        <div className="flex items-start gap-2 text-sm text-red-700">
+          <AlertCircle size={14} className="shrink-0 mt-0.5" />
+          <span>
+            You've reached your contact limit for this month. <Link href="/pricing" className="font-semibold underline">Upgrade to Plan A</Link> for unlimited contacts.
+          </span>
+        </div>
+      )}
+      {isNearLimit && !isAtLimit && (
+        <div className="flex items-start gap-2 text-sm text-yellow-700">
+          <AlertCircle size={14} className="shrink-0 mt-0.5" />
+          <span>
+            You're almost at your limit. <Link href="/pricing" className="font-semibold underline">Upgrade to Plan A</Link> for unlimited contacts.
+          </span>
+        </div>
+      )}
     </div>
   );
 }

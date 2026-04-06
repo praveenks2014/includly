@@ -13,5 +13,11 @@ export interface Rating {
   score: number;
   /** @nullable */
   comment?: string | null;
+  /**
+   * Anonymized reviewer name (first name + initial of surname)
+   * @nullable
+   */
+  reviewerName?: string | null;
   createdAt: Date;
+  updatedAt: Date;
 }

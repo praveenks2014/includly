@@ -316,7 +316,7 @@ paths:
     post:
       operationId: createRating
       tags: [ratings]
-      summary: Submit a rating for a professional
+      summary: Submit or update a rating for a professional (upsert — one per parent per professional)
       security:
         - clerkAuth: []
       requestBody:
@@ -327,7 +327,7 @@ paths:
               $ref: "#/components/schemas/CreateRatingBody"
       responses:
         "201":
-          description: Rating created
+          description: Rating created or updated
           content:
             application/json:
               schema:
@@ -349,7 +349,7 @@ paths:
     get:
       operationId: getRatingsForProfessional
       tags: [ratings]
-      summary: Get all ratings for a professional
+      summary: Get all ratings for a professional (includes anonymized reviewer name)
       parameters:
         - name: id
           in: path
@@ -365,6 +365,118 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Rating"
+
+  /ratings/my/{professionalId}:
+    get:
+      operationId: getMyRatingForProfessional
+      tags: [ratings]
+      summary: Get the authenticated parent's rating for a specific professional
+      security:
+        - clerkAuth: []
+      parameters:
+        - name: professionalId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Parent's rating or null
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyRatingResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /contacts/usage:
+    get:
+      operationId: getContactUsage
+      tags: [unlocks]
+      summary: Get the authenticated parent's contact unlock usage for the current calendar month
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Contact usage for this month
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContactUsage"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/settings:
+    get:
+      operationId: getAdminSettings
+      tags: [dashboard]
+      summary: Admin — get global settings
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Admin settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSettings"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateAdminSettings
+      tags: [dashboard]
+      summary: Admin — update global settings
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAdminSettingsBody"
+      responses:
+        "200":
+          description: Updated admin settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSettings"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /unlocks/check/{professionalId}:
     get:
@@ -1361,7 +1473,13 @@ components:
           type: integer
         comment:
           type: ["string", "null"]
+        reviewerName:
+          type: ["string", "null"]
+          description: Anonymized reviewer name (first name + initial of surname)
         createdAt:
+          type: string
+          format: date-time
+        updatedAt:
           type: string
           format: date-time
       required:
@@ -1370,6 +1488,39 @@ components:
         - professionalId
         - score
         - createdAt
+        - updatedAt
+
+    MyRatingResponse:
+      type: object
+      properties:
+        rating:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/Rating"
+      required:
+        - rating
+
+    ContactUsage:
+      type: object
+      properties:
+        used:
+          type: integer
+          description: Number of contacts unlocked this calendar month
+        limit:
+          type: integer
+          description: Monthly contact unlock limit
+        resetsAt:
+          type: string
+          format: date-time
+          description: When the monthly counter resets (start of next month)
+        hasActiveSubscription:
+          type: boolean
+          description: If true, the parent has unlimited access and the limit does not apply
+      required:
+        - used
+        - limit
+        - resetsAt
+        - hasActiveSubscription
 
     CreateRatingBody:
       type: object

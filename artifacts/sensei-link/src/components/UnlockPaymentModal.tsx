@@ -59,7 +59,22 @@ export function UnlockPaymentModal({
         orderData.professionalId = professionalId;
       }
 
-      const order = await createOrder({ data: orderData });
+      let order;
+      try {
+        order = await createOrder({ data: orderData });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "";
+        if (msg.includes("contact limit") || msg.includes("CONTACT_LIMIT_REACHED")) {
+          toast({
+            title: "Monthly contact limit reached",
+            description: "Upgrade to Plan A for unlimited contacts this month.",
+            variant: "destructive",
+          });
+          setActivePlan(null);
+          return;
+        }
+        throw err;
+      }
 
       const rzp = new window.Razorpay({
         key: order.keyId,
@@ -127,7 +142,15 @@ export function UnlockPaymentModal({
       window.location.href = result.url;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Stripe is not configured. Please use Razorpay.";
-      toast({ title: "Stripe unavailable", description: msg, variant: "destructive" });
+      if (msg.includes("contact limit") || msg.includes("CONTACT_LIMIT_REACHED")) {
+        toast({
+          title: "Monthly contact limit reached",
+          description: "Upgrade to Plan A for unlimited contacts this month.",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Stripe unavailable", description: msg, variant: "destructive" });
+      }
     } finally {
       setActivePlan(null);
     }

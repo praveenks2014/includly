@@ -4,8 +4,12 @@ import {
   useGetProfessional,
   useGetRatingsForProfessional,
   useCheckUnlockStatus,
+  useGetMyRatingForProfessional,
+  useCreateRating,
   getGetProfessionalQueryKey,
   getCheckUnlockStatusQueryKey,
+  getGetRatingsForProfessionalQueryKey,
+  getGetMyRatingForProfessionalQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -15,6 +19,7 @@ import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel, SPECIALTY_COLORS } from "@/lib/specialties";
 import { UnlockPaymentModal } from "@/components/UnlockPaymentModal";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 import {
   BadgeCheck,
   Clock,
@@ -27,9 +32,39 @@ import {
   Loader2,
   Star,
   IndianRupee,
+  Pencil,
 } from "lucide-react";
 
 const PREMIUM_SPECIALTIES = ["neurologist", "therapy_centre"];
+
+function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [hovered, setHovered] = useState(0);
+
+  return (
+    <div className="flex items-center gap-1">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          onClick={() => onChange(star)}
+          onMouseEnter={() => setHovered(star)}
+          onMouseLeave={() => setHovered(0)}
+          className="p-0.5 focus:outline-none"
+          aria-label={`Rate ${star} stars`}
+        >
+          <Star
+            size={22}
+            className={`transition-colors ${
+              (hovered || value) >= star
+                ? "text-yellow-400 fill-yellow-400"
+                : "text-muted-foreground"
+            }`}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default function ProfessionalProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -37,7 +72,12 @@ export default function ProfessionalProfilePage() {
   const [, setLocation] = useLocation();
   const { isSignedIn } = useUser();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [showPayModal, setShowPayModal] = useState(false);
+  const [reviewScore, setReviewScore] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [showReviewForm, setShowReviewForm] = useState(false);
 
   const { data: professional, isLoading } = useGetProfessional(professionalId);
   const { data: ratingsData } = useGetRatingsForProfessional(professionalId);
@@ -48,8 +88,17 @@ export default function ProfessionalProfilePage() {
       queryKey: getCheckUnlockStatusQueryKey(professionalId),
     },
   });
+  const { data: myRatingData } = useGetMyRatingForProfessional(professionalId, {
+    query: {
+      enabled: isSignedIn === true,
+      retry: false,
+      queryKey: getGetMyRatingForProfessionalQueryKey(professionalId),
+    },
+  });
+  const { mutateAsync: submitRating } = useCreateRating();
 
   const isUnlocked = unlockStatus?.isUnlocked ?? false;
+  const myRating = myRatingData?.rating ?? null;
 
   function handleUnlock() {
     if (!isSignedIn) {
@@ -62,6 +111,54 @@ export default function ProfessionalProfilePage() {
   function handleUnlockSuccess() {
     queryClient.invalidateQueries({ queryKey: getGetProfessionalQueryKey(professionalId) });
     queryClient.invalidateQueries({ queryKey: getCheckUnlockStatusQueryKey(professionalId) });
+  }
+
+  function handleStartReview() {
+    if (myRating) {
+      setReviewScore(myRating.score);
+      setReviewComment(myRating.comment ?? "");
+    } else {
+      setReviewScore(0);
+      setReviewComment("");
+    }
+    setShowReviewForm(true);
+  }
+
+  async function handleSubmitReview() {
+    if (!isSignedIn) {
+      setLocation("/sign-in");
+      return;
+    }
+    if (reviewScore === 0) {
+      toast({ title: "Please select a star rating", variant: "destructive" });
+      return;
+    }
+    setIsSubmittingReview(true);
+    try {
+      await submitRating({
+        data: {
+          professionalId,
+          score: reviewScore,
+          comment: reviewComment.trim() || undefined,
+        },
+      });
+      toast({
+        title: myRating ? "Review updated!" : "Review submitted!",
+        description: "Thank you for your feedback.",
+      });
+      setShowReviewForm(false);
+      queryClient.invalidateQueries({ queryKey: getGetRatingsForProfessionalQueryKey(professionalId) });
+      queryClient.invalidateQueries({ queryKey: getGetMyRatingForProfessionalQueryKey(professionalId) });
+      queryClient.invalidateQueries({ queryKey: getGetProfessionalQueryKey(professionalId) });
+    } catch {
+      toast({
+        title: "Failed to submit review",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingReview(false);
+    }
   }
 
   if (isLoading) {
@@ -233,19 +330,78 @@ export default function ProfessionalProfilePage() {
           </div>
         </div>
 
-        {/* Ratings */}
+        {/* Reviews */}
         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-          <h2 className="text-lg font-serif font-semibold mb-4">
-            Reviews {ratings.length > 0 && <span className="text-base font-normal text-muted-foreground">({ratings.length})</span>}
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-serif font-semibold">
+              Reviews {ratings.length > 0 && <span className="text-base font-normal text-muted-foreground">({ratings.length})</span>}
+            </h2>
+            {isSignedIn && isUnlocked && !showReviewForm && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={handleStartReview}
+                data-testid="write-review-btn"
+              >
+                <Pencil size={13} />
+                {myRating ? "Edit review" : "Write a review"}
+              </Button>
+            )}
+          </div>
+
+          {/* Review form */}
+          {showReviewForm && (
+            <div className="mb-6 p-4 bg-muted/30 border border-border rounded-xl">
+              <h3 className="text-sm font-semibold mb-3">{myRating ? "Edit your review" : "Write a review"}</h3>
+              <div className="mb-3">
+                <label className="text-xs text-muted-foreground mb-1.5 block">Your rating</label>
+                <StarPicker value={reviewScore} onChange={setReviewScore} />
+              </div>
+              <div className="mb-3">
+                <label className="text-xs text-muted-foreground mb-1.5 block">Comment (optional)</label>
+                <textarea
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                  rows={3}
+                  placeholder="Share your experience..."
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  data-testid="review-comment-input"
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowReviewForm(false)}
+                  disabled={isSubmittingReview}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSubmitReview}
+                  disabled={isSubmittingReview || reviewScore === 0}
+                  data-testid="submit-review-btn"
+                >
+                  {isSubmittingReview ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+                  {myRating ? "Update review" : "Submit review"}
+                </Button>
+              </div>
+            </div>
+          )}
+
           {ratings.length === 0 ? (
-            <p className="text-muted-foreground text-sm">No reviews yet.</p>
+            <p className="text-muted-foreground text-sm">No reviews yet.{isSignedIn && isUnlocked && !showReviewForm ? " Be the first to write one." : ""}</p>
           ) : (
             <div className="space-y-4">
               {ratings.map((r) => (
                 <div key={r.id} className="pb-4 border-b border-border last:border-0 last:pb-0">
                   <div className="flex items-center gap-2 mb-1">
                     <StarRating value={r.score} size={14} />
+                    {r.reviewerName && (
+                      <span className="text-xs font-medium text-foreground">{r.reviewerName}</span>
+                    )}
                     <span className="text-xs text-muted-foreground">
                       {new Date(r.createdAt).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}
                     </span>

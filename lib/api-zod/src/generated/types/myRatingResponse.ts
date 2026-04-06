@@ -5,10 +5,8 @@
  * SenseiLink API specification — marketplace for parents to find Shadow Teachers, Special Educators, and Medical Specialists
  * OpenAPI spec version: 0.1.0
  */
+import type { Rating } from "./rating";
 
-export interface AdminSettings {
-  id: number;
-  /** Maximum contacts a parent can unlock per calendar month (for Plan B) */
-  contactLimitPerParent: number;
-  updatedAt: Date;
+export interface MyRatingResponse {
+  rating: Rating | null;
 }

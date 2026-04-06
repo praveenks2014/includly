@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gt } from "drizzle-orm";
-import { db, contactUnlocksTable, professionalProfilesTable, subscriptionsTable } from "@workspace/db";
+import { eq, and, gt, gte } from "drizzle-orm";
+import { db, contactUnlocksTable, professionalProfilesTable, subscriptionsTable, adminSettingsTable, DEFAULT_CONTACT_LIMIT } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import {
   CheckUnlockStatusParams,
@@ -35,6 +35,52 @@ async function hasActiveSubscription(userId: number): Promise<boolean> {
     .limit(1);
   return !!sub;
 }
+
+async function getContactLimit(): Promise<number> {
+  try {
+    const [settings] = await db
+      .select({ contactLimitPerParent: adminSettingsTable.contactLimitPerParent })
+      .from(adminSettingsTable)
+      .limit(1);
+    if (settings && settings.contactLimitPerParent > 0) {
+      return settings.contactLimitPerParent;
+    }
+  } catch {
+  }
+  return DEFAULT_CONTACT_LIMIT;
+}
+
+function getMonthBounds(): { start: Date; end: Date } {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return { start, end };
+}
+
+router.get("/contacts/usage", requireAuth, requireRole("parent", "admin"), async (req, res): Promise<void> => {
+  const { start, end } = getMonthBounds();
+  const limit = await getContactLimit();
+
+  const unlocks = await db
+    .select({ id: contactUnlocksTable.id })
+    .from(contactUnlocksTable)
+    .where(
+      and(
+        eq(contactUnlocksTable.parentId, req.userId!),
+        gte(contactUnlocksTable.unlockedAt, start),
+      ),
+    );
+
+  const used = unlocks.length;
+  const hasActiveSub = await hasActiveSubscription(req.userId!);
+
+  res.json({
+    used,
+    limit,
+    resetsAt: end.toISOString(),
+    hasActiveSubscription: hasActiveSub,
+  });
+});
 
 router.get("/unlocks/check/:professionalId", requireAuth, requireRole("parent", "admin"), async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.professionalId) ? req.params.professionalId[0] : req.params.professionalId;
@@ -195,12 +241,13 @@ router.post("/unlocks", requireAuth, requireRole("parent", "admin"), async (req,
     : null;
 
   res.status(201).json({
-    id: unlock.id,
-    parentId: unlock.parentId,
-    professionalId: unlock.professionalId,
-    unlockedAt: unlock.unlockedAt,
+    id: unlock!.id,
+    parentId: unlock!.parentId,
+    professionalId: unlock!.professionalId,
+    unlockedAt: unlock!.unlockedAt,
     professional: profWithUnlock,
   });
 });
 
+export { getContactLimit, getMonthBounds };
 export default router;

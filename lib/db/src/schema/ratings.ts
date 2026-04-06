@@ -1,4 +1,4 @@
-import { pgTable, serial, timestamp, integer, text } from "drizzle-orm/pg-core";
+import { pgTable, serial, timestamp, integer, text, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -12,7 +12,9 @@ export const ratingsTable = pgTable("ratings", {
   comment: text("comment"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => ({
+  parentProfessionalUnique: unique("ratings_parent_professional_unique").on(table.parentId, table.professionalId),
+}));
 
 export const insertRatingSchema = createInsertSchema(ratingsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertRating = z.infer<typeof insertRatingSchema>;

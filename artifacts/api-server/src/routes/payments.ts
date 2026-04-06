@@ -1,9 +1,9 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, desc, and, gt } from "drizzle-orm";
+import { eq, desc, and, gt, gte } from "drizzle-orm";
 import Stripe from "stripe";
 import Razorpay from "razorpay";
 import crypto from "crypto";
-import { db, paymentsTable, subscriptionsTable, contactUnlocksTable, professionalProfilesTable, professionalSubscriptionsTable } from "@workspace/db";
+import { db, paymentsTable, subscriptionsTable, contactUnlocksTable, professionalProfilesTable, professionalSubscriptionsTable, adminSettingsTable, DEFAULT_CONTACT_LIMIT } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { PLANS, type PlanId } from "../lib/paymentPlans";
 import {
@@ -13,6 +13,51 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+async function getContactLimit(): Promise<number> {
+  try {
+    const [settings] = await db
+      .select({ contactLimitPerParent: adminSettingsTable.contactLimitPerParent })
+      .from(adminSettingsTable)
+      .limit(1);
+    if (settings && settings.contactLimitPerParent > 0) {
+      return settings.contactLimitPerParent;
+    }
+  } catch {
+  }
+  return DEFAULT_CONTACT_LIMIT;
+}
+
+async function getMonthlyUnlockCount(userId: number): Promise<number> {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const unlocks = await db
+    .select({ id: contactUnlocksTable.id })
+    .from(contactUnlocksTable)
+    .where(
+      and(
+        eq(contactUnlocksTable.parentId, userId),
+        gte(contactUnlocksTable.unlockedAt, monthStart),
+      ),
+    );
+  return unlocks.length;
+}
+
+async function parentHasActiveSubscription(userId: number): Promise<boolean> {
+  const now = new Date();
+  const [sub] = await db
+    .select({ id: subscriptionsTable.id })
+    .from(subscriptionsTable)
+    .where(
+      and(
+        eq(subscriptionsTable.userId, userId),
+        eq(subscriptionsTable.status, "active"),
+        gt(subscriptionsTable.expiresAt, now),
+      ),
+    )
+    .limit(1);
+  return !!sub;
+}
 
 function getStripe(): Stripe | null {
   const key = process.env["STRIPE_SECRET_KEY"];
@@ -160,6 +205,24 @@ router.post(
     if (plan === "plan_b_per_contact" && !professionalId) {
       res.status(400).json({ error: "professionalId is required for per-contact unlock." });
       return;
+    }
+
+    // Plan B: enforce monthly contact limit (Plan A subscribers are exempt)
+    if (plan === "plan_b_per_contact" && req.userRole === "parent") {
+      const hasSub = await parentHasActiveSubscription(req.userId!);
+      if (!hasSub) {
+        const limit = await getContactLimit();
+        const used = await getMonthlyUnlockCount(req.userId!);
+        if (used >= limit) {
+          res.status(403).json({
+            error: `You've reached your contact limit for this month (${used}/${limit}). Upgrade to Plan A for unlimited contacts.`,
+            code: "CONTACT_LIMIT_REACHED",
+            used,
+            limit,
+          });
+          return;
+        }
+      }
     }
 
     const [payment] = await db
@@ -350,6 +413,24 @@ router.post(
   if (plan === "plan_b_per_contact" && !professionalId) {
     res.status(400).json({ error: "professionalId is required for per-contact unlock." });
     return;
+  }
+
+  // Plan B: enforce monthly contact limit (Plan A subscribers are exempt)
+  if (plan === "plan_b_per_contact" && req.userRole === "parent") {
+    const hasSub = await parentHasActiveSubscription(req.userId!);
+    if (!hasSub) {
+      const limit = await getContactLimit();
+      const used = await getMonthlyUnlockCount(req.userId!);
+      if (used >= limit) {
+        res.status(403).json({
+          error: `You've reached your contact limit for this month (${used}/${limit}). Upgrade to Plan A for unlimited contacts.`,
+          code: "CONTACT_LIMIT_REACHED",
+          used,
+          limit,
+        });
+        return;
+      }
+    }
   }
 
   const [payment] = await db

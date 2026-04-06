@@ -7,5 +7,6 @@
  */
 
 export interface UpdateAdminSettingsBody {
+  /** @minimum 1 */
   contactLimitPerParent?: number;
 }

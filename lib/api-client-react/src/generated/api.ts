@@ -24,6 +24,7 @@ import type {
   AdminStats,
   ComplianceContent,
   ContactUnlock,
+  ContactUsage,
   CreateProfessionalProfileBody,
   CreateRatingBody,
   CreateRazorpayOrderBody,
@@ -31,6 +32,7 @@ import type {
   CreateUnlockBody,
   ErrorResponse,
   HealthStatus,
+  MyRatingResponse,
   ParentDashboard,
   PaymentPlans,
   PaymentRecord,
@@ -818,7 +820,7 @@ export function useSearchProfessionals<
 }
 
 /**
- * @summary Submit a rating for a professional
+ * @summary Submit or update a rating for a professional (upsert — one per parent per professional)
  */
 export const getCreateRatingUrl = () => {
   return `/api/ratings`;
@@ -881,7 +883,7 @@ export type CreateRatingMutationBody = BodyType<CreateRatingBody>;
 export type CreateRatingMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Submit a rating for a professional
+ * @summary Submit or update a rating for a professional (upsert — one per parent per professional)
  */
 export const useCreateRating = <
   TError = ErrorType<ErrorResponse>,
@@ -904,7 +906,7 @@ export const useCreateRating = <
 };
 
 /**
- * @summary Get all ratings for a professional
+ * @summary Get all ratings for a professional (includes anonymized reviewer name)
  */
 export const getGetRatingsForProfessionalUrl = (id: number) => {
   return `/api/ratings/professional/${id}`;
@@ -966,7 +968,7 @@ export type GetRatingsForProfessionalQueryResult = NonNullable<
 export type GetRatingsForProfessionalQueryError = ErrorType<unknown>;
 
 /**
- * @summary Get all ratings for a professional
+ * @summary Get all ratings for a professional (includes anonymized reviewer name)
  */
 
 export function useGetRatingsForProfessional<
@@ -991,6 +993,340 @@ export function useGetRatingsForProfessional<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get the authenticated parent's rating for a specific professional
+ */
+export const getGetMyRatingForProfessionalUrl = (professionalId: number) => {
+  return `/api/ratings/my/${professionalId}`;
+};
+
+export const getMyRatingForProfessional = async (
+  professionalId: number,
+  options?: RequestInit,
+): Promise<MyRatingResponse> => {
+  return customFetch<MyRatingResponse>(
+    getGetMyRatingForProfessionalUrl(professionalId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMyRatingForProfessionalQueryKey = (
+  professionalId: number,
+) => {
+  return [`/api/ratings/my/${professionalId}`] as const;
+};
+
+export const getGetMyRatingForProfessionalQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyRatingForProfessional>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  professionalId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyRatingForProfessional>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetMyRatingForProfessionalQueryKey(professionalId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyRatingForProfessional>>
+  > = ({ signal }) =>
+    getMyRatingForProfessional(professionalId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!professionalId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyRatingForProfessional>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyRatingForProfessionalQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyRatingForProfessional>>
+>;
+export type GetMyRatingForProfessionalQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get the authenticated parent's rating for a specific professional
+ */
+
+export function useGetMyRatingForProfessional<
+  TData = Awaited<ReturnType<typeof getMyRatingForProfessional>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  professionalId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyRatingForProfessional>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyRatingForProfessionalQueryOptions(
+    professionalId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get the authenticated parent's contact unlock usage for the current calendar month
+ */
+export const getGetContactUsageUrl = () => {
+  return `/api/contacts/usage`;
+};
+
+export const getContactUsage = async (
+  options?: RequestInit,
+): Promise<ContactUsage> => {
+  return customFetch<ContactUsage>(getGetContactUsageUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetContactUsageQueryKey = () => {
+  return [`/api/contacts/usage`] as const;
+};
+
+export const getGetContactUsageQueryOptions = <
+  TData = Awaited<ReturnType<typeof getContactUsage>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getContactUsage>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetContactUsageQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getContactUsage>>> = ({
+    signal,
+  }) => getContactUsage({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getContactUsage>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetContactUsageQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getContactUsage>>
+>;
+export type GetContactUsageQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get the authenticated parent's contact unlock usage for the current calendar month
+ */
+
+export function useGetContactUsage<
+  TData = Awaited<ReturnType<typeof getContactUsage>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getContactUsage>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetContactUsageQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Admin — get global settings
+ */
+export const getGetAdminSettingsUrl = () => {
+  return `/api/admin/settings`;
+};
+
+export const getAdminSettings = async (
+  options?: RequestInit,
+): Promise<AdminSettings> => {
+  return customFetch<AdminSettings>(getGetAdminSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAdminSettingsQueryKey = () => {
+  return [`/api/admin/settings`] as const;
+};
+
+export const getGetAdminSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminSettings>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAdminSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAdminSettings>>
+  > = ({ signal }) => getAdminSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdminSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdminSettings>>
+>;
+export type GetAdminSettingsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Admin — get global settings
+ */
+
+export function useGetAdminSettings<
+  TData = Awaited<ReturnType<typeof getAdminSettings>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdminSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Admin — update global settings
+ */
+export const getUpdateAdminSettingsUrl = () => {
+  return `/api/admin/settings`;
+};
+
+export const updateAdminSettings = async (
+  updateAdminSettingsBody: UpdateAdminSettingsBody,
+  options?: RequestInit,
+): Promise<AdminSettings> => {
+  return customFetch<AdminSettings>(getUpdateAdminSettingsUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateAdminSettingsBody),
+  });
+};
+
+export const getUpdateAdminSettingsMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAdminSettings>>,
+    TError,
+    { data: BodyType<UpdateAdminSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAdminSettings>>,
+  TError,
+  { data: BodyType<UpdateAdminSettingsBody> },
+  TContext
+> => {
+  const mutationKey = ["updateAdminSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAdminSettings>>,
+    { data: BodyType<UpdateAdminSettingsBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateAdminSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAdminSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAdminSettings>>
+>;
+export type UpdateAdminSettingsMutationBody = BodyType<UpdateAdminSettingsBody>;
+export type UpdateAdminSettingsMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Admin — update global settings
+ */
+export const useUpdateAdminSettings = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAdminSettings>>,
+    TError,
+    { data: BodyType<UpdateAdminSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateAdminSettings>>,
+  TError,
+  { data: BodyType<UpdateAdminSettingsBody> },
+  TContext
+> => {
+  return useMutation(getUpdateAdminSettingsMutationOptions(options));
+};
 
 /**
  * @summary Check if parent has unlocked a professional's contact

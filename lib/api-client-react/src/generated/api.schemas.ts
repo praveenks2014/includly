@@ -279,7 +279,38 @@ export interface Rating {
   score: number;
   /** @nullable */
   comment?: string | null;
+  /**
+   * Anonymized reviewer name (first name + initial of surname)
+   * @nullable
+   */
+  reviewerName?: string | null;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface MyRatingResponse {
+  rating: Rating | null;
+}
+
+export interface ContactUsage {
+  /** Number of contacts unlocked this calendar month */
+  used: number;
+  /** Monthly contact unlock limit */
+  limit: number;
+  /** When the monthly counter resets (start of next month) */
+  resetsAt: string;
+  /** If true, the parent has unlimited access and the limit does not apply */
+  hasActiveSubscription: boolean;
+}
+
+export interface AdminSettings {
+  /** Maximum contacts a parent can unlock per calendar month (for Plan B) */
+  contactLimitPerMonth: number;
+}
+
+export interface UpdateAdminSettingsBody {
+  /** @minimum 1 */
+  contactLimitPerMonth?: number;
 }
 
 export interface CreateRatingBody {
