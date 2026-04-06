@@ -26,7 +26,10 @@ import {
   ArrowLeft,
   Loader2,
   Star,
+  IndianRupee,
 } from "lucide-react";
+
+const PREMIUM_SPECIALTIES = ["neurologist", "therapy_centre"];
 
 export default function ProfessionalProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -106,6 +109,11 @@ export default function ProfessionalProfilePage() {
                 {p.isVerified && p.verificationStatus === "verified" && (
                   <BadgeCheck size={22} className="text-primary" />
                 )}
+                {PREMIUM_SPECIALTIES.includes(p.specialty) && (
+                  <span className="text-xs font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                    Premium
+                  </span>
+                )}
               </div>
               <span className={`inline-block text-sm font-medium px-3 py-1 rounded-full ${specialtyColor}`}>
                 {getSpecialtyLabel(p.specialty)}
@@ -138,6 +146,17 @@ export default function ProfessionalProfilePage() {
               <span className="flex items-center gap-1.5">
                 <Navigation size={14} />
                 Travels up to {p.travelRadiusKm} km
+              </span>
+            )}
+            {(p.pricingMinINR || p.pricingMaxINR) && (
+              <span className="flex items-center gap-1.5 text-green-700 font-medium">
+                <IndianRupee size={14} />
+                {p.pricingMinINR && p.pricingMaxINR
+                  ? `₹${p.pricingMinINR.toLocaleString("en-IN")} – ₹${p.pricingMaxINR.toLocaleString("en-IN")}`
+                  : p.pricingMinINR
+                    ? `From ₹${p.pricingMinINR.toLocaleString("en-IN")}`
+                    : `Up to ₹${p.pricingMaxINR!.toLocaleString("en-IN")}`}
+                {" "}/session
               </span>
             )}
           </div>

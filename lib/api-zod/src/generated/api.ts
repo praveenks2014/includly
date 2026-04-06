@@ -113,6 +113,9 @@ export const GetMyProfessionalProfileResponse = zod.object({
   totalRatings: zod.number(),
   phone: zod.string().nullish(),
   email: zod.string().nullish(),
+  pricingMinINR: zod.number().nullish(),
+  pricingMaxINR: zod.number().nullish(),
+  paymentActivated: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
 
@@ -142,6 +145,8 @@ export const CreateProfessionalProfileBody = zod.object({
   willingToTravel: zod.boolean().optional(),
   phone: zod.string().optional(),
   email: zod.string().optional(),
+  pricingMinINR: zod.number().optional(),
+  pricingMaxINR: zod.number().optional(),
 });
 
 /**
@@ -172,6 +177,8 @@ export const UpdateProfessionalProfileBody = zod.object({
   willingToTravel: zod.boolean().optional(),
   phone: zod.string().optional(),
   email: zod.string().optional(),
+  pricingMinINR: zod.number().optional(),
+  pricingMaxINR: zod.number().optional(),
 });
 
 export const UpdateProfessionalProfileResponse = zod.object({
@@ -208,6 +215,9 @@ export const UpdateProfessionalProfileResponse = zod.object({
   totalRatings: zod.number(),
   phone: zod.string().nullish(),
   email: zod.string().nullish(),
+  pricingMinINR: zod.number().nullish(),
+  pricingMaxINR: zod.number().nullish(),
+  paymentActivated: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
 
@@ -239,6 +249,9 @@ export const GetProfessionalResponse = zod.object({
   isUnlocked: zod.boolean(),
   phone: zod.string().nullish(),
   email: zod.string().nullish(),
+  pricingMinINR: zod.number().nullish(),
+  pricingMaxINR: zod.number().nullish(),
+  paymentActivated: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
 
@@ -277,6 +290,10 @@ export const SearchProfessionalsQueryParams = zod.object({
     .number()
     .optional()
     .describe("Search radius in km (used with lat\/lng)"),
+  budgetMaxINR: zod.coerce
+    .number()
+    .optional()
+    .describe("Filter by maximum session price in INR"),
   page: zod.coerce.number().default(searchProfessionalsQueryPageDefault),
   limit: zod.coerce.number().default(searchProfessionalsQueryLimitDefault),
 });
@@ -311,6 +328,9 @@ export const SearchProfessionalsResponse = zod.object({
         .describe(
           "Distance from search location in km (present when lat\/lng\/radiusKm provided)",
         ),
+      pricingMinINR: zod.number().nullish(),
+      pricingMaxINR: zod.number().nullish(),
+      paymentActivated: zod.boolean(),
     }),
   ),
   total: zod.number(),
@@ -394,6 +414,9 @@ export const GetMyUnlocksResponseItem = zod.object({
         .describe(
           "Distance from search location in km (present when lat\/lng\/radiusKm provided)",
         ),
+      pricingMinINR: zod.number().nullish(),
+      pricingMaxINR: zod.number().nullish(),
+      paymentActivated: zod.boolean(),
     })
     .optional(),
   unlockedAt: zod.coerce.date(),
@@ -446,6 +469,9 @@ export const GetParentDashboardResponse = zod.object({
             .describe(
               "Distance from search location in km (present when lat\/lng\/radiusKm provided)",
             ),
+          pricingMinINR: zod.number().nullish(),
+          pricingMaxINR: zod.number().nullish(),
+          paymentActivated: zod.boolean(),
         })
         .optional(),
       unlockedAt: zod.coerce.date(),
@@ -494,6 +520,9 @@ export const GetProfessionalDashboardResponse = zod.object({
       totalRatings: zod.number(),
       phone: zod.string().nullish(),
       email: zod.string().nullish(),
+      pricingMinINR: zod.number().nullish(),
+      pricingMaxINR: zod.number().nullish(),
+      paymentActivated: zod.boolean(),
       createdAt: zod.coerce.date(),
     })
     .optional(),
@@ -525,6 +554,24 @@ export const GetPlatformStatsResponse = zod.object({
 });
 
 /**
+ * @summary Admin — list professionals with their payment/subscription status
+ */
+export const GetAdminProfessionalsBillingResponse = zod.object({
+  professionals: zod.array(
+    zod.object({
+      id: zod.number(),
+      userId: zod.number(),
+      fullName: zod.string().nullish(),
+      specialty: zod.string(),
+      paymentActivated: zod.boolean(),
+      hasActiveMonthlySubscription: zod.boolean(),
+      monthlySubscriptionExpiresAt: zod.coerce.date().nullish(),
+    }),
+  ),
+  total: zod.number(),
+});
+
+/**
  * @summary Get available payment plans and prices
  */
 export const GetPaymentPlansResponse = zod.object({
@@ -547,6 +594,24 @@ export const GetPaymentPlansResponse = zod.object({
     stripePriceId: zod.string().nullish(),
   }),
   planC: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    description: zod.string(),
+    amountPaise: zod.number(),
+    currency: zod.string(),
+    durationDays: zod.number().nullish(),
+    stripePriceId: zod.string().nullish(),
+  }),
+  planD: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    description: zod.string(),
+    amountPaise: zod.number(),
+    currency: zod.string(),
+    durationDays: zod.number().nullish(),
+    stripePriceId: zod.string().nullish(),
+  }),
+  planE: zod.object({
     id: zod.string(),
     name: zod.string(),
     description: zod.string(),
@@ -597,6 +662,8 @@ export const CreateStripeCheckoutBody = zod.object({
     "plan_a_subscription",
     "plan_b_per_contact",
     "plan_c_featured",
+    "plan_d_pro_onetime",
+    "plan_e_pro_monthly",
   ]),
   professionalId: zod.number().optional(),
   successUrl: zod.string(),
@@ -617,6 +684,8 @@ export const CreateRazorpayOrderBody = zod.object({
     "plan_a_subscription",
     "plan_b_per_contact",
     "plan_c_featured",
+    "plan_d_pro_onetime",
+    "plan_e_pro_monthly",
   ]),
   professionalId: zod.number().optional(),
 });

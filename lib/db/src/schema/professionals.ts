@@ -43,6 +43,9 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   totalUnlocks: integer("total_unlocks").notNull().default(0),
   phone: text("phone"),
   email: text("email"),
+  pricingMinINR: integer("pricing_min_inr"),
+  pricingMaxINR: integer("pricing_max_inr"),
+  paymentActivated: boolean("payment_activated").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
@@ -57,6 +60,7 @@ export const insertProfessionalProfileSchema = createInsertSchema(professionalPr
   totalUnlocks: true,
   isVerified: true,
   verificationStatus: true,
+  paymentActivated: true,
 });
 export type InsertProfessionalProfile = z.infer<typeof insertProfessionalProfileSchema>;
 export type ProfessionalProfile = typeof professionalProfilesTable.$inferSelect;

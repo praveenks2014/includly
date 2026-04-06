@@ -42,4 +42,9 @@ export interface ProfessionalSearchResult {
    * @nullable
    */
   distanceKm?: number | null;
+  /** @nullable */
+  pricingMinINR?: number | null;
+  /** @nullable */
+  pricingMaxINR?: number | null;
+  paymentActivated: boolean;
 }

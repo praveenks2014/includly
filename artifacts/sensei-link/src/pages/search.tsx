@@ -38,6 +38,7 @@ export default function SearchPage() {
   const [city, setCity] = useState(params.get("city") ?? "");
   const [minExperience, setMinExperience] = useState("");
   const [willingToTravel, setWillingToTravel] = useState(false);
+  const [budgetMaxINR, setBudgetMaxINR] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
   const [geoLocation, setGeoLocation] = useState<{ lat: number; lng: number; city: string } | null>(null);
@@ -49,6 +50,7 @@ export default function SearchPage() {
     ...(!geoMode && city ? { city } : {}),
     ...(minExperience ? { minExperience: Number(minExperience) } : {}),
     ...(willingToTravel ? { willingToTravel: true } : {}),
+    ...(budgetMaxINR ? { budgetMaxINR: Number(budgetMaxINR) } : {}),
     ...(geoMode && geoLocation
       ? { lat: geoLocation.lat, lng: geoLocation.lng, radiusKm }
       : {}),
@@ -85,11 +87,12 @@ export default function SearchPage() {
     setCity("");
     setMinExperience("");
     setWillingToTravel(false);
+    setBudgetMaxINR("");
     setGeoMode(false);
     setGeoLocation(null);
   }
 
-  const hasFilters = specialty || city || minExperience || willingToTravel || geoMode;
+  const hasFilters = specialty || city || minExperience || willingToTravel || budgetMaxINR || geoMode;
   const professionals = data?.professionals ?? [];
 
   return (
@@ -175,6 +178,19 @@ export default function SearchPage() {
                   onChange={(e) => setMinExperience(e.target.value)}
                   className="w-36"
                   data-testid="min-experience-input"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="budget-max">Max budget (₹/session)</Label>
+                <Input
+                  id="budget-max"
+                  type="number"
+                  min={0}
+                  placeholder="e.g. 2000"
+                  value={budgetMaxINR}
+                  onChange={(e) => setBudgetMaxINR(e.target.value)}
+                  className="w-40"
+                  data-testid="budget-max-input"
                 />
               </div>
               <div className="flex flex-col gap-1.5">

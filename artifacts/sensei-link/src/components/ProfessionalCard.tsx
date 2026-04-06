@@ -1,9 +1,11 @@
 import { Link } from "wouter";
-import { BadgeCheck, Clock, MapPin, Star, Navigation } from "lucide-react";
+import { BadgeCheck, Clock, MapPin, Star, Navigation, IndianRupee } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getSpecialtyLabel, SPECIALTY_COLORS } from "@/lib/specialties";
+
+const PREMIUM_SPECIALTIES = ["neurologist", "therapy_centre"];
 
 interface Professional {
   id: number;
@@ -24,6 +26,9 @@ interface Professional {
   phone?: string | null;
   email?: string | null;
   isUnlocked?: boolean;
+  pricingMinINR?: number | null;
+  pricingMaxINR?: number | null;
+  paymentActivated?: boolean;
 }
 
 interface ProfessionalCardProps {
@@ -56,6 +61,11 @@ export function ProfessionalCard({ professional: p, onUnlock, unlocking, distanc
               {p.verificationStatus === "pending" && (
                 <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-full border border-yellow-200">
                   Pending
+                </span>
+              )}
+              {PREMIUM_SPECIALTIES.includes(p.specialty) && (
+                <span className="text-xs font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                  Premium
                 </span>
               )}
             </div>
@@ -99,6 +109,17 @@ export function ProfessionalCard({ professional: p, onUnlock, unlocking, distanc
             <span className="flex items-center gap-1 text-primary font-medium">
               <Navigation size={12} />
               {distanceKm} km away
+            </span>
+          )}
+          {(p.pricingMinINR || p.pricingMaxINR) && (
+            <span className="flex items-center gap-1 text-green-700 font-medium">
+              <IndianRupee size={12} />
+              {p.pricingMinINR && p.pricingMaxINR
+                ? `₹${p.pricingMinINR.toLocaleString("en-IN")}–₹${p.pricingMaxINR.toLocaleString("en-IN")}`
+                : p.pricingMinINR
+                  ? `From ₹${p.pricingMinINR.toLocaleString("en-IN")}`
+                  : `Up to ₹${p.pricingMaxINR!.toLocaleString("en-IN")}`}
+              {" "}/session
             </span>
           )}
         </div>

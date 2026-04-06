@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./adminProfessionalBillingRecord";
+export * from "./adminProfessionalsBillingResponse";
 export * from "./complianceContent";
 export * from "./contactUnlock";
 export * from "./createProfessionalProfileBody";

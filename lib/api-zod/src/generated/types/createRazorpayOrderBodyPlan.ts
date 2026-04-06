@@ -13,4 +13,6 @@ export const CreateRazorpayOrderBodyPlan = {
   plan_a_subscription: "plan_a_subscription",
   plan_b_per_contact: "plan_b_per_contact",
   plan_c_featured: "plan_c_featured",
+  plan_d_pro_onetime: "plan_d_pro_onetime",
+  plan_e_pro_monthly: "plan_e_pro_monthly",
 } as const;

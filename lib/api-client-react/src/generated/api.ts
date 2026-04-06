@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AdminProfessionalsBillingResponse,
   ComplianceContent,
   ContactUnlock,
   CreateProfessionalProfileBody,
@@ -1457,6 +1458,86 @@ export function useGetPlatformStats<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetPlatformStatsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Admin — list professionals with their payment/subscription status
+ */
+export const getGetAdminProfessionalsBillingUrl = () => {
+  return `/api/admin/professionals/billing`;
+};
+
+export const getAdminProfessionalsBilling = async (
+  options?: RequestInit,
+): Promise<AdminProfessionalsBillingResponse> => {
+  return customFetch<AdminProfessionalsBillingResponse>(
+    getGetAdminProfessionalsBillingUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetAdminProfessionalsBillingQueryKey = () => {
+  return [`/api/admin/professionals/billing`] as const;
+};
+
+export const getGetAdminProfessionalsBillingQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminProfessionalsBilling>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminProfessionalsBilling>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAdminProfessionalsBillingQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAdminProfessionalsBilling>>
+  > = ({ signal }) =>
+    getAdminProfessionalsBilling({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminProfessionalsBilling>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdminProfessionalsBillingQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdminProfessionalsBilling>>
+>;
+export type GetAdminProfessionalsBillingQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Admin — list professionals with their payment/subscription status
+ */
+
+export function useGetAdminProfessionalsBilling<
+  TData = Awaited<ReturnType<typeof getAdminProfessionalsBilling>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminProfessionalsBilling>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdminProfessionalsBillingQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

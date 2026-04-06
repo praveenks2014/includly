@@ -284,6 +284,12 @@ paths:
           schema:
             type: number
           description: Search radius in km (used with lat/lng)
+        - name: budgetMaxINR
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Filter by maximum session price in INR
         - name: page
           in: query
           required: false
@@ -463,6 +469,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PlatformStats"
+
+  /admin/professionals/billing:
+    get:
+      operationId: getAdminProfessionalsBilling
+      tags: [dashboard]
+      summary: Admin — list professionals with their payment/subscription status
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: List of professionals with billing info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminProfessionalsBillingResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /payments/plans:
     get:
@@ -827,6 +860,12 @@ components:
           type: ["string", "null"]
         email:
           type: ["string", "null"]
+        pricingMinINR:
+          type: ["integer", "null"]
+        pricingMaxINR:
+          type: ["integer", "null"]
+        paymentActivated:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -841,6 +880,7 @@ components:
         - isVerified
         - verificationStatus
         - totalRatings
+        - paymentActivated
         - createdAt
 
     ProfessionalDetail:
@@ -886,6 +926,12 @@ components:
           type: ["string", "null"]
         email:
           type: ["string", "null"]
+        pricingMinINR:
+          type: ["integer", "null"]
+        pricingMaxINR:
+          type: ["integer", "null"]
+        paymentActivated:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -903,6 +949,7 @@ components:
         - phoneBlurred
         - emailBlurred
         - isUnlocked
+        - paymentActivated
         - createdAt
 
     ProfessionalSearchResult:
@@ -953,6 +1000,12 @@ components:
         distanceKm:
           type: ["number", "null"]
           description: Distance from search location in km (present when lat/lng/radiusKm provided)
+        pricingMinINR:
+          type: ["integer", "null"]
+        pricingMaxINR:
+          type: ["integer", "null"]
+        paymentActivated:
+          type: boolean
       required:
         - id
         - userId
@@ -966,6 +1019,7 @@ components:
         - phoneBlurred
         - emailBlurred
         - isUnlocked
+        - paymentActivated
 
     SearchProfessionalsResponse:
       type: object
@@ -1024,6 +1078,10 @@ components:
           type: string
         email:
           type: string
+        pricingMinINR:
+          type: integer
+        pricingMaxINR:
+          type: integer
       required:
         - fullName
         - specialty
@@ -1068,6 +1126,10 @@ components:
           type: string
         email:
           type: string
+        pricingMinINR:
+          type: integer
+        pricingMaxINR:
+          type: integer
 
     Rating:
       type: object
@@ -1222,6 +1284,44 @@ components:
         - lastUpdated
         - content
 
+    AdminProfessionalBillingRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        fullName:
+          type: ["string", "null"]
+        specialty:
+          type: string
+        paymentActivated:
+          type: boolean
+        hasActiveMonthlySubscription:
+          type: boolean
+        monthlySubscriptionExpiresAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - id
+        - userId
+        - specialty
+        - paymentActivated
+        - hasActiveMonthlySubscription
+
+    AdminProfessionalsBillingResponse:
+      type: object
+      properties:
+        professionals:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminProfessionalBillingRecord"
+        total:
+          type: integer
+      required:
+        - professionals
+        - total
+
     PaymentPlan:
       type: object
       properties:
@@ -1255,10 +1355,16 @@ components:
           $ref: "#/components/schemas/PaymentPlan"
         planC:
           $ref: "#/components/schemas/PaymentPlan"
+        planD:
+          $ref: "#/components/schemas/PaymentPlan"
+        planE:
+          $ref: "#/components/schemas/PaymentPlan"
       required:
         - planA
         - planB
         - planC
+        - planD
+        - planE
 
     SubscriptionStatus:
       type: object
@@ -1319,6 +1425,8 @@ components:
             - plan_a_subscription
             - plan_b_per_contact
             - plan_c_featured
+            - plan_d_pro_onetime
+            - plan_e_pro_monthly
         professionalId:
           type: integer
         successUrl:
@@ -1353,6 +1461,8 @@ components:
             - plan_a_subscription
             - plan_b_per_contact
             - plan_c_featured
+            - plan_d_pro_onetime
+            - plan_e_pro_monthly
         professionalId:
           type: integer
       required:

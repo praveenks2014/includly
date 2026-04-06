@@ -5,12 +5,9 @@
  * SenseiLink API specification — marketplace for parents to find Shadow Teachers, Special Educators, and Medical Specialists
  * OpenAPI spec version: 0.1.0
  */
-import type { PaymentPlan } from "./paymentPlan";
+import type { AdminProfessionalBillingRecord } from "./adminProfessionalBillingRecord";
 
-export interface PaymentPlans {
-  planA: PaymentPlan;
-  planB: PaymentPlan;
-  planC: PaymentPlan;
-  planD: PaymentPlan;
-  planE: PaymentPlan;
+export interface AdminProfessionalsBillingResponse {
+  professionals: AdminProfessionalBillingRecord[];
+  total: number;
 }

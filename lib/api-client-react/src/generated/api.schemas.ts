@@ -114,6 +114,11 @@ export interface ProfessionalProfile {
   phone?: string | null;
   /** @nullable */
   email?: string | null;
+  /** @nullable */
+  pricingMinINR?: number | null;
+  /** @nullable */
+  pricingMaxINR?: number | null;
+  paymentActivated: boolean;
   createdAt: string;
 }
 
@@ -145,6 +150,11 @@ export interface ProfessionalDetail {
   phone?: string | null;
   /** @nullable */
   email?: string | null;
+  /** @nullable */
+  pricingMinINR?: number | null;
+  /** @nullable */
+  pricingMaxINR?: number | null;
+  paymentActivated: boolean;
   createdAt: string;
 }
 
@@ -184,6 +194,11 @@ export interface ProfessionalSearchResult {
    * @nullable
    */
   distanceKm?: number | null;
+  /** @nullable */
+  pricingMinINR?: number | null;
+  /** @nullable */
+  pricingMaxINR?: number | null;
+  paymentActivated: boolean;
 }
 
 export interface SearchProfessionalsResponse {
@@ -221,6 +236,8 @@ export interface CreateProfessionalProfileBody {
   willingToTravel?: boolean;
   phone?: string;
   email?: string;
+  pricingMinINR?: number;
+  pricingMaxINR?: number;
 }
 
 export type UpdateProfessionalProfileBodySpecialty =
@@ -251,6 +268,8 @@ export interface UpdateProfessionalProfileBody {
   willingToTravel?: boolean;
   phone?: string;
   email?: string;
+  pricingMinINR?: number;
+  pricingMaxINR?: number;
 }
 
 export interface Rating {
@@ -321,6 +340,23 @@ export interface ComplianceContent {
   content: string;
 }
 
+export interface AdminProfessionalBillingRecord {
+  id: number;
+  userId: number;
+  /** @nullable */
+  fullName?: string | null;
+  specialty: string;
+  paymentActivated: boolean;
+  hasActiveMonthlySubscription: boolean;
+  /** @nullable */
+  monthlySubscriptionExpiresAt?: string | null;
+}
+
+export interface AdminProfessionalsBillingResponse {
+  professionals: AdminProfessionalBillingRecord[];
+  total: number;
+}
+
 export interface PaymentPlan {
   id: string;
   name: string;
@@ -337,6 +373,8 @@ export interface PaymentPlans {
   planA: PaymentPlan;
   planB: PaymentPlan;
   planC: PaymentPlan;
+  planD: PaymentPlan;
+  planE: PaymentPlan;
 }
 
 export type SubscriptionStatusSubscription = {
@@ -370,6 +408,8 @@ export const CreateStripeCheckoutBodyPlan = {
   plan_a_subscription: "plan_a_subscription",
   plan_b_per_contact: "plan_b_per_contact",
   plan_c_featured: "plan_c_featured",
+  plan_d_pro_onetime: "plan_d_pro_onetime",
+  plan_e_pro_monthly: "plan_e_pro_monthly",
 } as const;
 
 export interface CreateStripeCheckoutBody {
@@ -392,6 +432,8 @@ export const CreateRazorpayOrderBodyPlan = {
   plan_a_subscription: "plan_a_subscription",
   plan_b_per_contact: "plan_b_per_contact",
   plan_c_featured: "plan_c_featured",
+  plan_d_pro_onetime: "plan_d_pro_onetime",
+  plan_e_pro_monthly: "plan_e_pro_monthly",
 } as const;
 
 export interface CreateRazorpayOrderBody {
@@ -441,6 +483,10 @@ export type SearchProfessionalsParams = {
    * Search radius in km (used with lat/lng)
    */
   radiusKm?: number;
+  /**
+   * Filter by maximum session price in INR
+   */
+  budgetMaxINR?: number;
   page?: number;
   limit?: number;
 };

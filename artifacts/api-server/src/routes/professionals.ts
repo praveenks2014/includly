@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, ilike, or, gt } from "drizzle-orm";
-import { db, usersTable, professionalProfilesTable, contactUnlocksTable, specialtyEnum } from "@workspace/db";
+import { eq, and, gte, ilike, or, gt, lte } from "drizzle-orm";
+import { db, usersTable, professionalProfilesTable, contactUnlocksTable, specialtyEnum, professionalSubscriptionsTable } from "@workspace/db";
 import { subscriptionsTable } from "@workspace/db";
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
 import {
@@ -112,7 +112,7 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
     return;
   }
 
-  const { specialty, city, minExperience, minRating, willingToTravel, lat, lng, radiusKm, page, limit } = parsed.data;
+  const { specialty, city, minExperience, minRating, willingToTravel, lat, lng, radiusKm, budgetMaxINR, page, limit } = parsed.data;
 
   const conditions = [];
 
@@ -135,6 +135,14 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
 
   if (willingToTravel !== undefined) {
     conditions.push(eq(professionalProfilesTable.willingToTravel, willingToTravel));
+  }
+
+  if (budgetMaxINR !== undefined) {
+    conditions.push(
+      and(
+        lte(professionalProfilesTable.pricingMinINR, budgetMaxINR),
+      ),
+    );
   }
 
   const pageNum = page ?? 1;
@@ -221,6 +229,9 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       phone: isUnlocked ? p.phone : null,
       email: isUnlocked ? p.email : null,
       distanceKm: p.distanceKm ?? null,
+      pricingMinINR: p.pricingMinINR ?? null,
+      pricingMaxINR: p.pricingMaxINR ?? null,
+      paymentActivated: p.paymentActivated,
     };
   });
 
@@ -294,9 +305,48 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
     isUnlocked,
     phone: isUnlocked ? profile.phone : null,
     email: isUnlocked ? profile.email : null,
+    pricingMinINR: profile.pricingMinINR ?? null,
+    pricingMaxINR: profile.pricingMaxINR ?? null,
+    paymentActivated: profile.paymentActivated,
   };
 
   res.json(GetProfessionalResponse.parse(result));
+});
+
+router.get("/admin/professionals/billing", requireAuth, requireRole("admin"), async (_req, res): Promise<void> => {
+  const profiles = await db
+    .select()
+    .from(professionalProfilesTable);
+
+  const now = new Date();
+
+  const results = await Promise.all(
+    profiles.map(async (p) => {
+      const [activeSub] = await db
+        .select()
+        .from(professionalSubscriptionsTable)
+        .where(
+          and(
+            eq(professionalSubscriptionsTable.professionalId, p.id),
+            eq(professionalSubscriptionsTable.status, "active"),
+            gt(professionalSubscriptionsTable.expiresAt, now),
+          ),
+        )
+        .limit(1);
+
+      return {
+        id: p.id,
+        userId: p.userId,
+        fullName: p.fullName,
+        specialty: p.specialty,
+        paymentActivated: p.paymentActivated,
+        hasActiveMonthlySubscription: !!activeSub,
+        monthlySubscriptionExpiresAt: activeSub ? activeSub.expiresAt.toISOString() : null,
+      };
+    }),
+  );
+
+  res.json({ professionals: results, total: results.length });
 });
 
 export default router;

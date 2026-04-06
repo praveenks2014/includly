@@ -5,6 +5,8 @@ import {
   getCreateProfessionalProfileMutationOptions,
   getUpdateProfessionalProfileMutationOptions,
   getGetMyProfessionalProfileQueryKey,
+  useCreateRazorpayOrder,
+  useVerifyRazorpayPayment,
   type CreateProfessionalProfileBodySpecialty,
 } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -22,11 +24,12 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { SPECIALTY_OPTIONS } from "@/lib/specialties";
-import { Loader2, CheckCircle2 } from "lucide-react";
+import { Loader2, CheckCircle2, IndianRupee } from "lucide-react";
 import { LocationPicker, type PickedLocation } from "@/components/LocationPicker";
+import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
 
 const TRAVEL_RADIUS_OPTIONS = [5, 10, 15, 25, 50];
-const STEPS = ["Basic info", "Details", "Location", "Contact"];
+const STEPS = ["Basic info", "Details", "Location", "Contact", "Pricing", "Activate"];
 
 export default function OnboardPage() {
   const [, setLocation] = useLocation();
@@ -35,6 +38,9 @@ export default function OnboardPage() {
   const { data: existingProfile, isLoading } = useGetMyProfessionalProfile();
 
   const [step, setStep] = useState(0);
+  const [profileCreatedId, setProfileCreatedId] = useState<number | null>(null);
+  const [paymentDone, setPaymentDone] = useState(false);
+  const [paymentLoading, setPaymentLoading] = useState(false);
   const [form, setForm] = useState({
     fullName: existingProfile?.fullName ?? "",
     specialty: existingProfile?.specialty ?? "",
@@ -49,14 +55,22 @@ export default function OnboardPage() {
     travelRadiusKm: existingProfile?.travelRadiusKm?.toString() ?? "10",
     phone: existingProfile?.phone ?? "",
     email: existingProfile?.email ?? "",
+    pricingMinINR: existingProfile?.pricingMinINR?.toString() ?? "",
+    pricingMaxINR: existingProfile?.pricingMaxINR?.toString() ?? "",
   });
+
+  const { mutateAsync: createOrderAsync } = useCreateRazorpayOrder();
+  const { mutateAsync: verifyPaymentAsync } = useVerifyRazorpayPayment();
 
   const createMutation = useMutation({
     ...getCreateProfessionalProfileMutationOptions(),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
-      toast({ title: "Profile created!", description: "Your profile is now live." });
-      setLocation("/dashboard");
+      toast({ title: "Profile created!", description: "Now complete your activation." });
+      if (data && typeof data === "object" && "id" in data) {
+        setProfileCreatedId((data as { id: number }).id);
+      }
+      setStep(5);
     },
     onError: () => {
       toast({ title: "Error", description: "Could not save your profile. Please try again.", variant: "destructive" });
@@ -68,7 +82,11 @@ export default function OnboardPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
       toast({ title: "Profile updated!" });
-      setLocation("/dashboard");
+      if (existingProfile?.paymentActivated) {
+        setLocation("/dashboard");
+      } else {
+        setStep(5);
+      }
     },
     onError: () => {
       toast({ title: "Error", description: "Could not update your profile.", variant: "destructive" });
@@ -120,6 +138,8 @@ export default function OnboardPage() {
       travelRadiusKm: form.willingToTravel ? Number(form.travelRadiusKm) : undefined,
       phone: form.phone,
       email: form.email,
+      pricingMinINR: form.pricingMinINR ? Number(form.pricingMinINR) : undefined,
+      pricingMaxINR: form.pricingMaxINR ? Number(form.pricingMaxINR) : undefined,
     };
 
     if (existingProfile) {
@@ -129,7 +149,67 @@ export default function OnboardPage() {
     }
   }
 
+  async function handlePayment() {
+    const loaded = await loadRazorpayScript();
+    if (!loaded) {
+      toast({ title: "Could not load payment module", description: "Please try again.", variant: "destructive" });
+      return;
+    }
+
+    setPaymentLoading(true);
+    try {
+      const order = await createOrderAsync({
+        data: { plan: "plan_d_pro_onetime" },
+      });
+
+      const rzp = new window.Razorpay({
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency,
+        name: "SenseiLink",
+        description: order.planName,
+        order_id: order.orderId,
+        handler: async (response: RazorpayPaymentResponse) => {
+          try {
+            await verifyPaymentAsync({
+              data: {
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpayOrderId: response.razorpay_order_id,
+                razorpaySignature: response.razorpay_signature,
+                paymentId: order.paymentId,
+              },
+            });
+            toast({ title: "Payment successful!", description: "Your profile is now live." });
+            setPaymentDone(true);
+            queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
+            setTimeout(() => setLocation("/dashboard"), 1500);
+          } catch {
+            toast({ title: "Verification failed", description: "Please contact support.", variant: "destructive" });
+          }
+        },
+        theme: { color: "#4f46e5" },
+        modal: {
+          ondismiss: () => {
+            setPaymentLoading(false);
+            toast({ title: "Payment cancelled", description: "You can activate your profile anytime." });
+          },
+        },
+      });
+
+      rzp.open();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Something went wrong";
+      toast({ title: "Could not initiate payment", description: msg, variant: "destructive" });
+    } finally {
+      setPaymentLoading(false);
+    }
+  }
+
   const isPending = createMutation.isPending || updateMutation.isPending;
+  const isActivationStep = step === 5;
+  const alreadyActivated = existingProfile?.paymentActivated ?? false;
+
+  const stepsToShow = existingProfile && alreadyActivated ? STEPS.slice(0, 5) : STEPS;
 
   return (
     <div className="min-h-screen bg-background">
@@ -138,12 +218,12 @@ export default function OnboardPage() {
           <h1 className="text-2xl font-serif font-semibold text-foreground mb-1">
             {existingProfile ? "Edit your profile" : "Set up your profile"}
           </h1>
-          <p className="text-muted-foreground text-sm">Step {step + 1} of {STEPS.length}: {STEPS[step]}</p>
+          <p className="text-muted-foreground text-sm">Step {step + 1} of {stepsToShow.length}: {stepsToShow[step]}</p>
         </div>
 
         {/* Step progress */}
         <div className="flex gap-2 mb-8">
-          {STEPS.map((s, i) => (
+          {stepsToShow.map((s, i) => (
             <div
               key={s}
               className={`flex-1 h-1.5 rounded-full transition-colors ${i <= step ? "bg-primary" : "bg-muted"}`}
@@ -321,37 +401,152 @@ export default function OnboardPage() {
               </div>
             </div>
           )}
+
+          {/* Step 4: Pricing */}
+          {step === 4 && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground bg-muted/50 rounded-lg p-3 border border-border">
+                Let parents know your expected session rate. This helps them filter by budget.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="pricingMinINR">Min. price (₹)</Label>
+                  <div className="relative mt-1">
+                    <IndianRupee size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="pricingMinINR"
+                      type="number"
+                      min={0}
+                      value={form.pricingMinINR}
+                      onChange={(e) => set("pricingMinINR", e.target.value)}
+                      placeholder="500"
+                      className="pl-8"
+                      data-testid="input-pricingMinINR"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="pricingMaxINR">Max. price (₹)</Label>
+                  <div className="relative mt-1">
+                    <IndianRupee size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="pricingMaxINR"
+                      type="number"
+                      min={0}
+                      value={form.pricingMaxINR}
+                      onChange={(e) => set("pricingMaxINR", e.target.value)}
+                      placeholder="2000"
+                      className="pl-8"
+                      data-testid="input-pricingMaxINR"
+                    />
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Leave blank if you prefer to discuss pricing directly with parents.
+              </p>
+              {form.pricingMinINR && form.pricingMaxINR && (
+                <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-800 font-medium">
+                  Your profile will show: ₹{Number(form.pricingMinINR).toLocaleString("en-IN")} – ₹{Number(form.pricingMaxINR).toLocaleString("en-IN")} / session
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 5: Activate Profile */}
+          {step === 5 && (
+            <div className="space-y-4">
+              {alreadyActivated || paymentDone ? (
+                <div className="text-center py-4">
+                  <CheckCircle2 size={48} className="text-green-500 mx-auto mb-3" />
+                  <h3 className="text-lg font-semibold text-foreground mb-1">Profile is Live!</h3>
+                  <p className="text-muted-foreground text-sm">Your profile is active and visible to parents.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="text-center py-2">
+                    <h3 className="text-lg font-semibold text-foreground mb-2">Activate Your Profile</h3>
+                    <p className="text-muted-foreground text-sm mb-4">
+                      A one-time listing fee of ₹999 is required to make your profile live and visible to parents searching for specialists.
+                    </p>
+                  </div>
+                  <div className="bg-muted/40 border border-border rounded-xl p-5 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-foreground">Professional Listing Fee</span>
+                      <span className="text-lg font-bold text-foreground">₹999</span>
+                    </div>
+                    <ul className="space-y-1.5 text-sm text-muted-foreground">
+                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> One-time payment</li>
+                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> Profile goes live immediately</li>
+                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> Visible to parents searching in your city</li>
+                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> No recurring charges</li>
+                    </ul>
+                  </div>
+                  <Button
+                    className="w-full gap-2"
+                    onClick={handlePayment}
+                    disabled={paymentLoading}
+                    data-testid="pay-listing-fee-btn"
+                  >
+                    {paymentLoading ? <Loader2 size={15} className="animate-spin" /> : <IndianRupee size={15} />}
+                    {paymentLoading ? "Processing…" : "Pay ₹999 & Activate Profile"}
+                  </Button>
+                  <p className="text-xs text-center text-muted-foreground">
+                    Secured by Razorpay. UPI, cards & netbanking accepted.
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-muted-foreground"
+                    onClick={() => setLocation("/dashboard")}
+                  >
+                    Skip for now (profile won't be visible)
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Navigation */}
-        <div className="flex justify-between mt-6">
-          <Button variant="outline" onClick={handleBack} disabled={step === 0}>
-            Back
-          </Button>
-          {step < STEPS.length - 1 ? (
-            <Button
-              onClick={handleNext}
-              disabled={step === 0 && (!form.specialty || !form.fullName)}
-              data-testid="next-step-btn"
-            >
-              Continue
+        {!isActivationStep && (
+          <div className="flex justify-between mt-6">
+            <Button variant="outline" onClick={handleBack} disabled={step === 0}>
+              Back
             </Button>
-          ) : (
-            <Button
-              onClick={handleSubmit}
-              disabled={isPending}
-              className="gap-2"
-              data-testid="submit-profile-btn"
-            >
-              {isPending ? (
-                <Loader2 size={15} className="animate-spin" />
-              ) : (
-                <CheckCircle2 size={15} />
-              )}
-              {existingProfile ? "Save changes" : "Create profile"}
+            {step < 4 ? (
+              <Button
+                onClick={handleNext}
+                disabled={step === 0 && (!form.specialty || !form.fullName)}
+                data-testid="next-step-btn"
+              >
+                Continue
+              </Button>
+            ) : (
+              <Button
+                onClick={handleSubmit}
+                disabled={isPending}
+                className="gap-2"
+                data-testid="submit-profile-btn"
+              >
+                {isPending ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <CheckCircle2 size={15} />
+                )}
+                {existingProfile ? "Save changes" : "Create profile"}
+              </Button>
+            )}
+          </div>
+        )}
+
+        {isActivationStep && (alreadyActivated || paymentDone) && (
+          <div className="mt-6">
+            <Button className="w-full" onClick={() => setLocation("/dashboard")}>
+              Go to Dashboard
             </Button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

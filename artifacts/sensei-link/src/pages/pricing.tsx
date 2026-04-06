@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Check, Loader2, Zap, CreditCard, Shield } from "lucide-react";
+import { Check, Loader2, Zap, CreditCard, Shield, Building2 } from "lucide-react";
 import { loadRazorpayScript, formatRupees, type RazorpayPaymentResponse } from "@/lib/razorpay";
 
 type RazorpayResponse = RazorpayPaymentResponse;
@@ -54,7 +54,7 @@ export default function PricingPage() {
     try {
       const order = await createOrder({
         data: {
-          plan: planId as "plan_a_subscription" | "plan_b_per_contact" | "plan_c_featured",
+          plan: planId as "plan_a_subscription" | "plan_b_per_contact" | "plan_c_featured" | "plan_d_pro_onetime" | "plan_e_pro_monthly",
           professionalId,
         },
       });
@@ -209,6 +209,67 @@ export default function PricingPage() {
             </>
           )}
         </div>
+
+        {/* For Professionals section */}
+        {plans && (
+          <div className="mt-12 mb-8">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-serif font-bold text-foreground mb-2">For Professionals</h2>
+              <p className="text-muted-foreground max-w-xl mx-auto">
+                Join SenseiLink as a specialist. Simple, transparent pricing to get your profile live and visible to parents.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              {/* Plan D — One-time listing fee */}
+              <PlanCard
+                plan={plans.planD}
+                icon={<Building2 size={20} className="text-primary" />}
+                badge="Required"
+                highlight
+                features={[
+                  "One-time fee to go live",
+                  "Appear in parent searches",
+                  "No monthly commitment",
+                  "Profile stays active permanently",
+                ]}
+                onRazorpay={() => handleRazorpay("plan_d_pro_onetime")}
+                loadingKey={loadingKey}
+                planId="plan_d_pro_onetime"
+              />
+              {/* Plan E — Monthly subscription */}
+              <PlanCard
+                plan={plans.planE}
+                icon={<Shield size={20} className="text-purple-600" />}
+                badge="Neurologists & Therapy Centres"
+                features={[
+                  "Premium badge on your profile",
+                  "Required for neurologists",
+                  "Required for therapy centres",
+                  "Monthly renewal",
+                ]}
+                onRazorpay={() => handleRazorpay("plan_e_pro_monthly")}
+                loadingKey={loadingKey}
+                planId="plan_e_pro_monthly"
+              />
+              {/* Plan C — Featured listing */}
+              <PlanCard
+                plan={plans.planC}
+                icon={<Zap size={20} className="text-yellow-500" />}
+                badge="Optional boost"
+                features={[
+                  "Featured at top of search results",
+                  "More parent inquiries",
+                  "30-day visibility boost",
+                  "Build your practice faster",
+                ]}
+                onStripe={() => handleStripe("plan_c_featured")}
+                loadingKey={loadingKey}
+                planId="plan_c_featured"
+                stripeOnly
+              />
+            </div>
+          </div>
+        )}
 
         <div className="bg-card border border-border rounded-xl p-6 text-center">
           <p className="text-sm text-muted-foreground mb-1">

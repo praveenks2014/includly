@@ -25,6 +25,10 @@ export type SearchProfessionalsParams = {
    * Search radius in km (used with lat/lng)
    */
   radiusKm?: number;
+  /**
+   * Filter by maximum session price in INR
+   */
+  budgetMaxINR?: number;
   page?: number;
   limit?: number;
 };

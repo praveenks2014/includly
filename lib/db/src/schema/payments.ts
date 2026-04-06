@@ -6,7 +6,7 @@ import { professionalProfilesTable } from "./professionals";
 
 export const paymentProviderEnum = pgEnum("payment_provider", ["stripe", "razorpay"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "completed", "failed", "refunded"]);
-export const paymentPlanEnum = pgEnum("payment_plan", ["plan_a_subscription", "plan_b_per_contact", "plan_c_featured"]);
+export const paymentPlanEnum = pgEnum("payment_plan", ["plan_a_subscription", "plan_b_per_contact", "plan_c_featured", "plan_d_pro_onetime", "plan_e_pro_monthly"]);
 
 export const paymentsTable = pgTable("payments", {
   id: serial("id").primaryKey(),
@@ -36,6 +36,18 @@ export const subscriptionsTable = pgTable("subscriptions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const professionalSubscriptionsTable = pgTable("professional_subscriptions", {
+  id: serial("id").primaryKey(),
+  professionalId: integer("professional_id").notNull().references(() => professionalProfilesTable.id, { onDelete: "cascade" }),
+  provider: paymentProviderEnum("provider").notNull(),
+  providerSubscriptionId: text("provider_subscription_id"),
+  plan: text("plan").notNull().default("plan_e_pro_monthly"),
+  status: text("status").notNull().default("active"),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const insertPaymentSchema = createInsertSchema(paymentsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof paymentsTable.$inferSelect;
@@ -43,3 +55,7 @@ export type Payment = typeof paymentsTable.$inferSelect;
 export const insertSubscriptionSchema = createInsertSchema(subscriptionsTable).omit({ id: true, createdAt: true });
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
 export type Subscription = typeof subscriptionsTable.$inferSelect;
+
+export const insertProfessionalSubscriptionSchema = createInsertSchema(professionalSubscriptionsTable).omit({ id: true, createdAt: true });
+export type InsertProfessionalSubscription = z.infer<typeof insertProfessionalSubscriptionSchema>;
+export type ProfessionalSubscription = typeof professionalSubscriptionsTable.$inferSelect;

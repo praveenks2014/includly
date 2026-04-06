@@ -21,4 +21,6 @@ export interface CreateProfessionalProfileBody {
   willingToTravel?: boolean;
   phone?: string;
   email?: string;
+  pricingMinINR?: number;
+  pricingMaxINR?: number;
 }

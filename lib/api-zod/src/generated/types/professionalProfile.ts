@@ -37,5 +37,10 @@ export interface ProfessionalProfile {
   phone?: string | null;
   /** @nullable */
   email?: string | null;
+  /** @nullable */
+  pricingMinINR?: number | null;
+  /** @nullable */
+  pricingMaxINR?: number | null;
+  paymentActivated: boolean;
   createdAt: Date;
 }

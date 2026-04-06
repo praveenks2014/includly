@@ -3,7 +3,7 @@ import { eq, desc, and, gt } from "drizzle-orm";
 import Stripe from "stripe";
 import Razorpay from "razorpay";
 import crypto from "crypto";
-import { db, paymentsTable, subscriptionsTable, contactUnlocksTable } from "@workspace/db";
+import { db, paymentsTable, subscriptionsTable, contactUnlocksTable, professionalProfilesTable, professionalSubscriptionsTable } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { PLANS, type PlanId } from "../lib/paymentPlans";
 import {
@@ -32,6 +32,8 @@ router.get("/payments/plans", (_req: Request, res: Response): void => {
     planA: PLANS.plan_a_subscription,
     planB: PLANS.plan_b_per_contact,
     planC: PLANS.plan_c_featured,
+    planD: PLANS.plan_d_pro_onetime,
+    planE: PLANS.plan_e_pro_monthly,
   });
 });
 
@@ -148,6 +150,12 @@ router.post(
       return;
     }
 
+    // Plan D/E are professional-only
+    if ((plan === "plan_d_pro_onetime" || plan === "plan_e_pro_monthly") && req.userRole === "parent") {
+      res.status(403).json({ error: "Professional billing plans are for professional accounts only." });
+      return;
+    }
+
     // Plan B requires professionalId
     if (plan === "plan_b_per_contact" && !professionalId) {
       res.status(400).json({ error: "professionalId is required for per-contact unlock." });
@@ -158,7 +166,7 @@ router.post(
       .insert(paymentsTable)
       .values({
         userId: req.userId!,
-        plan: plan as "plan_a_subscription" | "plan_b_per_contact" | "plan_c_featured",
+        plan: plan as "plan_a_subscription" | "plan_b_per_contact" | "plan_c_featured" | "plan_d_pro_onetime" | "plan_e_pro_monthly",
         provider: "stripe",
         amountPaise: planDetails.amountPaise,
         currency: planDetails.currency,
@@ -332,6 +340,12 @@ router.post(
     return;
   }
 
+  // Plan D/E are professional-only
+  if ((plan === "plan_d_pro_onetime" || plan === "plan_e_pro_monthly") && req.userRole === "parent") {
+    res.status(403).json({ error: "Professional billing plans are for professional accounts only." });
+    return;
+  }
+
   // Plan B requires professionalId
   if (plan === "plan_b_per_contact" && !professionalId) {
     res.status(400).json({ error: "professionalId is required for per-contact unlock." });
@@ -342,7 +356,7 @@ router.post(
     .insert(paymentsTable)
     .values({
       userId: req.userId!,
-      plan: plan as "plan_a_subscription" | "plan_b_per_contact" | "plan_c_featured",
+      plan: plan as "plan_a_subscription" | "plan_b_per_contact" | "plan_c_featured" | "plan_d_pro_onetime" | "plan_e_pro_monthly",
       provider: "razorpay",
       amountPaise: planDetails.amountPaise,
       currency: planDetails.currency,
@@ -448,7 +462,7 @@ export async function activatePayment(
   professionalId: number | null,
   provider: "stripe" | "razorpay" = "razorpay",
   providerSubscriptionId: string | null = null,
-): Promise<{ isSubscriptionActive: boolean; unlockedProfessionalId: number | null }> {
+): Promise<{ isSubscriptionActive: boolean; unlockedProfessionalId: number | null; paymentActivated?: boolean }> {
   if (plan === "plan_a_subscription") {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
@@ -475,6 +489,45 @@ export async function activatePayment(
       await db.insert(contactUnlocksTable).values({ parentId: userId, professionalId });
     }
     return { isSubscriptionActive: false, unlockedProfessionalId: professionalId };
+  }
+
+  if (plan === "plan_d_pro_onetime") {
+    const [prof] = await db
+      .select()
+      .from(professionalProfilesTable)
+      .where(eq(professionalProfilesTable.userId, userId))
+      .limit(1);
+
+    if (prof) {
+      await db
+        .update(professionalProfilesTable)
+        .set({ paymentActivated: true })
+        .where(eq(professionalProfilesTable.id, prof.id));
+    }
+    return { isSubscriptionActive: false, unlockedProfessionalId: null, paymentActivated: true };
+  }
+
+  if (plan === "plan_e_pro_monthly") {
+    const [prof] = await db
+      .select()
+      .from(professionalProfilesTable)
+      .where(eq(professionalProfilesTable.userId, userId))
+      .limit(1);
+
+    if (prof) {
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+      await db.insert(professionalSubscriptionsTable).values({
+        professionalId: prof.id,
+        provider,
+        providerSubscriptionId: providerSubscriptionId ?? undefined,
+        plan: "plan_e_pro_monthly",
+        status: "active",
+        startsAt: new Date(),
+        expiresAt,
+      });
+    }
+    return { isSubscriptionActive: false, unlockedProfessionalId: null };
   }
 
   return { isSubscriptionActive: false, unlockedProfessionalId: null };
