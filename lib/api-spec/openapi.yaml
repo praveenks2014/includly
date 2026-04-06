@@ -28,6 +28,8 @@ tags:
     description: Payment processing (Stripe + Razorpay)
   - name: webhooks
     description: Payment webhook handlers
+  - name: admin
+    description: Admin-only platform management
 
 paths:
   /healthz:
@@ -729,6 +731,221 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ComplianceContent"
+
+  /admin/professionals:
+    get:
+      operationId: adminListProfessionals
+      tags: [admin]
+      summary: List all professionals with status (admin only)
+      security:
+        - clerkAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [unsubmitted, pending, verified, rejected]
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of professionals with user info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminProfessionalsResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/professionals/{id}/approve:
+    patch:
+      operationId: adminApproveProfessional
+      tags: [admin]
+      summary: Approve a professional's onboarding (admin only)
+      security:
+        - clerkAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated professional profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfessionalProfile"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/professionals/{id}/reject:
+    patch:
+      operationId: adminRejectProfessional
+      tags: [admin]
+      summary: Reject a professional's onboarding (admin only)
+      security:
+        - clerkAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated professional profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfessionalProfile"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/stats:
+    get:
+      operationId: adminGetStats
+      tags: [admin]
+      summary: Get admin platform statistics (admin only)
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Admin platform stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/settings:
+    get:
+      operationId: adminGetSettings
+      tags: [admin]
+      summary: Get admin settings (admin only)
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Admin settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSettings"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: adminUpdateSettings
+      tags: [admin]
+      summary: Update admin settings (admin only)
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAdminSettingsBody"
+      responses:
+        "200":
+          description: Updated admin settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSettings"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
   securitySchemes:
@@ -1523,3 +1740,101 @@ components:
         - success
         - message
         - isSubscriptionActive
+
+    AdminProfessionalRow:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        fullName:
+          type: ["string", "null"]
+        specialty:
+          type: string
+        verificationStatus:
+          type: string
+          enum: [unsubmitted, pending, verified, rejected]
+        city:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        userEmail:
+          type: ["string", "null"]
+        userName:
+          type: ["string", "null"]
+      required:
+        - id
+        - userId
+        - specialty
+        - verificationStatus
+        - createdAt
+
+    AdminProfessionalsResponse:
+      type: object
+      properties:
+        professionals:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminProfessionalRow"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required:
+        - professionals
+        - total
+        - page
+        - limit
+
+    AdminStats:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+        totalProfessionals:
+          type: integer
+        totalParents:
+          type: integer
+        totalUnlocksThisMonth:
+          type: integer
+        pendingProfessionals:
+          type: integer
+        verifiedProfessionals:
+          type: integer
+        rejectedProfessionals:
+          type: integer
+      required:
+        - totalUsers
+        - totalProfessionals
+        - totalParents
+        - totalUnlocksThisMonth
+        - pendingProfessionals
+        - verifiedProfessionals
+        - rejectedProfessionals
+
+    AdminSettings:
+      type: object
+      properties:
+        id:
+          type: integer
+        contactLimitPerParent:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - contactLimitPerParent
+        - updatedAt
+
+    UpdateAdminSettingsBody:
+      type: object
+      properties:
+        contactLimitPerParent:
+          type: integer

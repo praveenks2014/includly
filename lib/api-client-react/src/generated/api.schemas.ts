@@ -465,6 +465,61 @@ export interface PaymentVerifyResult {
   unlockedProfessionalId?: number | null;
 }
 
+export type AdminProfessionalRowVerificationStatus =
+  (typeof AdminProfessionalRowVerificationStatus)[keyof typeof AdminProfessionalRowVerificationStatus];
+
+export const AdminProfessionalRowVerificationStatus = {
+  unsubmitted: "unsubmitted",
+  pending: "pending",
+  verified: "verified",
+  rejected: "rejected",
+} as const;
+
+export interface AdminProfessionalRow {
+  id: number;
+  userId: number;
+  /** @nullable */
+  fullName?: string | null;
+  specialty: string;
+  verificationStatus: AdminProfessionalRowVerificationStatus;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  country?: string | null;
+  createdAt: string;
+  /** @nullable */
+  userEmail?: string | null;
+  /** @nullable */
+  userName?: string | null;
+}
+
+export interface AdminProfessionalsResponse {
+  professionals: AdminProfessionalRow[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface AdminStats {
+  totalUsers: number;
+  totalProfessionals: number;
+  totalParents: number;
+  totalUnlocksThisMonth: number;
+  pendingProfessionals: number;
+  verifiedProfessionals: number;
+  rejectedProfessionals: number;
+}
+
+export interface AdminSettings {
+  id: number;
+  contactLimitPerParent: number;
+  updatedAt: string;
+}
+
+export interface UpdateAdminSettingsBody {
+  contactLimitPerParent?: number;
+}
+
 export type SearchProfessionalsParams = {
   specialty?: SearchProfessionalsSpecialty;
   city?: string;
@@ -508,3 +563,19 @@ export const SearchProfessionalsSpecialty = {
 export type StripeWebhookBody = { [key: string]: unknown };
 
 export type RazorpayWebhookBody = { [key: string]: unknown };
+
+export type AdminListProfessionalsParams = {
+  status?: AdminListProfessionalsStatus;
+  page?: number;
+  limit?: number;
+};
+
+export type AdminListProfessionalsStatus =
+  (typeof AdminListProfessionalsStatus)[keyof typeof AdminListProfessionalsStatus];
+
+export const AdminListProfessionalsStatus = {
+  unsubmitted: "unsubmitted",
+  pending: "pending",
+  verified: "verified",
+  rejected: "rejected",
+} as const;

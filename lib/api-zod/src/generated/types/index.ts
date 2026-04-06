@@ -6,8 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./adminListProfessionalsParams";
+export * from "./adminListProfessionalsStatus";
 export * from "./adminProfessionalBillingRecord";
+export * from "./adminProfessionalRow";
+export * from "./adminProfessionalRowVerificationStatus";
 export * from "./adminProfessionalsBillingResponse";
+export * from "./adminProfessionalsResponse";
+export * from "./adminSettings";
+export * from "./adminStats";
 export * from "./complianceContent";
 export * from "./contactUnlock";
 export * from "./createProfessionalProfileBody";
@@ -46,6 +53,7 @@ export * from "./stripeWebhookBody";
 export * from "./subscriptionStatus";
 export * from "./subscriptionStatusSubscription";
 export * from "./unlockStatus";
+export * from "./updateAdminSettingsBody";
 export * from "./updateProfessionalProfileBody";
 export * from "./updateProfessionalProfileBodySpecialty";
 export * from "./updateUserBody";

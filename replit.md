@@ -37,6 +37,7 @@ Tables:
 - `contact_unlocks` — parent_id FK, professional_id FK, unlocked_at
 - `payments` — user_id FK, plan (enum), provider (stripe/razorpay), provider_payment_id, provider_order_id, amount_paise, currency, status (pending/completed/failed/refunded), professional_id FK, metadata
 - `subscriptions` — user_id FK, provider, provider_subscription_id, plan, status, starts_at, expires_at
+- `admin_settings` — single-row config table: contact_limit_per_parent (default 5)
 
 Enums:
 - `specialty`: shadow_teacher, special_tutor, occupational_therapy, speech_therapy, psychiatrist, developmental_pediatrician, neurologist
@@ -59,6 +60,25 @@ Enums:
 - `/payment/success` — Post-payment success confirmation
 - `/payment/cancel` — Cancelled payment redirect
 - `/privacy`, `/terms`, `/support` — Compliance pages
+- `/admin` — Admin dashboard (role=admin required): Professionals tab (approve/reject), Stats tab, Settings tab
+
+## Admin Access
+
+To grant admin access to a user, run this SQL against the database:
+```sql
+UPDATE users SET role = 'admin' WHERE email = 'your@email.com';
+```
+The user must be signed in to see the admin dashboard. Non-admins get a 403/Access Denied page.
+
+## Admin Routes (API)
+
+All admin routes require `role = admin`:
+- `GET /api/admin/professionals?status=pending&page=1&limit=20` — List professionals with user info
+- `PATCH /api/admin/professionals/:id/approve` — Approve (sets verificationStatus=verified, isVerified=true)
+- `PATCH /api/admin/professionals/:id/reject` — Reject (sets verificationStatus=rejected, isVerified=false)
+- `GET /api/admin/stats` — Platform stats (total users/professionals/parents, unlocks this month, pending/verified/rejected counts)
+- `GET /api/admin/settings` — Get admin settings (auto-creates defaults if missing)
+- `PATCH /api/admin/settings` — Update settings (contactLimitPerParent)
 
 ## Monetization
 

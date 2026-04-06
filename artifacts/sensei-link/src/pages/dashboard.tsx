@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp } from "lucide-react";
+import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle } from "lucide-react";
 
 export default function DashboardPage() {
   const { user } = useUser();
@@ -279,6 +279,21 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
 
   return (
     <div className="space-y-6">
+      {/* Rejection notice */}
+      {profile.verificationStatus === "rejected" && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start gap-3" data-testid="rejection-notice">
+          <XCircle size={20} className="text-red-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-red-800">Your application was not approved</p>
+            <p className="text-sm text-red-700 mt-1">
+              Unfortunately, your professional profile application has been reviewed and could not be approved at this time.
+              If you have questions or believe this is a mistake, please{" "}
+              <a href="/support" className="underline font-medium">contact our support team</a>.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Featured listing upsell */}
       <div className="bg-gradient-to-r from-violet-50 to-blue-50 border border-violet-200 rounded-xl p-4 flex items-center justify-between gap-4">
         <div className="flex items-start gap-3">
@@ -325,9 +340,12 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Badge variant={profile.verificationStatus === "verified" ? "default" : "secondary"}>
+            <Badge
+              variant={profile.verificationStatus === "verified" ? "default" : profile.verificationStatus === "rejected" ? "destructive" : "secondary"}
+            >
               {profile.verificationStatus === "verified" ? "Verified" :
                profile.verificationStatus === "pending" ? "Pending verification" :
+               profile.verificationStatus === "rejected" ? "Application rejected" :
                "Not verified"}
             </Badge>
             {profile.city && <Badge variant="outline">{profile.city}</Badge>}

@@ -760,3 +760,171 @@ export const GetSupportInfoResponse = zod.object({
   lastUpdated: zod.string(),
   content: zod.string(),
 });
+
+/**
+ * @summary List all professionals with status (admin only)
+ */
+export const adminListProfessionalsQueryPageDefault = 1;
+export const adminListProfessionalsQueryLimitDefault = 20;
+
+export const AdminListProfessionalsQueryParams = zod.object({
+  status: zod
+    .enum(["unsubmitted", "pending", "verified", "rejected"])
+    .optional(),
+  page: zod.coerce.number().default(adminListProfessionalsQueryPageDefault),
+  limit: zod.coerce.number().default(adminListProfessionalsQueryLimitDefault),
+});
+
+export const AdminListProfessionalsResponse = zod.object({
+  professionals: zod.array(
+    zod.object({
+      id: zod.number(),
+      userId: zod.number(),
+      fullName: zod.string().nullish(),
+      specialty: zod.string(),
+      verificationStatus: zod.enum([
+        "unsubmitted",
+        "pending",
+        "verified",
+        "rejected",
+      ]),
+      city: zod.string().nullish(),
+      country: zod.string().nullish(),
+      createdAt: zod.coerce.date(),
+      userEmail: zod.string().nullish(),
+      userName: zod.string().nullish(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  limit: zod.number(),
+});
+
+/**
+ * @summary Approve a professional's onboarding (admin only)
+ */
+export const AdminApproveProfessionalParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AdminApproveProfessionalResponse = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  fullName: zod.string().nullish(),
+  specialty: zod.enum([
+    "shadow_teacher",
+    "special_tutor",
+    "occupational_therapy",
+    "speech_therapy",
+    "psychiatrist",
+    "developmental_pediatrician",
+    "neurologist",
+    "therapy_centre",
+  ]),
+  bio: zod.string().nullish(),
+  yearsExperience: zod.number(),
+  qualifications: zod.string(),
+  city: zod.string().nullish(),
+  country: zod.string().nullish(),
+  latitude: zod.number().nullish(),
+  longitude: zod.number().nullish(),
+  travelRadiusKm: zod.number(),
+  willingToTravel: zod.boolean(),
+  isVerified: zod.boolean(),
+  verificationStatus: zod.enum([
+    "pending",
+    "verified",
+    "rejected",
+    "unsubmitted",
+  ]),
+  averageRating: zod.number().nullish(),
+  totalRatings: zod.number(),
+  phone: zod.string().nullish(),
+  email: zod.string().nullish(),
+  pricingMinINR: zod.number().nullish(),
+  pricingMaxINR: zod.number().nullish(),
+  paymentActivated: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Reject a professional's onboarding (admin only)
+ */
+export const AdminRejectProfessionalParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AdminRejectProfessionalResponse = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  fullName: zod.string().nullish(),
+  specialty: zod.enum([
+    "shadow_teacher",
+    "special_tutor",
+    "occupational_therapy",
+    "speech_therapy",
+    "psychiatrist",
+    "developmental_pediatrician",
+    "neurologist",
+    "therapy_centre",
+  ]),
+  bio: zod.string().nullish(),
+  yearsExperience: zod.number(),
+  qualifications: zod.string(),
+  city: zod.string().nullish(),
+  country: zod.string().nullish(),
+  latitude: zod.number().nullish(),
+  longitude: zod.number().nullish(),
+  travelRadiusKm: zod.number(),
+  willingToTravel: zod.boolean(),
+  isVerified: zod.boolean(),
+  verificationStatus: zod.enum([
+    "pending",
+    "verified",
+    "rejected",
+    "unsubmitted",
+  ]),
+  averageRating: zod.number().nullish(),
+  totalRatings: zod.number(),
+  phone: zod.string().nullish(),
+  email: zod.string().nullish(),
+  pricingMinINR: zod.number().nullish(),
+  pricingMaxINR: zod.number().nullish(),
+  paymentActivated: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Get admin platform statistics (admin only)
+ */
+export const AdminGetStatsResponse = zod.object({
+  totalUsers: zod.number(),
+  totalProfessionals: zod.number(),
+  totalParents: zod.number(),
+  totalUnlocksThisMonth: zod.number(),
+  pendingProfessionals: zod.number(),
+  verifiedProfessionals: zod.number(),
+  rejectedProfessionals: zod.number(),
+});
+
+/**
+ * @summary Get admin settings (admin only)
+ */
+export const AdminGetSettingsResponse = zod.object({
+  id: zod.number(),
+  contactLimitPerParent: zod.number(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Update admin settings (admin only)
+ */
+export const AdminUpdateSettingsBody = zod.object({
+  contactLimitPerParent: zod.number().optional(),
+});
+
+export const AdminUpdateSettingsResponse = zod.object({
+  id: zod.number(),
+  contactLimitPerParent: zod.number(),
+  updatedAt: zod.coerce.date(),
+});
