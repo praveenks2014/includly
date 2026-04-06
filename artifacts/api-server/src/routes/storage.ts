@@ -73,13 +73,7 @@ router.post("/storage/uploads/request-url", requireAuth, async (req: Request, re
       fileSizeBytes: size,
     });
 
-    res.json(
-      RequestUploadUrlResponse.parse({
-        uploadURL,
-        objectPath,
-        metadata: { name, size, contentType },
-      }),
-    );
+    res.json(RequestUploadUrlResponse.parse({ uploadURL, objectPath }));
   } catch (error) {
     req.log.error({ err: error }, "Error generating upload URL");
     res.status(500).json({ error: "Failed to generate upload URL" });

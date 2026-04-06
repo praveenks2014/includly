@@ -3,8 +3,6 @@ import { Readable } from "stream";
 import { randomUUID } from "crypto";
 import {
   ObjectAclPolicy,
-  ObjectPermission,
-  canAccessObject,
   getObjectAclPolicy,
   setObjectAclPolicy,
 } from "./objectAcl";
@@ -203,21 +201,6 @@ export class ObjectStorageService {
     return normalizedPath;
   }
 
-  async canAccessObjectEntity({
-    userId,
-    objectFile,
-    requestedPermission,
-  }: {
-    userId?: string;
-    objectFile: File;
-    requestedPermission?: ObjectPermission;
-  }): Promise<boolean> {
-    return canAccessObject({
-      userId,
-      objectFile,
-      requestedPermission: requestedPermission ?? ObjectPermission.READ,
-    });
-  }
 }
 
 function parseObjectPath(path: string): {
