@@ -38,10 +38,15 @@ Tables:
 - `payments` — user_id FK, plan (enum), provider (stripe/razorpay), provider_payment_id, provider_order_id, amount_paise, currency, status (pending/completed/failed/refunded), professional_id FK, metadata
 - `subscriptions` — user_id FK, provider, provider_subscription_id, plan, status, starts_at, expires_at
 - `admin_settings` — single-row config table: contact_limit_per_parent (default 5)
+- `user_certifications` — user_id FK, document_type, document_url (object storage path), notes, status (pending/approved/rejected), reviewed_at
+- `identity_verifications` — professional_id FK, document_type (aadhar/passport/driving_licence/national_id), file_key (object storage path), status (pending/verified/rejected), dpdp_consent, submitted_at, reviewed_at
 
 Enums:
 - `specialty`: shadow_teacher, special_tutor, occupational_therapy, speech_therapy, psychiatrist, developmental_pediatrician, neurologist
 - `verification_status`: unsubmitted, pending, verified, rejected
+- `id_document_type`: aadhar, passport, driving_licence, national_id
+- `id_verification_status`: pending, verified, rejected
+- `certification_status`: pending, approved, rejected
 - `role`: parent, professional, admin
 - `payment_provider`: stripe, razorpay
 - `payment_status`: pending, completed, failed, refunded

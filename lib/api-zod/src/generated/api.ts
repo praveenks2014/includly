@@ -1051,3 +1051,98 @@ export const BroadcastNotificationResponse = zod.object({
   total: zod.number(),
   message: zod.string(),
 });
+
+/**
+ * @summary Request a presigned URL for file upload
+ */
+
+export const RequestUploadUrlBody = zod.object({
+  name: zod.string().min(1).describe("Original file name."),
+  size: zod.number().min(1).describe("File size in bytes."),
+  contentType: zod.string().min(1).describe("MIME type of the file."),
+});
+
+export const RequestUploadUrlResponse = zod.object({
+  uploadURL: zod.string().url().describe("Presigned GCS URL for PUT upload."),
+  objectPath: zod
+    .string()
+    .describe(
+      "Normalized object path (e.g. \/objects\/uploads\/uuid). Store in DB.",
+    ),
+});
+
+/**
+ * Professionals upload Aadhar/passport/ID with DPDP consent.
+ * @summary Submit identity document for verification
+ */
+export const SubmitIdentityVerificationBody = zod.object({
+  documentType: zod.enum([
+    "aadhar",
+    "passport",
+    "driving_licence",
+    "national_id",
+  ]),
+  fileKey: zod
+    .string()
+    .describe("Object path returned by the upload endpoint."),
+  dpdpConsent: zod
+    .boolean()
+    .describe("User explicitly consents to DPDP\/GDPR data processing."),
+});
+
+/**
+ * @summary Get current professional's identity verification status
+ */
+export const GetMyIdentityVerificationResponse = zod.object({
+  id: zod.number(),
+  professionalId: zod.number(),
+  documentType: zod.enum([
+    "aadhar",
+    "passport",
+    "driving_licence",
+    "national_id",
+  ]),
+  fileKey: zod.string(),
+  status: zod.enum(["pending", "verified", "rejected"]),
+  dpdpConsent: zod.boolean().optional(),
+  submittedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Upload a qualification/certification document
+ */
+export const SubmitCertificationBody = zod.object({
+  documentType: zod
+    .string()
+    .describe("e.g. degree, diploma, certificate, training"),
+  fileKey: zod
+    .string()
+    .describe("Object path returned by the upload endpoint."),
+});
+
+/**
+ * @summary List current professional's certification documents
+ */
+export const GetMyCertificationsResponseItem = zod.object({
+  id: zod.number(),
+  professionalId: zod.number(),
+  documentType: zod.string(),
+  fileKey: zod.string(),
+  uploadedAt: zod.coerce.date(),
+});
+export const GetMyCertificationsResponse = zod.array(
+  GetMyCertificationsResponseItem,
+);
+
+/**
+ * @summary Delete account and all personal data (GDPR/DPDP right to erasure)
+ */
+export const DeleteMyAccountBody = zod.object({
+  confirmPhrase: zod
+    .string()
+    .describe('User must type \"DELETE MY ACCOUNT\" to confirm.'),
+});
+
+export const DeleteMyAccountResponse = zod.object({
+  success: zod.boolean(),
+});

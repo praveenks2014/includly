@@ -592,6 +592,98 @@ export interface BroadcastNotificationResult {
   message: string;
 }
 
+export interface UploadUrlRequest {
+  /**
+   * Original file name.
+   * @minLength 1
+   */
+  name: string;
+  /**
+   * File size in bytes.
+   * @minimum 1
+   */
+  size: number;
+  /**
+   * MIME type of the file.
+   * @minLength 1
+   */
+  contentType: string;
+}
+
+export interface UploadUrlResponse {
+  /** Presigned GCS URL for PUT upload. */
+  uploadURL: string;
+  /** Normalized object path (e.g. /objects/uploads/uuid). Store in DB. */
+  objectPath: string;
+}
+
+export type IdentityVerificationDocumentDocumentType =
+  (typeof IdentityVerificationDocumentDocumentType)[keyof typeof IdentityVerificationDocumentDocumentType];
+
+export const IdentityVerificationDocumentDocumentType = {
+  aadhar: "aadhar",
+  passport: "passport",
+  driving_licence: "driving_licence",
+  national_id: "national_id",
+} as const;
+
+export type IdentityVerificationDocumentStatus =
+  (typeof IdentityVerificationDocumentStatus)[keyof typeof IdentityVerificationDocumentStatus];
+
+export const IdentityVerificationDocumentStatus = {
+  pending: "pending",
+  verified: "verified",
+  rejected: "rejected",
+} as const;
+
+export interface IdentityVerificationDocument {
+  id: number;
+  professionalId: number;
+  documentType: IdentityVerificationDocumentDocumentType;
+  fileKey: string;
+  status: IdentityVerificationDocumentStatus;
+  dpdpConsent?: boolean;
+  submittedAt: string;
+}
+
+export type SubmitIdentityVerificationBodyDocumentType =
+  (typeof SubmitIdentityVerificationBodyDocumentType)[keyof typeof SubmitIdentityVerificationBodyDocumentType];
+
+export const SubmitIdentityVerificationBodyDocumentType = {
+  aadhar: "aadhar",
+  passport: "passport",
+  driving_licence: "driving_licence",
+  national_id: "national_id",
+} as const;
+
+export interface SubmitIdentityVerificationBody {
+  documentType: SubmitIdentityVerificationBodyDocumentType;
+  /** Object path returned by the upload endpoint. */
+  fileKey: string;
+  /** User explicitly consents to DPDP/GDPR data processing. */
+  dpdpConsent: boolean;
+}
+
+export interface CertificationDocument {
+  id: number;
+  professionalId: number;
+  documentType: string;
+  fileKey: string;
+  uploadedAt: string;
+}
+
+export interface SubmitCertificationBody {
+  /** e.g. degree, diploma, certificate, training */
+  documentType: string;
+  /** Object path returned by the upload endpoint. */
+  fileKey: string;
+}
+
+export interface DeleteAccountBody {
+  /** User must type "DELETE MY ACCOUNT" to confirm. */
+  confirmPhrase: string;
+}
+
 export type SearchProfessionalsParams = {
   specialty?: SearchProfessionalsSpecialty;
   city?: string;

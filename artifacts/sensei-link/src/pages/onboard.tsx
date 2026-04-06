@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -24,12 +25,20 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { SPECIALTY_OPTIONS } from "@/lib/specialties";
-import { Loader2, CheckCircle2, IndianRupee } from "lucide-react";
+import { Loader2, CheckCircle2, IndianRupee, ShieldCheck } from "lucide-react";
 import { LocationPicker, type PickedLocation } from "@/components/LocationPicker";
 import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
+import { FileUploadField } from "@/components/FileUploadField";
 
 const TRAVEL_RADIUS_OPTIONS = [5, 10, 25, 50];
-const STEPS = ["Basic info", "Details", "Location", "Contact", "Pricing", "Activate"];
+const STEPS = ["Basic info", "Details", "Location", "Contact", "Pricing", "Verify ID", "Activate"];
+
+const ID_DOCUMENT_TYPES = [
+  { value: "aadhar", label: "Aadhaar Card (India)" },
+  { value: "passport", label: "Passport" },
+  { value: "driving_licence", label: "Driving Licence" },
+  { value: "national_id", label: "National ID" },
+] as const;
 
 export default function OnboardPage() {
   const [, setLocation] = useLocation();
@@ -41,6 +50,13 @@ export default function OnboardPage() {
   const [profileCreatedId, setProfileCreatedId] = useState<number | null>(null);
   const [paymentDone, setPaymentDone] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [verificationSubmitting, setVerificationSubmitting] = useState(false);
+  const [verificationDone, setVerificationDone] = useState(false);
+  const [idDocType, setIdDocType] = useState<string>("aadhar");
+  const [idFileKey, setIdFileKey] = useState<string>("");
+  const [certFileKey, setCertFileKey] = useState<string>("");
+  const [certDocType, setCertDocType] = useState<string>("degree");
+  const [dpdpConsent, setDpdpConsent] = useState(false);
   const [form, setForm] = useState({
     fullName: existingProfile?.fullName ?? "",
     specialty: existingProfile?.specialty ?? "",
@@ -66,11 +82,11 @@ export default function OnboardPage() {
     ...getCreateProfessionalProfileMutationOptions(),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
-      toast({ title: "Profile created!", description: "Now complete your activation." });
+      toast({ title: "Profile created!", description: "Now verify your identity." });
       if (data && typeof data === "object" && "id" in data) {
         setProfileCreatedId((data as { id: number }).id);
       }
-      setStep(5);
+      setStep(5); // Verify ID step
     },
     onError: () => {
       toast({ title: "Error", description: "Could not save your profile. Please try again.", variant: "destructive" });
@@ -85,7 +101,7 @@ export default function OnboardPage() {
       if (existingProfile?.paymentActivated) {
         setLocation("/dashboard");
       } else {
-        setStep(5);
+        setStep(5); // Verify ID step
       }
     },
     onError: () => {
@@ -205,8 +221,43 @@ export default function OnboardPage() {
     }
   }
 
+  async function handleSubmitVerification() {
+    if (!idFileKey) {
+      toast({ title: "Please upload your ID document first", variant: "destructive" });
+      return;
+    }
+    if (!dpdpConsent) {
+      toast({ title: "Please accept the consent to proceed", variant: "destructive" });
+      return;
+    }
+    setVerificationSubmitting(true);
+    try {
+      const idRes = await fetch("/api/verifications/identity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentType: idDocType, fileKey: idFileKey, dpdpConsent }),
+      });
+      if (!idRes.ok) throw new Error("Failed to submit identity verification");
+
+      if (certFileKey) {
+        await fetch("/api/verifications/certifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documentType: certDocType, fileKey: certFileKey }),
+        });
+      }
+      setVerificationDone(true);
+      toast({ title: "Documents submitted", description: "Your profile will show Verified once reviewed (2-3 business days)." });
+    } catch {
+      toast({ title: "Error", description: "Could not submit documents. Please try again.", variant: "destructive" });
+    } finally {
+      setVerificationSubmitting(false);
+    }
+  }
+
   const isPending = createMutation.isPending || updateMutation.isPending;
-  const isActivationStep = step === 5;
+  const isVerifyStep = step === 5;
+  const isActivationStep = step === 6;
   const alreadyActivated = existingProfile?.paymentActivated ?? false;
 
   const stepsToShow = existingProfile && alreadyActivated ? STEPS.slice(0, 5) : STEPS;
@@ -453,8 +504,117 @@ export default function OnboardPage() {
             </div>
           )}
 
-          {/* Step 5: Activate Profile */}
+          {/* Step 5: Verify Identity */}
           {step === 5 && (
+            <div className="space-y-5">
+              {verificationDone ? (
+                <div className="text-center py-6">
+                  <ShieldCheck size={48} className="text-primary mx-auto mb-3" />
+                  <h3 className="text-lg font-semibold text-foreground mb-1">Documents Submitted</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Your verification is under review. We'll update your status within 2–3 business days.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="text-center">
+                    <ShieldCheck size={36} className="text-primary mx-auto mb-2" />
+                    <h3 className="text-lg font-semibold text-foreground mb-1">Verify Your Identity</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Upload your ID and qualifications to earn a Verified badge. Parents trust verified professionals more.
+                    </p>
+                  </div>
+
+                  <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+                    <h4 className="font-medium text-sm">Identity Document <span className="text-destructive">*</span></h4>
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">Document type</Label>
+                      <Select value={idDocType} onValueChange={setIdDocType}>
+                        <SelectTrigger data-testid="id-doc-type-select">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ID_DOCUMENT_TYPES.map((t) => (
+                            <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <FileUploadField
+                      label="Upload ID document"
+                      onUploaded={setIdFileKey}
+                      uploadedPath={idFileKey}
+                    />
+                  </div>
+
+                  <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+                    <h4 className="font-medium text-sm">Qualification Certificate <span className="text-muted-foreground text-xs">(optional)</span></h4>
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1 block">Certificate type</Label>
+                      <Input
+                        value={certDocType}
+                        onChange={(e) => setCertDocType(e.target.value)}
+                        placeholder="e.g. B.Ed, OT Diploma, Speech Therapy Degree"
+                        data-testid="cert-doc-type-input"
+                      />
+                    </div>
+                    <FileUploadField
+                      label="Upload certificate"
+                      onUploaded={setCertFileKey}
+                      uploadedPath={certFileKey}
+                    />
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+                    <p className="text-xs font-semibold text-amber-900">Data Processing Consent — DPDP / GDPR</p>
+                    <p className="text-xs text-amber-800 leading-relaxed">
+                      Your identity and qualification documents are collected solely for professional verification purposes on SenseiLink.
+                      Documents are stored securely and will not be shared with third parties.
+                      Under India's DPDP Act 2023 and GDPR, you have the right to request deletion of your documents at any time
+                      by using the "Delete My Account" option in Account Settings.
+                    </p>
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        id="dpdp-consent"
+                        checked={dpdpConsent}
+                        onCheckedChange={(v) => setDpdpConsent(v === true)}
+                        data-testid="dpdp-consent-checkbox"
+                      />
+                      <label htmlFor="dpdp-consent" className="text-xs text-amber-900 leading-relaxed cursor-pointer">
+                        I consent to SenseiLink processing my documents for identity verification as described above.
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button
+                      className="flex-1 gap-2"
+                      onClick={handleSubmitVerification}
+                      disabled={verificationSubmitting || !idFileKey || !dpdpConsent}
+                      data-testid="submit-verification-btn"
+                    >
+                      {verificationSubmitting ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                      {verificationSubmitting ? "Submitting…" : "Submit for Verification"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setStep(6)}
+                      data-testid="skip-verification-btn"
+                    >
+                      Skip for now
+                    </Button>
+                  </div>
+
+                  <p className="text-xs text-center text-muted-foreground">
+                    Verification typically takes 2–3 business days. Your profile will show "Verification Pending" until reviewed.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Step 6: Activate Profile */}
+          {step === 6 && (
             <div className="space-y-4">
               {alreadyActivated || paymentDone ? (
                 <div className="text-center py-4">
@@ -509,7 +669,7 @@ export default function OnboardPage() {
         </div>
 
         {/* Navigation */}
-        {!isActivationStep && (
+        {!isActivationStep && !isVerifyStep && (
           <div className="flex justify-between mt-6">
             <Button variant="outline" onClick={handleBack} disabled={step === 0}>
               Back
@@ -537,6 +697,14 @@ export default function OnboardPage() {
                 {existingProfile ? "Save changes" : "Create profile"}
               </Button>
             )}
+          </div>
+        )}
+
+        {isVerifyStep && verificationDone && (
+          <div className="mt-6">
+            <Button className="w-full" onClick={() => setStep(6)}>
+              Continue to Activate
+            </Button>
           </div>
         )}
 

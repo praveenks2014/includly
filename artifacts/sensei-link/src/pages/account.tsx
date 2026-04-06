@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useUser } from "@clerk/react";
+import { useUser, useClerk } from "@clerk/react";
 import {
   useGetMe,
   getUpdateMeMutationOptions,
@@ -15,21 +15,36 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, User, Bell } from "lucide-react";
-import { Link } from "wouter";
+import { Loader2, User, Bell, Trash2, ShieldAlert } from "lucide-react";
+import { Link, useLocation } from "wouter";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 export default function AccountPage() {
   const { user } = useUser();
+  const { signOut } = useClerk();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   const { data: me, isLoading } = useGetMe();
   const { data: notifPrefs } = useGetNotificationPreferences();
 
   const [fullName, setFullName] = useState("");
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const {
     isSupported: pushSupported,
@@ -72,6 +87,32 @@ export default function AccountPage() {
 
   function handleSave() {
     updateMutation.mutate({ data: { fullName, city, country } });
+  }
+
+  async function handleDeleteAccount() {
+    if (deleteConfirm !== "DELETE MY ACCOUNT") {
+      toast({ title: "Please type DELETE MY ACCOUNT exactly to confirm", variant: "destructive" });
+      return;
+    }
+    setIsDeleting(true);
+    try {
+      const res = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmPhrase: "DELETE MY ACCOUNT" }),
+      });
+      if (!res.ok) {
+        const body = await res.json() as { error?: string };
+        throw new Error(body.error ?? "Failed to delete account");
+      }
+      await signOut();
+      setLocation("/");
+      toast({ title: "Account deleted", description: "Your data has been permanently removed." });
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Could not delete account.", variant: "destructive" });
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   async function handleToggleNotifications() {
@@ -273,7 +314,7 @@ export default function AccountPage() {
 
         {/* Professional profile link */}
         {me?.role === "professional" && (
-          <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+          <div className="bg-card border border-border rounded-xl p-5 shadow-sm mb-6">
             <h2 className="font-semibold mb-1">Professional profile</h2>
             <p className="text-sm text-muted-foreground mb-3">Manage your public profile that parents see in search results.</p>
             <Link href="/onboard">
@@ -281,6 +322,61 @@ export default function AccountPage() {
             </Link>
           </div>
         )}
+
+        {/* GDPR/DPDP Data Deletion */}
+        <div className="bg-card border border-destructive/30 rounded-xl p-6 shadow-sm" data-testid="delete-account-section">
+          <div className="flex items-center gap-2 mb-4">
+            <ShieldAlert size={18} className="text-destructive" />
+            <h2 className="font-semibold text-destructive">Delete My Account & Data</h2>
+          </div>
+          <p className="text-sm text-muted-foreground mb-2">
+            Under GDPR and India's DPDP Act 2023, you have the right to erasure of your personal data.
+            This will permanently delete your account, all uploaded documents, and anonymize associated records.
+            <strong className="block mt-1 text-foreground">This action cannot be undone.</strong>
+          </p>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm" className="gap-2 mt-2" data-testid="delete-account-btn">
+                <Trash2 size={14} />
+                Delete My Account
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Permanently delete your account?</AlertDialogTitle>
+                <AlertDialogDescription className="space-y-3">
+                  <span className="block">
+                    All your personal data, documents, and associated records will be permanently deleted.
+                    This cannot be undone.
+                  </span>
+                  <span className="block">
+                    Type <strong>DELETE MY ACCOUNT</strong> to confirm:
+                  </span>
+                  <Input
+                    value={deleteConfirm}
+                    onChange={(e) => setDeleteConfirm(e.target.value)}
+                    placeholder="DELETE MY ACCOUNT"
+                    className="mt-1"
+                    data-testid="delete-confirm-input"
+                  />
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setDeleteConfirm("")}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteAccount}
+                  disabled={isDeleting || deleteConfirm !== "DELETE MY ACCOUNT"}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
+                  data-testid="confirm-delete-btn"
+                >
+                  {isDeleting && <Loader2 size={14} className="animate-spin" />}
+                  Yes, delete everything
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
     </div>
   );

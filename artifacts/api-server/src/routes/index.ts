@@ -9,6 +9,9 @@ import complianceRouter from "./compliance";
 import paymentsRouter from "./payments";
 import adminRouter from "./admin";
 import notificationsRouter from "./notifications";
+import storageRouter from "./storage";
+import verificationsRouter from "./verifications";
+import accountRouter from "./account";
 
 const router: IRouter = Router();
 
@@ -22,5 +25,8 @@ router.use(complianceRouter);
 router.use(paymentsRouter);
 router.use(adminRouter);
 router.use(notificationsRouter);
+router.use(storageRouter);
+router.use(verificationsRouter);
+router.use(accountRouter);
 
 export default router;

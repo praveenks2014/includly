@@ -24,6 +24,7 @@ import type {
   AdminStats,
   BroadcastNotificationBody,
   BroadcastNotificationResult,
+  CertificationDocument,
   ComplianceContent,
   ContactUnlock,
   ContactUsage,
@@ -32,8 +33,10 @@ import type {
   CreateRazorpayOrderBody,
   CreateStripeCheckoutBody,
   CreateUnlockBody,
+  DeleteAccountBody,
   ErrorResponse,
   HealthStatus,
+  IdentityVerificationDocument,
   MyRatingResponse,
   NotificationPreferences,
   ParentDashboard,
@@ -53,6 +56,8 @@ import type {
   SetRoleBody,
   StripeCheckoutSession,
   StripeWebhookBody,
+  SubmitCertificationBody,
+  SubmitIdentityVerificationBody,
   SubscriptionStatus,
   SuccessResponse,
   UnlockStatus,
@@ -61,6 +66,8 @@ import type {
   UpdateNotificationPreferencesBody,
   UpdateProfessionalProfileBody,
   UpdateUserBody,
+  UploadUrlRequest,
+  UploadUrlResponse,
   UserProfile,
   VapidPublicKeyResponse,
   VerifyRazorpayBody,
@@ -3630,4 +3637,507 @@ export const useBroadcastNotification = <
   TContext
 > => {
   return useMutation(getBroadcastNotificationMutationOptions(options));
+};
+
+/**
+ * @summary Request a presigned URL for file upload
+ */
+export const getRequestUploadUrlUrl = () => {
+  return `/api/storage/uploads/request-url`;
+};
+
+export const requestUploadUrl = async (
+  uploadUrlRequest: UploadUrlRequest,
+  options?: RequestInit,
+): Promise<UploadUrlResponse> => {
+  return customFetch<UploadUrlResponse>(getRequestUploadUrlUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(uploadUrlRequest),
+  });
+};
+
+export const getRequestUploadUrlMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestUploadUrl>>,
+    TError,
+    { data: BodyType<UploadUrlRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof requestUploadUrl>>,
+  TError,
+  { data: BodyType<UploadUrlRequest> },
+  TContext
+> => {
+  const mutationKey = ["requestUploadUrl"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof requestUploadUrl>>,
+    { data: BodyType<UploadUrlRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return requestUploadUrl(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RequestUploadUrlMutationResult = NonNullable<
+  Awaited<ReturnType<typeof requestUploadUrl>>
+>;
+export type RequestUploadUrlMutationBody = BodyType<UploadUrlRequest>;
+export type RequestUploadUrlMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Request a presigned URL for file upload
+ */
+export const useRequestUploadUrl = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestUploadUrl>>,
+    TError,
+    { data: BodyType<UploadUrlRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof requestUploadUrl>>,
+  TError,
+  { data: BodyType<UploadUrlRequest> },
+  TContext
+> => {
+  return useMutation(getRequestUploadUrlMutationOptions(options));
+};
+
+/**
+ * Professionals upload Aadhar/passport/ID with DPDP consent.
+ * @summary Submit identity document for verification
+ */
+export const getSubmitIdentityVerificationUrl = () => {
+  return `/api/verifications/identity`;
+};
+
+export const submitIdentityVerification = async (
+  submitIdentityVerificationBody: SubmitIdentityVerificationBody,
+  options?: RequestInit,
+): Promise<IdentityVerificationDocument> => {
+  return customFetch<IdentityVerificationDocument>(
+    getSubmitIdentityVerificationUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(submitIdentityVerificationBody),
+    },
+  );
+};
+
+export const getSubmitIdentityVerificationMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitIdentityVerification>>,
+    TError,
+    { data: BodyType<SubmitIdentityVerificationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitIdentityVerification>>,
+  TError,
+  { data: BodyType<SubmitIdentityVerificationBody> },
+  TContext
+> => {
+  const mutationKey = ["submitIdentityVerification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitIdentityVerification>>,
+    { data: BodyType<SubmitIdentityVerificationBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return submitIdentityVerification(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitIdentityVerificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitIdentityVerification>>
+>;
+export type SubmitIdentityVerificationMutationBody =
+  BodyType<SubmitIdentityVerificationBody>;
+export type SubmitIdentityVerificationMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Submit identity document for verification
+ */
+export const useSubmitIdentityVerification = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitIdentityVerification>>,
+    TError,
+    { data: BodyType<SubmitIdentityVerificationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitIdentityVerification>>,
+  TError,
+  { data: BodyType<SubmitIdentityVerificationBody> },
+  TContext
+> => {
+  return useMutation(getSubmitIdentityVerificationMutationOptions(options));
+};
+
+/**
+ * @summary Get current professional's identity verification status
+ */
+export const getGetMyIdentityVerificationUrl = () => {
+  return `/api/verifications/identity`;
+};
+
+export const getMyIdentityVerification = async (
+  options?: RequestInit,
+): Promise<IdentityVerificationDocument> => {
+  return customFetch<IdentityVerificationDocument>(
+    getGetMyIdentityVerificationUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetMyIdentityVerificationQueryKey = () => {
+  return [`/api/verifications/identity`] as const;
+};
+
+export const getGetMyIdentityVerificationQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyIdentityVerification>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyIdentityVerification>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMyIdentityVerificationQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyIdentityVerification>>
+  > = ({ signal }) => getMyIdentityVerification({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyIdentityVerification>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyIdentityVerificationQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyIdentityVerification>>
+>;
+export type GetMyIdentityVerificationQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get current professional's identity verification status
+ */
+
+export function useGetMyIdentityVerification<
+  TData = Awaited<ReturnType<typeof getMyIdentityVerification>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyIdentityVerification>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyIdentityVerificationQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Upload a qualification/certification document
+ */
+export const getSubmitCertificationUrl = () => {
+  return `/api/verifications/certifications`;
+};
+
+export const submitCertification = async (
+  submitCertificationBody: SubmitCertificationBody,
+  options?: RequestInit,
+): Promise<CertificationDocument> => {
+  return customFetch<CertificationDocument>(getSubmitCertificationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(submitCertificationBody),
+  });
+};
+
+export const getSubmitCertificationMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitCertification>>,
+    TError,
+    { data: BodyType<SubmitCertificationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitCertification>>,
+  TError,
+  { data: BodyType<SubmitCertificationBody> },
+  TContext
+> => {
+  const mutationKey = ["submitCertification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitCertification>>,
+    { data: BodyType<SubmitCertificationBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return submitCertification(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitCertificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitCertification>>
+>;
+export type SubmitCertificationMutationBody = BodyType<SubmitCertificationBody>;
+export type SubmitCertificationMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Upload a qualification/certification document
+ */
+export const useSubmitCertification = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitCertification>>,
+    TError,
+    { data: BodyType<SubmitCertificationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitCertification>>,
+  TError,
+  { data: BodyType<SubmitCertificationBody> },
+  TContext
+> => {
+  return useMutation(getSubmitCertificationMutationOptions(options));
+};
+
+/**
+ * @summary List current professional's certification documents
+ */
+export const getGetMyCertificationsUrl = () => {
+  return `/api/verifications/certifications`;
+};
+
+export const getMyCertifications = async (
+  options?: RequestInit,
+): Promise<CertificationDocument[]> => {
+  return customFetch<CertificationDocument[]>(getGetMyCertificationsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyCertificationsQueryKey = () => {
+  return [`/api/verifications/certifications`] as const;
+};
+
+export const getGetMyCertificationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyCertifications>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyCertifications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyCertificationsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyCertifications>>
+  > = ({ signal }) => getMyCertifications({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyCertifications>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyCertificationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyCertifications>>
+>;
+export type GetMyCertificationsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary List current professional's certification documents
+ */
+
+export function useGetMyCertifications<
+  TData = Awaited<ReturnType<typeof getMyCertifications>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyCertifications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyCertificationsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Delete account and all personal data (GDPR/DPDP right to erasure)
+ */
+export const getDeleteMyAccountUrl = () => {
+  return `/api/account/delete`;
+};
+
+export const deleteMyAccount = async (
+  deleteAccountBody: DeleteAccountBody,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getDeleteMyAccountUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(deleteAccountBody),
+  });
+};
+
+export const getDeleteMyAccountMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteMyAccount>>,
+    TError,
+    { data: BodyType<DeleteAccountBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteMyAccount>>,
+  TError,
+  { data: BodyType<DeleteAccountBody> },
+  TContext
+> => {
+  const mutationKey = ["deleteMyAccount"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteMyAccount>>,
+    { data: BodyType<DeleteAccountBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return deleteMyAccount(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteMyAccountMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteMyAccount>>
+>;
+export type DeleteMyAccountMutationBody = BodyType<DeleteAccountBody>;
+export type DeleteMyAccountMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete account and all personal data (GDPR/DPDP right to erasure)
+ */
+export const useDeleteMyAccount = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteMyAccount>>,
+    TError,
+    { data: BodyType<DeleteAccountBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteMyAccount>>,
+  TError,
+  { data: BodyType<DeleteAccountBody> },
+  TContext
+> => {
+  return useMutation(getDeleteMyAccountMutationOptions(options));
 };

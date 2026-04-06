@@ -32,6 +32,12 @@ tags:
     description: Admin-only platform management
   - name: notifications
     description: Push notification subscription and preferences
+  - name: storage
+    description: Object storage upload and serving endpoints
+  - name: verifications
+    description: Identity verification and certification uploads
+  - name: account
+    description: Account management including data deletion
 
 paths:
   /healthz:
@@ -1159,6 +1165,185 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /storage/uploads/request-url:
+    post:
+      tags: [storage]
+      operationId: requestUploadUrl
+      summary: Request a presigned URL for file upload
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadUrlRequest"
+      responses:
+        "200":
+          description: Presigned upload URL generated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrlResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /verifications/identity:
+    post:
+      tags: [verifications]
+      operationId: submitIdentityVerification
+      summary: Submit identity document for verification
+      description: Professionals upload Aadhar/passport/ID with DPDP consent.
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitIdentityVerificationBody"
+      responses:
+        "201":
+          description: Verification submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityVerificationDocument"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      tags: [verifications]
+      operationId: getMyIdentityVerification
+      summary: Get current professional's identity verification status
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Identity verification record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityVerificationDocument"
+        "404":
+          description: No verification submitted yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /verifications/certifications:
+    post:
+      tags: [verifications]
+      operationId: submitCertification
+      summary: Upload a qualification/certification document
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitCertificationBody"
+      responses:
+        "201":
+          description: Certification uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CertificationDocument"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      tags: [verifications]
+      operationId: getMyCertifications
+      summary: List current professional's certification documents
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: List of certifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CertificationDocument"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /account/delete:
+    post:
+      tags: [account]
+      operationId: deleteMyAccount
+      summary: Delete account and all personal data (GDPR/DPDP right to erasure)
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteAccountBody"
+      responses:
+        "200":
+          description: Account deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Confirmation phrase missing or wrong
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   securitySchemes:
     clerkAuth:
@@ -2181,3 +2366,104 @@ components:
         - sent
         - total
         - message
+
+    UploadUrlRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Original file name.
+        size:
+          type: integer
+          minimum: 1
+          description: File size in bytes.
+        contentType:
+          type: string
+          minLength: 1
+          description: MIME type of the file.
+
+    UploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL:
+          type: string
+          format: uri
+          description: Presigned GCS URL for PUT upload.
+        objectPath:
+          type: string
+          description: Normalized object path (e.g. /objects/uploads/uuid). Store in DB.
+
+    IdentityVerificationDocument:
+      type: object
+      required: [id, professionalId, documentType, fileKey, status, submittedAt]
+      properties:
+        id:
+          type: integer
+        professionalId:
+          type: integer
+        documentType:
+          type: string
+          enum: [aadhar, passport, driving_licence, national_id]
+        fileKey:
+          type: string
+        status:
+          type: string
+          enum: [pending, verified, rejected]
+        dpdpConsent:
+          type: boolean
+        submittedAt:
+          type: string
+          format: date-time
+
+    SubmitIdentityVerificationBody:
+      type: object
+      required: [documentType, fileKey, dpdpConsent]
+      properties:
+        documentType:
+          type: string
+          enum: [aadhar, passport, driving_licence, national_id]
+        fileKey:
+          type: string
+          description: Object path returned by the upload endpoint.
+        dpdpConsent:
+          type: boolean
+          description: User explicitly consents to DPDP/GDPR data processing.
+
+    CertificationDocument:
+      type: object
+      required: [id, professionalId, documentType, fileKey, uploadedAt]
+      properties:
+        id:
+          type: integer
+        professionalId:
+          type: integer
+        documentType:
+          type: string
+        fileKey:
+          type: string
+        uploadedAt:
+          type: string
+          format: date-time
+
+    SubmitCertificationBody:
+      type: object
+      required: [documentType, fileKey]
+      properties:
+        documentType:
+          type: string
+          description: e.g. degree, diploma, certificate, training
+        fileKey:
+          type: string
+          description: Object path returned by the upload endpoint.
+
+    DeleteAccountBody:
+      type: object
+      properties:
+        confirmPhrase:
+          type: string
+          description: User must type "DELETE MY ACCOUNT" to confirm.
+      required:
+        - confirmPhrase
