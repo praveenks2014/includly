@@ -425,6 +425,9 @@ importers:
       '@stripe/stripe-js':
         specifier: ^9.0.1
         version: 9.0.1
+      '@types/google.maps':
+        specifier: ^3.58.1
+        version: 3.58.1
       '@vis.gl/react-google-maps':
         specifier: ^1.8.2
         version: 1.8.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0)

@@ -153,8 +153,9 @@ router.post(
       return;
     }
 
-    const { plan, professionalId, successUrl, cancelUrl } = parsed.data;
-    const planDetails = PLANS[plan as PlanId];
+    const plan: PlanId = parsed.data.plan as PlanId;
+    const { professionalId, successUrl, cancelUrl } = parsed.data;
+    const planDetails = PLANS[plan];
 
     if (!planDetails) {
       res.status(400).json({ error: "Invalid plan" });
@@ -384,8 +385,9 @@ router.post(
     return;
   }
 
-  const { plan, professionalId } = parsed.data;
-  const planDetails = PLANS[plan as PlanId];
+  const plan: PlanId = parsed.data.plan as PlanId;
+  const { professionalId } = parsed.data;
+  const planDetails = PLANS[plan];
 
   if (!planDetails) {
     res.status(400).json({ error: "Invalid plan" });

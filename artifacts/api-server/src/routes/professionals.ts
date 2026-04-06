@@ -182,7 +182,30 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
     : [desc(professionalProfilesTable.id)];
 
   const paginated = await db
-    .select({ ...professionalProfilesTable, distanceKm: distanceSql })
+    .select({
+      id: professionalProfilesTable.id,
+      userId: professionalProfilesTable.userId,
+      fullName: professionalProfilesTable.fullName,
+      specialty: professionalProfilesTable.specialty,
+      bio: professionalProfilesTable.bio,
+      yearsExperience: professionalProfilesTable.yearsExperience,
+      city: professionalProfilesTable.city,
+      country: professionalProfilesTable.country,
+      latitude: professionalProfilesTable.latitude,
+      longitude: professionalProfilesTable.longitude,
+      travelRadiusKm: professionalProfilesTable.travelRadiusKm,
+      willingToTravel: professionalProfilesTable.willingToTravel,
+      isVerified: professionalProfilesTable.isVerified,
+      verificationStatus: professionalProfilesTable.verificationStatus,
+      averageRating: professionalProfilesTable.averageRating,
+      totalRatings: professionalProfilesTable.totalRatings,
+      phone: professionalProfilesTable.phone,
+      email: professionalProfilesTable.email,
+      pricingMinINR: professionalProfilesTable.pricingMinINR,
+      pricingMaxINR: professionalProfilesTable.pricingMaxINR,
+      paymentActivated: professionalProfilesTable.paymentActivated,
+      distanceKm: distanceSql,
+    })
     .from(professionalProfilesTable)
     .where(whereClause)
     .orderBy(...orderByClauses)

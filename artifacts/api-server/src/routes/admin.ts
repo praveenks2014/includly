@@ -65,7 +65,7 @@ router.get("/admin/professionals", ...adminGuard, async (req, res): Promise<void
 });
 
 router.patch("/admin/professionals/:id/approve", ...adminGuard, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid id" });
     return;
@@ -86,7 +86,7 @@ router.patch("/admin/professionals/:id/approve", ...adminGuard, async (req, res)
 });
 
 router.patch("/admin/professionals/:id/reject", ...adminGuard, async (req, res): Promise<void> => {
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid id" });
     return;
