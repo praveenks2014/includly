@@ -40,6 +40,9 @@ Tables:
 - `admin_settings` — single-row config table: contact_limit_per_parent (default 5)
 - `user_certifications` — user_id FK, document_type, document_url (object storage path), notes, status (pending/approved/rejected), reviewed_at
 - `identity_verifications` — professional_id FK, document_type (aadhar/passport/driving_licence/national_id), file_key (object storage path), status (pending/verified/rejected), dpdp_consent, submitted_at, reviewed_at
+- `professional_availability` — professional_id FK, day_of_week (0-6), start_time, end_time, slot_duration_minutes, price_inr, is_active
+- `session_bookings` — professional_id FK, parent_id FK, booked_date, start_time, end_time, duration_minutes, amount_inr, status (enum), notes, provider_order_id, provider_payment_id, updated_at
+- `professional_profiles` also has: `upi_id` text (private, never exposed on public API), `pricing_min_inr`, `pricing_max_inr`
 
 Enums:
 - `specialty`: shadow_teacher, special_tutor, occupational_therapy, speech_therapy, psychiatrist, developmental_pediatrician, neurologist, therapy_centre
@@ -48,6 +51,7 @@ Enums:
 - `id_verification_status`: pending, verified, rejected
 - `certification_status`: pending, approved, rejected
 - `role`: parent, professional, admin
+- `session_status`: pending_payment, confirmed, cancelled_by_parent, cancelled_by_professional, completed, no_show
 - `payment_provider`: stripe, razorpay
 - `payment_status`: pending, completed, failed, refunded
 - `payment_plan`: plan_a_subscription, plan_b_per_contact, plan_c_featured

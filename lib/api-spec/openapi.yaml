@@ -38,6 +38,8 @@ tags:
     description: Identity verification and certification uploads
   - name: account
     description: Account management including data deletion
+  - name: sessions
+    description: Session scheduling, availability management, and session booking payments
 
 paths:
   /healthz:
@@ -1344,6 +1346,202 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /sessions/availability:
+    get:
+      operationId: getMyAvailability
+      tags: [sessions]
+      summary: Get own availability slots
+      description: Professional retrieves their own weekly availability schedule
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Availability slots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AvailabilitySlot"
+        "401":
+          description: Unauthorized
+    put:
+      operationId: setAvailability
+      tags: [sessions]
+      summary: Set weekly availability
+      description: Professional replaces their entire availability schedule
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAvailabilityBody"
+      responses:
+        "200":
+          description: Availability updated
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AvailabilitySlot"
+
+  /professionals/{id}/availability:
+    get:
+      operationId: getProfessionalAvailability
+      tags: [sessions]
+      summary: Get a professional's public availability config
+      description: Returns the weekly availability schedule for a professional (public)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Availability slots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AvailabilitySlot"
+
+  /professionals/{id}/bookable-slots:
+    get:
+      operationId: getBookableSlots
+      tags: [sessions]
+      summary: Get bookable time slots for a date
+      description: Returns computed available time slots for a professional on a given date, excluding already-booked slots
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Date in YYYY-MM-DD format
+      responses:
+        "200":
+          description: Bookable slots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BookableSlot"
+
+  /sessions/book:
+    post:
+      operationId: bookSession
+      tags: [sessions]
+      summary: Book a session and create payment order
+      description: Parent books a time slot with a professional and receives a Razorpay order to complete payment
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookSessionBody"
+      responses:
+        "200":
+          description: Session created with Razorpay order details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionBookingOrderResponse"
+        "400":
+          description: Slot already taken or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sessions/verify-payment:
+    post:
+      operationId: verifySessionPayment
+      tags: [sessions]
+      summary: Verify Razorpay payment and confirm session
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifySessionPaymentBody"
+      responses:
+        "200":
+          description: Session confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionBooking"
+
+  /sessions:
+    get:
+      operationId: getMySessions
+      tags: [sessions]
+      summary: List sessions for current user
+      description: Returns upcoming and past sessions. Role-aware — professionals see sessions booked with them, parents see sessions they booked.
+      security:
+        - clerkAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SessionBookingWithDetails"
+
+  /sessions/{id}/status:
+    patch:
+      operationId: updateSessionStatus
+      tags: [sessions]
+      summary: Update session status
+      description: Professional can mark a session as completed, no_show, or cancelled
+      security:
+        - clerkAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSessionStatusBody"
+      responses:
+        "200":
+          description: Session updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionBooking"
+        "403":
+          description: Not authorized to update this session
+
 components:
   securitySchemes:
     clerkAuth:
@@ -1478,6 +1676,9 @@ components:
           type: ["integer", "null"]
         pricingMaxINR:
           type: ["integer", "null"]
+        upiId:
+          type: ["string", "null"]
+          description: UPI ID — returned only in private (own profile) response
         paymentActivated:
           type: boolean
         createdAt:
@@ -1696,6 +1897,9 @@ components:
           type: integer
         pricingMaxINR:
           type: integer
+        upiId:
+          type: string
+          description: UPI ID for receiving session payments (never exposed to parents/clients)
       required:
         - fullName
         - specialty
@@ -1744,6 +1948,9 @@ components:
           type: integer
         pricingMaxINR:
           type: integer
+        upiId:
+          type: string
+          description: UPI ID for receiving session payments (never exposed to parents/clients)
 
     Rating:
       type: object
@@ -2467,3 +2674,184 @@ components:
           description: User must type "DELETE MY ACCOUNT" to confirm.
       required:
         - confirmPhrase
+
+    AvailabilitySlot:
+      type: object
+      required: [id, professionalId, dayOfWeek, startTime, endTime, slotDurationMinutes, priceInr, isActive]
+      properties:
+        id:
+          type: integer
+        professionalId:
+          type: integer
+        dayOfWeek:
+          type: integer
+          description: 0=Sunday, 1=Monday, ..., 6=Saturday
+        startTime:
+          type: string
+          description: "HH:MM format e.g. 09:00"
+        endTime:
+          type: string
+          description: "HH:MM format e.g. 17:00"
+        slotDurationMinutes:
+          type: integer
+        priceInr:
+          type: integer
+        isActive:
+          type: boolean
+
+    SetAvailabilityBody:
+      type: object
+      required: [slots]
+      properties:
+        slots:
+          type: array
+          items:
+            type: object
+            required: [dayOfWeek, startTime, endTime, slotDurationMinutes, priceInr]
+            properties:
+              dayOfWeek:
+                type: integer
+              startTime:
+                type: string
+              endTime:
+                type: string
+              slotDurationMinutes:
+                type: integer
+              priceInr:
+                type: integer
+
+    BookableSlot:
+      type: object
+      required: [date, startTime, endTime, durationMinutes, priceInr]
+      properties:
+        date:
+          type: string
+        startTime:
+          type: string
+        endTime:
+          type: string
+        durationMinutes:
+          type: integer
+        priceInr:
+          type: integer
+
+    BookSessionBody:
+      type: object
+      required: [professionalId, bookedDate, startTime, endTime, durationMinutes, amountInr]
+      properties:
+        professionalId:
+          type: integer
+        bookedDate:
+          type: string
+          description: "YYYY-MM-DD"
+        startTime:
+          type: string
+        endTime:
+          type: string
+        durationMinutes:
+          type: integer
+        amountInr:
+          type: integer
+        notes:
+          type: string
+
+    SessionBookingOrderResponse:
+      type: object
+      required: [sessionId, orderId, amount, currency, keyId]
+      properties:
+        sessionId:
+          type: integer
+        orderId:
+          type: string
+        amount:
+          type: integer
+          description: Amount in paise
+        currency:
+          type: string
+        keyId:
+          type: string
+
+    VerifySessionPaymentBody:
+      type: object
+      required: [sessionId, razorpayPaymentId, razorpayOrderId, razorpaySignature]
+      properties:
+        sessionId:
+          type: integer
+        razorpayPaymentId:
+          type: string
+        razorpayOrderId:
+          type: string
+        razorpaySignature:
+          type: string
+
+    SessionBooking:
+      type: object
+      required: [id, professionalId, parentId, bookedDate, startTime, endTime, durationMinutes, amountInr, status]
+      properties:
+        id:
+          type: integer
+        professionalId:
+          type: integer
+        parentId:
+          type: integer
+        bookedDate:
+          type: string
+        startTime:
+          type: string
+        endTime:
+          type: string
+        durationMinutes:
+          type: integer
+        amountInr:
+          type: integer
+        status:
+          type: string
+          enum: [pending_payment, confirmed, cancelled_by_parent, cancelled_by_professional, completed, no_show]
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    SessionBookingWithDetails:
+      type: object
+      required: [id, professionalId, parentId, bookedDate, startTime, endTime, durationMinutes, amountInr, status]
+      properties:
+        id:
+          type: integer
+        professionalId:
+          type: integer
+        parentId:
+          type: integer
+        bookedDate:
+          type: string
+        startTime:
+          type: string
+        endTime:
+          type: string
+        durationMinutes:
+          type: integer
+        amountInr:
+          type: integer
+        status:
+          type: string
+          enum: [pending_payment, confirmed, cancelled_by_parent, cancelled_by_professional, completed, no_show]
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        professionalName:
+          type: string
+        professionalSpecialty:
+          type: string
+        parentName:
+          type: string
+
+    UpdateSessionStatusBody:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [confirmed, cancelled_by_professional, completed, no_show]

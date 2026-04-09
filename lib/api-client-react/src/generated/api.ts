@@ -22,6 +22,9 @@ import type {
   AdminProfessionalsResponse,
   AdminSettings,
   AdminStats,
+  AvailabilitySlot,
+  BookSessionBody,
+  BookableSlot,
   BroadcastNotificationBody,
   BroadcastNotificationResult,
   CertificationDocument,
@@ -35,6 +38,8 @@ import type {
   CreateUnlockBody,
   DeleteAccountBody,
   ErrorResponse,
+  GetBookableSlotsParams,
+  GetMySessionsParams,
   HealthStatus,
   IdentityVerificationDocument,
   MyRatingResponse,
@@ -53,6 +58,10 @@ import type {
   RazorpayWebhookBody,
   SearchProfessionalsParams,
   SearchProfessionalsResponse,
+  SessionBooking,
+  SessionBookingOrderResponse,
+  SessionBookingWithDetails,
+  SetAvailabilityBody,
   SetRoleBody,
   StripeCheckoutSession,
   StripeWebhookBody,
@@ -65,12 +74,14 @@ import type {
   UpdateAdminSettingsBody,
   UpdateNotificationPreferencesBody,
   UpdateProfessionalProfileBody,
+  UpdateSessionStatusBody,
   UpdateUserBody,
   UploadUrlRequest,
   UploadUrlResponse,
   UserProfile,
   VapidPublicKeyResponse,
   VerifyRazorpayBody,
+  VerifySessionPaymentBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -4140,4 +4151,731 @@ export const useDeleteMyAccount = <
   TContext
 > => {
   return useMutation(getDeleteMyAccountMutationOptions(options));
+};
+
+/**
+ * Professional retrieves their own weekly availability schedule
+ * @summary Get own availability slots
+ */
+export const getGetMyAvailabilityUrl = () => {
+  return `/api/sessions/availability`;
+};
+
+export const getMyAvailability = async (
+  options?: RequestInit,
+): Promise<AvailabilitySlot[]> => {
+  return customFetch<AvailabilitySlot[]>(getGetMyAvailabilityUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyAvailabilityQueryKey = () => {
+  return [`/api/sessions/availability`] as const;
+};
+
+export const getGetMyAvailabilityQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyAvailability>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyAvailability>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyAvailabilityQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyAvailability>>
+  > = ({ signal }) => getMyAvailability({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyAvailability>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyAvailabilityQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyAvailability>>
+>;
+export type GetMyAvailabilityQueryError = ErrorType<void>;
+
+/**
+ * @summary Get own availability slots
+ */
+
+export function useGetMyAvailability<
+  TData = Awaited<ReturnType<typeof getMyAvailability>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyAvailability>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyAvailabilityQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Professional replaces their entire availability schedule
+ * @summary Set weekly availability
+ */
+export const getSetAvailabilityUrl = () => {
+  return `/api/sessions/availability`;
+};
+
+export const setAvailability = async (
+  setAvailabilityBody: SetAvailabilityBody,
+  options?: RequestInit,
+): Promise<AvailabilitySlot[]> => {
+  return customFetch<AvailabilitySlot[]>(getSetAvailabilityUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(setAvailabilityBody),
+  });
+};
+
+export const getSetAvailabilityMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setAvailability>>,
+    TError,
+    { data: BodyType<SetAvailabilityBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setAvailability>>,
+  TError,
+  { data: BodyType<SetAvailabilityBody> },
+  TContext
+> => {
+  const mutationKey = ["setAvailability"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setAvailability>>,
+    { data: BodyType<SetAvailabilityBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setAvailability(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetAvailabilityMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setAvailability>>
+>;
+export type SetAvailabilityMutationBody = BodyType<SetAvailabilityBody>;
+export type SetAvailabilityMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Set weekly availability
+ */
+export const useSetAvailability = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setAvailability>>,
+    TError,
+    { data: BodyType<SetAvailabilityBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setAvailability>>,
+  TError,
+  { data: BodyType<SetAvailabilityBody> },
+  TContext
+> => {
+  return useMutation(getSetAvailabilityMutationOptions(options));
+};
+
+/**
+ * Returns the weekly availability schedule for a professional (public)
+ * @summary Get a professional's public availability config
+ */
+export const getGetProfessionalAvailabilityUrl = (id: number) => {
+  return `/api/professionals/${id}/availability`;
+};
+
+export const getProfessionalAvailability = async (
+  id: number,
+  options?: RequestInit,
+): Promise<AvailabilitySlot[]> => {
+  return customFetch<AvailabilitySlot[]>(
+    getGetProfessionalAvailabilityUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetProfessionalAvailabilityQueryKey = (id: number) => {
+  return [`/api/professionals/${id}/availability`] as const;
+};
+
+export const getGetProfessionalAvailabilityQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProfessionalAvailability>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProfessionalAvailability>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetProfessionalAvailabilityQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProfessionalAvailability>>
+  > = ({ signal }) =>
+    getProfessionalAvailability(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProfessionalAvailability>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetProfessionalAvailabilityQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProfessionalAvailability>>
+>;
+export type GetProfessionalAvailabilityQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get a professional's public availability config
+ */
+
+export function useGetProfessionalAvailability<
+  TData = Awaited<ReturnType<typeof getProfessionalAvailability>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProfessionalAvailability>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProfessionalAvailabilityQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns computed available time slots for a professional on a given date, excluding already-booked slots
+ * @summary Get bookable time slots for a date
+ */
+export const getGetBookableSlotsUrl = (
+  id: number,
+  params: GetBookableSlotsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/professionals/${id}/bookable-slots?${stringifiedParams}`
+    : `/api/professionals/${id}/bookable-slots`;
+};
+
+export const getBookableSlots = async (
+  id: number,
+  params: GetBookableSlotsParams,
+  options?: RequestInit,
+): Promise<BookableSlot[]> => {
+  return customFetch<BookableSlot[]>(getGetBookableSlotsUrl(id, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBookableSlotsQueryKey = (
+  id: number,
+  params?: GetBookableSlotsParams,
+) => {
+  return [
+    `/api/professionals/${id}/bookable-slots`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetBookableSlotsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBookableSlots>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  params: GetBookableSlotsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBookableSlots>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetBookableSlotsQueryKey(id, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBookableSlots>>
+  > = ({ signal }) =>
+    getBookableSlots(id, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBookableSlots>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBookableSlotsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBookableSlots>>
+>;
+export type GetBookableSlotsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get bookable time slots for a date
+ */
+
+export function useGetBookableSlots<
+  TData = Awaited<ReturnType<typeof getBookableSlots>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  params: GetBookableSlotsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBookableSlots>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBookableSlotsQueryOptions(id, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Parent books a time slot with a professional and receives a Razorpay order to complete payment
+ * @summary Book a session and create payment order
+ */
+export const getBookSessionUrl = () => {
+  return `/api/sessions/book`;
+};
+
+export const bookSession = async (
+  bookSessionBody: BookSessionBody,
+  options?: RequestInit,
+): Promise<SessionBookingOrderResponse> => {
+  return customFetch<SessionBookingOrderResponse>(getBookSessionUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(bookSessionBody),
+  });
+};
+
+export const getBookSessionMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bookSession>>,
+    TError,
+    { data: BodyType<BookSessionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof bookSession>>,
+  TError,
+  { data: BodyType<BookSessionBody> },
+  TContext
+> => {
+  const mutationKey = ["bookSession"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof bookSession>>,
+    { data: BodyType<BookSessionBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return bookSession(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BookSessionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof bookSession>>
+>;
+export type BookSessionMutationBody = BodyType<BookSessionBody>;
+export type BookSessionMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Book a session and create payment order
+ */
+export const useBookSession = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bookSession>>,
+    TError,
+    { data: BodyType<BookSessionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof bookSession>>,
+  TError,
+  { data: BodyType<BookSessionBody> },
+  TContext
+> => {
+  return useMutation(getBookSessionMutationOptions(options));
+};
+
+/**
+ * @summary Verify Razorpay payment and confirm session
+ */
+export const getVerifySessionPaymentUrl = () => {
+  return `/api/sessions/verify-payment`;
+};
+
+export const verifySessionPayment = async (
+  verifySessionPaymentBody: VerifySessionPaymentBody,
+  options?: RequestInit,
+): Promise<SessionBooking> => {
+  return customFetch<SessionBooking>(getVerifySessionPaymentUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(verifySessionPaymentBody),
+  });
+};
+
+export const getVerifySessionPaymentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof verifySessionPayment>>,
+    TError,
+    { data: BodyType<VerifySessionPaymentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof verifySessionPayment>>,
+  TError,
+  { data: BodyType<VerifySessionPaymentBody> },
+  TContext
+> => {
+  const mutationKey = ["verifySessionPayment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof verifySessionPayment>>,
+    { data: BodyType<VerifySessionPaymentBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return verifySessionPayment(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type VerifySessionPaymentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof verifySessionPayment>>
+>;
+export type VerifySessionPaymentMutationBody =
+  BodyType<VerifySessionPaymentBody>;
+export type VerifySessionPaymentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Verify Razorpay payment and confirm session
+ */
+export const useVerifySessionPayment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof verifySessionPayment>>,
+    TError,
+    { data: BodyType<VerifySessionPaymentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof verifySessionPayment>>,
+  TError,
+  { data: BodyType<VerifySessionPaymentBody> },
+  TContext
+> => {
+  return useMutation(getVerifySessionPaymentMutationOptions(options));
+};
+
+/**
+ * Returns upcoming and past sessions. Role-aware — professionals see sessions booked with them, parents see sessions they booked.
+ * @summary List sessions for current user
+ */
+export const getGetMySessionsUrl = (params?: GetMySessionsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/sessions?${stringifiedParams}`
+    : `/api/sessions`;
+};
+
+export const getMySessions = async (
+  params?: GetMySessionsParams,
+  options?: RequestInit,
+): Promise<SessionBookingWithDetails[]> => {
+  return customFetch<SessionBookingWithDetails[]>(getGetMySessionsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMySessionsQueryKey = (params?: GetMySessionsParams) => {
+  return [`/api/sessions`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetMySessionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMySessions>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetMySessionsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMySessions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMySessionsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMySessions>>> = ({
+    signal,
+  }) => getMySessions(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMySessions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMySessionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMySessions>>
+>;
+export type GetMySessionsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List sessions for current user
+ */
+
+export function useGetMySessions<
+  TData = Awaited<ReturnType<typeof getMySessions>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetMySessionsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMySessions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMySessionsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Professional can mark a session as completed, no_show, or cancelled
+ * @summary Update session status
+ */
+export const getUpdateSessionStatusUrl = (id: number) => {
+  return `/api/sessions/${id}/status`;
+};
+
+export const updateSessionStatus = async (
+  id: number,
+  updateSessionStatusBody: UpdateSessionStatusBody,
+  options?: RequestInit,
+): Promise<SessionBooking> => {
+  return customFetch<SessionBooking>(getUpdateSessionStatusUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateSessionStatusBody),
+  });
+};
+
+export const getUpdateSessionStatusMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSessionStatus>>,
+    TError,
+    { id: number; data: BodyType<UpdateSessionStatusBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateSessionStatus>>,
+  TError,
+  { id: number; data: BodyType<UpdateSessionStatusBody> },
+  TContext
+> => {
+  const mutationKey = ["updateSessionStatus"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateSessionStatus>>,
+    { id: number; data: BodyType<UpdateSessionStatusBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateSessionStatus(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateSessionStatusMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateSessionStatus>>
+>;
+export type UpdateSessionStatusMutationBody = BodyType<UpdateSessionStatusBody>;
+export type UpdateSessionStatusMutationError = ErrorType<void>;
+
+/**
+ * @summary Update session status
+ */
+export const useUpdateSessionStatus = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSessionStatus>>,
+    TError,
+    { id: number; data: BodyType<UpdateSessionStatusBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateSessionStatus>>,
+  TError,
+  { id: number; data: BodyType<UpdateSessionStatusBody> },
+  TContext
+> => {
+  return useMutation(getUpdateSessionStatusMutationOptions(options));
 };

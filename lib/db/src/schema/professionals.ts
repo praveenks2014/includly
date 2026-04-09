@@ -45,6 +45,7 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   email: text("email"),
   pricingMinINR: integer("pricing_min_inr"),
   pricingMaxINR: integer("pricing_max_inr"),
+  upiId: text("upi_id"),
   paymentActivated: boolean("payment_activated").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

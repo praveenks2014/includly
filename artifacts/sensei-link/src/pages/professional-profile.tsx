@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel, SPECIALTY_COLORS } from "@/lib/specialties";
 import { UnlockPaymentModal } from "@/components/UnlockPaymentModal";
+import { BookingWidget } from "@/components/BookingWidget";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -329,6 +330,11 @@ export default function ProfessionalProfilePage() {
             )}
           </div>
         </div>
+
+        {/* Booking widget — shown to all signed-in visitors */}
+        {isSignedIn && (
+          <BookingWidget professionalId={professionalId} professionalName={professional?.fullName} />
+        )}
 
         {/* Reviews */}
         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">

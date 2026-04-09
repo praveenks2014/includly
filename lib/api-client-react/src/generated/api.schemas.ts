@@ -118,6 +118,11 @@ export interface ProfessionalProfile {
   pricingMinINR?: number | null;
   /** @nullable */
   pricingMaxINR?: number | null;
+  /**
+   * UPI ID — returned only in private (own profile) response
+   * @nullable
+   */
+  upiId?: string | null;
   paymentActivated: boolean;
   createdAt: string;
 }
@@ -238,6 +243,8 @@ export interface CreateProfessionalProfileBody {
   email?: string;
   pricingMinINR?: number;
   pricingMaxINR?: number;
+  /** UPI ID for receiving session payments (never exposed to parents/clients) */
+  upiId?: string;
 }
 
 export type UpdateProfessionalProfileBodySpecialty =
@@ -270,6 +277,8 @@ export interface UpdateProfessionalProfileBody {
   email?: string;
   pricingMinINR?: number;
   pricingMaxINR?: number;
+  /** UPI ID for receiving session payments (never exposed to parents/clients) */
+  upiId?: string;
 }
 
 export interface Rating {
@@ -684,6 +693,136 @@ export interface DeleteAccountBody {
   confirmPhrase: string;
 }
 
+export interface AvailabilitySlot {
+  id: number;
+  professionalId: number;
+  /** 0=Sunday, 1=Monday, ..., 6=Saturday */
+  dayOfWeek: number;
+  /** HH:MM format e.g. 09:00 */
+  startTime: string;
+  /** HH:MM format e.g. 17:00 */
+  endTime: string;
+  slotDurationMinutes: number;
+  priceInr: number;
+  isActive: boolean;
+}
+
+export type SetAvailabilityBodySlotsItem = {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  slotDurationMinutes: number;
+  priceInr: number;
+};
+
+export interface SetAvailabilityBody {
+  slots: SetAvailabilityBodySlotsItem[];
+}
+
+export interface BookableSlot {
+  date: string;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  priceInr: number;
+}
+
+export interface BookSessionBody {
+  professionalId: number;
+  /** YYYY-MM-DD */
+  bookedDate: string;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  amountInr: number;
+  notes?: string;
+}
+
+export interface SessionBookingOrderResponse {
+  sessionId: number;
+  orderId: string;
+  /** Amount in paise */
+  amount: number;
+  currency: string;
+  keyId: string;
+}
+
+export interface VerifySessionPaymentBody {
+  sessionId: number;
+  razorpayPaymentId: string;
+  razorpayOrderId: string;
+  razorpaySignature: string;
+}
+
+export type SessionBookingStatus =
+  (typeof SessionBookingStatus)[keyof typeof SessionBookingStatus];
+
+export const SessionBookingStatus = {
+  pending_payment: "pending_payment",
+  confirmed: "confirmed",
+  cancelled_by_parent: "cancelled_by_parent",
+  cancelled_by_professional: "cancelled_by_professional",
+  completed: "completed",
+  no_show: "no_show",
+} as const;
+
+export interface SessionBooking {
+  id: number;
+  professionalId: number;
+  parentId: number;
+  bookedDate: string;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  amountInr: number;
+  status: SessionBookingStatus;
+  notes?: string;
+  createdAt?: string;
+}
+
+export type SessionBookingWithDetailsStatus =
+  (typeof SessionBookingWithDetailsStatus)[keyof typeof SessionBookingWithDetailsStatus];
+
+export const SessionBookingWithDetailsStatus = {
+  pending_payment: "pending_payment",
+  confirmed: "confirmed",
+  cancelled_by_parent: "cancelled_by_parent",
+  cancelled_by_professional: "cancelled_by_professional",
+  completed: "completed",
+  no_show: "no_show",
+} as const;
+
+export interface SessionBookingWithDetails {
+  id: number;
+  professionalId: number;
+  parentId: number;
+  bookedDate: string;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  amountInr: number;
+  status: SessionBookingWithDetailsStatus;
+  notes?: string;
+  createdAt?: string;
+  professionalName?: string;
+  professionalSpecialty?: string;
+  parentName?: string;
+}
+
+export type UpdateSessionStatusBodyStatus =
+  (typeof UpdateSessionStatusBodyStatus)[keyof typeof UpdateSessionStatusBodyStatus];
+
+export const UpdateSessionStatusBodyStatus = {
+  confirmed: "confirmed",
+  cancelled_by_professional: "cancelled_by_professional",
+  completed: "completed",
+  no_show: "no_show",
+} as const;
+
+export interface UpdateSessionStatusBody {
+  status: UpdateSessionStatusBodyStatus;
+}
+
 export type SearchProfessionalsParams = {
   specialty?: SearchProfessionalsSpecialty;
   city?: string;
@@ -743,3 +882,14 @@ export const AdminListProfessionalsStatus = {
   verified: "verified",
   rejected: "rejected",
 } as const;
+
+export type GetBookableSlotsParams = {
+  /**
+   * Date in YYYY-MM-DD format
+   */
+  date: string;
+};
+
+export type GetMySessionsParams = {
+  status?: string;
+};

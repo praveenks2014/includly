@@ -73,6 +73,7 @@ export default function OnboardPage() {
     email: existingProfile?.email ?? "",
     pricingMinINR: existingProfile?.pricingMinINR?.toString() ?? "",
     pricingMaxINR: existingProfile?.pricingMaxINR?.toString() ?? "",
+    upiId: existingProfile?.upiId ?? "",
     centreRegistrationNo: "",
     numTherapists: "",
   });
@@ -167,6 +168,7 @@ export default function OnboardPage() {
       email: form.email,
       pricingMinINR: form.pricingMinINR ? Number(form.pricingMinINR) : undefined,
       pricingMaxINR: form.pricingMaxINR ? Number(form.pricingMaxINR) : undefined,
+      upiId: form.upiId.trim() || undefined,
     };
 
     if (existingProfile) {
@@ -595,6 +597,24 @@ export default function OnboardPage() {
                   Your profile will show: ₹{Number(form.pricingMinINR).toLocaleString("en-IN")} – ₹{Number(form.pricingMaxINR).toLocaleString("en-IN")} / session
                 </div>
               )}
+
+              <div className="border-t border-border pt-4 mt-2">
+                <Label htmlFor="upiId" className="flex items-center gap-1.5">
+                  UPI ID <span className="text-xs text-muted-foreground font-normal">(for receiving session payments)</span>
+                </Label>
+                <Input
+                  id="upiId"
+                  type="text"
+                  placeholder="yourname@upi"
+                  value={form.upiId}
+                  onChange={(e) => set("upiId", e.target.value)}
+                  className="mt-1"
+                  data-testid="input-upiId"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Parents pay for sessions via Razorpay. Your payout will be transferred to this UPI ID. Only you can see this — it's never shown to parents.
+                </p>
+              </div>
             </div>
           )}
 

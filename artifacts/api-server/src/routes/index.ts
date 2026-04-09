@@ -12,6 +12,7 @@ import notificationsRouter from "./notifications";
 import storageRouter from "./storage";
 import verificationsRouter from "./verifications";
 import accountRouter from "./account";
+import sessionsRouter from "./sessions";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(notificationsRouter);
 router.use(storageRouter);
 router.use(verificationsRouter);
 router.use(accountRouter);
+router.use(sessionsRouter);
 
 export default router;

@@ -28,7 +28,7 @@ import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import { useToast } from "@/hooks/use-toast";
 import { NotificationBanner } from "@/components/NotificationBanner";
-import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle, AlertCircle, Bell } from "lucide-react";
+import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle, AlertCircle, Bell, CalendarCheck, CalendarClock } from "lucide-react";
 
 export default function DashboardPage() {
   const { user } = useUser();
@@ -347,6 +347,32 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
         <StatCard icon={<Phone size={18} className="text-accent" />} label="Contact unlocks" value={data.totalUnlocks ?? 0} />
         <StatCard icon={<Star size={18} className="text-yellow-500" />} label="Average rating" value={data.averageRating ? data.averageRating.toFixed(1) : "—"} />
         <StatCard icon={<BarChart3 size={18} className="text-primary" />} label="Total reviews" value={data.totalRatings ?? 0} />
+      </div>
+
+      {/* Sessions quick-actions */}
+      <div className="grid grid-cols-2 gap-4">
+        <Link href="/sessions">
+          <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-3 hover:shadow-md transition-shadow cursor-pointer group">
+            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center shrink-0 group-hover:bg-green-200 transition-colors">
+              <CalendarCheck size={18} className="text-green-700" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm text-foreground">My Sessions</p>
+              <p className="text-xs text-muted-foreground">View booked sessions</p>
+            </div>
+          </div>
+        </Link>
+        <Link href="/availability">
+          <div className="bg-card border border-border rounded-xl p-4 flex items-center gap-3 hover:shadow-md transition-shadow cursor-pointer group">
+            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0 group-hover:bg-blue-200 transition-colors">
+              <CalendarClock size={18} className="text-blue-700" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm text-foreground">Availability</p>
+              <p className="text-xs text-muted-foreground">Manage your schedule</p>
+            </div>
+          </div>
+        </Link>
       </div>
 
       {/* Profile card */}

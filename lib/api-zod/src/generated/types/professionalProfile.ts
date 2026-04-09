@@ -41,6 +41,11 @@ export interface ProfessionalProfile {
   pricingMinINR?: number | null;
   /** @nullable */
   pricingMaxINR?: number | null;
+  /**
+   * UPI ID — returned only in private (own profile) response
+   * @nullable
+   */
+  upiId?: string | null;
   paymentActivated: boolean;
   createdAt: Date;
 }

@@ -329,8 +329,9 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
     }
   }
 
+  const { upiId: _upiId, ...safeProfile } = profile;
   const result = {
-    ...profile,
+    ...safeProfile,
     phoneBlurred: blurContact(profile.phone),
     emailBlurred: blurContact(profile.email),
     isUnlocked,
@@ -339,6 +340,7 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
     pricingMinINR: profile.pricingMinINR ?? null,
     pricingMaxINR: profile.pricingMaxINR ?? null,
     paymentActivated: profile.paymentActivated,
+    upiId: null,
   };
 
   res.json(GetProfessionalResponse.parse(result));

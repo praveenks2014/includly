@@ -115,6 +115,10 @@ export const GetMyProfessionalProfileResponse = zod.object({
   email: zod.string().nullish(),
   pricingMinINR: zod.number().nullish(),
   pricingMaxINR: zod.number().nullish(),
+  upiId: zod
+    .string()
+    .nullish()
+    .describe("UPI ID — returned only in private (own profile) response"),
   paymentActivated: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -147,6 +151,12 @@ export const CreateProfessionalProfileBody = zod.object({
   email: zod.string().optional(),
   pricingMinINR: zod.number().optional(),
   pricingMaxINR: zod.number().optional(),
+  upiId: zod
+    .string()
+    .optional()
+    .describe(
+      "UPI ID for receiving session payments (never exposed to parents\/clients)",
+    ),
 });
 
 /**
@@ -179,6 +189,12 @@ export const UpdateProfessionalProfileBody = zod.object({
   email: zod.string().optional(),
   pricingMinINR: zod.number().optional(),
   pricingMaxINR: zod.number().optional(),
+  upiId: zod
+    .string()
+    .optional()
+    .describe(
+      "UPI ID for receiving session payments (never exposed to parents\/clients)",
+    ),
 });
 
 export const UpdateProfessionalProfileResponse = zod.object({
@@ -217,6 +233,10 @@ export const UpdateProfessionalProfileResponse = zod.object({
   email: zod.string().nullish(),
   pricingMinINR: zod.number().nullish(),
   pricingMaxINR: zod.number().nullish(),
+  upiId: zod
+    .string()
+    .nullish()
+    .describe("UPI ID — returned only in private (own profile) response"),
   paymentActivated: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -592,6 +612,10 @@ export const GetProfessionalDashboardResponse = zod.object({
       email: zod.string().nullish(),
       pricingMinINR: zod.number().nullish(),
       pricingMaxINR: zod.number().nullish(),
+      upiId: zod
+        .string()
+        .nullish()
+        .describe("UPI ID — returned only in private (own profile) response"),
       paymentActivated: zod.boolean(),
       createdAt: zod.coerce.date(),
     })
@@ -925,6 +949,10 @@ export const AdminApproveProfessionalResponse = zod.object({
   email: zod.string().nullish(),
   pricingMinINR: zod.number().nullish(),
   pricingMaxINR: zod.number().nullish(),
+  upiId: zod
+    .string()
+    .nullish()
+    .describe("UPI ID — returned only in private (own profile) response"),
   paymentActivated: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -972,6 +1000,10 @@ export const AdminRejectProfessionalResponse = zod.object({
   email: zod.string().nullish(),
   pricingMinINR: zod.number().nullish(),
   pricingMaxINR: zod.number().nullish(),
+  upiId: zod
+    .string()
+    .nullish()
+    .describe("UPI ID — returned only in private (own profile) response"),
   paymentActivated: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -1145,4 +1177,217 @@ export const DeleteMyAccountBody = zod.object({
 
 export const DeleteMyAccountResponse = zod.object({
   success: zod.boolean(),
+});
+
+/**
+ * Professional retrieves their own weekly availability schedule
+ * @summary Get own availability slots
+ */
+export const GetMyAvailabilityResponseItem = zod.object({
+  id: zod.number(),
+  professionalId: zod.number(),
+  dayOfWeek: zod.number().describe("0=Sunday, 1=Monday, ..., 6=Saturday"),
+  startTime: zod.string().describe("HH:MM format e.g. 09:00"),
+  endTime: zod.string().describe("HH:MM format e.g. 17:00"),
+  slotDurationMinutes: zod.number(),
+  priceInr: zod.number(),
+  isActive: zod.boolean(),
+});
+export const GetMyAvailabilityResponse = zod.array(
+  GetMyAvailabilityResponseItem,
+);
+
+/**
+ * Professional replaces their entire availability schedule
+ * @summary Set weekly availability
+ */
+export const SetAvailabilityBody = zod.object({
+  slots: zod.array(
+    zod.object({
+      dayOfWeek: zod.number(),
+      startTime: zod.string(),
+      endTime: zod.string(),
+      slotDurationMinutes: zod.number(),
+      priceInr: zod.number(),
+    }),
+  ),
+});
+
+export const SetAvailabilityResponseItem = zod.object({
+  id: zod.number(),
+  professionalId: zod.number(),
+  dayOfWeek: zod.number().describe("0=Sunday, 1=Monday, ..., 6=Saturday"),
+  startTime: zod.string().describe("HH:MM format e.g. 09:00"),
+  endTime: zod.string().describe("HH:MM format e.g. 17:00"),
+  slotDurationMinutes: zod.number(),
+  priceInr: zod.number(),
+  isActive: zod.boolean(),
+});
+export const SetAvailabilityResponse = zod.array(SetAvailabilityResponseItem);
+
+/**
+ * Returns the weekly availability schedule for a professional (public)
+ * @summary Get a professional's public availability config
+ */
+export const GetProfessionalAvailabilityParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetProfessionalAvailabilityResponseItem = zod.object({
+  id: zod.number(),
+  professionalId: zod.number(),
+  dayOfWeek: zod.number().describe("0=Sunday, 1=Monday, ..., 6=Saturday"),
+  startTime: zod.string().describe("HH:MM format e.g. 09:00"),
+  endTime: zod.string().describe("HH:MM format e.g. 17:00"),
+  slotDurationMinutes: zod.number(),
+  priceInr: zod.number(),
+  isActive: zod.boolean(),
+});
+export const GetProfessionalAvailabilityResponse = zod.array(
+  GetProfessionalAvailabilityResponseItem,
+);
+
+/**
+ * Returns computed available time slots for a professional on a given date, excluding already-booked slots
+ * @summary Get bookable time slots for a date
+ */
+export const GetBookableSlotsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetBookableSlotsQueryParams = zod.object({
+  date: zod.date().describe("Date in YYYY-MM-DD format"),
+});
+
+export const GetBookableSlotsResponseItem = zod.object({
+  date: zod.string(),
+  startTime: zod.string(),
+  endTime: zod.string(),
+  durationMinutes: zod.number(),
+  priceInr: zod.number(),
+});
+export const GetBookableSlotsResponse = zod.array(GetBookableSlotsResponseItem);
+
+/**
+ * Parent books a time slot with a professional and receives a Razorpay order to complete payment
+ * @summary Book a session and create payment order
+ */
+export const BookSessionBody = zod.object({
+  professionalId: zod.number(),
+  bookedDate: zod.string().describe("YYYY-MM-DD"),
+  startTime: zod.string(),
+  endTime: zod.string(),
+  durationMinutes: zod.number(),
+  amountInr: zod.number(),
+  notes: zod.string().optional(),
+});
+
+export const BookSessionResponse = zod.object({
+  sessionId: zod.number(),
+  orderId: zod.string(),
+  amount: zod.number().describe("Amount in paise"),
+  currency: zod.string(),
+  keyId: zod.string(),
+});
+
+/**
+ * @summary Verify Razorpay payment and confirm session
+ */
+export const VerifySessionPaymentBody = zod.object({
+  sessionId: zod.number(),
+  razorpayPaymentId: zod.string(),
+  razorpayOrderId: zod.string(),
+  razorpaySignature: zod.string(),
+});
+
+export const VerifySessionPaymentResponse = zod.object({
+  id: zod.number(),
+  professionalId: zod.number(),
+  parentId: zod.number(),
+  bookedDate: zod.string(),
+  startTime: zod.string(),
+  endTime: zod.string(),
+  durationMinutes: zod.number(),
+  amountInr: zod.number(),
+  status: zod.enum([
+    "pending_payment",
+    "confirmed",
+    "cancelled_by_parent",
+    "cancelled_by_professional",
+    "completed",
+    "no_show",
+  ]),
+  notes: zod.string().optional(),
+  createdAt: zod.coerce.date().optional(),
+});
+
+/**
+ * Returns upcoming and past sessions. Role-aware — professionals see sessions booked with them, parents see sessions they booked.
+ * @summary List sessions for current user
+ */
+export const GetMySessionsQueryParams = zod.object({
+  status: zod.coerce.string().optional(),
+});
+
+export const GetMySessionsResponseItem = zod.object({
+  id: zod.number(),
+  professionalId: zod.number(),
+  parentId: zod.number(),
+  bookedDate: zod.string(),
+  startTime: zod.string(),
+  endTime: zod.string(),
+  durationMinutes: zod.number(),
+  amountInr: zod.number(),
+  status: zod.enum([
+    "pending_payment",
+    "confirmed",
+    "cancelled_by_parent",
+    "cancelled_by_professional",
+    "completed",
+    "no_show",
+  ]),
+  notes: zod.string().optional(),
+  createdAt: zod.coerce.date().optional(),
+  professionalName: zod.string().optional(),
+  professionalSpecialty: zod.string().optional(),
+  parentName: zod.string().optional(),
+});
+export const GetMySessionsResponse = zod.array(GetMySessionsResponseItem);
+
+/**
+ * Professional can mark a session as completed, no_show, or cancelled
+ * @summary Update session status
+ */
+export const UpdateSessionStatusParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateSessionStatusBody = zod.object({
+  status: zod.enum([
+    "confirmed",
+    "cancelled_by_professional",
+    "completed",
+    "no_show",
+  ]),
+});
+
+export const UpdateSessionStatusResponse = zod.object({
+  id: zod.number(),
+  professionalId: zod.number(),
+  parentId: zod.number(),
+  bookedDate: zod.string(),
+  startTime: zod.string(),
+  endTime: zod.string(),
+  durationMinutes: zod.number(),
+  amountInr: zod.number(),
+  status: zod.enum([
+    "pending_payment",
+    "confirmed",
+    "cancelled_by_parent",
+    "cancelled_by_professional",
+    "completed",
+    "no_show",
+  ]),
+  notes: zod.string().optional(),
+  createdAt: zod.coerce.date().optional(),
 });

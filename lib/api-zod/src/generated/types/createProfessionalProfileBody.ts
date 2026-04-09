@@ -23,4 +23,6 @@ export interface CreateProfessionalProfileBody {
   email?: string;
   pricingMinINR?: number;
   pricingMaxINR?: number;
+  /** UPI ID for receiving session payments (never exposed to parents/clients) */
+  upiId?: string;
 }
