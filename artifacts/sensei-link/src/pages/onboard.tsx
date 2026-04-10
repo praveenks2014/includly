@@ -84,6 +84,10 @@ export default function OnboardPage() {
   const roleSetTriggered = useRef(false);
 
   useEffect(() => {
+    sessionStorage.removeItem("sproutly_signup_as");
+  }, []);
+
+  useEffect(() => {
     if (!me) return;
     if (roleSetTriggered.current) return;
     if (me.role === "professional" || me.role === "admin") {

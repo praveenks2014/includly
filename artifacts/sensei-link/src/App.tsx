@@ -90,8 +90,17 @@ function SignInPage() {
   );
 }
 
+const SIGNUP_AS_KEY = "sproutly_signup_as";
+
 function SignUpPage() {
-  const isProfessional = new URLSearchParams(window.location.search).get("as") === "professional";
+  const queryAs = new URLSearchParams(window.location.search).get("as");
+  if (queryAs === "professional") {
+    sessionStorage.setItem(SIGNUP_AS_KEY, "professional");
+  }
+  const isProfessional =
+    queryAs === "professional" ||
+    sessionStorage.getItem(SIGNUP_AS_KEY) === "professional";
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       {isProfessional && (
