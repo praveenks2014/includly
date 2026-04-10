@@ -1,6 +1,6 @@
-import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { ClerkProvider, SignIn, SignUp, useClerk, useAuth } from "@clerk/react";
+import { ClerkProvider, useClerk, useAuth } from "@clerk/react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, useRef } from "react";
@@ -21,6 +21,8 @@ import PaymentCancelPage from "@/pages/payment-cancel";
 import AdminPage from "@/pages/admin";
 import AvailabilityPage from "@/pages/availability";
 import SessionsPage from "@/pages/sessions";
+import PhoneSignUpPage from "@/pages/sign-up";
+import PhoneSignInPage from "@/pages/sign-in";
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
@@ -77,50 +79,6 @@ function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SignInPage() {
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <SignIn
-        routing="path"
-        path={`${basePath}/sign-in`}
-        signUpUrl={`${basePath}/sign-up`}
-        fallbackRedirectUrl={`${basePath}/dashboard`}
-      />
-    </div>
-  );
-}
-
-const SIGNUP_AS_KEY = "sproutly_signup_as";
-
-function SignUpPage() {
-  const queryAs = new URLSearchParams(window.location.search).get("as");
-  if (queryAs === "professional") {
-    sessionStorage.setItem(SIGNUP_AS_KEY, "professional");
-  }
-  const isProfessional =
-    queryAs === "professional" ||
-    sessionStorage.getItem(SIGNUP_AS_KEY) === "professional";
-
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      {isProfessional && (
-        <div className="absolute top-20 left-0 right-0 text-center">
-          <span className="inline-flex items-center gap-2 bg-primary/10 text-primary rounded-full px-4 py-1.5 text-sm font-medium border border-primary/20">
-            🌱 Joining as a specialist — we'll set up your profile after sign-up
-          </span>
-        </div>
-      )}
-      <SignUp
-        routing="path"
-        path={`${basePath}/sign-up`}
-        signInUrl={`${basePath}/sign-in`}
-        fallbackRedirectUrl={isProfessional ? `${basePath}/onboard` : `${basePath}/dashboard`}
-        forceRedirectUrl={isProfessional ? `${basePath}/onboard` : undefined}
-      />
-    </div>
-  );
-}
-
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isSignedIn, isLoaded } = useAuth();
   const [, setLocation] = useLocation();
@@ -141,8 +99,8 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={HomePage} />
-        <Route path="/sign-in/*?" component={SignInPage} />
-        <Route path="/sign-up/*?" component={SignUpPage} />
+        <Route path="/sign-in" component={PhoneSignInPage} />
+        <Route path="/sign-up" component={PhoneSignUpPage} />
         <Route path="/search" component={SearchPage} />
         <Route path="/professionals/:id" component={ProfessionalProfilePage} />
         <Route path="/dashboard">
