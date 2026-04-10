@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import {
   useGetMyProfessionalProfile,
@@ -7,6 +7,7 @@ import {
   getCreateProfessionalProfileMutationOptions,
   getUpdateProfessionalProfileMutationOptions,
   getGetMyProfessionalProfileQueryKey,
+  getGetMeQueryKey,
   type CreateProfessionalProfileBodySpecialty,
 } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -79,12 +80,27 @@ export default function OnboardPage() {
 
   const { data: me } = useGetMe();
   const { mutateAsync: setMyRoleAsync } = useSetMyRole();
+  const [roleReady, setRoleReady] = useState(false);
+  const roleSetTriggered = useRef(false);
 
   useEffect(() => {
-    if (me && me.role === "parent") {
-      setMyRoleAsync({ data: { role: "professional" } }).catch(() => {});
+    if (!me) return;
+    if (roleSetTriggered.current) return;
+    if (me.role === "professional" || me.role === "admin") {
+      setRoleReady(true);
+      return;
     }
-  }, [me, setMyRoleAsync]);
+    roleSetTriggered.current = true;
+    setMyRoleAsync({ data: { role: "professional" } })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+        setRoleReady(true);
+      })
+      .catch(() => {
+        roleSetTriggered.current = false;
+        toast({ title: "Could not set professional role", description: "Please try again or contact support.", variant: "destructive" });
+      });
+  }, [me]);
 
   const createMutation = useMutation({
     ...getCreateProfessionalProfileMutationOptions(),
@@ -117,10 +133,13 @@ export default function OnboardPage() {
     },
   });
 
-  if (isLoading) {
+  if (isLoading || !roleReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3">
         <Loader2 className="animate-spin text-primary" size={28} />
+        {!roleReady && me && me.role === "parent" && (
+          <p className="text-sm text-muted-foreground">Setting up your specialist account…</p>
+        )}
       </div>
     );
   }
