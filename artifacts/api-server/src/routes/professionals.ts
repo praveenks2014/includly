@@ -382,4 +382,29 @@ router.get("/admin/professionals/billing", requireAuth, requireRole("admin"), as
   res.json({ professionals: results, total: results.length });
 });
 
+router.post("/professionals/me/free-activate", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const [profile] = await db
+    .select()
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.userId, req.userId!));
+
+  if (!profile) {
+    res.status(404).json({ error: "Professional profile not found" });
+    return;
+  }
+
+  if (profile.paymentActivated) {
+    res.json({ message: "Already activated", paymentActivated: true });
+    return;
+  }
+
+  const [updated] = await db
+    .update(professionalProfilesTable)
+    .set({ paymentActivated: true, updatedAt: new Date() })
+    .where(eq(professionalProfilesTable.id, profile.id))
+    .returning();
+
+  res.json({ message: "Profile activated (first month free)", paymentActivated: updated.paymentActivated });
+});
+
 export default router;

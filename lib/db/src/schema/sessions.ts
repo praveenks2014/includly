@@ -35,6 +35,7 @@ export const sessionBookingsTable = pgTable("session_bookings", {
   endTime: text("end_time").notNull(),
   durationMinutes: integer("duration_minutes").notNull(),
   amountInr: integer("amount_inr").notNull(),
+  commissionInr: integer("commission_inr").notNull().default(0),
   status: sessionStatusEnum("status").notNull().default("pending_payment"),
   providerOrderId: text("provider_order_id"),
   providerPaymentId: text("provider_payment_id"),

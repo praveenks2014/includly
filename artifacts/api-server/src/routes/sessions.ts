@@ -26,6 +26,12 @@ function getRazorpay() {
   return new Razorpay({ key_id: keyId, key_secret: keySecret });
 }
 
+function getSessionCommission(specialty: string): number {
+  if (specialty === "therapy_centre") return 149;
+  if (specialty === "psychiatrist" || specialty === "neurologist") return 99;
+  return 49;
+}
+
 function addMinutes(time: string, minutes: number): string {
   const [h, m] = time.split(":").map(Number);
   const total = h * 60 + m + minutes;
@@ -206,6 +212,13 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
     return;
   }
 
+  const [prof] = await db
+    .select({ specialty: professionalProfilesTable.specialty })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, professionalId));
+
+  const commissionInr = prof ? getSessionCommission(prof.specialty) : 49;
+
   const order = await razorpay.orders.create({
     amount: amountInr * 100,
     currency: "INR",
@@ -222,6 +235,7 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
       endTime,
       durationMinutes,
       amountInr,
+      commissionInr,
       notes: notes ?? null,
       providerOrderId: order.id as string,
     })

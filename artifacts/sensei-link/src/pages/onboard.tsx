@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   useGetMyProfessionalProfile,
+  useGetMe,
+  useSetMyRole,
   getCreateProfessionalProfileMutationOptions,
   getUpdateProfessionalProfileMutationOptions,
   getGetMyProfessionalProfileQueryKey,
-  useCreateRazorpayOrder,
-  useVerifyRazorpayPayment,
   type CreateProfessionalProfileBodySpecialty,
 } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -27,7 +27,6 @@ import { useToast } from "@/hooks/use-toast";
 import { SPECIALTY_OPTIONS } from "@/lib/specialties";
 import { Loader2, CheckCircle2, IndianRupee, ShieldCheck } from "lucide-react";
 import { LocationPicker, type PickedLocation } from "@/components/LocationPicker";
-import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
 import { FileUploadField } from "@/components/FileUploadField";
 
 const TRAVEL_RADIUS_OPTIONS = [5, 10, 25, 50];
@@ -78,8 +77,14 @@ export default function OnboardPage() {
     numTherapists: "",
   });
 
-  const { mutateAsync: createOrderAsync } = useCreateRazorpayOrder();
-  const { mutateAsync: verifyPaymentAsync } = useVerifyRazorpayPayment();
+  const { data: me } = useGetMe();
+  const { mutateAsync: setMyRoleAsync } = useSetMyRole();
+
+  useEffect(() => {
+    if (me && me.role === "parent") {
+      setMyRoleAsync({ data: { role: "professional" } }).catch(() => {});
+    }
+  }, [me, setMyRoleAsync]);
 
   const createMutation = useMutation({
     ...getCreateProfessionalProfileMutationOptions(),
@@ -178,57 +183,21 @@ export default function OnboardPage() {
     }
   }
 
-  async function handlePayment() {
-    const loaded = await loadRazorpayScript();
-    if (!loaded) {
-      toast({ title: "Could not load payment module", description: "Please try again.", variant: "destructive" });
-      return;
-    }
-
+  async function handleFreeActivate() {
     setPaymentLoading(true);
     try {
-      const order = await createOrderAsync({
-        data: { plan: activationPlan as "plan_d_pro_onetime" | "plan_e_pro_monthly" },
-      });
-
-      const rzp = new window.Razorpay({
-        key: order.keyId,
-        amount: order.amount,
-        currency: order.currency,
-        name: "Sproutly",
-        description: order.planName,
-        order_id: order.orderId,
-        handler: async (response: RazorpayPaymentResponse) => {
-          try {
-            await verifyPaymentAsync({
-              data: {
-                razorpayPaymentId: response.razorpay_payment_id,
-                razorpayOrderId: response.razorpay_order_id,
-                razorpaySignature: response.razorpay_signature,
-                paymentId: order.paymentId,
-              },
-            });
-            toast({ title: "Payment successful!", description: "Your profile is now live." });
-            setPaymentDone(true);
-            queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
-            setTimeout(() => setLocation("/dashboard"), 1500);
-          } catch {
-            toast({ title: "Verification failed", description: "Please contact support.", variant: "destructive" });
-          }
-        },
-        theme: { color: "#4f46e5" },
-        modal: {
-          ondismiss: () => {
-            setPaymentLoading(false);
-            toast({ title: "Payment cancelled", description: "You can activate your profile anytime." });
-          },
-        },
-      });
-
-      rzp.open();
+      const res = await fetch("/api/professionals/me/free-activate", { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? "Activation failed");
+      }
+      toast({ title: "Profile activated!", description: "Your first month is FREE. Billing starts after 30 days." });
+      setPaymentDone(true);
+      queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
+      setTimeout(() => setLocation("/dashboard"), 1500);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
-      toast({ title: "Could not initiate payment", description: msg, variant: "destructive" });
+      toast({ title: "Could not activate profile", description: msg, variant: "destructive" });
     } finally {
       setPaymentLoading(false);
     }
@@ -278,10 +247,16 @@ export default function OnboardPage() {
   const alreadyActivated = existingProfile?.paymentActivated ?? false;
 
   const isTherapyCentre = form.specialty === "therapy_centre";
-  const isPremiumPlan = ["therapy_centre", "neurologist"].includes(form.specialty);
-  const activationPlan = isPremiumPlan ? "plan_e_pro_monthly" : "plan_d_pro_onetime";
-  const activationAmount = isPremiumPlan ? "₹499/month" : "₹999";
-  const activationLabel = isPremiumPlan ? "Monthly subscription — renews every 30 days" : "One-time payment";
+
+  function getMonthlyAmount(specialty: string): number {
+    if (specialty === "therapy_centre") return 999;
+    if (["psychiatrist", "neurologist", "developmental_pediatrician"].includes(specialty)) return 299;
+    return 99;
+  }
+
+  const monthlyAmount = getMonthlyAmount(form.specialty);
+  const activationAmount = `₹${monthlyAmount}/month`;
+  const activationLabel = "Monthly subscription — first month FREE, then renews every 30 days";
 
   const stepsToShow = existingProfile && alreadyActivated ? STEPS.slice(0, 5) : STEPS;
 
@@ -745,49 +720,52 @@ export default function OnboardPage() {
               ) : (
                 <>
                   <div className="text-center py-2">
+                    <div className="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 rounded-full px-4 py-1 text-sm font-medium mb-3">
+                      <CheckCircle2 size={13} /> First month — completely FREE
+                    </div>
                     <h3 className="text-lg font-semibold text-foreground mb-2">
                       {isTherapyCentre ? "Activate Your Centre Listing" : "Activate Your Profile"}
                     </h3>
                     <p className="text-muted-foreground text-sm mb-4">
-                      {isPremiumPlan
-                        ? `A monthly subscription of ${activationAmount} is required to keep your listing active and visible to families.`
-                        : `A one-time listing fee of ${activationAmount} is required to make your profile live and visible to parents.`}
+                      Your listing goes live immediately. After 30 days, your subscription of {activationAmount} starts via UPI auto-debit.
                     </p>
                   </div>
                   <div className="bg-muted/40 border border-border rounded-xl p-5 space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-medium text-foreground">
-                        {isTherapyCentre ? "Therapy Centre Listing" : isPremiumPlan ? "Premium Listing" : "Professional Listing Fee"}
+                        {isTherapyCentre ? "Therapy Centre Listing" : "Professional Listing"}
                       </span>
-                      <span className="text-lg font-bold text-foreground">{activationAmount}</span>
+                      <div className="text-right">
+                        <div className="text-xs text-muted-foreground line-through">{activationAmount}</div>
+                        <div className="text-lg font-bold text-green-600">₹0 today</div>
+                      </div>
                     </div>
                     <ul className="space-y-1.5 text-sm text-muted-foreground">
                       <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> {activationLabel}</li>
-                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> Listing goes live immediately</li>
+                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> Listing goes live immediately — no waiting</li>
                       <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" />
                         {isTherapyCentre ? "Visible to families searching in your area" : "Visible to parents searching in your city"}
                       </li>
-                      {isPremiumPlan && (
-                        <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> Premium placement in search results</li>
-                      )}
-                      {!isPremiumPlan && (
-                        <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> No recurring charges</li>
-                      )}
+                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> Your UPI ID on file used for recurring billing</li>
                     </ul>
+                    <div className="border-t border-border pt-3 flex justify-between text-sm">
+                      <span className="text-muted-foreground">From month 2 onwards</span>
+                      <span className="font-semibold text-foreground">{activationAmount}</span>
+                    </div>
                   </div>
                   <Button
                     className="w-full gap-2"
-                    onClick={handlePayment}
+                    onClick={handleFreeActivate}
                     disabled={paymentLoading}
                     data-testid="pay-listing-fee-btn"
                   >
-                    {paymentLoading ? <Loader2 size={15} className="animate-spin" /> : <IndianRupee size={15} />}
+                    {paymentLoading ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
                     {paymentLoading
-                      ? "Processing…"
-                      : `Pay ${activationAmount} & Activate ${isTherapyCentre ? "Centre" : "Profile"}`}
+                      ? "Activating…"
+                      : `Activate ${isTherapyCentre ? "Centre" : "Profile"} — First Month Free`}
                   </Button>
                   <p className="text-xs text-center text-muted-foreground">
-                    Secured by Razorpay. UPI, cards & netbanking accepted.
+                    No payment today. Recurring billing starts after your free trial via UPI auto-debit.
                   </p>
                   <Button
                     variant="ghost"

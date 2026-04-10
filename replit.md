@@ -41,7 +41,7 @@ Tables:
 - `user_certifications` — user_id FK, document_type, document_url (object storage path), notes, status (pending/approved/rejected), reviewed_at
 - `identity_verifications` — professional_id FK, document_type (aadhar/passport/driving_licence/national_id), file_key (object storage path), status (pending/verified/rejected), dpdp_consent, submitted_at, reviewed_at
 - `professional_availability` — professional_id FK, day_of_week (0-6), start_time, end_time, slot_duration_minutes, price_inr, is_active
-- `session_bookings` — professional_id FK, parent_id FK, booked_date, start_time, end_time, duration_minutes, amount_inr, status (enum), notes, provider_order_id, provider_payment_id, updated_at
+- `session_bookings` — professional_id FK, parent_id FK, booked_date, start_time, end_time, duration_minutes, amount_inr, commission_inr (platform fee deducted from professional payout), status (enum), notes, provider_order_id, provider_payment_id, updated_at
 - `professional_profiles` also has: `upi_id` text (private, never exposed on public API), `pricing_min_inr`, `pricing_max_inr`
 
 Enums:
@@ -91,6 +91,17 @@ All admin routes require `role = admin`:
 
 ## Monetization
 
+### Professional Monthly Subscriptions (all plans: first month free, then auto-debit via UPI)
+- **₹99/month**: Educators — shadow_teacher, special_tutor, occupational_therapy, speech_therapy
+- **₹299/month**: Medical specialists — psychiatrist, neurologist, developmental_pediatrician
+- **₹999/month**: therapy_centre
+- Activation: `POST /api/professionals/me/free-activate` (no payment, sets paymentActivated=true for free trial)
+- Session platform commission (deducted from professional payout, stored in commission_inr):
+  - ₹49 per session: shadow_teacher, special_tutor, OT, speech_therapy
+  - ₹99 per session: psychiatrist, neurologist
+  - ₹149 per session: therapy_centre
+
+### Parent Contact Unlocks
 - **Plan A** (₹499/30 days): Premium subscription — unlimited contact unlocks for 30 days
 - **Plan B** (₹99/contact): Pay-per-contact — unlock one professional's contact details
 - **Plan C** (₹299/30 days): Featured listing for professionals
