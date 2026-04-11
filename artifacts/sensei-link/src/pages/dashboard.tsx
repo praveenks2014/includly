@@ -1,5 +1,5 @@
-import { Link } from "wouter";
-import { useState } from "react";
+import { Link, useLocation } from "wouter";
+import { useState, useEffect } from "react";
 import { useUser } from "@clerk/react";
 import {
   useGetMe,
@@ -33,7 +33,19 @@ import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCar
 export default function DashboardPage() {
   const { user } = useUser();
   const { data: me, isLoading: meLoading } = useGetMe();
+  const [, setLocation] = useLocation();
   const role = me?.role;
+
+  // Safety net: if the user signed up intending to be a professional but Clerk
+  // redirected them here instead of /onboard (e.g. after Google OAuth), catch it
+  // and send them to /onboard so their role gets set correctly.
+  useEffect(() => {
+    if (meLoading) return;
+    const intent = localStorage.getItem("sproutly_signup_as");
+    if (intent === "professional" && role !== "professional" && role !== "admin") {
+      setLocation("/onboard");
+    }
+  }, [meLoading, role, setLocation]);
 
   const { data: parentDash, isLoading: parentLoading } = useGetParentDashboard();
   const { data: proDash, isLoading: proLoading } = useGetProfessionalDashboard();

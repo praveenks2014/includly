@@ -85,6 +85,7 @@ export default function OnboardPage() {
 
   useEffect(() => {
     sessionStorage.removeItem("sproutly_signup_as");
+    localStorage.removeItem("sproutly_signup_as");
   }, []);
 
   useEffect(() => {

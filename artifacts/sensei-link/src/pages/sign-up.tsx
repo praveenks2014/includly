@@ -7,10 +7,14 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 export default function SignUpPage() {
   const queryAs = new URLSearchParams(window.location.search).get("as");
   if (queryAs === "professional") {
+    // Use localStorage so intent survives Google/Apple OAuth redirects
+    // (sessionStorage is wiped when the browser leaves the page)
+    localStorage.setItem(SIGNUP_AS_KEY, "professional");
     sessionStorage.setItem(SIGNUP_AS_KEY, "professional");
   }
   const isProfessional =
     queryAs === "professional" ||
+    localStorage.getItem(SIGNUP_AS_KEY) === "professional" ||
     sessionStorage.getItem(SIGNUP_AS_KEY) === "professional";
 
   return (
