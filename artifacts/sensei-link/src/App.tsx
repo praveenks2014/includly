@@ -21,8 +21,8 @@ import PaymentCancelPage from "@/pages/payment-cancel";
 import AdminPage from "@/pages/admin";
 import AvailabilityPage from "@/pages/availability";
 import SessionsPage from "@/pages/sessions";
-import PhoneSignUpPage from "@/pages/sign-up";
-import PhoneSignInPage from "@/pages/sign-in";
+import SignUpPage from "@/pages/sign-up";
+import SignInPage from "@/pages/sign-in";
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
@@ -99,8 +99,8 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={HomePage} />
-        <Route path="/sign-in" component={PhoneSignInPage} />
-        <Route path="/sign-up" component={PhoneSignUpPage} />
+        <Route path="/sign-in/*?" component={SignInPage} />
+        <Route path="/sign-up/*?" component={SignUpPage} />
         <Route path="/search" component={SearchPage} />
         <Route path="/professionals/:id" component={ProfessionalProfilePage} />
         <Route path="/dashboard">
