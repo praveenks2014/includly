@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { Component, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { APIProvider, Map, AdvancedMarker } from "@vis.gl/react-google-maps";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MapPin, Crosshair, Loader2 } from "lucide-react";
+import { MapPin, Crosshair, Loader2, AlertCircle } from "lucide-react";
 
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 
@@ -44,13 +45,13 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
     script.async = true;
     script.defer = true;
     script.onload = () => resolve();
-    script.onerror = () => reject();
+    script.onerror = () => reject(new Error("Google Maps script failed to load"));
     document.head.appendChild(script);
   });
 }
 
-async function reverseGeocode(lat: number, lng: number): Promise<{ city: string; country: string }> {
-  if (!window.google?.maps) return { city: "", country: "India" };
+async function reverseGeocodeGoogle(lat: number, lng: number): Promise<{ city: string; country: string }> {
+  if (!window.google?.maps) throw new Error("Google Maps not available");
   const geocoder = new window.google.maps.Geocoder();
   const result = await geocoder.geocode({ location: { lat, lng } });
   const comps = result.results[0]?.address_components ?? [];
@@ -62,6 +63,36 @@ async function reverseGeocode(lat: number, lng: number): Promise<{ city: string;
   return { city, country };
 }
 
+async function reverseGeocodeNominatim(lat: number, lng: number): Promise<{ city: string; country: string }> {
+  const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`;
+  const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+  if (!res.ok) throw new Error("Nominatim request failed");
+  const data = await res.json() as {
+    address?: {
+      city?: string;
+      town?: string;
+      village?: string;
+      county?: string;
+      country?: string;
+    };
+  };
+  const addr = data.address ?? {};
+  const city = addr.city ?? addr.town ?? addr.village ?? addr.county ?? "";
+  const country = addr.country ?? "India";
+  return { city, country };
+}
+
+async function reverseGeocode(lat: number, lng: number): Promise<{ city: string; country: string }> {
+  if (window.google?.maps) {
+    try {
+      return await reverseGeocodeGoogle(lat, lng);
+    } catch {
+      // fall through to Nominatim
+    }
+  }
+  return reverseGeocodeNominatim(lat, lng);
+}
+
 type GmpPlaceSelectEvent = Event & {
   place: {
     fetchFields: (opts: { fields: string[] }) => Promise<void>;
@@ -71,9 +102,32 @@ type GmpPlaceSelectEvent = Event & {
   };
 };
 
-export function LocationPicker({ lat, lng, city, country, onLocationChange }: LocationPickerProps) {
+class LocationPickerErrorBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode; fallback: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
+
+function LocationPickerInner({ lat, lng, city, country, onLocationChange }: LocationPickerProps) {
   const [mapsReady, setMapsReady] = useState(false);
+  const [mapsError, setMapsError] = useState(false);
   const [detecting, setDetecting] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
   const [markerPos, setMarkerPos] = useState<{ lat: number; lng: number } | null>(
     lat != null && lng != null ? { lat, lng } : null,
   );
@@ -86,7 +140,7 @@ export function LocationPicker({ lat, lng, city, country, onLocationChange }: Lo
     if (!GOOGLE_MAPS_KEY) return;
     loadGoogleMapsScript(GOOGLE_MAPS_KEY)
       .then(() => setMapsReady(true))
-      .catch(console.error);
+      .catch(() => setMapsError(true));
   }, []);
 
   useEffect(() => {
@@ -147,8 +201,12 @@ export function LocationPicker({ lat, lng, city, country, onLocationChange }: Lo
   }, [mapsReady, onLocationChange]);
 
   function handleDetectLocation() {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      setGpsError("Geolocation is not supported by your browser.");
+      return;
+    }
     setDetecting(true);
+    setGpsError(null);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const newLat = pos.coords.latitude;
@@ -162,19 +220,18 @@ export function LocationPicker({ lat, lng, city, country, onLocationChange }: Lo
         }
         setDetecting(false);
       },
-      () => setDetecting(false),
+      (err) => {
+        setDetecting(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          setGpsError("Location access was denied. Please enter your city manually.");
+        } else {
+          setGpsError("Could not detect location. Please enter your city manually.");
+        }
+      },
     );
   }
 
-  if (!GOOGLE_MAPS_KEY) {
-    return (
-      <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border border-dashed border-border text-sm text-muted-foreground">
-        <MapPin size={16} />
-        <span>Location picker unavailable (VITE_GOOGLE_MAPS_API_KEY not set)</span>
-      </div>
-    );
-  }
-
+  const noMapsAvailable = !GOOGLE_MAPS_KEY || mapsError;
   const center = markerPos ?? { lat: 20.5937, lng: 78.9629 };
 
   return (
@@ -200,44 +257,62 @@ export function LocationPicker({ lat, lng, city, country, onLocationChange }: Lo
         <Button
           type="button"
           variant="outline"
-          size="icon"
           onClick={handleDetectLocation}
           disabled={detecting}
-          title="Use my current location"
+          className="shrink-0 gap-1.5 text-sm"
           data-testid="detect-location-btn"
         >
-          {detecting ? <Loader2 size={16} className="animate-spin" /> : <Crosshair size={16} />}
+          {detecting ? <Loader2 size={15} className="animate-spin" /> : <Crosshair size={15} />}
+          {detecting ? "Detecting…" : "Use my location"}
         </Button>
       </div>
 
-      <div className="h-48 rounded-xl overflow-hidden border border-border">
-        <APIProvider apiKey={GOOGLE_MAPS_KEY}>
-          <Map
-            center={center}
-            zoom={markerPos ? 12 : 4}
-            mapId="sensei-picker-map"
-            gestureHandling="greedy"
-            disableDefaultUI
-            style={{ width: "100%", height: "100%" }}
-            onClick={async (e) => {
-              if (!e.detail?.latLng) return;
-              const newLat = e.detail.latLng.lat;
-              const newLng = e.detail.latLng.lng;
-              setMarkerPos({ lat: newLat, lng: newLng });
-              try {
-                const { city: newCity, country: newCountry } = await reverseGeocode(newLat, newLng);
-                onLocationChange({ lat: newLat, lng: newLng, city: newCity, country: newCountry });
-              } catch {
-                onLocationChange({ lat: newLat, lng: newLng, city: city ?? "", country: country ?? "India" });
-              }
-            }}
-          >
-            {markerPos && (
-              <AdvancedMarker position={markerPos} title="Your location" />
-            )}
-          </Map>
-        </APIProvider>
-      </div>
+      {gpsError && (
+        <div className="flex items-start gap-2 text-xs text-destructive">
+          <AlertCircle size={13} className="mt-0.5 shrink-0" />
+          <span>{gpsError}</span>
+        </div>
+      )}
+
+      {noMapsAvailable ? (
+        <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border border-dashed border-border text-sm text-muted-foreground">
+          <MapPin size={16} />
+          <span>
+            {mapsError
+              ? "Map unavailable — use the button above to detect your location or enter your city below."
+              : "Map unavailable — enter your city and country in the fields below, or use the detect button above."}
+          </span>
+        </div>
+      ) : (
+        <div className="h-48 rounded-xl overflow-hidden border border-border">
+          <APIProvider apiKey={GOOGLE_MAPS_KEY!}>
+            <Map
+              center={center}
+              zoom={markerPos ? 12 : 4}
+              mapId="sensei-picker-map"
+              gestureHandling="greedy"
+              disableDefaultUI
+              style={{ width: "100%", height: "100%" }}
+              onClick={async (e) => {
+                if (!e.detail?.latLng) return;
+                const newLat = e.detail.latLng.lat;
+                const newLng = e.detail.latLng.lng;
+                setMarkerPos({ lat: newLat, lng: newLng });
+                try {
+                  const { city: newCity, country: newCountry } = await reverseGeocode(newLat, newLng);
+                  onLocationChange({ lat: newLat, lng: newLng, city: newCity, country: newCountry });
+                } catch {
+                  onLocationChange({ lat: newLat, lng: newLng, city: city ?? "", country: country ?? "India" });
+                }
+              }}
+            >
+              {markerPos && (
+                <AdvancedMarker position={markerPos} title="Your location" />
+              )}
+            </Map>
+          </APIProvider>
+        </div>
+      )}
 
       {markerPos && (
         <p className="text-xs text-muted-foreground">
@@ -246,5 +321,20 @@ export function LocationPicker({ lat, lng, city, country, onLocationChange }: Lo
         </p>
       )}
     </div>
+  );
+}
+
+export function LocationPicker(props: LocationPickerProps) {
+  const fallback = (
+    <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border border-dashed border-border text-sm text-muted-foreground">
+      <MapPin size={16} />
+      <span>Map component unavailable — please enter your city and country below.</span>
+    </div>
+  );
+
+  return (
+    <LocationPickerErrorBoundary fallback={fallback}>
+      <LocationPickerInner {...props} />
+    </LocationPickerErrorBoundary>
   );
 }

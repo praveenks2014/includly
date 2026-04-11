@@ -281,6 +281,7 @@ export default function OnboardPage() {
   const alreadyActivated = existingProfile?.paymentActivated ?? false;
 
   const isTherapyCentre = form.specialty === "therapy_centre";
+  const isGeoFencedSpecialty = ["shadow_teacher", "special_tutor"].includes(form.specialty);
 
   function getMonthlyAmount(specialty: string): number {
     if (specialty === "therapy_centre") return 999;
@@ -478,6 +479,11 @@ export default function OnboardPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                      {isGeoFencedSpecialty && (
+                        <p className="mt-2 text-xs text-muted-foreground" data-testid="geofencing-label">
+                          Parents within {form.travelRadiusKm} km of your location can find you when searching for home visits.
+                        </p>
+                      )}
                     </div>
                   )}
                 </>
