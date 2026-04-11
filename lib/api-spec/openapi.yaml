@@ -1587,6 +1587,8 @@ components:
           type: ["string", "null"]
         country:
           type: ["string", "null"]
+        location:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
@@ -1606,6 +1608,8 @@ components:
         city:
           type: string
         country:
+          type: string
+        location:
           type: string
         avatarUrl:
           type: string
@@ -2287,6 +2291,7 @@ components:
             - plan_c_featured
             - plan_d_pro_onetime
             - plan_e_pro_monthly
+            - plan_f_per_booking
         professionalId:
           type: integer
         successUrl:
@@ -2323,6 +2328,7 @@ components:
             - plan_c_featured
             - plan_d_pro_onetime
             - plan_e_pro_monthly
+            - plan_f_per_booking
         professionalId:
           type: integer
       required:

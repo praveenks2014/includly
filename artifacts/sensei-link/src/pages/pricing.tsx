@@ -22,37 +22,38 @@ const PARENT_PLANS = [
     id: "plan_a_subscription",
     icon: <Zap size={22} className="text-primary" />,
     iconBg: "bg-primary/10",
-    title: "Parent Premium",
+    title: "Shadow Teacher Plan",
     price: "₹499",
     period: "/ 30 days",
-    description: "Unlimited contact unlocks for 30 days. Find and connect with as many specialists as you need.",
+    description: "Unlimited access to all shadow teacher contacts for 30 days. Or pay ₹99 per contact if you only need one.",
     features: [
-      "30-day unlimited access",
-      "Unlock unlimited specialist contacts",
-      "All specialties included",
+      "30-day unlimited access to shadow teachers",
+      "Unlock as many shadow teacher contacts as you need",
       "Download contact info",
       "Priority listings first",
     ],
     highlight: true,
     badge: "Best value",
+    altOption: { price: "₹99", label: "/ contact", planId: "plan_b_per_contact" },
   },
   {
-    id: "plan_b_per_contact",
-    icon: <CreditCard size={22} className="text-muted-foreground" />,
-    iconBg: "bg-muted/60",
-    title: "Pay Per Contact",
-    price: "₹99",
-    period: "/ contact",
-    description: "Unlock one specialist's contact details. Pay only when you need it.",
+    id: "plan_f_per_booking",
+    icon: <CreditCard size={22} className="text-blue-600" />,
+    iconBg: "bg-blue-50",
+    title: "All Other Specialists",
+    price: "₹49",
+    period: "/ booking",
+    description: "Book a session with any OT, Speech Therapist, Special Tutor, Medical Specialist, or Therapy Centre. No subscription needed.",
     features: [
-      "Unlock one specialist's contact",
-      "Never expires",
-      "Instant access",
-      "Add more any time",
+      "One booking per payment",
+      "OT, Speech, Special Tutors",
+      "Medical Specialists & Therapy Centres",
+      "No subscription required",
+      "Instant confirmation",
     ],
     highlight: false,
     badge: null,
-    profileUnlockOnly: true,
+    profileUnlockOnly: false,
   },
 ];
 
@@ -327,10 +328,18 @@ export default function PricingPage() {
               </div>
               <h2 className="text-xl font-bold text-foreground mb-1">{plan.title}</h2>
               <p className="text-sm text-muted-foreground mb-4 flex-1">{plan.description}</p>
-              <div className="mb-5">
+              <div className="mb-2">
                 <span className="text-3xl font-bold text-foreground">{plan.price}</span>
                 <span className="text-muted-foreground text-sm ml-1">{plan.period}</span>
               </div>
+              {"altOption" in plan && plan.altOption && (
+                <div className="mb-4 text-sm text-muted-foreground">
+                  or{" "}
+                  <span className="font-semibold text-foreground">{plan.altOption.price}</span>
+                  <span className="ml-0.5">{plan.altOption.label}</span>
+                  <span className="ml-1 text-xs">(per contact, no subscription)</span>
+                </div>
+              )}
               <ul className="space-y-2 mb-6">
                 {plan.features.map((f) => (
                   <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -339,55 +348,56 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-              {plan.profileUnlockOnly ? (
-                <div className="flex flex-col gap-2">
-                  <p className="text-xs text-muted-foreground/70 italic mb-1">
-                    To unlock a specific specialist, click "Unlock" on their profile or in search results.
-                  </p>
-                  <Link href="/search">
-                    <Button className="w-full" variant="outline">
-                      Browse specialists
+              <div className="flex flex-col gap-2">
+                {!isSignedIn ? (
+                  <Link href="/sign-up">
+                    <Button className="w-full" variant={plan.highlight ? "default" : "outline"}>
+                      Get started
                     </Button>
                   </Link>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {!isSignedIn ? (
-                    <Link href="/sign-up">
-                      <Button className="w-full" variant={plan.highlight ? "default" : "outline"}>
-                        Get started
+                ) : plan.id === "plan_a_subscription" ? (
+                  <>
+                    <Button
+                      className="w-full"
+                      variant="default"
+                      disabled={!!loadingKey || !!hasActiveSub}
+                      onClick={() => handleRazorpay(plan.id)}
+                      data-testid={`cta-rzp-${plan.id}`}
+                    >
+                      {loadingKey === `rzp-${plan.id}` ? (
+                        <Loader2 size={14} className="animate-spin mr-2" />
+                      ) : null}
+                      {hasActiveSub ? "Already subscribed" : loadingKey === `rzp-${plan.id}` ? "Processing…" : "₹499 / 30 days — Razorpay"}
+                    </Button>
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      disabled={!!loadingKey || !!hasActiveSub}
+                      onClick={() => handleStripe(plan.id)}
+                      data-testid={`cta-stripe-${plan.id}`}
+                    >
+                      {loadingKey === `stripe-${plan.id}` ? (
+                        <Loader2 size={14} className="animate-spin mr-2" />
+                      ) : null}
+                      {loadingKey === `stripe-${plan.id}` ? "Redirecting…" : "₹499 / 30 days — Stripe"}
+                    </Button>
+                    <p className="text-xs text-muted-foreground/70 italic text-center mt-1">
+                      Or pay ₹99 per contact — click "Unlock" on any shadow teacher's profile.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground/70 italic mb-1">
+                      To book a session, click "Book" on a specialist's profile in search results.
+                    </p>
+                    <Link href="/search">
+                      <Button className="w-full" variant="outline">
+                        Browse specialists
                       </Button>
                     </Link>
-                  ) : (
-                    <>
-                      <Button
-                        className="w-full"
-                        variant={plan.highlight ? "default" : "outline"}
-                        disabled={!!loadingKey || !!hasActiveSub}
-                        onClick={() => handleRazorpay(plan.id)}
-                        data-testid={`cta-rzp-${plan.id}`}
-                      >
-                        {loadingKey === `rzp-${plan.id}` ? (
-                          <Loader2 size={14} className="animate-spin mr-2" />
-                        ) : null}
-                        {hasActiveSub ? "Already subscribed" : loadingKey === `rzp-${plan.id}` ? "Processing…" : "Pay via Razorpay"}
-                      </Button>
-                      <Button
-                        className="w-full"
-                        variant="outline"
-                        disabled={!!loadingKey || !!hasActiveSub}
-                        onClick={() => handleStripe(plan.id)}
-                        data-testid={`cta-stripe-${plan.id}`}
-                      >
-                        {loadingKey === `stripe-${plan.id}` ? (
-                          <Loader2 size={14} className="animate-spin mr-2" />
-                        ) : null}
-                        {loadingKey === `stripe-${plan.id}` ? "Redirecting…" : "Pay via Stripe"}
-                      </Button>
-                    </>
-                  )}
-                </div>
-              )}
+                  </>
+                )}
+              </div>
             </div>
           ))}
         </div>

@@ -12,4 +12,5 @@ export interface UpdateUserBody {
   city?: string;
   country?: string;
   avatarUrl?: string;
+  location?: string;
 }

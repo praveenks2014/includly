@@ -14,6 +14,7 @@ export const usersTable = pgTable("users", {
   role: userRoleEnum("role").notNull().default("parent"),
   city: text("city"),
   country: text("country"),
+  location: text("location"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

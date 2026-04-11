@@ -43,6 +43,7 @@ export default function AccountPage() {
   const [fullName, setFullName] = useState("");
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
+  const [location, setLocation_] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -60,6 +61,7 @@ export default function AccountPage() {
       setFullName(me.fullName ?? "");
       setCity(me.city ?? "");
       setCountry(me.country ?? "");
+      setLocation_(me.location ?? "");
     }
   }, [me]);
 
@@ -86,7 +88,7 @@ export default function AccountPage() {
   });
 
   function handleSave() {
-    updateMutation.mutate({ data: { fullName, city, country } });
+    updateMutation.mutate({ data: { fullName, city, country, location } });
   }
 
   async function handleDeleteAccount() {
@@ -183,6 +185,22 @@ export default function AccountPage() {
                 data-testid="account-fullName"
               />
             </div>
+            {me?.role === "parent" && (
+              <div>
+                <Label htmlFor="location">Your location</Label>
+                <p className="text-xs text-muted-foreground mb-1">
+                  City, neighbourhood, or area — helps professionals understand where you're based.
+                </p>
+                <Input
+                  id="location"
+                  value={location}
+                  onChange={(e) => setLocation_(e.target.value)}
+                  placeholder="e.g. Bandra, Mumbai or Koramangala, Bengaluru"
+                  className="mt-1"
+                  data-testid="account-location"
+                />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="city">City</Label>

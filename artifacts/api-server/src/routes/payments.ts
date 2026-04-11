@@ -80,6 +80,7 @@ router.get("/payments/plans", (_req: Request, res: Response): void => {
     planC: PLANS.plan_c_featured,
     planD: PLANS.plan_d_pro_onetime,
     planE: PLANS.plan_e_pro_monthly,
+    planF: PLANS.plan_f_per_booking,
   });
 });
 
@@ -191,8 +192,8 @@ router.post(
       return;
     }
 
-    // Plan A/B are parent-only
-    if ((plan === "plan_a_subscription" || plan === "plan_b_per_contact") && req.userRole === "professional") {
+    // Plan A/B/F are parent-only
+    if ((plan === "plan_a_subscription" || plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && req.userRole === "professional") {
       res.status(403).json({ error: "Subscription and per-contact plans are for parents only." });
       return;
     }
@@ -203,9 +204,9 @@ router.post(
       return;
     }
 
-    // Plan B requires professionalId
-    if (plan === "plan_b_per_contact" && !professionalId) {
-      res.status(400).json({ error: "professionalId is required for per-contact unlock." });
+    // Plan B/F require professionalId
+    if ((plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && !professionalId) {
+      res.status(400).json({ error: "professionalId is required for per-booking unlock." });
       return;
     }
 
@@ -231,7 +232,7 @@ router.post(
       .insert(paymentsTable)
       .values({
         userId: req.userId!,
-        plan: plan as "plan_a_subscription" | "plan_b_per_contact" | "plan_c_featured" | "plan_d_pro_onetime" | "plan_e_pro_monthly",
+        plan: plan as "plan_a_subscription" | "plan_b_per_contact" | "plan_c_featured" | "plan_d_pro_onetime" | "plan_e_pro_monthly" | "plan_f_per_booking",
         provider: "stripe",
         amountPaise: planDetails.amountPaise,
         currency: planDetails.currency,
@@ -400,8 +401,8 @@ router.post(
     return;
   }
 
-  // Plan A/B are parent-only
-  if ((plan === "plan_a_subscription" || plan === "plan_b_per_contact") && req.userRole === "professional") {
+  // Plan A/B/F are parent-only
+  if ((plan === "plan_a_subscription" || plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && req.userRole === "professional") {
     res.status(403).json({ error: "Subscription and per-contact plans are for parents only." });
     return;
   }
@@ -412,9 +413,9 @@ router.post(
     return;
   }
 
-  // Plan B requires professionalId
-  if (plan === "plan_b_per_contact" && !professionalId) {
-    res.status(400).json({ error: "professionalId is required for per-contact unlock." });
+  // Plan B/F require professionalId
+  if ((plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && !professionalId) {
+    res.status(400).json({ error: "professionalId is required for per-booking unlock." });
     return;
   }
 
@@ -440,7 +441,7 @@ router.post(
     .insert(paymentsTable)
     .values({
       userId: req.userId!,
-      plan: plan as "plan_a_subscription" | "plan_b_per_contact" | "plan_c_featured" | "plan_d_pro_onetime" | "plan_e_pro_monthly",
+      plan: plan as "plan_a_subscription" | "plan_b_per_contact" | "plan_c_featured" | "plan_d_pro_onetime" | "plan_e_pro_monthly" | "plan_f_per_booking",
       provider: "razorpay",
       amountPaise: planDetails.amountPaise,
       currency: planDetails.currency,
@@ -562,7 +563,7 @@ export async function activatePayment(
     return { isSubscriptionActive: true, unlockedProfessionalId: null };
   }
 
-  if (plan === "plan_b_per_contact" && professionalId) {
+  if ((plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && professionalId) {
     const existing = await db
       .select()
       .from(contactUnlocksTable)

@@ -38,6 +38,8 @@ export interface UserProfile {
   city?: string | null;
   /** @nullable */
   country?: string | null;
+  /** @nullable */
+  location?: string | null;
   createdAt: string;
 }
 
@@ -47,6 +49,7 @@ export interface UpdateUserBody {
   city?: string;
   country?: string;
   avatarUrl?: string;
+  location?: string;
 }
 
 export type SetRoleBodyRole =
@@ -440,6 +443,7 @@ export const CreateStripeCheckoutBodyPlan = {
   plan_c_featured: "plan_c_featured",
   plan_d_pro_onetime: "plan_d_pro_onetime",
   plan_e_pro_monthly: "plan_e_pro_monthly",
+  plan_f_per_booking: "plan_f_per_booking",
 } as const;
 
 export interface CreateStripeCheckoutBody {
@@ -464,6 +468,7 @@ export const CreateRazorpayOrderBodyPlan = {
   plan_c_featured: "plan_c_featured",
   plan_d_pro_onetime: "plan_d_pro_onetime",
   plan_e_pro_monthly: "plan_e_pro_monthly",
+  plan_f_per_booking: "plan_f_per_booking",
 } as const;
 
 export interface CreateRazorpayOrderBody {

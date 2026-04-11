@@ -28,6 +28,7 @@ export const GetMeResponse = zod.object({
   role: zod.enum(["parent", "professional", "admin"]),
   city: zod.string().nullish(),
   country: zod.string().nullish(),
+  location: zod.string().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -40,6 +41,7 @@ export const UpdateMeBody = zod.object({
   city: zod.string().optional(),
   country: zod.string().optional(),
   avatarUrl: zod.string().optional(),
+  location: zod.string().optional(),
 });
 
 export const UpdateMeResponse = zod.object({
@@ -52,6 +54,7 @@ export const UpdateMeResponse = zod.object({
   role: zod.enum(["parent", "professional", "admin"]),
   city: zod.string().nullish(),
   country: zod.string().nullish(),
+  location: zod.string().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -763,6 +766,7 @@ export const CreateStripeCheckoutBody = zod.object({
     "plan_c_featured",
     "plan_d_pro_onetime",
     "plan_e_pro_monthly",
+    "plan_f_per_booking",
   ]),
   professionalId: zod.number().optional(),
   successUrl: zod.string(),
@@ -785,6 +789,7 @@ export const CreateRazorpayOrderBody = zod.object({
     "plan_c_featured",
     "plan_d_pro_onetime",
     "plan_e_pro_monthly",
+    "plan_f_per_booking",
   ]),
   professionalId: zod.number().optional(),
 });

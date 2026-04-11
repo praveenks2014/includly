@@ -31,7 +31,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 ## DB Schema
 
 Tables:
-- `users` — clerk_id, email, phone, full_name, role (parent/professional/admin), city, country
+- `users` — clerk_id, email, phone, full_name, role (parent/professional/admin), city, country, location (parent-facing free-text location field)
 - `professional_profiles` — user_id FK, full_name, specialty (enum), bio, qualifications, years_experience, city, country, lat/lng, travel_radius_km, willing_to_travel, is_verified, verification_status (enum), average_rating, total_ratings, total_views, total_unlocks, phone, email
 - `ratings` — parent_id FK, professional_id FK, score (1-5), comment
 - `contact_unlocks` — parent_id FK, professional_id FK, unlocked_at
@@ -54,7 +54,7 @@ Enums:
 - `session_status`: pending_payment, confirmed, cancelled_by_parent, cancelled_by_professional, completed, no_show
 - `payment_provider`: stripe, razorpay
 - `payment_status`: pending, completed, failed, refunded
-- `payment_plan`: plan_a_subscription, plan_b_per_contact, plan_c_featured
+- `payment_plan`: plan_a_subscription, plan_b_per_contact, plan_c_featured, plan_d_pro_onetime, plan_e_pro_monthly, plan_f_per_booking (₹49/booking for non-shadow-teacher specialists)
 
 ## Pages
 
@@ -65,7 +65,7 @@ Enums:
 - `/dashboard` — Role-aware dashboard (parent / professional)
 - `/onboard` — Multi-step professional profile creation/edit
 - `/account` — Account settings
-- `/pricing` — Pricing page with Plan A/B/C cards, Razorpay integration
+- `/pricing` — Pricing page: Shadow Teacher Plan (₹499/30 days or ₹99/contact) + All Other Specialists (₹49/booking, no subscription). Razorpay + Stripe integration.
 - `/payment/success` — Post-payment success confirmation
 - `/payment/cancel` — Cancelled payment redirect
 - `/privacy`, `/terms`, `/support` — Compliance pages

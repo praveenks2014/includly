@@ -23,5 +23,7 @@ export interface UserProfile {
   city?: string | null;
   /** @nullable */
   country?: string | null;
+  /** @nullable */
+  location?: string | null;
   createdAt: Date;
 }

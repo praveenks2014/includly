@@ -44,6 +44,15 @@ export const PLANS = {
     durationDays: 30,
     stripePriceId: process.env["STRIPE_PLAN_E_PRICE_ID"] ?? null,
   },
+  plan_f_per_booking: {
+    id: "plan_f_per_booking",
+    name: "Specialist Booking",
+    description: "Book one session with a specialist (OT, Speech, Special Tutor, Medical Specialist, or Therapy Centre). No subscription needed.",
+    amountPaise: 4900,
+    currency: "INR",
+    durationDays: null,
+    stripePriceId: process.env["STRIPE_PLAN_F_PRICE_ID"] ?? null,
+  },
 } as const;
 
 export type PlanId = keyof typeof PLANS;
