@@ -78,7 +78,7 @@ export default function OnboardPage() {
     numTherapists: "",
   });
 
-  const { data: me } = useGetMe();
+  const { data: me, isError: meError } = useGetMe();
   const { mutateAsync: setMyRoleAsync } = useSetMyRole();
   const [roleReady, setRoleReady] = useState(false);
   const roleSetTriggered = useRef(false);
@@ -89,6 +89,13 @@ export default function OnboardPage() {
   }, []);
 
   useEffect(() => {
+    // If /users/me itself errors (e.g. transient 500), still unblock the form.
+    // POST /professionals/me sets the role server-side, so we don't need to
+    // block on the role-set call succeeding here.
+    if (meError && !roleSetTriggered.current) {
+      setRoleReady(true);
+      return;
+    }
     if (!me) return;
     if (roleSetTriggered.current) return;
     if (me.role === "professional" || me.role === "admin") {
@@ -99,11 +106,14 @@ export default function OnboardPage() {
     setMyRoleAsync({ data: { role: "professional" } })
       .then(() => {
         queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
-        setRoleReady(true);
       })
       .catch(() => {
+        // Non-fatal: POST /professionals/me also sets the role server-side.
+        // Allow the user to proceed so they can fill in their profile.
         roleSetTriggered.current = false;
-        toast({ title: "Could not set professional role", description: "Please try again or contact support.", variant: "destructive" });
+      })
+      .finally(() => {
+        setRoleReady(true);
       });
   }, [me]);
 

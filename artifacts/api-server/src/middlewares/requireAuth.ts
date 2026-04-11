@@ -30,16 +30,22 @@ export const requireAuth = async (
 
   req.clerkId = clerkId;
 
-  let [user] = await db.select().from(usersTable).where(eq(usersTable.clerkId, clerkId));
+  // Use upsert to avoid a race condition where two concurrent requests for a
+  // brand-new user both see no row and both attempt INSERT, causing the second
+  // one to fail with a unique-constraint violation.
+  const inserted = await db
+    .insert(usersTable)
+    .values({ clerkId, role: "parent" })
+    .onConflictDoNothing()
+    .returning();
+
+  const user = inserted[0] ?? (
+    await db.select().from(usersTable).where(eq(usersTable.clerkId, clerkId))
+  )[0];
 
   if (!user) {
-    [user] = await db
-      .insert(usersTable)
-      .values({
-        clerkId,
-        role: "parent",
-      })
-      .returning();
+    res.status(500).json({ error: "Failed to resolve user" });
+    return;
   }
 
   req.userId = user.id;
