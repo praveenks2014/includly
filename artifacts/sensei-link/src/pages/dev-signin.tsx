@@ -25,7 +25,10 @@ export default function DevSignInPage() {
 
   const handleSignIn = async (e?: React.FormEvent, overrideEmail?: string, overridePassword?: string) => {
     e?.preventDefault();
-    if (!isLoaded || !signIn) return;
+    if (!isLoaded || !signIn) {
+      setError("Auth not ready yet — please wait a moment and try again.");
+      return;
+    }
 
     const ident = overrideEmail ?? email;
     const pass = overridePassword ?? password;
@@ -118,9 +121,12 @@ export default function DevSignInPage() {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
-              <Button type="submit" className="w-full" disabled={loading || !isLoaded}>
+              <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Signing in…" : "Sign In"}
               </Button>
+              {!isLoaded && !loading && (
+                <p className="text-xs text-center text-muted-foreground">Initialising auth…</p>
+              )}
             </form>
           </CardContent>
         </Card>
