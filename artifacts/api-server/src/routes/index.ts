@@ -13,9 +13,11 @@ import storageRouter from "./storage";
 import verificationsRouter from "./verifications";
 import accountRouter from "./account";
 import sessionsRouter from "./sessions";
+import devRouter from "./dev";
 
 const router: IRouter = Router();
 
+router.use(devRouter);
 router.use(healthRouter);
 router.use(usersRouter);
 router.use(professionalsRouter);
