@@ -21,19 +21,25 @@ import { loadRazorpayScript, formatRupees, type RazorpayPaymentResponse } from "
 
 type RazorpayResponse = RazorpayPaymentResponse;
 
+const SUBSCRIPTION_SPECIALTIES = ["shadow_teacher", "special_tutor"];
+
 export function UnlockPaymentModal({
   open,
   onClose,
   professionalId,
   professionalName,
+  specialty,
   onUnlockSuccess,
 }: {
   open: boolean;
   onClose: () => void;
   professionalId: number;
   professionalName?: string;
+  specialty?: string;
   onUnlockSuccess: () => void;
 }) {
+  // For shadow teachers / special tutors, default CTA is the ₹499 / 30 days plan
+  const preferSubscription = specialty ? SUBSCRIPTION_SPECIALTIES.includes(specialty) : false;
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [activePlan, setActivePlan] = useState<string | null>(null);
@@ -178,16 +184,18 @@ export function UnlockPaymentModal({
           <div className="space-y-4">
             {plans && (
               <>
+                {/* For shadow teachers / special tutors, show ₹499/30-day plan first as recommended */}
                 <PlanOption
-                  title={plans.planB.name}
-                  price={formatRupees(plans.planB.amountPaise)}
-                  description="Unlock just this specialist's contact"
-                  features={["One-time unlock", "Never expires", "Instant access"]}
-                  badge="Pay per contact"
+                  title={plans.planA.name}
+                  price={`${formatRupees(plans.planA.amountPaise)} / 30 days`}
+                  description={preferSubscription ? `Unlock ${professionalName ? `${professionalName.split(" ")[0]}'s` : "this professional's"} contact for 30 days` : "Unlock unlimited contacts for 30 days"}
+                  features={["30-day access per teacher", "Unlimited unlocks this month", "All specialties included"]}
+                  badge={preferSubscription ? "Recommended" : "Best value"}
+                  highlight
                   activePlanId={activePlan}
-                  planId="plan_b_per_contact"
-                  onRazorpay={() => handleRazorpayPlan("plan_b_per_contact")}
-                  onStripe={() => handleStripe("plan_b_per_contact")}
+                  planId="plan_a_subscription"
+                  onRazorpay={() => handleRazorpayPlan("plan_a_subscription")}
+                  onStripe={() => handleStripe("plan_a_subscription")}
                   isLoading={isLoading}
                 />
 
@@ -201,16 +209,15 @@ export function UnlockPaymentModal({
                 </div>
 
                 <PlanOption
-                  title={plans.planA.name}
-                  price={formatRupees(plans.planA.amountPaise)}
-                  description="Unlock unlimited contacts for 30 days"
-                  features={["All specialties", "Unlimited unlocks", `30 day access`]}
-                  badge="Best value"
-                  highlight
+                  title={plans.planB.name}
+                  price={formatRupees(plans.planB.amountPaise)}
+                  description="Single contact unlock — pay as you go"
+                  features={["One-time unlock", "Just this specialist", "Instant access"]}
+                  badge="Pay per contact"
                   activePlanId={activePlan}
-                  planId="plan_a_subscription"
-                  onRazorpay={() => handleRazorpayPlan("plan_a_subscription")}
-                  onStripe={() => handleStripe("plan_a_subscription")}
+                  planId="plan_b_per_contact"
+                  onRazorpay={() => handleRazorpayPlan("plan_b_per_contact")}
+                  onStripe={() => handleStripe("plan_b_per_contact")}
                   isLoading={isLoading}
                 />
               </>

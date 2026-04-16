@@ -344,7 +344,7 @@ export default function ProfessionalProfilePage() {
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Unlock {p.fullName?.split(" ")[0]}'s direct phone &amp; email
                   </p>
-                  <p className="text-[11px] text-muted-foreground/70 mt-1">₹99 per unlock · or ₹499/month for unlimited</p>
+                  <p className="text-[11px] text-muted-foreground/70 mt-1">₹499 / 30 days · or ₹99 single contact</p>
                 </div>
                 <Button
                   onClick={handleUnlock}
@@ -353,7 +353,7 @@ export default function ProfessionalProfilePage() {
                   data-testid="unlock-contact-btn"
                 >
                   <Lock size={13} />
-                  Unlock for ₹99
+                  Unlock for ₹499 / 30 days
                 </Button>
               </div>
             </div>
@@ -459,6 +459,7 @@ export default function ProfessionalProfilePage() {
         onClose={() => setShowPayModal(false)}
         professionalId={professionalId}
         professionalName={professional?.fullName ?? undefined}
+        specialty={professional?.specialty}
         onUnlockSuccess={handleUnlockSuccess}
       />
     </div>

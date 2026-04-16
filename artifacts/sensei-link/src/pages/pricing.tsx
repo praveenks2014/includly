@@ -11,8 +11,8 @@ import {
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Check, Loader2, Zap, CreditCard, UserCheck, Stethoscope, Building2, IndianRupee, CheckCircle2 } from "lucide-react";
-import { loadRazorpayScript, formatRupees, type RazorpayPaymentResponse } from "@/lib/razorpay";
+import { Check, Loader2, Zap, CreditCard, UserCheck, Stethoscope, Building2, IndianRupee, CheckCircle2, Crown } from "lucide-react";
+import { loadRazorpayScript, formatRupees, type RazorpayPaymentResponse, type RazorpaySubscriptionResponse } from "@/lib/razorpay";
 import { getSpecialtyLabel } from "@/lib/specialties";
 
 type RazorpayResponse = RazorpayPaymentResponse;
@@ -210,6 +210,56 @@ export default function PricingPage() {
     }
   }
 
+  const [proUpgradeLoading, setProUpgradeLoading] = useState(false);
+
+  async function handleUpgradeToPro() {
+    if (!requireSignIn()) return;
+    const loaded = await loadRazorpayScript();
+    if (!loaded) {
+      toast({ title: "Could not load payment module", description: "Please try again.", variant: "destructive" });
+      return;
+    }
+    setProUpgradeLoading(true);
+    try {
+      const order = await createOrder({ data: { plan: "plan_e_pro_monthly" } });
+      if (order.isSubscription && order.subscriptionId) {
+        const rzp = new window.Razorpay({
+          key: order.keyId,
+          subscription_id: order.subscriptionId,
+          name: "Sproutly",
+          description: order.planName,
+          handler: async (response: RazorpaySubscriptionResponse) => {
+            try {
+              const result = await verifyPayment({
+                data: {
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySubscriptionId: response.razorpay_subscription_id,
+                  razorpaySignature: response.razorpay_signature,
+                  paymentId: order.paymentId,
+                },
+              });
+              if (result.success) {
+                toast({ title: "Pro activated!", description: "Your Sproutly Pro subscription is now active." });
+              } else {
+                toast({ title: "Payment verification failed", variant: "destructive" });
+              }
+            } catch {
+              toast({ title: "Verification error", description: "Please contact support.", variant: "destructive" });
+            }
+          },
+          theme: { color: "#d97706" },
+          modal: { ondismiss: () => { setProUpgradeLoading(false); toast({ title: "Subscription cancelled" }); } },
+        });
+        rzp.open();
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Something went wrong";
+      toast({ title: "Could not initiate subscription", description: msg, variant: "destructive" });
+    } finally {
+      setProUpgradeLoading(false);
+    }
+  }
+
   const role = me?.role;
   const isProfessional = role === "professional";
   const hasActiveSub = sub?.hasActiveSubscription;
@@ -283,6 +333,51 @@ export default function PricingPage() {
               </p>
             </div>
           )}
+
+          {/* Go Pro CTA */}
+          <div className="mt-8 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-6">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-amber-100 border border-amber-200 rounded-xl flex items-center justify-center shrink-0">
+                <Crown size={22} className="text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-bold text-amber-900 text-lg">Sproutly Pro</h3>
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-200 border border-amber-300 px-2 py-0.5 rounded-full">PRO</span>
+                </div>
+                <p className="text-sm text-amber-800 mb-3">Unlock premium tools: multi-day schedule templates, priority placement in search, and a Pro badge on your profile.</p>
+                <ul className="grid sm:grid-cols-2 gap-1.5 mb-4">
+                  {[
+                    "Pro badge on your profile",
+                    "One-click multi-day schedule templates",
+                    "Priority listing in search results",
+                    "Advanced analytics (coming soon)",
+                  ].map((f) => (
+                    <li key={f} className="flex items-center gap-2 text-xs text-amber-800">
+                      <Check size={12} className="text-amber-600 shrink-0" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div>
+                    <span className="text-2xl font-bold text-amber-900">₹499</span>
+                    <span className="text-amber-700 text-sm ml-1">/ month</span>
+                  </div>
+                  <Button
+                    onClick={handleUpgradeToPro}
+                    disabled={proUpgradeLoading}
+                    className="bg-amber-600 hover:bg-amber-700 text-white border-0 gap-2"
+                    data-testid="go-pro-btn-pricing"
+                  >
+                    {proUpgradeLoading ? <Loader2 size={14} className="animate-spin" /> : <Crown size={14} />}
+                    {proUpgradeLoading ? "Processing…" : "Go Pro — ₹499/month"}
+                  </Button>
+                  <p className="text-xs text-amber-600 w-full sm:w-auto">Billed monthly via Razorpay. Cancel anytime.</p>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div className="mt-8 text-center text-xs text-muted-foreground">
             Billing starts 30 days after activation via UPI auto-debit. Cancel anytime from your dashboard.

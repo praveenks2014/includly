@@ -10,6 +10,7 @@ import {
   useGetContactUsage,
   useCreateStripeCheckout,
   useBroadcastNotification,
+  useSetAvailability,
   getGetMySubscriptionQueryKey,
   getGetPaymentHistoryQueryKey,
   getGetContactUsageQueryKey,
@@ -263,9 +264,50 @@ function ParentDashboard({
   );
 }
 
+const SCHEDULE_TEMPLATES = [
+  {
+    label: "Weekday mornings",
+    description: "Mon–Fri • 9 AM–12 PM",
+    days: ["M", "T", "W", "Th", "F"],
+    iconColor: "text-primary",
+    iconType: "columns" as const,
+    slots: [1, 2, 3, 4, 5].map((d) => ({ dayOfWeek: d, startTime: "09:00", endTime: "12:00", slotDurationMinutes: 60, priceInr: 500 })),
+  },
+  {
+    label: "Alternating days",
+    description: "Mon, Wed, Fri • 9 AM–5 PM",
+    days: ["M", "W", "F"],
+    iconColor: "text-green-600",
+    iconType: "check" as const,
+    slots: [1, 3, 5].map((d) => ({ dayOfWeek: d, startTime: "09:00", endTime: "17:00", slotDurationMinutes: 60, priceInr: 500 })),
+  },
+  {
+    label: "Weekends",
+    description: "Sat & Sun • 9 AM–5 PM",
+    days: ["Sa", "Su"],
+    iconColor: "text-blue-600",
+    iconType: "calendar" as const,
+    slots: [6, 0].map((d) => ({ dayOfWeek: d, startTime: "09:00", endTime: "17:00", slotDurationMinutes: 60, priceInr: 500 })),
+  },
+];
+
 function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboard | undefined; isLoading: boolean }) {
   const { toast } = useToast();
   const { mutateAsync: createStripeCheckout, isPending: stripeLoading } = useCreateStripeCheckout();
+  const { mutateAsync: setAvailability, isPending: applyingTemplate } = useSetAvailability();
+  const [applyingLabel, setApplyingLabel] = useState<string | null>(null);
+
+  async function handleApplyTemplate(label: string, slots: { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number; priceInr: number }[]) {
+    setApplyingLabel(label);
+    try {
+      await setAvailability({ data: { slots } });
+      toast({ title: "Schedule applied", description: `${label} pattern set for this week.` });
+    } catch {
+      toast({ title: "Could not apply template", description: "Please try again or set availability manually.", variant: "destructive" });
+    } finally {
+      setApplyingLabel(null);
+    }
+  }
 
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -404,32 +446,25 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
             </Link>
           </div>
           <div className="p-5">
-            <p className="text-xs text-muted-foreground mb-4">Quickly apply a schedule pattern across multiple days at once.</p>
+            <p className="text-xs text-muted-foreground mb-4">Click a pattern to instantly apply it to your availability calendar.</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[
-                {
-                  label: "Weekday mornings",
-                  description: "Mon–Fri • 9 AM–12 PM",
-                  days: ["M", "T", "W", "Th", "F"],
-                  icon: <Columns size={14} className="text-primary" />,
-                },
-                {
-                  label: "Alternating days",
-                  description: "Mon, Wed, Fri • All day",
-                  days: ["M", "W", "F"],
-                  icon: <CheckCheck size={14} className="text-green-600" />,
-                },
-                {
-                  label: "Weekends",
-                  description: "Sat & Sun • Flexible",
-                  days: ["Sa", "Su"],
-                  icon: <CalendarCheck size={14} className="text-blue-600" />,
-                },
-              ].map((template) => (
-                <Link key={template.label} href="/availability">
-                  <div className="border border-border rounded-lg p-3 hover:border-primary/40 hover:bg-primary/5 transition-colors cursor-pointer">
+              {SCHEDULE_TEMPLATES.map((template) => {
+                const isApplying = applyingLabel === template.label;
+                const icon = template.iconType === "columns"
+                  ? <Columns size={14} className={template.iconColor} />
+                  : template.iconType === "check"
+                  ? <CheckCheck size={14} className={template.iconColor} />
+                  : <CalendarCheck size={14} className={template.iconColor} />;
+                return (
+                  <button
+                    key={template.label}
+                    disabled={applyingTemplate}
+                    onClick={() => handleApplyTemplate(template.label, template.slots)}
+                    className="text-left border border-border rounded-lg p-3 hover:border-primary/40 hover:bg-primary/5 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                    data-testid={`apply-template-${template.label.toLowerCase().replace(/\s+/g, "-")}`}
+                  >
                     <div className="flex items-center gap-1.5 mb-2">
-                      {template.icon}
+                      {isApplying ? <Loader2 size={14} className="animate-spin text-primary" /> : icon}
                       <span className="text-xs font-semibold text-foreground">{template.label}</span>
                     </div>
                     <p className="text-[11px] text-muted-foreground mb-2">{template.description}</p>
@@ -438,9 +473,12 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
                         <span key={d} className="text-[10px] font-bold bg-primary/10 text-primary rounded px-1.5 py-0.5">{d}</span>
                       ))}
                     </div>
-                  </div>
-                </Link>
-              ))}
+                    <p className="text-[10px] text-primary font-medium mt-2">
+                      {isApplying ? "Applying…" : "Tap to apply →"}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
