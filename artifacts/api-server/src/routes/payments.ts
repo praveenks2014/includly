@@ -468,6 +468,50 @@ router.post(
     })
     .returning();
 
+  // plan_e_pro_monthly: use Razorpay recurring subscription instead of one-time order
+  if (plan === "plan_e_pro_monthly") {
+    // Create a Razorpay billing plan for the monthly subscription
+    const rzPlan = await razorpay.plans.create({
+      period: "monthly",
+      interval: 1,
+      item: {
+        name: planDetails.name,
+        amount: planDetails.amountPaise,
+        currency: planDetails.currency,
+        description: planDetails.description,
+      },
+      notes: { paymentId: String(payment.id) },
+    } as Parameters<typeof razorpay.plans.create>[0]);
+
+    // Create a recurring subscription against that plan
+    const subscription = await razorpay.subscriptions.create({
+      plan_id: rzPlan.id,
+      customer_notify: 1,
+      total_count: 12, // up to 12 monthly cycles
+      quantity: 1,
+      notes: {
+        paymentId: String(payment.id),
+        userId: String(req.userId),
+        plan,
+      },
+    } as Parameters<typeof razorpay.subscriptions.create>[0]);
+
+    await db
+      .update(paymentsTable)
+      .set({ providerOrderId: subscription.id })
+      .where(eq(paymentsTable.id, payment.id));
+
+    res.json({
+      subscriptionId: subscription.id,
+      isSubscription: true,
+      currency: planDetails.currency,
+      keyId: process.env["RAZORPAY_KEY_ID"]!,
+      paymentId: payment.id,
+      planName: planDetails.name,
+    });
+    return;
+  }
+
   const order = await razorpay.orders.create({
     amount: planDetails.amountPaise,
     currency: planDetails.currency,
@@ -502,11 +546,16 @@ router.post("/payments/razorpay/verify", requireAuth, async (req: Request, res: 
     return;
   }
 
-  const { razorpayPaymentId, razorpayOrderId, razorpaySignature, paymentId } = parsed.data;
+  const { razorpayPaymentId, razorpayOrderId, razorpaySubscriptionId, razorpaySignature, paymentId } = parsed.data;
 
   const keySecret = process.env["RAZORPAY_KEY_SECRET"];
   if (!keySecret) {
     res.status(503).json({ error: "Razorpay is not configured" });
+    return;
+  }
+
+  if (!razorpayOrderId && !razorpaySubscriptionId) {
+    res.status(400).json({ error: "Either razorpayOrderId or razorpaySubscriptionId is required" });
     return;
   }
 
@@ -526,15 +575,28 @@ router.post("/payments/razorpay/verify", requireAuth, async (req: Request, res: 
     return;
   }
 
-  if (payment.providerOrderId !== razorpayOrderId) {
-    res.status(400).json({ error: "Order ID mismatch" });
-    return;
+  // Subscription payment: HMAC is payment_id|subscription_id
+  // Order payment: HMAC is order_id|payment_id
+  let expectedSignature: string;
+  if (razorpaySubscriptionId) {
+    if (payment.providerOrderId !== razorpaySubscriptionId) {
+      res.status(400).json({ error: "Subscription ID mismatch" });
+      return;
+    }
+    expectedSignature = crypto
+      .createHmac("sha256", keySecret)
+      .update(`${razorpayPaymentId}|${razorpaySubscriptionId}`)
+      .digest("hex");
+  } else {
+    if (payment.providerOrderId !== razorpayOrderId) {
+      res.status(400).json({ error: "Order ID mismatch" });
+      return;
+    }
+    expectedSignature = crypto
+      .createHmac("sha256", keySecret)
+      .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+      .digest("hex");
   }
-
-  const expectedSignature = crypto
-    .createHmac("sha256", keySecret)
-    .update(`${razorpayOrderId}|${razorpayPaymentId}`)
-    .digest("hex");
 
   if (expectedSignature !== razorpaySignature) {
     res.status(400).json({ error: "Invalid payment signature" });
@@ -546,7 +608,13 @@ router.post("/payments/razorpay/verify", requireAuth, async (req: Request, res: 
     .set({ status: "completed", providerPaymentId: razorpayPaymentId, updatedAt: new Date() })
     .where(eq(paymentsTable.id, paymentId));
 
-  const result = await activatePayment(payment.userId, payment.plan, payment.professionalId ?? null, "razorpay");
+  const result = await activatePayment(
+    payment.userId,
+    payment.plan,
+    payment.professionalId ?? null,
+    "razorpay",
+    razorpaySubscriptionId ?? null,
+  );
 
   res.json({
     success: true,

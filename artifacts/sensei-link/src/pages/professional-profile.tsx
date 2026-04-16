@@ -342,8 +342,9 @@ export default function ProfessionalProfilePage() {
                 <div>
                   <p className="text-sm font-semibold text-foreground">Contact details are locked</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Unlock to get {p.fullName?.split(" ")[0]}'s direct phone &amp; email
+                    Unlock {p.fullName?.split(" ")[0]}'s direct phone &amp; email
                   </p>
+                  <p className="text-[11px] text-muted-foreground/70 mt-1">₹99 per unlock · or ₹499/month for unlimited</p>
                 </div>
                 <Button
                   onClick={handleUnlock}
@@ -352,7 +353,7 @@ export default function ProfessionalProfilePage() {
                   data-testid="unlock-contact-btn"
                 >
                   <Lock size={13} />
-                  Unlock contact
+                  Unlock for ₹99
                 </Button>
               </div>
             </div>

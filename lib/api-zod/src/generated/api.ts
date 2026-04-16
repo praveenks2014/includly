@@ -804,7 +804,8 @@ export const CreateRazorpayOrderResponse = zod.object({
  */
 export const VerifyRazorpayPaymentBody = zod.object({
   razorpayPaymentId: zod.string(),
-  razorpayOrderId: zod.string(),
+  razorpayOrderId: zod.string().optional(),
+  razorpaySubscriptionId: zod.string().optional(),
   razorpaySignature: zod.string(),
   paymentId: zod.number(),
 });

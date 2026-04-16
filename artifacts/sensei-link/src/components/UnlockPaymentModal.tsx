@@ -78,11 +78,11 @@ export function UnlockPaymentModal({
 
       const rzp = new window.Razorpay({
         key: order.keyId,
-        amount: order.amount,
+        amount: order.amount!,
         currency: order.currency,
         name: "Sproutly",
         description: order.planName,
-        order_id: order.orderId,
+        order_id: order.orderId!,
         handler: async (response: RazorpayResponse) => {
           try {
             const result = await verifyPayment({

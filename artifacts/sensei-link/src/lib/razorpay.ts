@@ -1,4 +1,4 @@
-export interface RazorpayOptions {
+export interface RazorpayOrderOptions {
   key: string;
   amount: number;
   currency: string;
@@ -11,6 +11,19 @@ export interface RazorpayOptions {
   modal?: { ondismiss?: () => void };
 }
 
+export interface RazorpaySubscriptionOptions {
+  key: string;
+  subscription_id: string;
+  name: string;
+  description: string;
+  handler: (response: RazorpaySubscriptionResponse) => void;
+  prefill?: { name?: string; email?: string; contact?: string };
+  theme?: { color?: string };
+  modal?: { ondismiss?: () => void };
+}
+
+export type RazorpayOptions = RazorpayOrderOptions | RazorpaySubscriptionOptions;
+
 export interface RazorpayInstance {
   open(): void;
 }
@@ -18,6 +31,12 @@ export interface RazorpayInstance {
 export interface RazorpayPaymentResponse {
   razorpay_payment_id: string;
   razorpay_order_id: string;
+  razorpay_signature: string;
+}
+
+export interface RazorpaySubscriptionResponse {
+  razorpay_payment_id: string;
+  razorpay_subscription_id: string;
   razorpay_signature: string;
 }
 

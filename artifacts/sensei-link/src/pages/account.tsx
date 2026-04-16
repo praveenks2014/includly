@@ -31,7 +31,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, User, Bell, Trash2, ShieldAlert, CheckCircle2, Clock, XCircle, AlertCircle, Ticket } from "lucide-react";
+import { Loader2, User, Bell, Trash2, ShieldAlert, CheckCircle2, Clock, XCircle, AlertCircle, Ticket, Crown } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import {
@@ -45,7 +45,7 @@ import {
   useCreateRazorpayOrder,
   useVerifyRazorpayPayment,
 } from "@workspace/api-client-react";
-import { loadRazorpayScript, formatRupees, type RazorpayPaymentResponse } from "@/lib/razorpay";
+import { loadRazorpayScript, formatRupees, type RazorpayPaymentResponse, type RazorpaySubscriptionResponse } from "@/lib/razorpay";
 
 export default function AccountPage() {
   const { user } = useUser();
@@ -77,11 +77,11 @@ export default function AccountPage() {
       const order = await createOrder({ data: { plan: planId } });
       const rzp = new window.Razorpay({
         key: order.keyId,
-        amount: order.amount,
+        amount: order.amount!,
         currency: order.currency,
         name: "Sproutly",
         description: order.planName,
-        order_id: order.orderId,
+        order_id: order.orderId!,
         handler: async (response: RazorpayPaymentResponse) => {
           try {
             const result = await verifyPayment({
@@ -117,6 +117,50 @@ export default function AccountPage() {
       toast({ title: "Could not initiate payment", description: msg, variant: "destructive" });
     } finally {
       setSessionPassActivePlan(null);
+    }
+  }
+
+  async function handleUpgradeToPro() {
+    const loaded = await loadRazorpayScript();
+    if (!loaded) {
+      toast({ title: "Could not load payment module", description: "Please try again.", variant: "destructive" });
+      return;
+    }
+    try {
+      const order = await createOrder({ data: { plan: "plan_e_pro_monthly" } });
+      if (order.isSubscription && order.subscriptionId) {
+        const rzp = new window.Razorpay({
+          key: order.keyId,
+          subscription_id: order.subscriptionId,
+          name: "Sproutly",
+          description: order.planName,
+          handler: async (response: RazorpaySubscriptionResponse) => {
+            try {
+              const result = await verifyPayment({
+                data: {
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySubscriptionId: response.razorpay_subscription_id,
+                  razorpaySignature: response.razorpay_signature,
+                  paymentId: order.paymentId,
+                },
+              });
+              if (result.success) {
+                toast({ title: "Pro activated!", description: "Your Sproutly Pro subscription is now active." });
+              } else {
+                toast({ title: "Payment verification failed", variant: "destructive" });
+              }
+            } catch {
+              toast({ title: "Verification error", description: "Please contact support.", variant: "destructive" });
+            }
+          },
+          theme: { color: "#d97706" },
+          modal: { ondismiss: () => toast({ title: "Subscription cancelled" }) },
+        });
+        rzp.open();
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Something went wrong";
+      toast({ title: "Could not initiate subscription", description: msg, variant: "destructive" });
     }
   }
 
@@ -505,6 +549,40 @@ export default function AccountPage() {
             <Link href="/onboard">
               <Button variant="outline" size="sm" data-testid="edit-pro-profile-btn">Edit professional profile</Button>
             </Link>
+          </div>
+        )}
+
+        {/* Pro subscription upgrade for professional users */}
+        {me?.role === "professional" && (
+          <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-5 shadow-sm mb-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0">
+                <Crown size={18} className="text-amber-600" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-amber-900 flex items-center gap-1.5">
+                  Sproutly Pro
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded-full">₹499/month</span>
+                </h2>
+                <p className="text-sm text-amber-700 mt-1">
+                  Get top placement in search results, a Pro badge on your profile, and access to multi-day schedule templates.
+                </p>
+                <ul className="text-xs text-amber-700 mt-2 space-y-1">
+                  <li className="flex items-center gap-1.5"><CheckCircle2 size={12} className="text-amber-600" />⭐ Pro badge visible to parents</li>
+                  <li className="flex items-center gap-1.5"><CheckCircle2 size={12} className="text-amber-600" />Priority ranking in search results</li>
+                  <li className="flex items-center gap-1.5"><CheckCircle2 size={12} className="text-amber-600" />Multi-day schedule templates</li>
+                </ul>
+              </div>
+            </div>
+            <Button
+              className="gap-2 bg-amber-600 hover:bg-amber-700 text-white border-0"
+              onClick={handleUpgradeToPro}
+              data-testid="upgrade-to-pro-btn"
+            >
+              <Crown size={14} />
+              Subscribe — ₹499/month
+            </Button>
+            <p className="text-[11px] text-amber-600 mt-2">Auto-renews monthly. Cancel anytime from your Razorpay dashboard.</p>
           </div>
         )}
 

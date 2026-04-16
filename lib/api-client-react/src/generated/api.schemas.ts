@@ -496,8 +496,10 @@ export interface CreateRazorpayOrderBody {
 }
 
 export interface RazorpayOrder {
-  orderId: string;
-  amount: number;
+  orderId?: string;
+  subscriptionId?: string;
+  isSubscription?: boolean;
+  amount?: number;
   currency: string;
   keyId: string;
   paymentId: number;
@@ -506,7 +508,8 @@ export interface RazorpayOrder {
 
 export interface VerifyRazorpayBody {
   razorpayPaymentId: string;
-  razorpayOrderId: string;
+  razorpayOrderId?: string;
+  razorpaySubscriptionId?: string;
   razorpaySignature: string;
   paymentId: number;
 }
