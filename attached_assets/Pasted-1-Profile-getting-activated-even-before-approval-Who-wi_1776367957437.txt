@@ -1,0 +1,31 @@
+1. Profile getting activated even before approval. Who will get the approval?
+2. In  the pricing page show the pricing relevant to the profile. It is showing all professionals price.
+3. Post verification, the user does not need to upload the proofs again. If not verified they should be allowed to upload the proof again. 
+4. The location is not working during onboarding
+5. Pricing payment should only upi as of now. 
+6. Search button in specialist profile should be showing the parents looking for speech therapist in the geo location. Currently it is showing professional .
+7. Account setting post onboarding does not need to show option to edit the name, city and country.
+8. Should show the current status of the verification in the account setting for professionals.
+9. Page for admin to approve the profile. 
+10. Phone number and email to be verified by the users by entering otp
+11. Use good monetization strategy below is the strategy suggested by Geminiyou can use that . Project Goal: Transition the existing monetization logic of my Special Education & Therapy Marketplace from a flat-fee "toll" model to a "SaaS-Enabled Marketplace" model to improve retention and reduce platform leakage.
+Current State:
+• Geo-search matching parents with Shadow Teachers and Professionals based on location.
+• Flat fees: ₹499 for Shadow Teacher discovery; ₹49 per slot booking.
+Requested Updates & Logic Changes:
+1.	Dynamic Access Control (Shadow Teachers):
+• Implement a "blurred contact" or "locked profile" logic.
+• Create a Stripe/Payment gateway integration where a one-time payment of ₹499 "unlocks" a Shadow Teacher’s full contact details and messaging capability for the parent for a 30-day window.
+2.	Credit-Based Booking System (Therapists/Psychologists):
+• Replace the ₹49 per-booking fee with a "Session Pass" system.
+• Build a wallet or credit counter in the User Schema. Parents should be able to purchase a "5-session pass" (stored as credits).
+• Every time a slot is booked, decrement 1 credit. This reduces transaction friction and encourages long-term therapy commitments.
+3.	Pro-Tier Subscription for Centers/Professionals:
+• Update the Professional Profile model to include a is_premium boolean.
+• Create a dashboard view specifically for is_premium users that includes:
+• Advanced availability management (Calendar sync).
+• Priority ranking in the Geo-search algorithm for their specific PIN codes.
+• Integrate a monthly recurring subscription (SaaS fee) for this tier.
+4.	Geo-Search Refinement:
+1. • Ensure the search query filters first by "Specialization Tag" (e.g., ADHD, Speech, Occupational Therapy) and then by proximity (Haversine formula).
+2. • Add a "Verification Status" filter to the UI to emphasize trust.
