@@ -36,7 +36,6 @@ import {
   Pencil,
 } from "lucide-react";
 
-const PREMIUM_SPECIALTIES = ["neurologist", "therapy_centre"];
 
 function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const [hovered, setHovered] = useState(0);
@@ -207,9 +206,9 @@ export default function ProfessionalProfilePage() {
                 {p.isVerified && p.verificationStatus === "verified" && (
                   <BadgeCheck size={22} className="text-primary" />
                 )}
-                {PREMIUM_SPECIALTIES.includes(p.specialty) && (
-                  <span className="text-xs font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
-                    Premium
+                {p.isPremium && (
+                  <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                    ⭐ Pro
                   </span>
                 )}
               </div>
@@ -275,6 +274,20 @@ export default function ProfessionalProfilePage() {
             <div className="mb-4">
               <h3 className="text-sm font-semibold text-foreground mb-1">Qualifications</h3>
               <p className="text-sm text-muted-foreground">{p.qualifications}</p>
+            </div>
+          )}
+
+          {/* Specialization tags */}
+          {Array.isArray(p.specializationTags) && p.specializationTags.length > 0 && (
+            <div className="mb-4">
+              <h3 className="text-sm font-semibold text-foreground mb-2">Specializes in</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {p.specializationTags.map((tag) => (
+                  <span key={tag} className="px-2.5 py-1 rounded-full text-xs bg-primary/10 text-primary border border-primary/20 font-medium">
+                    {tag}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
 

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc } from "drizzle-orm";
+import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc, arrayOverlaps } from "drizzle-orm";
 import { db, usersTable, professionalProfilesTable, contactUnlocksTable, specialtyEnum, professionalSubscriptionsTable } from "@workspace/db";
 import { subscriptionsTable } from "@workspace/db";
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
@@ -110,7 +110,7 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
     return;
   }
 
-  const { specialty, city, minExperience, minRating, willingToTravel, lat, lng, radiusKm, budgetMaxINR, page, limit } = parsed.data;
+  const { specialty, city, minExperience, minRating, willingToTravel, lat, lng, radiusKm, budgetMaxINR, tags, verifiedOnly, page, limit } = parsed.data;
 
   const pageNum = page ?? 1;
   const limitNum = limit ?? 20;
@@ -120,17 +120,27 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
     eq(professionalProfilesTable.verificationStatus, "verified"),
   ];
 
+  if (verifiedOnly) {
+    conditions.push(eq(professionalProfilesTable.isVerified, true));
+  }
+
+  if (tags) {
+    const tagArray = tags.split(",").map((t) => t.trim()).filter(Boolean);
+    if (tagArray.length > 0) {
+      conditions.push(arrayOverlaps(professionalProfilesTable.specializationTags, tagArray));
+    }
+  }
+
   if (specialty) {
     conditions.push(eq(professionalProfilesTable.specialty, specialty as SpecialtyValue));
   }
 
   if (city) {
-    conditions.push(
-      or(
-        ilike(professionalProfilesTable.city, `%${city}%`),
-        ilike(professionalProfilesTable.country, `%${city}%`),
-      ),
+    const cityCondition = or(
+      ilike(professionalProfilesTable.city, `%${city}%`),
+      ilike(professionalProfilesTable.country, `%${city}%`),
     );
+    if (cityCondition) conditions.push(cityCondition);
   }
 
   if (minExperience !== undefined) {
@@ -180,8 +190,8 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
   const total = parseInt(totalStr, 10);
 
   const orderByClauses = useGeo
-    ? [asc(distanceSql)]
-    : [desc(professionalProfilesTable.id)];
+    ? [desc(professionalProfilesTable.isPremium), asc(distanceSql)]
+    : [desc(professionalProfilesTable.isPremium), desc(professionalProfilesTable.id)];
 
   const paginated = await db
     .select({
@@ -206,6 +216,8 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       pricingMinINR: professionalProfilesTable.pricingMinINR,
       pricingMaxINR: professionalProfilesTable.pricingMaxINR,
       paymentActivated: professionalProfilesTable.paymentActivated,
+      isPremium: professionalProfilesTable.isPremium,
+      specializationTags: professionalProfilesTable.specializationTags,
       distanceKm: distanceSql,
     })
     .from(professionalProfilesTable)
@@ -265,6 +277,8 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       pricingMinINR: p.pricingMinINR ?? null,
       pricingMaxINR: p.pricingMaxINR ?? null,
       paymentActivated: p.paymentActivated,
+      isPremium: p.isPremium,
+      specializationTags: p.specializationTags ?? [],
     };
   });
 
@@ -342,6 +356,8 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
     pricingMinINR: profile.pricingMinINR ?? null,
     pricingMaxINR: profile.pricingMaxINR ?? null,
     paymentActivated: profile.paymentActivated,
+    isPremium: profile.isPremium,
+    specializationTags: profile.specializationTags ?? [],
     upiId: null,
   };
 
@@ -384,7 +400,7 @@ router.get("/admin/professionals/billing", requireAuth, requireRole("admin"), as
   res.json({ professionals: results, total: results.length });
 });
 
-router.post("/professionals/me/free-activate", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+router.post("/professionals/me/free-activate", requireAuth, requireRole("professional"), async (req, res): Promise<void> => {
   const [profile] = await db
     .select()
     .from(professionalProfilesTable)

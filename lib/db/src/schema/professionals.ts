@@ -48,6 +48,8 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   rejectionReason: text("rejection_reason"),
   upiId: text("upi_id"),
   paymentActivated: boolean("payment_activated").notNull().default(false),
+  isPremium: boolean("is_premium").notNull().default(false),
+  specializationTags: text("specialization_tags").array().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -33,6 +33,16 @@ import { FileUploadField } from "@/components/FileUploadField";
 const TRAVEL_RADIUS_OPTIONS = [5, 10, 25, 50];
 const STEPS = ["Basic info", "Details", "Location", "Contact", "Pricing", "Verify ID", "Activate"];
 
+const TAG_OPTIONS = [
+  "ADHD",
+  "Autism",
+  "Dyslexia",
+  "Cerebral Palsy",
+  "Down Syndrome",
+  "Speech Delay",
+  "Learning Disabilities",
+];
+
 const ID_DOCUMENT_TYPES = [
   { value: "aadhar", label: "Aadhaar Card (India)" },
   { value: "passport", label: "Passport" },
@@ -76,6 +86,7 @@ export default function OnboardPage() {
     upiId: existingProfile?.upiId ?? "",
     centreRegistrationNo: "",
     numTherapists: "",
+    specializationTags: (existingProfile?.specializationTags ?? []) as string[],
   });
 
   const { data: me, isError: meError } = useGetMe();
@@ -208,6 +219,7 @@ export default function OnboardPage() {
       pricingMinINR: form.pricingMinINR ? Number(form.pricingMinINR) : undefined,
       pricingMaxINR: form.pricingMaxINR ? Number(form.pricingMaxINR) : undefined,
       upiId: form.upiId.trim() || undefined,
+      specializationTags: form.specializationTags.length > 0 ? form.specializationTags : undefined,
     };
 
     if (existingProfile) {
@@ -417,6 +429,32 @@ export default function OnboardPage() {
                   className="mt-1 min-h-[80px]"
                   data-testid="input-qualifications"
                 />
+              </div>
+              <div>
+                <Label>Specialization tags <span className="text-muted-foreground text-xs">(pick up to 5)</span></Label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {TAG_OPTIONS.map((tag) => {
+                    const selected = form.specializationTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          setForm((prev) => {
+                            if (prev.specializationTags.includes(tag)) {
+                              return { ...prev, specializationTags: prev.specializationTags.filter((t) => t !== tag) };
+                            }
+                            if (prev.specializationTags.length >= 5) return prev;
+                            return { ...prev, specializationTags: [...prev.specializationTags, tag] };
+                          });
+                        }}
+                        className={`px-3 py-1 rounded-full text-sm border transition-colors ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-foreground hover:border-primary"}`}
+                      >
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {isTherapyCentre && (

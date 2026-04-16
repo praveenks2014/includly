@@ -1,9 +1,9 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, desc, and, gt, gte } from "drizzle-orm";
+import { eq, desc, and, gt, gte, sql } from "drizzle-orm";
 import Stripe from "stripe";
 import Razorpay from "razorpay";
 import crypto from "crypto";
-import { db, paymentsTable, subscriptionsTable, contactUnlocksTable, professionalProfilesTable, professionalSubscriptionsTable, adminSettingsTable, DEFAULT_CONTACT_LIMIT } from "@workspace/db";
+import { db, paymentsTable, subscriptionsTable, contactUnlocksTable, professionalProfilesTable, professionalSubscriptionsTable, adminSettingsTable, usersTable, DEFAULT_CONTACT_LIMIT } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { PLANS, type PlanId } from "../lib/paymentPlans";
 import {
@@ -81,7 +81,19 @@ router.get("/payments/plans", (_req: Request, res: Response): void => {
     planD: PLANS.plan_d_pro_onetime,
     planE: PLANS.plan_e_pro_monthly,
     planF: PLANS.plan_f_per_booking,
+    planSessionPass5: PLANS.plan_session_pass_5,
+    planSessionPass10: PLANS.plan_session_pass_10,
   });
+});
+
+router.get("/payments/session-credits", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const [user] = await db
+    .select({ sessionCredits: usersTable.sessionCredits })
+    .from(usersTable)
+    .where(eq(usersTable.id, req.userId!))
+    .limit(1);
+
+  res.json({ credits: user?.sessionCredits ?? 0 });
 });
 
 router.get("/payments/subscription", requireAuth, async (req: Request, res: Response): Promise<void> => {
@@ -621,7 +633,27 @@ export async function activatePayment(
         startsAt: new Date(),
         expiresAt,
       });
+      await db
+        .update(professionalProfilesTable)
+        .set({ isPremium: true })
+        .where(eq(professionalProfilesTable.id, prof.id));
     }
+    return { isSubscriptionActive: false, unlockedProfessionalId: null };
+  }
+
+  if (plan === "plan_session_pass_5") {
+    await db
+      .update(usersTable)
+      .set({ sessionCredits: sql`${usersTable.sessionCredits} + 5` })
+      .where(eq(usersTable.id, userId));
+    return { isSubscriptionActive: false, unlockedProfessionalId: null };
+  }
+
+  if (plan === "plan_session_pass_10") {
+    await db
+      .update(usersTable)
+      .set({ sessionCredits: sql`${usersTable.sessionCredits} + 10` })
+      .where(eq(usersTable.id, userId));
     return { isSubscriptionActive: false, unlockedProfessionalId: null };
   }
 

@@ -53,6 +53,24 @@ export const PLANS = {
     durationDays: null,
     stripePriceId: process.env["STRIPE_PLAN_F_PRICE_ID"] ?? null,
   },
+  plan_session_pass_5: {
+    id: "plan_session_pass_5",
+    name: "5-Session Pass",
+    description: "Purchase 5 session credits for ₹245. Each credit covers one confirmed session slot.",
+    amountPaise: 24500,
+    currency: "INR",
+    durationDays: null,
+    stripePriceId: null,
+  },
+  plan_session_pass_10: {
+    id: "plan_session_pass_10",
+    name: "10-Session Pass",
+    description: "Purchase 10 session credits for ₹490. Save more with the larger pack.",
+    amountPaise: 49000,
+    currency: "INR",
+    durationDays: null,
+    stripePriceId: null,
+  },
 } as const;
 
 export type PlanId = keyof typeof PLANS;

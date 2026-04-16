@@ -127,6 +127,8 @@ export interface ProfessionalProfile {
    */
   upiId?: string | null;
   paymentActivated: boolean;
+  isPremium: boolean;
+  specializationTags: string[];
   /** @nullable */
   rejectionReason?: string | null;
   createdAt: string;
@@ -165,6 +167,8 @@ export interface ProfessionalDetail {
   /** @nullable */
   pricingMaxINR?: number | null;
   paymentActivated: boolean;
+  isPremium: boolean;
+  specializationTags: string[];
   createdAt: string;
 }
 
@@ -209,6 +213,8 @@ export interface ProfessionalSearchResult {
   /** @nullable */
   pricingMaxINR?: number | null;
   paymentActivated: boolean;
+  isPremium: boolean;
+  specializationTags: string[];
 }
 
 export interface SearchProfessionalsResponse {
@@ -250,6 +256,7 @@ export interface CreateProfessionalProfileBody {
   pricingMaxINR?: number;
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
   upiId?: string;
+  specializationTags?: string[];
 }
 
 export type UpdateProfessionalProfileBodySpecialty =
@@ -284,6 +291,7 @@ export interface UpdateProfessionalProfileBody {
   pricingMaxINR?: number;
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
   upiId?: string;
+  specializationTags?: string[];
 }
 
 export interface Rating {
@@ -410,6 +418,13 @@ export interface PaymentPlans {
   planC: PaymentPlan;
   planD: PaymentPlan;
   planE: PaymentPlan;
+  planSessionPass5: PaymentPlan;
+  planSessionPass10: PaymentPlan;
+}
+
+export interface SessionCredits {
+  /** Remaining session credits for the parent */
+  credits: number;
 }
 
 export type SubscriptionStatusSubscription = {
@@ -471,6 +486,8 @@ export const CreateRazorpayOrderBodyPlan = {
   plan_d_pro_onetime: "plan_d_pro_onetime",
   plan_e_pro_monthly: "plan_e_pro_monthly",
   plan_f_per_booking: "plan_f_per_booking",
+  plan_session_pass_5: "plan_session_pass_5",
+  plan_session_pass_10: "plan_session_pass_10",
 } as const;
 
 export interface CreateRazorpayOrderBody {

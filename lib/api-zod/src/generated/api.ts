@@ -123,6 +123,8 @@ export const GetMyProfessionalProfileResponse = zod.object({
     .nullish()
     .describe("UPI ID — returned only in private (own profile) response"),
   paymentActivated: zod.boolean(),
+  isPremium: zod.boolean(),
+  specializationTags: zod.array(zod.string()),
   rejectionReason: zod.string().nullish(),
   createdAt: zod.coerce.date(),
 });
@@ -161,6 +163,7 @@ export const CreateProfessionalProfileBody = zod.object({
     .describe(
       "UPI ID for receiving session payments (never exposed to parents\/clients)",
     ),
+  specializationTags: zod.array(zod.string()).optional(),
 });
 
 /**
@@ -199,6 +202,7 @@ export const UpdateProfessionalProfileBody = zod.object({
     .describe(
       "UPI ID for receiving session payments (never exposed to parents\/clients)",
     ),
+  specializationTags: zod.array(zod.string()).optional(),
 });
 
 export const UpdateProfessionalProfileResponse = zod.object({
@@ -242,6 +246,8 @@ export const UpdateProfessionalProfileResponse = zod.object({
     .nullish()
     .describe("UPI ID — returned only in private (own profile) response"),
   paymentActivated: zod.boolean(),
+  isPremium: zod.boolean(),
+  specializationTags: zod.array(zod.string()),
   createdAt: zod.coerce.date(),
 });
 
@@ -276,6 +282,8 @@ export const GetProfessionalResponse = zod.object({
   pricingMinINR: zod.number().nullish(),
   pricingMaxINR: zod.number().nullish(),
   paymentActivated: zod.boolean(),
+  isPremium: zod.boolean(),
+  specializationTags: zod.array(zod.string()),
   createdAt: zod.coerce.date(),
 });
 
@@ -318,6 +326,8 @@ export const SearchProfessionalsQueryParams = zod.object({
     .number()
     .optional()
     .describe("Filter by maximum session price in INR"),
+  tags: zod.string().optional().describe("Comma-separated specialization tags to filter by (ANY match)"),
+  verifiedOnly: zod.coerce.boolean().optional().describe("If true, return only verified professionals"),
   page: zod.coerce.number().default(searchProfessionalsQueryPageDefault),
   limit: zod.coerce.number().default(searchProfessionalsQueryLimitDefault),
 });
@@ -355,6 +365,8 @@ export const SearchProfessionalsResponse = zod.object({
       pricingMinINR: zod.number().nullish(),
       pricingMaxINR: zod.number().nullish(),
       paymentActivated: zod.boolean(),
+      isPremium: zod.boolean(),
+      specializationTags: zod.array(zod.string()),
     }),
   ),
   total: zod.number(),
@@ -621,6 +633,8 @@ export const GetProfessionalDashboardResponse = zod.object({
         .nullish()
         .describe("UPI ID — returned only in private (own profile) response"),
       paymentActivated: zod.boolean(),
+      isPremium: zod.boolean(),
+      specializationTags: zod.array(zod.string()),
       createdAt: zod.coerce.date(),
     })
     .optional(),
@@ -677,52 +691,31 @@ export const GetAdminProfessionalsBillingResponse = zod.object({
 /**
  * @summary Get available payment plans and prices
  */
+const planShape = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  description: zod.string(),
+  amountPaise: zod.number(),
+  currency: zod.string(),
+  durationDays: zod.number().nullish(),
+  stripePriceId: zod.string().nullish(),
+});
+
 export const GetPaymentPlansResponse = zod.object({
-  planA: zod.object({
-    id: zod.string(),
-    name: zod.string(),
-    description: zod.string(),
-    amountPaise: zod.number(),
-    currency: zod.string(),
-    durationDays: zod.number().nullish(),
-    stripePriceId: zod.string().nullish(),
-  }),
-  planB: zod.object({
-    id: zod.string(),
-    name: zod.string(),
-    description: zod.string(),
-    amountPaise: zod.number(),
-    currency: zod.string(),
-    durationDays: zod.number().nullish(),
-    stripePriceId: zod.string().nullish(),
-  }),
-  planC: zod.object({
-    id: zod.string(),
-    name: zod.string(),
-    description: zod.string(),
-    amountPaise: zod.number(),
-    currency: zod.string(),
-    durationDays: zod.number().nullish(),
-    stripePriceId: zod.string().nullish(),
-  }),
-  planD: zod.object({
-    id: zod.string(),
-    name: zod.string(),
-    description: zod.string(),
-    amountPaise: zod.number(),
-    currency: zod.string(),
-    durationDays: zod.number().nullish(),
-    stripePriceId: zod.string().nullish(),
-  }),
-  planE: zod.object({
-    id: zod.string(),
-    name: zod.string(),
-    description: zod.string(),
-    amountPaise: zod.number(),
-    currency: zod.string(),
-    durationDays: zod.number().nullish(),
-    stripePriceId: zod.string().nullish(),
-  }),
+  planA: planShape,
+  planB: planShape,
+  planC: planShape,
+  planD: planShape,
+  planE: planShape,
+  planSessionPass5: planShape,
+  planSessionPass10: planShape,
+});
+
+/**
+ * @summary Get session credits for current parent
+ */
+export const GetSessionCreditsResponse = zod.object({
+  credits: zod.number().describe("Remaining session credits for the parent"),
 });
 
 /**
@@ -791,6 +784,8 @@ export const CreateRazorpayOrderBody = zod.object({
     "plan_d_pro_onetime",
     "plan_e_pro_monthly",
     "plan_f_per_booking",
+    "plan_session_pass_5",
+    "plan_session_pass_10",
   ]),
   professionalId: zod.number().optional(),
 });

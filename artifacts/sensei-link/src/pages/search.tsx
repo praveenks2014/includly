@@ -25,6 +25,16 @@ import { ProfessionalsMap } from "@/components/ProfessionalsMap";
 
 const RADIUS_OPTIONS = [5, 10, 25];
 
+const TAG_OPTIONS = [
+  "ADHD",
+  "Autism",
+  "Dyslexia",
+  "Cerebral Palsy",
+  "Down Syndrome",
+  "Speech Delay",
+  "Learning Disabilities",
+];
+
 export default function SearchPage() {
   const queryClient = useQueryClient();
   const [unlockTarget, setUnlockTarget] = useState<{ id: number; name?: string } | null>(null);
@@ -45,6 +55,8 @@ export default function SearchPage() {
   const [radiusKm, setRadiusKm] = useState(5);
   const [geoMode, setGeoMode] = useState(false);
   const [geoLocating, setGeoLocating] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
 
   const searchParams = {
     ...(specialty ? { specialty: specialty as SearchProfessionalsSpecialty } : {}),
@@ -55,6 +67,8 @@ export default function SearchPage() {
     ...(geoMode && geoLocation
       ? { lat: geoLocation.lat, lng: geoLocation.lng, radiusKm }
       : {}),
+    ...(selectedTags.length > 0 ? { tags: selectedTags.join(",") } : {}),
+    ...(verifiedOnly ? { verifiedOnly: true } : {}),
     limit: 40,
   };
 
@@ -106,9 +120,11 @@ export default function SearchPage() {
     setBudgetMaxINR("");
     setGeoMode(false);
     setGeoLocation(null);
+    setSelectedTags([]);
+    setVerifiedOnly(false);
   }
 
-  const hasFilters = specialty || city || minExperience || willingToTravel || budgetMaxINR || geoMode;
+  const hasFilters = specialty || city || minExperience || willingToTravel || budgetMaxINR || geoMode || selectedTags.length > 0 || verifiedOnly;
   const professionals = data?.professionals ?? [];
 
   return (
@@ -264,6 +280,42 @@ export default function SearchPage() {
                   </div>
                 </div>
               )}
+
+              <div className="w-full flex flex-col gap-1.5">
+                <Label>Verified only</Label>
+                <div className="flex items-center gap-2 h-9">
+                  <Switch
+                    checked={verifiedOnly}
+                    onCheckedChange={setVerifiedOnly}
+                    data-testid="verified-only-toggle"
+                  />
+                  <span className="text-sm text-muted-foreground">{verifiedOnly ? "Verified only" : "All"}</span>
+                </div>
+              </div>
+
+              <div className="w-full flex flex-col gap-1.5">
+                <Label>Specialization <span className="text-muted-foreground text-xs">(filter by need)</span></Label>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {TAG_OPTIONS.map((tag) => {
+                    const active = selectedTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() =>
+                          setSelectedTags((prev) =>
+                            prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+                          )
+                        }
+                        className={`px-3 py-1 rounded-full text-sm border transition-colors ${active ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-foreground hover:border-primary"}`}
+                        data-testid={`tag-${tag.replace(/\s+/g, "-").toLowerCase()}`}
+                      >
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 

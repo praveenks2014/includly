@@ -9,6 +9,8 @@ import {
   getGetNotificationPreferencesQueryKey,
   useGetMyProfessionalProfile,
   getGetMyProfessionalProfileQueryKey,
+  useGetSessionCredits,
+  getGetSessionCreditsQueryKey,
 } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -29,9 +31,21 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, User, Bell, Trash2, ShieldAlert, CheckCircle2, Clock, XCircle, AlertCircle } from "lucide-react";
+import { Loader2, User, Bell, Trash2, ShieldAlert, CheckCircle2, Clock, XCircle, AlertCircle, Ticket } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  useCreateRazorpayOrder,
+  useVerifyRazorpayPayment,
+} from "@workspace/api-client-react";
+import { loadRazorpayScript, formatRupees, type RazorpayPaymentResponse } from "@/lib/razorpay";
 
 export default function AccountPage() {
   const { user } = useUser();
@@ -44,6 +58,67 @@ export default function AccountPage() {
   const { data: proProfile } = useGetMyProfessionalProfile({
     query: { queryKey: getGetMyProfessionalProfileQueryKey(), enabled: me?.role === "professional", retry: false },
   });
+  const { data: sessionCreditsData, refetch: refetchCredits } = useGetSessionCredits({
+    query: { queryKey: getGetSessionCreditsQueryKey(), enabled: me?.role === "parent", retry: false },
+  });
+  const [showSessionPassModal, setShowSessionPassModal] = useState(false);
+  const [sessionPassActivePlan, setSessionPassActivePlan] = useState<string | null>(null);
+  const { mutateAsync: createOrder } = useCreateRazorpayOrder();
+  const { mutateAsync: verifyPayment } = useVerifyRazorpayPayment();
+
+  async function handleBuySessionPass(planId: "plan_session_pass_5" | "plan_session_pass_10") {
+    const loaded = await loadRazorpayScript();
+    if (!loaded) {
+      toast({ title: "Could not load payment module", description: "Please try again.", variant: "destructive" });
+      return;
+    }
+    setSessionPassActivePlan(planId);
+    try {
+      const order = await createOrder({ data: { plan: planId } });
+      const rzp = new window.Razorpay({
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency,
+        name: "Sproutly",
+        description: order.planName,
+        order_id: order.orderId,
+        handler: async (response: RazorpayPaymentResponse) => {
+          try {
+            const result = await verifyPayment({
+              data: {
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpayOrderId: response.razorpay_order_id,
+                razorpaySignature: response.razorpay_signature,
+                paymentId: order.paymentId,
+              },
+            });
+            if (result.success) {
+              toast({ title: "Session credits added!", description: planId === "plan_session_pass_5" ? "5 credits added to your account." : "10 credits added to your account." });
+              setShowSessionPassModal(false);
+              refetchCredits();
+            } else {
+              toast({ title: "Payment verification failed", description: "Please contact support.", variant: "destructive" });
+            }
+          } catch {
+            toast({ title: "Verification error", description: "Please contact support.", variant: "destructive" });
+          }
+        },
+        theme: { color: "#4f46e5" },
+        modal: {
+          ondismiss: () => {
+            setSessionPassActivePlan(null);
+            toast({ title: "Payment cancelled" });
+          },
+        },
+      });
+      rzp.open();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Something went wrong";
+      toast({ title: "Could not initiate payment", description: msg, variant: "destructive" });
+    } finally {
+      setSessionPassActivePlan(null);
+    }
+  }
 
   const [fullName, setFullName] = useState("");
   const [city, setCity] = useState("");
@@ -242,6 +317,85 @@ export default function AccountPage() {
             Save changes
           </Button>
         </div>
+
+        {/* Session Credits (parent only) */}
+        {me?.role === "parent" && (
+          <div className="bg-card border border-border rounded-xl p-6 shadow-sm mb-6" data-testid="session-credits-section">
+            <div className="flex items-center gap-2 mb-4">
+              <Ticket size={18} className="text-primary" />
+              <h2 className="font-semibold">Session Credits</h2>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Session credits let you book sessions with shadow teachers and special educators.
+            </p>
+            <div className="flex items-center justify-between bg-muted/40 rounded-lg px-4 py-3 mb-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Available credits</p>
+                <p className="text-3xl font-bold text-foreground" data-testid="session-credits-balance">
+                  {sessionCreditsData?.credits ?? 0}
+                </p>
+              </div>
+              <Ticket size={36} className="text-primary/20" />
+            </div>
+            <Button onClick={() => setShowSessionPassModal(true)} className="gap-2" data-testid="buy-session-pass-btn">
+              <Ticket size={15} />
+              Buy session pass
+            </Button>
+          </div>
+        )}
+
+        {/* Session Pass Dialog */}
+        <Dialog open={showSessionPassModal} onOpenChange={(v) => !v && setShowSessionPassModal(false)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="font-serif">Buy session credits</DialogTitle>
+              <DialogDescription>Credits are used to book sessions with shadow teachers and educators.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 mt-2">
+              <div className="border border-border rounded-xl p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase font-semibold tracking-wide">Starter pack</p>
+                    <p className="font-semibold text-sm mt-0.5">5 session credits</p>
+                    <p className="text-xs text-muted-foreground">Book up to 5 sessions</p>
+                  </div>
+                  <span className="text-xl font-bold">₹245</span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full gap-2"
+                  disabled={sessionPassActivePlan !== null}
+                  onClick={() => handleBuySessionPass("plan_session_pass_5")}
+                  data-testid="buy-pass-5"
+                >
+                  {sessionPassActivePlan === "plan_session_pass_5" ? <Loader2 size={13} className="animate-spin" /> : null}
+                  Pay via UPI/Card — ₹245
+                </Button>
+              </div>
+              <div className="border border-primary bg-primary/5 rounded-xl p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="text-xs text-primary uppercase font-semibold tracking-wide">Best value</p>
+                    <p className="font-semibold text-sm mt-0.5">10 session credits</p>
+                    <p className="text-xs text-muted-foreground">Book up to 10 sessions · Save ₹0 per session</p>
+                  </div>
+                  <span className="text-xl font-bold">₹490</span>
+                </div>
+                <Button
+                  size="sm"
+                  className="w-full gap-2"
+                  disabled={sessionPassActivePlan !== null}
+                  onClick={() => handleBuySessionPass("plan_session_pass_10")}
+                  data-testid="buy-pass-10"
+                >
+                  {sessionPassActivePlan === "plan_session_pass_10" ? <Loader2 size={13} className="animate-spin" /> : null}
+                  Pay via UPI/Card — ₹490
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Notifications */}
         {pushSupported && (

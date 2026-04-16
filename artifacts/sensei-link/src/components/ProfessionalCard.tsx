@@ -5,8 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getSpecialtyLabel, SPECIALTY_COLORS } from "@/lib/specialties";
 
-const PREMIUM_SPECIALTIES = ["neurologist", "therapy_centre"];
-
 interface Professional {
   id: number;
   fullName?: string | null;
@@ -29,6 +27,8 @@ interface Professional {
   pricingMinINR?: number | null;
   pricingMaxINR?: number | null;
   paymentActivated?: boolean;
+  isPremium?: boolean;
+  specializationTags?: string[] | null;
 }
 
 interface ProfessionalCardProps {
@@ -63,9 +63,9 @@ export function ProfessionalCard({ professional: p, onUnlock, unlocking, distanc
                   Pending
                 </span>
               )}
-              {PREMIUM_SPECIALTIES.includes(p.specialty) && (
-                <span className="text-xs font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
-                  Premium
+              {p.isPremium && (
+                <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                  ⭐ Pro
                 </span>
               )}
             </div>
@@ -84,7 +84,18 @@ export function ProfessionalCard({ professional: p, onUnlock, unlocking, distanc
 
         {/* Bio */}
         {p.bio && (
-          <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{p.bio}</p>
+          <p className="text-sm text-muted-foreground line-clamp-2 mb-2">{p.bio}</p>
+        )}
+
+        {/* Specialization tags */}
+        {Array.isArray(p.specializationTags) && p.specializationTags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-3">
+            {p.specializationTags.slice(0, 4).map((tag) => (
+              <span key={tag} className="px-2 py-0.5 rounded-full text-xs bg-primary/10 text-primary border border-primary/20">
+                {tag}
+              </span>
+            ))}
+          </div>
         )}
 
         {/* Meta */}
