@@ -7,6 +7,8 @@ import {
   useGetNotificationPreferences,
   useUpdateNotificationPreferences,
   getGetNotificationPreferencesQueryKey,
+  useGetMyProfessionalProfile,
+  getGetMyProfessionalProfileQueryKey,
 } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -27,7 +29,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, User, Bell, Trash2, ShieldAlert } from "lucide-react";
+import { Loader2, User, Bell, Trash2, ShieldAlert, CheckCircle2, Clock, XCircle, AlertCircle } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
@@ -39,6 +41,9 @@ export default function AccountPage() {
   const [, setLocation] = useLocation();
   const { data: me, isLoading } = useGetMe();
   const { data: notifPrefs } = useGetNotificationPreferences();
+  const { data: proProfile } = useGetMyProfessionalProfile({
+    query: { queryKey: getGetMyProfessionalProfileQueryKey(), enabled: me?.role === "professional", retry: false },
+  });
 
   const [fullName, setFullName] = useState("");
   const [city, setCity] = useState("");
@@ -330,6 +335,14 @@ export default function AccountPage() {
           </div>
         )}
 
+        {/* Verification status (professional only) */}
+        {me?.role === "professional" && proProfile && (
+          <VerificationStatusCard
+            status={proProfile.verificationStatus}
+            rejectionReason={(proProfile as unknown as { rejectionReason?: string | null }).rejectionReason ?? null}
+          />
+        )}
+
         {/* Professional profile link */}
         {me?.role === "professional" && (
           <div className="bg-card border border-border rounded-xl p-5 shadow-sm mb-6">
@@ -396,6 +409,60 @@ export default function AccountPage() {
           </AlertDialog>
         </div>
       </div>
+    </div>
+  );
+}
+
+function VerificationStatusCard({ status, rejectionReason }: { status: string; rejectionReason: string | null }) {
+  const config: Record<string, { label: string; description: string; icon: React.ReactNode; cardClass: string; badgeClass: string }> = {
+    verified: {
+      label: "Approved",
+      description: "Your profile has been reviewed and approved. It is now visible to parents in search results.",
+      icon: <CheckCircle2 size={18} className="text-green-600" />,
+      cardClass: "bg-green-50 border-green-200",
+      badgeClass: "bg-green-100 text-green-700 border-green-300",
+    },
+    pending: {
+      label: "Under Review",
+      description: "Your profile is currently being reviewed by our team. This typically takes 1–2 business days.",
+      icon: <Clock size={18} className="text-yellow-600" />,
+      cardClass: "bg-yellow-50 border-yellow-200",
+      badgeClass: "bg-yellow-100 text-yellow-700 border-yellow-300",
+    },
+    rejected: {
+      label: "Rejected",
+      description: "Your application was not approved. Please review the reason below, update your profile or documents, and resubmit.",
+      icon: <XCircle size={18} className="text-red-600" />,
+      cardClass: "bg-red-50 border-red-200",
+      badgeClass: "bg-red-100 text-red-700 border-red-300",
+    },
+    unsubmitted: {
+      label: "Not Submitted",
+      description: "You haven't submitted your profile for review yet. Complete your profile and upload your documents to get started.",
+      icon: <AlertCircle size={18} className="text-muted-foreground" />,
+      cardClass: "border-border",
+      badgeClass: "",
+    },
+  };
+
+  const cfg = config[status] ?? config.unsubmitted;
+
+  return (
+    <div className={`border rounded-xl p-5 shadow-sm mb-6 ${cfg.cardClass}`} data-testid="verification-status-card">
+      <div className="flex items-center gap-2 mb-3">
+        {cfg.icon}
+        <h2 className="font-semibold">Verification Status</h2>
+        <Badge variant="outline" className={`text-xs ml-auto ${cfg.badgeClass}`} data-testid="verification-status-badge">
+          {cfg.label}
+        </Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">{cfg.description}</p>
+      {status === "rejected" && rejectionReason && (
+        <div className="mt-3 rounded-lg bg-red-100 border border-red-200 p-3 text-sm text-red-800">
+          <p className="font-medium mb-0.5">Reason provided by admin:</p>
+          <p>{rejectionReason}</p>
+        </div>
+      )}
     </div>
   );
 }

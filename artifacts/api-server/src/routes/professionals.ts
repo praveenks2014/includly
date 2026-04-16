@@ -116,7 +116,9 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
   const limitNum = limit ?? 20;
   const offsetNum = (pageNum - 1) * limitNum;
 
-  const conditions = [];
+  const conditions = [
+    eq(professionalProfilesTable.verificationStatus, "verified"),
+  ];
 
   if (specialty) {
     conditions.push(eq(professionalProfilesTable.specialty, specialty as SpecialtyValue));

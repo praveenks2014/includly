@@ -6,6 +6,8 @@ import {
   professionalProfilesTable,
   contactUnlocksTable,
   adminSettingsTable,
+  identityVerificationsTable,
+  professionalCertificationsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import {
@@ -92,9 +94,11 @@ router.patch("/admin/professionals/:id/reject", ...adminGuard, async (req, res):
     return;
   }
 
+  const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : null;
+
   const [profile] = await db
     .update(professionalProfilesTable)
-    .set({ verificationStatus: "rejected", isVerified: false })
+    .set({ verificationStatus: "rejected", isVerified: false, rejectionReason: reason || null })
     .where(eq(professionalProfilesTable.id, id))
     .returning();
 
@@ -176,6 +180,42 @@ router.patch("/admin/settings", ...adminGuard, async (req, res): Promise<void> =
     .returning();
 
   res.json(updated);
+});
+
+router.get("/admin/professionals/:id/documents", ...adminGuard, async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const [identity] = await db
+    .select()
+    .from(identityVerificationsTable)
+    .where(eq(identityVerificationsTable.professionalId, id));
+
+  const certifications = await db
+    .select()
+    .from(professionalCertificationsTable)
+    .where(eq(professionalCertificationsTable.professionalId, id));
+
+  res.json({
+    identity: identity
+      ? {
+          id: identity.id,
+          documentType: identity.documentType,
+          fileKey: identity.fileKey,
+          status: identity.status,
+          submittedAt: identity.submittedAt.toISOString(),
+        }
+      : null,
+    certifications: certifications.map((c) => ({
+      id: c.id,
+      documentType: c.documentType,
+      fileKey: c.fileKey,
+      uploadedAt: c.uploadedAt.toISOString(),
+    })),
+  });
 });
 
 export default router;

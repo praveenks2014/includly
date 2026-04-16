@@ -7,7 +7,6 @@ import {
   useAdminGetStats,
   useGetAdminSettings,
   useAdminApproveProfessional,
-  useAdminRejectProfessional,
   useUpdateAdminSettings,
   getAdminListProfessionalsQueryKey,
   getAdminGetStatsQueryKey,
@@ -32,7 +31,19 @@ import {
   UserX,
   TrendingUp,
   Phone,
+  FileText,
+  Eye,
+  ExternalLink,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 type TabId = "professionals" | "stats" | "settings";
 
@@ -109,39 +120,98 @@ export default function AdminPage() {
   );
 }
 
+interface ProfDocuments {
+  identity: {
+    id: number;
+    documentType: string;
+    fileKey: string;
+    status: string;
+    submittedAt: string;
+  } | null;
+  certifications: {
+    id: number;
+    documentType: string;
+    fileKey: string;
+    uploadedAt: string;
+  }[];
+}
+
+function fileKeyToUrl(fileKey: string): string {
+  const withoutLeadingObjects = fileKey.replace(/^\/objects\//, "");
+  return `/api/storage/objects/${withoutLeadingObjects}`;
+}
+
 function ProfessionalsTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>("pending");
   const [page, setPage] = useState(1);
 
+  const [reviewProf, setReviewProf] = useState<AdminProfessionalRow | null>(null);
+  const [documents, setDocuments] = useState<ProfDocuments | null>(null);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+
   const { data, isLoading } = useAdminListProfessionals(
     { status: statusFilter as "pending" | "verified" | "rejected" | "unsubmitted" | undefined, page, limit: 20 },
     { query: { queryKey: getAdminListProfessionalsQueryKey({ status: statusFilter as "pending" | "verified" | "rejected" | "unsubmitted" | undefined, page, limit: 20 }) } },
   );
 
-  const { mutateAsync: approve, isPending: approving } = useAdminApproveProfessional();
-  const { mutateAsync: reject, isPending: rejecting } = useAdminRejectProfessional();
+  const { mutateAsync: approve } = useAdminApproveProfessional();
+
+  function invalidateQueries() {
+    queryClient.invalidateQueries({ queryKey: ["adminListProfessionals"] });
+    queryClient.invalidateQueries({ queryKey: getAdminGetStatsQueryKey() });
+  }
+
+  async function openReview(prof: AdminProfessionalRow) {
+    setReviewProf(prof);
+    setRejectReason("");
+    setDocuments(null);
+    setDocsLoading(true);
+    try {
+      const res = await fetch(`/api/admin/professionals/${prof.id}/documents`);
+      if (res.ok) {
+        const docData = await res.json() as ProfDocuments;
+        setDocuments(docData);
+      }
+    } finally {
+      setDocsLoading(false);
+    }
+  }
 
   async function handleApprove(id: number) {
+    setIsApproving(true);
     try {
       await approve({ id });
-      queryClient.invalidateQueries({ queryKey: ["adminListProfessionals"] });
-      queryClient.invalidateQueries({ queryKey: getAdminGetStatsQueryKey() });
-      toast({ title: "Approved", description: "Professional has been approved and verified." });
+      invalidateQueries();
+      toast({ title: "Approved", description: "Professional is now visible in search results." });
+      setReviewProf(null);
     } catch {
       toast({ title: "Error", description: "Failed to approve professional.", variant: "destructive" });
+    } finally {
+      setIsApproving(false);
     }
   }
 
   async function handleReject(id: number) {
+    setIsRejecting(true);
     try {
-      await reject({ id });
-      queryClient.invalidateQueries({ queryKey: ["adminListProfessionals"] });
-      queryClient.invalidateQueries({ queryKey: getAdminGetStatsQueryKey() });
+      const res = await fetch(`/api/admin/professionals/${id}/reject`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: rejectReason.trim() || null }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      invalidateQueries();
       toast({ title: "Rejected", description: "Professional application has been rejected." });
+      setReviewProf(null);
     } catch {
       toast({ title: "Error", description: "Failed to reject professional.", variant: "destructive" });
+    } finally {
+      setIsRejecting(false);
     }
   }
 
@@ -154,124 +224,232 @@ function ProfessionalsTab() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {statuses.map((s) => (
-          <Button
-            key={s.value}
-            variant={statusFilter === s.value ? "default" : "outline"}
-            size="sm"
-            onClick={() => { setStatusFilter(s.value); setPage(1); }}
-          >
-            {s.label}
-          </Button>
-        ))}
-      </div>
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="animate-spin text-primary" size={28} />
+    <>
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {statuses.map((s) => (
+            <Button
+              key={s.value}
+              variant={statusFilter === s.value ? "default" : "outline"}
+              size="sm"
+              onClick={() => { setStatusFilter(s.value); setPage(1); }}
+            >
+              {s.label}
+            </Button>
+          ))}
         </div>
-      ) : (
-        <>
-          <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 border-b border-border">
-                <tr>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Professional</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Specialty</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Location</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Joined</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {(!data?.professionals || data.professionals.length === 0) ? (
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="animate-spin text-primary" size={28} />
+          </div>
+        ) : (
+          <>
+            <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 border-b border-border">
                   <tr>
-                    <td colSpan={6} className="text-center py-12 text-muted-foreground">
-                      No professionals found.
-                    </td>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Professional</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Specialty</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Location</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Joined</th>
+                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
                   </tr>
-                ) : (
-                  data.professionals.map((prof: AdminProfessionalRow) => (
-                    <tr key={prof.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-3">
-                        <p className="font-medium">{prof.fullName ?? prof.userName ?? "—"}</p>
-                        <p className="text-xs text-muted-foreground">{prof.userEmail ?? "—"}</p>
-                      </td>
-                      <td className="px-4 py-3 hidden sm:table-cell">
-                        <span className="text-muted-foreground">{getSpecialtyLabel(prof.specialty as Parameters<typeof getSpecialtyLabel>[0])}</span>
-                      </td>
-                      <td className="px-4 py-3 hidden md:table-cell">
-                        <span className="text-muted-foreground">{[prof.city, prof.country].filter(Boolean).join(", ") || "—"}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <VerificationBadge status={prof.verificationStatus} />
-                      </td>
-                      <td className="px-4 py-3 hidden md:table-cell">
-                        <span className="text-muted-foreground text-xs">
-                          {new Date(prof.createdAt).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {prof.verificationStatus !== "verified" && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1 text-green-700 border-green-300 hover:bg-green-50 mr-1"
-                            onClick={() => handleApprove(prof.id)}
-                            disabled={approving || rejecting}
-                            data-testid={`approve-btn-${prof.id}`}
-                          >
-                            <CheckCircle size={13} />
-                            Approve
-                          </Button>
-                        )}
-                        {prof.verificationStatus !== "rejected" && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1 text-red-700 border-red-300 hover:bg-red-50"
-                            onClick={() => handleReject(prof.id)}
-                            disabled={approving || rejecting}
-                            data-testid={`reject-btn-${prof.id}`}
-                          >
-                            <XCircle size={13} />
-                            Reject
-                          </Button>
-                        )}
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {(!data?.professionals || data.professionals.length === 0) ? (
+                    <tr>
+                      <td colSpan={6} className="text-center py-12 text-muted-foreground">
+                        No professionals found.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : (
+                    data.professionals.map((prof: AdminProfessionalRow) => (
+                      <tr key={prof.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-3">
+                          <p className="font-medium">{prof.fullName ?? prof.userName ?? "—"}</p>
+                          <p className="text-xs text-muted-foreground">{prof.userEmail ?? "—"}</p>
+                        </td>
+                        <td className="px-4 py-3 hidden sm:table-cell">
+                          <span className="text-muted-foreground">{getSpecialtyLabel(prof.specialty as Parameters<typeof getSpecialtyLabel>[0])}</span>
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          <span className="text-muted-foreground">{[prof.city, prof.country].filter(Boolean).join(", ") || "—"}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <VerificationBadge status={prof.verificationStatus} />
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          <span className="text-muted-foreground text-xs">
+                            {new Date(prof.createdAt).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1"
+                            onClick={() => openReview(prof)}
+                            data-testid={`review-btn-${prof.id}`}
+                          >
+                            <Eye size={13} />
+                            Review
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-          {data && data.total > data.limit && (
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                Showing {((page - 1) * data.limit) + 1}–{Math.min(page * data.limit, data.total)} of {data.total}
-              </p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page * data.limit >= data.total}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </Button>
+            {data && data.total > data.limit && (
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Showing {((page - 1) * data.limit) + 1}–{Math.min(page * data.limit, data.total)} of {data.total}
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page * data.limit >= data.total}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
               </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <Dialog open={!!reviewProf} onOpenChange={(open) => { if (!open) setReviewProf(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText size={18} className="text-primary" />
+              Review Application
+            </DialogTitle>
+          </DialogHeader>
+
+          {reviewProf && (
+            <div className="space-y-4 py-1">
+              <div className="bg-muted/40 rounded-lg p-4 space-y-1 text-sm">
+                <p className="font-semibold text-base">{reviewProf.fullName ?? reviewProf.userName ?? "—"}</p>
+                <p className="text-muted-foreground">{reviewProf.userEmail}</p>
+                <p>{getSpecialtyLabel(reviewProf.specialty as Parameters<typeof getSpecialtyLabel>[0])}</p>
+                <p className="text-muted-foreground">{[reviewProf.city, reviewProf.country].filter(Boolean).join(", ") || "—"}</p>
+                <div className="pt-1">
+                  <VerificationBadge status={reviewProf.verificationStatus} />
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium mb-2">Uploaded Documents</p>
+                {docsLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                    <Loader2 size={14} className="animate-spin" />
+                    Loading documents…
+                  </div>
+                ) : documents ? (
+                  <div className="space-y-2">
+                    {documents.identity ? (
+                      <a
+                        href={fileKeyToUrl(documents.identity.fileKey)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-border hover:bg-muted/40 transition-colors"
+                        data-testid="identity-doc-link"
+                      >
+                        <FileText size={14} className="text-primary shrink-0" />
+                        <span className="flex-1">
+                          Identity: <span className="capitalize">{documents.identity.documentType.replace(/_/g, " ")}</span>
+                        </span>
+                        <ExternalLink size={12} className="text-muted-foreground" />
+                      </a>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">No identity document uploaded.</p>
+                    )}
+                    {documents.certifications.length > 0 ? (
+                      documents.certifications.map((cert) => (
+                        <a
+                          key={cert.id}
+                          href={fileKeyToUrl(cert.fileKey)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-border hover:bg-muted/40 transition-colors"
+                        >
+                          <FileText size={14} className="text-blue-500 shrink-0" />
+                          <span className="flex-1">
+                            Certification: <span className="capitalize">{cert.documentType.replace(/_/g, " ")}</span>
+                          </span>
+                          <ExternalLink size={12} className="text-muted-foreground" />
+                        </a>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">No certification documents uploaded.</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">Could not load documents.</p>
+                )}
+              </div>
+
+              {reviewProf.verificationStatus !== "verified" && (
+                <div>
+                  <Label htmlFor="reject-reason" className="text-sm font-medium">
+                    Rejection reason <span className="text-muted-foreground font-normal">(optional — shown to the professional)</span>
+                  </Label>
+                  <Textarea
+                    id="reject-reason"
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="E.g. Documents unclear, please re-upload a higher quality scan…"
+                    className="mt-1 text-sm resize-none"
+                    rows={3}
+                    data-testid="reject-reason-input"
+                  />
+                </div>
+              )}
             </div>
           )}
-        </>
-      )}
-    </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="ghost" onClick={() => setReviewProf(null)}>
+              Close
+            </Button>
+            {reviewProf && reviewProf.verificationStatus !== "rejected" && (
+              <Button
+                variant="outline"
+                className="gap-1 text-red-700 border-red-300 hover:bg-red-50"
+                onClick={() => handleReject(reviewProf.id)}
+                disabled={isRejecting || isApproving}
+                data-testid={`reject-btn-${reviewProf?.id}`}
+              >
+                {isRejecting ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />}
+                Reject
+              </Button>
+            )}
+            {reviewProf && reviewProf.verificationStatus !== "verified" && (
+              <Button
+                className="gap-1 bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => handleApprove(reviewProf.id)}
+                disabled={isRejecting || isApproving}
+                data-testid={`approve-btn-${reviewProf?.id}`}
+              >
+                {isApproving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+                Approve
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
