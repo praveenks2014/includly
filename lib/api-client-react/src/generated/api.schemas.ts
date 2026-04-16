@@ -764,11 +764,12 @@ export interface BookSessionBody {
 
 export interface SessionBookingOrderResponse {
   sessionId: number;
-  orderId: string;
+  usedCredit?: boolean;
+  orderId?: string;
   /** Amount in paise */
-  amount: number;
-  currency: string;
-  keyId: string;
+  amount?: number;
+  currency?: string;
+  keyId?: string;
 }
 
 export interface VerifySessionPaymentBody {

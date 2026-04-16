@@ -1,10 +1,18 @@
 import { useState } from "react";
-import { useGetBookableSlots, useBookSession, useVerifySessionPayment, type BookableSlot } from "@workspace/api-client-react";
+import { useLocation } from "wouter";
+import {
+  useGetBookableSlots,
+  useBookSession,
+  useVerifySessionPayment,
+  useGetSessionCredits,
+  getGetSessionCreditsQueryKey,
+  type BookableSlot,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, CalendarCheck, Clock, IndianRupee, ChevronRight } from "lucide-react";
+import { Loader2, CalendarCheck, Clock, IndianRupee, ChevronRight, Ticket, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { loadRazorpayScript } from "@/lib/razorpay";
 import type { RazorpayPaymentResponse } from "@/lib/razorpay";
@@ -13,29 +21,46 @@ function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function BookingWidget({ professionalId, professionalName }: { professionalId: number; professionalName?: string | null }) {
+const CREDIT_SPECIALTIES = ["shadow_teacher", "special_tutor"];
+
+export function BookingWidget({
+  professionalId,
+  professionalName,
+  specialty,
+}: {
+  professionalId: number;
+  professionalName?: string | null;
+  specialty?: string;
+}) {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [date, setDate] = useState<string>(todayIsoDate());
   const [selectedSlot, setSelectedSlot] = useState<BookableSlot | null>(null);
   const [notes, setNotes] = useState("");
   const [booking, setBooking] = useState(false);
   const [booked, setBooked] = useState(false);
 
+  const isCreditSpecialty = specialty ? CREDIT_SPECIALTIES.includes(specialty) : false;
+
   const { data: slots, isLoading: slotsLoading } = useGetBookableSlots(professionalId, { date });
+  const { data: sessionCreditsData, refetch: refetchCredits } = useGetSessionCredits({
+    query: {
+      queryKey: getGetSessionCreditsQueryKey(),
+      enabled: isCreditSpecialty,
+      retry: false,
+    },
+  });
 
   const { mutateAsync: bookSession } = useBookSession();
   const { mutateAsync: verifyPayment } = useVerifySessionPayment();
+
+  const credits = sessionCreditsData?.credits ?? 0;
+  const noCredits = isCreditSpecialty && credits < 1;
 
   async function handleBook() {
     if (!selectedSlot) return;
     setBooking(true);
     try {
-      const loaded = await loadRazorpayScript();
-      if (!loaded) {
-        toast({ title: "Payment error", description: "Could not load payment gateway", variant: "destructive" });
-        return;
-      }
-
       const result = await bookSession({
         data: {
           professionalId,
@@ -47,6 +72,21 @@ export function BookingWidget({ professionalId, professionalName }: { profession
           notes: notes.trim() || undefined,
         },
       });
+
+      // Credit-based booking: no Razorpay step needed
+      if (result.usedCredit) {
+        toast({ title: "Session booked!", description: "1 session credit used. Your session is confirmed." });
+        refetchCredits();
+        setBooked(true);
+        return;
+      }
+
+      // Standard Razorpay payment flow
+      const loaded = await loadRazorpayScript();
+      if (!loaded) {
+        toast({ title: "Payment error", description: "Could not load payment gateway", variant: "destructive" });
+        return;
+      }
 
       await new Promise<void>((resolve, reject) => {
         const rzp = new window.Razorpay({
@@ -107,10 +147,36 @@ export function BookingWidget({ professionalId, professionalName }: { profession
 
   return (
     <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-      <div className="flex items-center gap-2 mb-5">
-        <CalendarCheck size={20} className="text-primary" />
-        <h2 className="font-serif font-semibold text-lg text-foreground">Book a Session</h2>
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2">
+          <CalendarCheck size={20} className="text-primary" />
+          <h2 className="font-serif font-semibold text-lg text-foreground">Book a Session</h2>
+        </div>
+        {isCreditSpecialty && (
+          <div className="flex items-center gap-1.5 text-sm">
+            <Ticket size={15} className="text-primary" />
+            <span className="font-semibold text-foreground">{credits}</span>
+            <span className="text-muted-foreground">credits</span>
+          </div>
+        )}
       </div>
+
+      {/* No credits warning for credit-specialty */}
+      {noCredits && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-amber-800">No session credits</p>
+            <p className="text-xs text-amber-700 mt-0.5 mb-2">
+              Booking with shadow teachers and special educators requires session credits.
+            </p>
+            <Button size="sm" className="gap-1.5 h-7 text-xs" onClick={() => navigate("/account")}>
+              <Ticket size={12} />
+              Buy session pass
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="mb-4">
         <Label htmlFor="booking-date" className="text-sm mb-1 block">Select date</Label>
@@ -140,10 +206,13 @@ export function BookingWidget({ professionalId, professionalName }: { profession
                 <button
                   key={`${slot.date}-${slot.startTime}`}
                   onClick={() => setSelectedSlot(isSelected ? null : slot)}
+                  disabled={noCredits}
                   className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
-                    isSelected
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border hover:border-primary hover:bg-primary/5"
+                    noCredits
+                      ? "border-border text-muted-foreground/50 cursor-not-allowed"
+                      : isSelected
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border hover:border-primary hover:bg-primary/5"
                   }`}
                 >
                   <span className="flex items-center gap-1.5">
@@ -151,20 +220,29 @@ export function BookingWidget({ professionalId, professionalName }: { profession
                     {slot.startTime}
                     <span className="text-xs opacity-70">({slot.durationMinutes}m)</span>
                   </span>
-                  <span className="flex items-center gap-0.5 text-xs mt-0.5 opacity-80">
-                    <IndianRupee size={10} />
-                    ₹{slot.priceInr}
-                  </span>
+                  {!isCreditSpecialty && (
+                    <span className="flex items-center gap-0.5 text-xs mt-0.5 opacity-80">
+                      <IndianRupee size={10} />
+                      ₹{slot.priceInr}
+                    </span>
+                  )}
+                  {isCreditSpecialty && (
+                    <span className="flex items-center gap-0.5 text-xs mt-0.5 opacity-80">
+                      <Ticket size={10} />
+                      1 credit
+                    </span>
+                  )}
                 </button>
               );
             })}
           </div>
 
-          {selectedSlot && (
+          {selectedSlot && !noCredits && (
             <div className="space-y-3 border-t border-border pt-4">
               <div className="bg-muted/40 rounded-lg p-3 text-sm">
                 <p className="font-medium">
-                  {selectedSlot.date} • {selectedSlot.startTime}–{selectedSlot.endTime} • ₹{selectedSlot.priceInr}
+                  {selectedSlot.date} • {selectedSlot.startTime}–{selectedSlot.endTime}
+                  {isCreditSpecialty ? " • 1 session credit" : ` • ₹${selectedSlot.priceInr}`}
                 </p>
               </div>
               <div>
@@ -185,8 +263,12 @@ export function BookingWidget({ professionalId, professionalName }: { profession
                 onClick={handleBook}
                 disabled={booking}
               >
-                {booking ? <Loader2 size={14} className="animate-spin" /> : <ChevronRight size={14} />}
-                {booking ? "Processing…" : `Book & Pay ₹${selectedSlot.priceInr}`}
+                {booking ? <Loader2 size={14} className="animate-spin" /> : isCreditSpecialty ? <Ticket size={14} /> : <ChevronRight size={14} />}
+                {booking
+                  ? "Processing…"
+                  : isCreditSpecialty
+                    ? "Book with 1 credit"
+                    : `Book & Pay ₹${selectedSlot.priceInr}`}
               </Button>
             </div>
           )}

@@ -6,7 +6,7 @@ import { professionalProfilesTable } from "./professionals";
 
 export const paymentProviderEnum = pgEnum("payment_provider", ["stripe", "razorpay"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "completed", "failed", "refunded"]);
-export const paymentPlanEnum = pgEnum("payment_plan", ["plan_a_subscription", "plan_b_per_contact", "plan_c_featured", "plan_d_pro_onetime", "plan_e_pro_monthly", "plan_f_per_booking"]);
+export const paymentPlanEnum = pgEnum("payment_plan", ["plan_a_subscription", "plan_b_per_contact", "plan_c_featured", "plan_d_pro_onetime", "plan_e_pro_monthly", "plan_f_per_booking", "plan_session_pass_5", "plan_session_pass_10"]);
 
 export const paymentsTable = pgTable("payments", {
   id: serial("id").primaryKey(),

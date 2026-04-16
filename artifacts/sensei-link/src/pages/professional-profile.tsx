@@ -346,7 +346,11 @@ export default function ProfessionalProfilePage() {
 
         {/* Booking widget — shown to all signed-in visitors */}
         {isSignedIn && (
-          <BookingWidget professionalId={professionalId} professionalName={professional?.fullName} />
+          <BookingWidget
+            professionalId={professionalId}
+            professionalName={professional?.fullName}
+            specialty={professional?.specialty}
+          />
         )}
 
         {/* Reviews */}

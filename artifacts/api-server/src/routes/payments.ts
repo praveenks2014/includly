@@ -425,6 +425,12 @@ router.post(
     return;
   }
 
+  // Session pass plans are parent-only
+  if ((plan === "plan_session_pass_5" || plan === "plan_session_pass_10") && req.userRole !== "parent") {
+    res.status(403).json({ error: "Session passes are for parent accounts only." });
+    return;
+  }
+
   // Plan B/F require professionalId
   if ((plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && !professionalId) {
     res.status(400).json({ error: "professionalId is required for per-booking unlock." });

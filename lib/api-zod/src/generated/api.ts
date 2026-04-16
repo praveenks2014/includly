@@ -1285,10 +1285,11 @@ export const BookSessionBody = zod.object({
 
 export const BookSessionResponse = zod.object({
   sessionId: zod.number(),
-  orderId: zod.string(),
-  amount: zod.number().describe("Amount in paise"),
-  currency: zod.string(),
-  keyId: zod.string(),
+  usedCredit: zod.boolean().optional(),
+  orderId: zod.string().optional(),
+  amount: zod.number().describe("Amount in paise").optional(),
+  currency: zod.string().optional(),
+  keyId: zod.string().optional(),
 });
 
 /**

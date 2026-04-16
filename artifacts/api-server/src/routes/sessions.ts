@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import {
@@ -219,6 +219,50 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
 
   const commissionInr = prof ? getSessionCommission(prof.specialty) : 49;
 
+  // Credit-based booking for shadow teachers and special tutors
+  const isCreditSpecialty = prof && (prof.specialty === "shadow_teacher" || prof.specialty === "special_tutor");
+  if (isCreditSpecialty) {
+    const [parent] = await db
+      .select({ sessionCredits: usersTable.sessionCredits })
+      .from(usersTable)
+      .where(eq(usersTable.id, req.userId!));
+
+    if (!parent || (parent.sessionCredits ?? 0) < 1) {
+      res.status(402).json({
+        error: "You need session credits to book with this specialist. Purchase a session pass to continue.",
+        code: "NO_SESSION_CREDITS",
+        sessionCredits: parent?.sessionCredits ?? 0,
+      });
+      return;
+    }
+
+    // Deduct 1 credit and confirm booking immediately
+    await db
+      .update(usersTable)
+      .set({ sessionCredits: sql`${usersTable.sessionCredits} - 1` })
+      .where(eq(usersTable.id, req.userId!));
+
+    const [booking] = await db
+      .insert(sessionBookingsTable)
+      .values({
+        professionalId,
+        parentId: req.userId!,
+        bookedDate,
+        startTime,
+        endTime,
+        durationMinutes,
+        amountInr: 0,
+        commissionInr: 0,
+        notes: notes ?? null,
+        status: "confirmed",
+      })
+      .returning();
+
+    res.json({ sessionId: booking.id, usedCredit: true });
+    return;
+  }
+
+  // Standard Razorpay payment flow for other specialties
   const order = await razorpay.orders.create({
     amount: amountInr * 100,
     currency: "INR",
