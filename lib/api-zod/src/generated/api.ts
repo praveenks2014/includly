@@ -123,6 +123,7 @@ export const GetMyProfessionalProfileResponse = zod.object({
     .nullish()
     .describe("UPI ID — returned only in private (own profile) response"),
   paymentActivated: zod.boolean(),
+  rejectionReason: zod.string().nullish(),
   createdAt: zod.coerce.date(),
 });
 

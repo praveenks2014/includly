@@ -127,6 +127,8 @@ export interface ProfessionalProfile {
    */
   upiId?: string | null;
   paymentActivated: boolean;
+  /** @nullable */
+  rejectionReason?: string | null;
   createdAt: string;
 }
 

@@ -339,7 +339,7 @@ export default function AccountPage() {
         {me?.role === "professional" && proProfile && (
           <VerificationStatusCard
             status={proProfile.verificationStatus}
-            rejectionReason={(proProfile as unknown as { rejectionReason?: string | null }).rejectionReason ?? null}
+            rejectionReason={proProfile.rejectionReason ?? null}
           />
         )}
 

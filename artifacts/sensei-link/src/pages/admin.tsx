@@ -45,13 +45,13 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
-type TabId = "professionals" | "stats" | "settings";
+type TabId = "pending-approvals" | "professionals" | "stats" | "settings";
 
 export default function AdminPage() {
   const [, setLocation] = useLocation();
   const { isLoaded: clerkLoaded } = useUser();
   const { data: me, isLoading: meLoading } = useGetMe();
-  const [activeTab, setActiveTab] = useState<TabId>("professionals");
+  const [activeTab, setActiveTab] = useState<TabId>("pending-approvals");
 
   if (!clerkLoaded || meLoading) {
     return (
@@ -77,7 +77,8 @@ export default function AdminPage() {
   }
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
-    { id: "professionals", label: "Professionals", icon: <Users size={16} /> },
+    { id: "pending-approvals", label: "Pending Approvals", icon: <Clock size={16} /> },
+    { id: "professionals", label: "All Professionals", icon: <Users size={16} /> },
     { id: "stats", label: "Platform Stats", icon: <BarChart3 size={16} /> },
     { id: "settings", label: "Settings", icon: <Settings size={16} /> },
   ];
@@ -112,6 +113,7 @@ export default function AdminPage() {
           ))}
         </div>
 
+        {activeTab === "pending-approvals" && <PendingApprovalsTab />}
         {activeTab === "professionals" && <ProfessionalsTab />}
         {activeTab === "stats" && <StatsTab />}
         {activeTab === "settings" && <SettingsTab />}
@@ -139,6 +141,279 @@ interface ProfDocuments {
 function fileKeyToUrl(fileKey: string): string {
   const withoutLeadingObjects = fileKey.replace(/^\/objects\//, "");
   return `/api/storage/objects/${withoutLeadingObjects}`;
+}
+
+function PendingApprovalsTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [reviewProf, setReviewProf] = useState<AdminProfessionalRow | null>(null);
+  const [documents, setDocuments] = useState<ProfDocuments | null>(null);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+
+  const { data, isLoading } = useAdminListProfessionals(
+    { status: "pending", page, limit: 20 },
+    { query: { queryKey: getAdminListProfessionalsQueryKey({ status: "pending", page, limit: 20 }) } },
+  );
+
+  const { mutateAsync: approve } = useAdminApproveProfessional();
+
+  function invalidateQueries() {
+    queryClient.invalidateQueries({ queryKey: ["adminListProfessionals"] });
+    queryClient.invalidateQueries({ queryKey: getAdminGetStatsQueryKey() });
+  }
+
+  async function openReview(prof: AdminProfessionalRow) {
+    setReviewProf(prof);
+    setRejectReason("");
+    setDocuments(null);
+    setDocsLoading(true);
+    try {
+      const res = await fetch(`/api/admin/professionals/${prof.id}/documents`);
+      if (res.ok) {
+        const docData = await res.json() as ProfDocuments;
+        setDocuments(docData);
+      }
+    } finally {
+      setDocsLoading(false);
+    }
+  }
+
+  async function handleApprove(id: number) {
+    setIsApproving(true);
+    try {
+      await approve({ id });
+      invalidateQueries();
+      toast({ title: "Approved", description: "Professional is now visible in search results." });
+      setReviewProf(null);
+    } catch {
+      toast({ title: "Error", description: "Failed to approve professional.", variant: "destructive" });
+    } finally {
+      setIsApproving(false);
+    }
+  }
+
+  async function handleReject(id: number) {
+    setIsRejecting(true);
+    try {
+      const res = await fetch(`/api/admin/professionals/${id}/reject`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: rejectReason.trim() || null }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      invalidateQueries();
+      toast({ title: "Rejected", description: "Professional application has been rejected." });
+      setReviewProf(null);
+    } catch {
+      toast({ title: "Error", description: "Failed to reject professional.", variant: "destructive" });
+    } finally {
+      setIsRejecting(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm text-muted-foreground">
+            Review and approve professionals who have submitted their verification documents.
+          </p>
+          {data && (
+            <span className="text-sm font-medium text-yellow-700 bg-yellow-50 border border-yellow-200 px-3 py-1 rounded-full">
+              {data.total} awaiting review
+            </span>
+          )}
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="animate-spin text-primary" size={28} />
+          </div>
+        ) : (
+          <>
+            <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 border-b border-border">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Professional</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Specialty</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Location</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Submitted</th>
+                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Review</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {(!data?.professionals || data.professionals.length === 0) ? (
+                    <tr>
+                      <td colSpan={5} className="text-center py-12 text-muted-foreground">
+                        <CheckCircle size={32} className="mx-auto mb-2 text-green-400" />
+                        No pending applications — all caught up!
+                      </td>
+                    </tr>
+                  ) : (
+                    data.professionals.map((prof: AdminProfessionalRow) => (
+                      <tr key={prof.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-3">
+                          <p className="font-medium">{prof.fullName ?? prof.userName ?? "—"}</p>
+                          <p className="text-xs text-muted-foreground">{prof.userEmail ?? "—"}</p>
+                        </td>
+                        <td className="px-4 py-3 hidden sm:table-cell text-muted-foreground">
+                          {getSpecialtyLabel(prof.specialty as Parameters<typeof getSpecialtyLabel>[0])}
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">
+                          {[prof.city, prof.country].filter(Boolean).join(", ") || "—"}
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell text-xs text-muted-foreground">
+                          {new Date(prof.createdAt).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => openReview(prof)}
+                            data-testid={`pending-review-btn-${prof.id}`}
+                          >
+                            <Eye size={13} />
+                            Review
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {data && data.total > data.limit && (
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Showing {((page - 1) * data.limit) + 1}–{Math.min(page * data.limit, data.total)} of {data.total}
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+                  <Button variant="outline" size="sm" disabled={page * data.limit >= data.total} onClick={() => setPage((p) => p + 1)}>Next</Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <Dialog open={!!reviewProf} onOpenChange={(open) => { if (!open) setReviewProf(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText size={18} className="text-primary" />
+              Review Application
+            </DialogTitle>
+          </DialogHeader>
+
+          {reviewProf && (
+            <div className="space-y-4 py-1">
+              <div className="bg-muted/40 rounded-lg p-4 space-y-1 text-sm">
+                <p className="font-semibold text-base">{reviewProf.fullName ?? reviewProf.userName ?? "—"}</p>
+                <p className="text-muted-foreground">{reviewProf.userEmail}</p>
+                <p>{getSpecialtyLabel(reviewProf.specialty as Parameters<typeof getSpecialtyLabel>[0])}</p>
+                <p className="text-muted-foreground">{[reviewProf.city, reviewProf.country].filter(Boolean).join(", ") || "—"}</p>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium mb-2">Uploaded Documents</p>
+                {docsLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                    <Loader2 size={14} className="animate-spin" />
+                    Loading documents…
+                  </div>
+                ) : documents ? (
+                  <div className="space-y-2">
+                    {documents.identity ? (
+                      <a
+                        href={fileKeyToUrl(documents.identity.fileKey)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-border hover:bg-muted/40 transition-colors"
+                      >
+                        <FileText size={14} className="text-primary shrink-0" />
+                        <span className="flex-1">Identity: <span className="capitalize">{documents.identity.documentType.replace(/_/g, " ")}</span></span>
+                        <ExternalLink size={12} className="text-muted-foreground" />
+                      </a>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">No identity document uploaded.</p>
+                    )}
+                    {documents.certifications.length > 0 ? (
+                      documents.certifications.map((cert) => (
+                        <a
+                          key={cert.id}
+                          href={fileKeyToUrl(cert.fileKey)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-border hover:bg-muted/40 transition-colors"
+                        >
+                          <FileText size={14} className="text-blue-500 shrink-0" />
+                          <span className="flex-1">Certification: <span className="capitalize">{cert.documentType.replace(/_/g, " ")}</span></span>
+                          <ExternalLink size={12} className="text-muted-foreground" />
+                        </a>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">No certification documents uploaded.</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">Could not load documents.</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="pending-reject-reason" className="text-sm font-medium">
+                  Rejection reason <span className="text-muted-foreground font-normal">(optional — shown to professional)</span>
+                </Label>
+                <Textarea
+                  id="pending-reject-reason"
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="E.g. Documents unclear, please re-upload a higher quality scan…"
+                  className="mt-1 text-sm resize-none"
+                  rows={3}
+                  data-testid="pending-reject-reason-input"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="ghost" onClick={() => setReviewProf(null)}>Close</Button>
+            {reviewProf && (
+              <Button
+                variant="outline"
+                className="gap-1 text-red-700 border-red-300 hover:bg-red-50"
+                onClick={() => handleReject(reviewProf.id)}
+                disabled={isRejecting || isApproving}
+                data-testid={`pending-reject-btn-${reviewProf?.id}`}
+              >
+                {isRejecting ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />}
+                Reject
+              </Button>
+            )}
+            {reviewProf && (
+              <Button
+                className="gap-1 bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => handleApprove(reviewProf.id)}
+                disabled={isRejecting || isApproving}
+                data-testid={`pending-approve-btn-${reviewProf?.id}`}
+              >
+                {isApproving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+                Approve
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
 function ProfessionalsTab() {
