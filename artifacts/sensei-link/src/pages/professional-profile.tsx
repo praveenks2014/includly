@@ -293,10 +293,10 @@ export default function ProfessionalProfilePage() {
 
           <Separator className="my-4" />
 
-          {/* Contact unlock section */}
-          <div>
-            <h3 className="text-sm font-semibold text-foreground mb-3">Contact information</h3>
-            {isUnlocked ? (
+          {/* Contact information */}
+          {isUnlocked ? (
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-3">Contact information</h3>
               <div className="space-y-2">
                 {p.phone && (
                   <a
@@ -319,29 +319,44 @@ export default function ProfessionalProfilePage() {
                   </a>
                 )}
               </div>
-            ) : (
-              <div className="bg-muted/40 border border-border rounded-lg p-4 flex items-start gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground/60 font-mono mb-1">
-                    <Phone size={13} />
-                    {p.phoneBlurred}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground/60 font-mono">
-                    <Mail size={13} />
-                    {p.emailBlurred}
-                  </div>
+            </div>
+          ) : (
+            /* Prominent locked contact overlay */
+            <div className="relative rounded-xl overflow-hidden border border-border/60">
+              {/* Blurred contact preview behind overlay */}
+              <div className="px-4 py-5 blur-[3px] select-none pointer-events-none" aria-hidden="true">
+                <div className="flex items-center gap-2 text-sm font-mono text-muted-foreground mb-2">
+                  <Phone size={13} />
+                  {p.phoneBlurred}
+                </div>
+                <div className="flex items-center gap-2 text-sm font-mono text-muted-foreground">
+                  <Mail size={13} />
+                  {p.emailBlurred}
+                </div>
+              </div>
+              {/* Overlay */}
+              <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/90 to-background/95 backdrop-blur-[1px] flex flex-col items-center justify-center gap-3 p-5 text-center">
+                <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                  <Lock size={18} className="text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Contact details are locked</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Unlock to get {p.fullName?.split(" ")[0]}'s direct phone &amp; email
+                  </p>
                 </div>
                 <Button
                   onClick={handleUnlock}
-                  className="gap-2 shrink-0"
+                  size="sm"
+                  className="gap-2 mt-1 shadow-md"
                   data-testid="unlock-contact-btn"
                 >
-                  <Lock size={14} />
+                  <Lock size={13} />
                   Unlock contact
                 </Button>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Booking widget — shown to all signed-in visitors */}

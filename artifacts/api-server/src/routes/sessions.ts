@@ -222,25 +222,21 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
   // Credit-based booking for shadow teachers and special tutors
   const isCreditSpecialty = prof && (prof.specialty === "shadow_teacher" || prof.specialty === "special_tutor");
   if (isCreditSpecialty) {
-    const [parent] = await db
-      .select({ sessionCredits: usersTable.sessionCredits })
-      .from(usersTable)
-      .where(eq(usersTable.id, req.userId!));
+    // Atomic credit deduction: only updates if credits > 0, preventing over-draw on concurrent requests
+    const deductResult = await db
+      .update(usersTable)
+      .set({ sessionCredits: sql`${usersTable.sessionCredits} - 1` })
+      .where(and(eq(usersTable.id, req.userId!), sql`${usersTable.sessionCredits} > 0`))
+      .returning({ sessionCredits: usersTable.sessionCredits });
 
-    if (!parent || (parent.sessionCredits ?? 0) < 1) {
+    if (deductResult.length === 0) {
       res.status(402).json({
         error: "You need session credits to book with this specialist. Purchase a session pass to continue.",
         code: "NO_SESSION_CREDITS",
-        sessionCredits: parent?.sessionCredits ?? 0,
+        sessionCredits: 0,
       });
       return;
     }
-
-    // Deduct 1 credit and confirm booking immediately
-    await db
-      .update(usersTable)
-      .set({ sessionCredits: sql`${usersTable.sessionCredits} - 1` })
-      .where(eq(usersTable.id, req.userId!));
 
     const [booking] = await db
       .insert(sessionBookingsTable)

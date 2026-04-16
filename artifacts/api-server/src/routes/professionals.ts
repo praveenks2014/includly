@@ -189,9 +189,17 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
     .where(whereClause);
   const total = parseInt(totalStr, 10);
 
+  // Compute isPremium dynamically from active subscription — prevents permanent boost after expiry
+  const isPremiumLive = sql<boolean>`EXISTS (
+    SELECT 1 FROM ${professionalSubscriptionsTable} ps
+    WHERE ps.professional_id = ${professionalProfilesTable.id}
+      AND ps.status = 'active'
+      AND ps.expires_at > now()
+  )`.as("is_premium_live");
+
   const orderByClauses = useGeo
-    ? [desc(professionalProfilesTable.isPremium), asc(distanceSql)]
-    : [desc(professionalProfilesTable.isPremium), desc(professionalProfilesTable.id)];
+    ? [sql`${isPremiumLive} DESC`, asc(distanceSql)]
+    : [sql`${isPremiumLive} DESC`, desc(professionalProfilesTable.id)];
 
   const paginated = await db
     .select({
@@ -216,7 +224,7 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       pricingMinINR: professionalProfilesTable.pricingMinINR,
       pricingMaxINR: professionalProfilesTable.pricingMaxINR,
       paymentActivated: professionalProfilesTable.paymentActivated,
-      isPremium: professionalProfilesTable.isPremium,
+      isPremium: isPremiumLive,
       specializationTags: professionalProfilesTable.specializationTags,
       distanceKm: distanceSql,
     })
@@ -345,6 +353,20 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
     }
   }
 
+  // Compute isPremium from active subscription — prevents permanent boost after expiry/cancel
+  const [activeProfSub] = await db
+    .select({ id: professionalSubscriptionsTable.id })
+    .from(professionalSubscriptionsTable)
+    .where(
+      and(
+        eq(professionalSubscriptionsTable.professionalId, profile.id),
+        eq(professionalSubscriptionsTable.status, "active"),
+        gt(professionalSubscriptionsTable.expiresAt, new Date()),
+      ),
+    )
+    .limit(1);
+  const isPremiumLive = !!activeProfSub;
+
   const { upiId: _upiId, ...safeProfile } = profile;
   const result = {
     ...safeProfile,
@@ -356,7 +378,7 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
     pricingMinINR: profile.pricingMinINR ?? null,
     pricingMaxINR: profile.pricingMaxINR ?? null,
     paymentActivated: profile.paymentActivated,
-    isPremium: profile.isPremium,
+    isPremium: isPremiumLive,
     specializationTags: profile.specializationTags ?? [],
     upiId: null,
   };

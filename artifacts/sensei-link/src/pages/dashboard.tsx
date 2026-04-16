@@ -28,7 +28,7 @@ import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import { useToast } from "@/hooks/use-toast";
 import { NotificationBanner } from "@/components/NotificationBanner";
-import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle, AlertCircle, Bell, CalendarCheck, CalendarClock } from "lucide-react";
+import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle, AlertCircle, Bell, CalendarCheck, CalendarClock, Crown, Columns, Lock, CheckCheck } from "lucide-react";
 
 export default function DashboardPage() {
   const { user } = useUser();
@@ -386,6 +386,88 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
           </div>
         </Link>
       </div>
+
+      {/* Premium Pro Schedule — multi-day template management, gated by active subscription */}
+      {profile.isPremium ? (
+        <div className="bg-card border border-amber-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-amber-100 bg-gradient-to-r from-amber-50 to-yellow-50 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Crown size={16} className="text-amber-600" />
+              <h2 className="font-semibold text-sm text-amber-900">Pro Schedule Templates</h2>
+              <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded-full">PRO</span>
+            </div>
+            <Link href="/availability">
+              <Button size="sm" variant="outline" className="text-xs h-7 border-amber-300 text-amber-800 hover:bg-amber-100 gap-1">
+                <CalendarClock size={12} />
+                Edit slots
+              </Button>
+            </Link>
+          </div>
+          <div className="p-5">
+            <p className="text-xs text-muted-foreground mb-4">Quickly apply a schedule pattern across multiple days at once.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                {
+                  label: "Weekday mornings",
+                  description: "Mon–Fri • 9 AM–12 PM",
+                  days: ["M", "T", "W", "Th", "F"],
+                  icon: <Columns size={14} className="text-primary" />,
+                },
+                {
+                  label: "Alternating days",
+                  description: "Mon, Wed, Fri • All day",
+                  days: ["M", "W", "F"],
+                  icon: <CheckCheck size={14} className="text-green-600" />,
+                },
+                {
+                  label: "Weekends",
+                  description: "Sat & Sun • Flexible",
+                  days: ["Sa", "Su"],
+                  icon: <CalendarCheck size={14} className="text-blue-600" />,
+                },
+              ].map((template) => (
+                <Link key={template.label} href="/availability">
+                  <div className="border border-border rounded-lg p-3 hover:border-primary/40 hover:bg-primary/5 transition-colors cursor-pointer">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      {template.icon}
+                      <span className="text-xs font-semibold text-foreground">{template.label}</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mb-2">{template.description}</p>
+                    <div className="flex gap-1">
+                      {template.days.map((d) => (
+                        <span key={d} className="text-[10px] font-bold bg-primary/10 text-primary rounded px-1.5 py-0.5">{d}</span>
+                      ))}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-full bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0">
+              <Lock size={15} className="text-amber-600" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm text-amber-900 flex items-center gap-1.5">
+                <Crown size={13} className="text-amber-600" />
+                Pro Schedule Templates
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Apply multi-day availability patterns instantly. Exclusive to Pro members.
+              </p>
+            </div>
+          </div>
+          <Link href="/account">
+            <Button size="sm" className="gap-1.5 shrink-0 bg-amber-600 hover:bg-amber-700 text-white border-0">
+              <Crown size={12} />
+              Upgrade
+            </Button>
+          </Link>
+        </div>
+      )}
 
       {/* Profile card */}
       <div className="bg-card border border-border rounded-xl shadow-sm">
