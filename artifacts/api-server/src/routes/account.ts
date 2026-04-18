@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
+import { createClerkClient } from "@clerk/express";
 import {
   db,
   usersTable,
@@ -9,6 +10,8 @@ import {
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { ObjectStorageService } from "../lib/objectStorage";
+
+const clerkClient = createClerkClient({ secretKey: process.env["CLERK_SECRET_KEY"] });
 
 const router: IRouter = Router();
 
@@ -68,6 +71,9 @@ router.post("/account/delete", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
+  // Save the Clerk ID before we tombstone it in the DB
+  const clerkId = req.clerkId!;
+
   // All DB anonymization in a single transaction — no partial state on failure
   await db.transaction(async (tx) => {
     if (profile) {
@@ -115,6 +121,15 @@ router.post("/account/delete", requireAuth, async (req, res): Promise<void> => {
       })
       .where(eq(usersTable.id, userId));
   });
+
+  // Delete the user from Clerk so the email/OAuth identity is fully released.
+  // This runs after the DB transaction so a Clerk API failure doesn't roll back
+  // the anonymization, but we log the error so it can be retried manually.
+  try {
+    await clerkClient.users.deleteUser(clerkId);
+  } catch (err) {
+    req.log.error({ err, clerkId }, "account/delete: failed to delete user from Clerk — email may remain blocked");
+  }
 
   res.json({ success: true });
 });
