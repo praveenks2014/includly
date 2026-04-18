@@ -116,9 +116,8 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
   const limitNum = limit ?? 20;
   const offsetNum = (pageNum - 1) * limitNum;
 
-  const conditions = [
-    eq(professionalProfilesTable.verificationStatus, "verified"),
-  ];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const conditions: any[] = [];
 
   if (verifiedOnly) {
     conditions.push(eq(professionalProfilesTable.isVerified, true));

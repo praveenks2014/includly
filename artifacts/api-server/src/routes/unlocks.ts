@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gt, gte } from "drizzle-orm";
+import { eq, and, gt, gte, or, isNull } from "drizzle-orm";
 import { db, contactUnlocksTable, professionalProfilesTable, subscriptionsTable, adminSettingsTable, DEFAULT_CONTACT_LIMIT } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import {
@@ -90,6 +90,10 @@ router.get("/unlocks/check/:professionalId", requireAuth, requireRole("parent", 
     return;
   }
 
+  // Check for an active teacher-scoped unlock:
+  // - Plan B unlocks have no expiry (expiresAt IS NULL) and are permanent
+  // - Plan A unlocks have expiresAt set (30-day access per teacher)
+  const now = new Date();
   const [unlock] = await db
     .select()
     .from(contactUnlocksTable)
@@ -97,14 +101,16 @@ router.get("/unlocks/check/:professionalId", requireAuth, requireRole("parent", 
       and(
         eq(contactUnlocksTable.parentId, req.userId!),
         eq(contactUnlocksTable.professionalId, params.data.professionalId),
+        or(
+          isNull(contactUnlocksTable.expiresAt),
+          gt(contactUnlocksTable.expiresAt, now),
+        ),
       ),
     );
 
-  const hasSub = !unlock ? await hasActiveSubscription(req.userId!) : false;
-
   res.json(
     CheckUnlockStatusResponse.parse({
-      isUnlocked: !!unlock || hasSub,
+      isUnlocked: !!unlock,
       unlockedAt: unlock?.unlockedAt?.toISOString() ?? null,
     }),
   );

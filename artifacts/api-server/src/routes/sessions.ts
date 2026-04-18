@@ -219,12 +219,15 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
 
   const commissionInr = prof ? getSessionCommission(prof.specialty) : 49;
 
-  // Credit-based booking for shadow teachers and special tutors
-  const isCreditSpecialty = prof && (prof.specialty === "shadow_teacher" || prof.specialty === "special_tutor");
+  // Credit-based booking for therapists and psychologists
+  const isCreditSpecialty = prof && (
+    prof.specialty === "occupational_therapy" ||
+    prof.specialty === "speech_therapy" ||
+    prof.specialty === "psychiatrist"
+  );
   if (isCreditSpecialty) {
     // Wrap credit deduction + booking in a transaction so credit is never lost on booking failure
     let bookingId: number | null = null;
-    let creditDeducted = false;
 
     try {
       await db.transaction(async (tx) => {
@@ -238,8 +241,6 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
         if (deductResult.length === 0) {
           throw Object.assign(new Error("NO_SESSION_CREDITS"), { statusCode: 402 });
         }
-
-        creditDeducted = true;
 
         const [booking] = await tx
           .insert(sessionBookingsTable)
@@ -272,7 +273,6 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
       throw err;
     }
 
-    void creditDeducted;
     res.json({ sessionId: bookingId!, usedCredit: true });
     return;
   }

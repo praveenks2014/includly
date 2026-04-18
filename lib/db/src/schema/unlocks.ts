@@ -9,6 +9,7 @@ export const contactUnlocksTable = pgTable("contact_unlocks", {
   parentId: integer("parent_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   professionalId: integer("professional_id").notNull().references(() => professionalProfilesTable.id, { onDelete: "cascade" }),
   unlockedAt: timestamp("unlocked_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
 });
 
 export const insertContactUnlockSchema = createInsertSchema(contactUnlocksTable).omit({ id: true, unlockedAt: true });

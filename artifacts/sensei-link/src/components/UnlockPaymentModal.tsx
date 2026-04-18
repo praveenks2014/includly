@@ -60,10 +60,11 @@ export function UnlockPaymentModal({
 
     setActivePlan(planId);
     try {
-      const orderData: { plan: "plan_a_subscription" | "plan_b_per_contact"; professionalId?: number } = { plan: planId };
-      if (planId === "plan_b_per_contact") {
-        orderData.professionalId = professionalId;
-      }
+      // Both plan_a (30-day teacher unlock) and plan_b (per-contact) require professionalId
+      const orderData: { plan: "plan_a_subscription" | "plan_b_per_contact"; professionalId: number } = {
+        plan: planId,
+        professionalId,
+      };
 
       let order;
       try {
@@ -137,10 +138,11 @@ export function UnlockPaymentModal({
     setActivePlan(`stripe_${planId}`);
     try {
       const origin = window.location.origin;
+      // Both plan_a (30-day teacher unlock) and plan_b (per-contact) require professionalId
       const result = await createStripeCheckout({
         data: {
           plan: planId,
-          professionalId: planId === "plan_b_per_contact" ? professionalId : undefined,
+          professionalId,
           successUrl: `${origin}${basePath}/payment/success`,
           cancelUrl: `${origin}${basePath}/payment/cancel`,
         },
@@ -148,15 +150,7 @@ export function UnlockPaymentModal({
       window.location.href = result.url;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Stripe is not configured. Please use Razorpay.";
-      if (msg.includes("contact limit") || msg.includes("CONTACT_LIMIT_REACHED")) {
-        toast({
-          title: "Monthly contact limit reached",
-          description: "Upgrade to Plan A for unlimited contacts this month.",
-          variant: "destructive",
-        });
-      } else {
-        toast({ title: "Stripe unavailable", description: msg, variant: "destructive" });
-      }
+      toast({ title: "Stripe unavailable", description: msg, variant: "destructive" });
     } finally {
       setActivePlan(null);
     }

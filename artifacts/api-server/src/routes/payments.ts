@@ -216,27 +216,24 @@ router.post(
       return;
     }
 
-    // Plan B/F require professionalId
-    if ((plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && !professionalId) {
-      res.status(400).json({ error: "professionalId is required for per-booking unlock." });
+    // Plan A/B/F require professionalId (all are teacher-scoped unlocks)
+    if ((plan === "plan_a_subscription" || plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && !professionalId) {
+      res.status(400).json({ error: "professionalId is required for contact unlocks and session bookings." });
       return;
     }
 
-    // Plan B: enforce monthly contact limit (Plan A subscribers are exempt)
+    // Plan B: enforce monthly contact limit (spam protection)
     if (plan === "plan_b_per_contact" && req.userRole === "parent") {
-      const hasSub = await parentHasActiveSubscription(req.userId!);
-      if (!hasSub) {
-        const limit = await getContactLimit();
-        const used = await getMonthlyUnlockCount(req.userId!);
-        if (used >= limit) {
-          res.status(403).json({
-            error: `You've reached your contact limit for this month (${used}/${limit}). Upgrade to Plan A for unlimited contacts.`,
-            code: "CONTACT_LIMIT_REACHED",
-            used,
-            limit,
-          });
-          return;
-        }
+      const limit = await getContactLimit();
+      const used = await getMonthlyUnlockCount(req.userId!);
+      if (used >= limit) {
+        res.status(403).json({
+          error: `You've reached your contact limit for this month (${used}/${limit}). Upgrade to Plan A for a 30-day teacher unlock.`,
+          code: "CONTACT_LIMIT_REACHED",
+          used,
+          limit,
+        });
+        return;
       }
     }
 
@@ -431,27 +428,24 @@ router.post(
     return;
   }
 
-  // Plan B/F require professionalId
-  if ((plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && !professionalId) {
-    res.status(400).json({ error: "professionalId is required for per-booking unlock." });
+  // Plan A/B/F require professionalId (all are teacher-scoped unlocks)
+  if ((plan === "plan_a_subscription" || plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && !professionalId) {
+    res.status(400).json({ error: "professionalId is required for contact unlocks and session bookings." });
     return;
   }
 
-  // Plan B: enforce monthly contact limit (Plan A subscribers are exempt)
+  // Plan B: enforce monthly contact limit (spam protection)
   if (plan === "plan_b_per_contact" && req.userRole === "parent") {
-    const hasSub = await parentHasActiveSubscription(req.userId!);
-    if (!hasSub) {
-      const limit = await getContactLimit();
-      const used = await getMonthlyUnlockCount(req.userId!);
-      if (used >= limit) {
-        res.status(403).json({
-          error: `You've reached your contact limit for this month (${used}/${limit}). Upgrade to Plan A for unlimited contacts.`,
-          code: "CONTACT_LIMIT_REACHED",
-          used,
-          limit,
-        });
-        return;
-      }
+    const limit = await getContactLimit();
+    const used = await getMonthlyUnlockCount(req.userId!);
+    if (used >= limit) {
+      res.status(403).json({
+        error: `You've reached your contact limit for this month (${used}/${limit}). Upgrade to Plan A for a 30-day teacher unlock.`,
+        code: "CONTACT_LIMIT_REACHED",
+        used,
+        limit,
+      });
+      return;
     }
   }
 
@@ -634,19 +628,42 @@ export async function activatePayment(
   provider: "stripe" | "razorpay" = "razorpay",
   providerSubscriptionId: string | null = null,
 ): Promise<{ isSubscriptionActive: boolean; unlockedProfessionalId: number | null; paymentActivated?: boolean }> {
-  if (plan === "plan_a_subscription") {
+  // Plan A: teacher-scoped 30-day contact unlock (₹499 per teacher per 30 days)
+  if (plan === "plan_a_subscription" && professionalId) {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
-    await db.insert(subscriptionsTable).values({
-      userId,
-      provider,
-      providerSubscriptionId: providerSubscriptionId ?? undefined,
-      plan: "plan_a",
-      status: "active",
-      startsAt: new Date(),
-      expiresAt,
-    });
-    return { isSubscriptionActive: true, unlockedProfessionalId: null };
+
+    const now = new Date();
+    const existing = await db
+      .select({ id: contactUnlocksTable.id })
+      .from(contactUnlocksTable)
+      .where(
+        and(
+          eq(contactUnlocksTable.parentId, userId),
+          eq(contactUnlocksTable.professionalId, professionalId),
+          gt(contactUnlocksTable.expiresAt, now),
+        ),
+      )
+      .limit(1);
+
+    if (existing.length === 0) {
+      await db.insert(contactUnlocksTable).values({
+        parentId: userId,
+        professionalId,
+        expiresAt,
+      });
+
+      const [prof] = await db
+        .select({ userId: professionalProfilesTable.userId })
+        .from(professionalProfilesTable)
+        .where(eq(professionalProfilesTable.id, professionalId))
+        .limit(1);
+
+      if (prof) {
+        void notifyProfessionalOnUnlock(prof.userId).catch(() => {});
+      }
+    }
+    return { isSubscriptionActive: false, unlockedProfessionalId: professionalId };
   }
 
   if ((plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && professionalId) {

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, count } from "drizzle-orm";
-import { db, usersTable, professionalProfilesTable, ratingsTable, contactUnlocksTable } from "@workspace/db";
+import { eq, count, gt, and } from "drizzle-orm";
+import { db, usersTable, professionalProfilesTable, ratingsTable, contactUnlocksTable, professionalSubscriptionsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   GetParentDashboardResponse,
@@ -95,6 +95,21 @@ router.get("/dashboard/professional", requireAuth, async (req, res): Promise<voi
     return;
   }
 
+  // Compute isPremium live from active professional subscription — never trust stored flag
+  const now = new Date();
+  const [activeSub] = await db
+    .select({ id: professionalSubscriptionsTable.id })
+    .from(professionalSubscriptionsTable)
+    .where(
+      and(
+        eq(professionalSubscriptionsTable.professionalId, profile.id),
+        gt(professionalSubscriptionsTable.expiresAt, now),
+      ),
+    )
+    .limit(1);
+
+  const isPremiumLive = !!activeSub;
+
   const recentRatings = await db
     .select()
     .from(ratingsTable)
@@ -103,7 +118,7 @@ router.get("/dashboard/professional", requireAuth, async (req, res): Promise<voi
 
   res.json(
     GetProfessionalDashboardResponse.parse({
-      profile,
+      profile: { ...profile, isPremium: isPremiumLive },
       totalViews: profile.totalViews ?? 0,
       totalUnlocks: profile.totalUnlocks ?? 0,
       averageRating: profile.averageRating,
