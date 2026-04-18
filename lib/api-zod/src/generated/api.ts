@@ -791,8 +791,10 @@ export const CreateRazorpayOrderBody = zod.object({
 });
 
 export const CreateRazorpayOrderResponse = zod.object({
-  orderId: zod.string(),
-  amount: zod.number(),
+  orderId: zod.string().optional(),        // present for one-time order plans
+  amount: zod.number().optional(),         // present for one-time order plans
+  subscriptionId: zod.string().optional(), // present for recurring subscription plans (plan_e)
+  isSubscription: zod.boolean().optional(), // true for recurring subscription plans
   currency: zod.string(),
   keyId: zod.string(),
   paymentId: zod.number(),
