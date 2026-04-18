@@ -760,24 +760,33 @@ export async function activatePayment(
   }
 
   if ((plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && professionalId) {
-    const existing = await db
-      .select()
+    // Plan B/F = permanent unlock (expiresAt IS NULL). Always ensure the parent has permanent access.
+    const [existing] = await db
+      .select({ id: contactUnlocksTable.id, expiresAt: contactUnlocksTable.expiresAt })
       .from(contactUnlocksTable)
       .where(and(eq(contactUnlocksTable.parentId, userId), eq(contactUnlocksTable.professionalId, professionalId)))
       .limit(1);
 
-    if (existing.length === 0) {
-      await db.insert(contactUnlocksTable).values({ parentId: userId, professionalId });
+    const [prof] = await db
+      .select({ userId: professionalProfilesTable.userId })
+      .from(professionalProfilesTable)
+      .where(eq(professionalProfilesTable.id, professionalId))
+      .limit(1);
 
-      const [prof] = await db
-        .select({ userId: professionalProfilesTable.userId })
-        .from(professionalProfilesTable)
-        .where(eq(professionalProfilesTable.id, professionalId))
-        .limit(1);
-
-      if (prof) {
-        void notifyProfessionalOnUnlock(prof.userId).catch(() => {});
+    if (existing) {
+      if (existing.expiresAt !== null) {
+        // Upgrade expired or time-limited unlock (Plan A) to permanent (Plan B)
+        await db
+          .update(contactUnlocksTable)
+          .set({ expiresAt: null })
+          .where(eq(contactUnlocksTable.id, existing.id));
+        if (prof) void notifyProfessionalOnUnlock(prof.userId).catch(() => {});
       }
+      // If expiresAt IS NULL, unlock is already permanent — no action needed
+    } else {
+      // First-time unlock: insert permanent record
+      await db.insert(contactUnlocksTable).values({ parentId: userId, professionalId });
+      if (prof) void notifyProfessionalOnUnlock(prof.userId).catch(() => {});
     }
     return { isSubscriptionActive: false, unlockedProfessionalId: professionalId };
   }

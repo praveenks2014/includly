@@ -48,6 +48,11 @@ router.post("/professionals/me", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
+  if (parsed.data.specializationTags && parsed.data.specializationTags.length > 5) {
+    res.status(400).json({ error: "A maximum of 5 specialization tags are allowed." });
+    return;
+  }
+
   const existing = await db
     .select()
     .from(professionalProfilesTable)
