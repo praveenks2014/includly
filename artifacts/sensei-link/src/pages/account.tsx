@@ -370,7 +370,7 @@ export default function AccountPage() {
               <h2 className="font-semibold">Session Credits</h2>
             </div>
             <p className="text-sm text-muted-foreground mb-4">
-              Session credits let you book sessions with shadow teachers and special educators.
+              Session credits let you book sessions with occupational therapists, speech therapists, and psychiatrists.
             </p>
             <div className="flex items-center justify-between bg-muted/40 rounded-lg px-4 py-3 mb-4">
               <div>
@@ -393,7 +393,7 @@ export default function AccountPage() {
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <DialogTitle className="font-serif">Buy session credits</DialogTitle>
-              <DialogDescription>Credits are used to book sessions with shadow teachers and educators.</DialogDescription>
+              <DialogDescription>Credits are used to book sessions with occupational therapists, speech therapists, and psychiatrists.</DialogDescription>
             </DialogHeader>
             <div className="space-y-3 mt-2">
               <div className="border border-border rounded-xl p-4">

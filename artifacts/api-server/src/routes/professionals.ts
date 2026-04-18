@@ -78,6 +78,11 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
     return;
   }
 
+  if (parsed.data.specializationTags && parsed.data.specializationTags.length > 5) {
+    res.status(400).json({ error: "A maximum of 5 specialization tags are allowed." });
+    return;
+  }
+
   const [profile] = await db
     .update(professionalProfilesTable)
     .set(parsed.data)

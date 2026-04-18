@@ -187,12 +187,6 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
     return;
   }
 
-  const razorpay = getRazorpay();
-  if (!razorpay) {
-    res.status(503).json({ error: "Payment gateway not configured" });
-    return;
-  }
-
   const { professionalId, bookedDate, startTime, endTime, durationMinutes, amountInr, notes } = parsed.data;
 
   const [existing] = await db
@@ -278,6 +272,12 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
   }
 
   // Standard Razorpay payment flow for other specialties
+  const razorpay = getRazorpay();
+  if (!razorpay) {
+    res.status(503).json({ error: "Payment gateway not configured" });
+    return;
+  }
+
   const order = await razorpay.orders.create({
     amount: amountInr * 100,
     currency: "INR",
