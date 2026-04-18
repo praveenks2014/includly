@@ -470,14 +470,19 @@ router.post(
 
   // plan_e_pro_monthly: use Razorpay recurring subscription instead of one-time order
   if (plan === "plan_e_pro_monthly") {
-    // Guard: prevent duplicate active Pro subscription
+    // Guard: prevent duplicate active Pro subscription (use live subscription status, not isPremium flag)
     const [activePro] = await db
-      .select({ id: professionalProfilesTable.id })
-      .from(professionalProfilesTable)
+      .select({ id: professionalSubscriptionsTable.id })
+      .from(professionalSubscriptionsTable)
+      .innerJoin(
+        professionalProfilesTable,
+        eq(professionalProfilesTable.id, professionalSubscriptionsTable.professionalId),
+      )
       .where(
         and(
           eq(professionalProfilesTable.userId, req.userId!),
-          eq(professionalProfilesTable.isPremium, true),
+          eq(professionalSubscriptionsTable.status, "active"),
+          gt(professionalSubscriptionsTable.expiresAt, new Date()),
         ),
       )
       .limit(1);
@@ -616,15 +621,29 @@ router.post("/payments/razorpay/webhook", async (req: Request, res: Response): P
       .set({ status: "active", expiresAt })
       .where(eq(professionalSubscriptionsTable.providerSubscriptionId, subscriptionId));
   } else if (eventType === "subscription.halted") {
-    await db
+    const [sub] = await db
       .update(professionalSubscriptionsTable)
       .set({ status: "halted" })
-      .where(eq(professionalSubscriptionsTable.providerSubscriptionId, subscriptionId));
+      .where(eq(professionalSubscriptionsTable.providerSubscriptionId, subscriptionId))
+      .returning({ professionalId: professionalSubscriptionsTable.professionalId });
+    if (sub) {
+      await db
+        .update(professionalProfilesTable)
+        .set({ isPremium: false })
+        .where(eq(professionalProfilesTable.id, sub.professionalId));
+    }
   } else if (eventType === "subscription.cancelled") {
-    await db
+    const [sub] = await db
       .update(professionalSubscriptionsTable)
       .set({ status: "cancelled" })
-      .where(eq(professionalSubscriptionsTable.providerSubscriptionId, subscriptionId));
+      .where(eq(professionalSubscriptionsTable.providerSubscriptionId, subscriptionId))
+      .returning({ professionalId: professionalSubscriptionsTable.professionalId });
+    if (sub) {
+      await db
+        .update(professionalProfilesTable)
+        .set({ isPremium: false })
+        .where(eq(professionalProfilesTable.id, sub.professionalId));
+    }
   }
 
   res.json({ ok: true });
