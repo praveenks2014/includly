@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc, arrayOverlaps } from "drizzle-orm";
+import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc, arrayOverlaps, isNull, type SQL } from "drizzle-orm";
 import { db, usersTable, professionalProfilesTable, contactUnlocksTable, specialtyEnum, professionalSubscriptionsTable } from "@workspace/db";
 import { subscriptionsTable } from "@workspace/db";
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
@@ -116,8 +116,7 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
   const limitNum = limit ?? 20;
   const offsetNum = (pageNum - 1) * limitNum;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const conditions: any[] = [];
+  const conditions: SQL<unknown>[] = [];
 
   if (verifiedOnly) {
     conditions.push(eq(professionalProfilesTable.isVerified, true));
@@ -239,7 +238,12 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
     const unlocks = await db
       .select()
       .from(contactUnlocksTable)
-      .where(eq(contactUnlocksTable.parentId, req.userId));
+      .where(
+        and(
+          eq(contactUnlocksTable.parentId, req.userId),
+          or(isNull(contactUnlocksTable.expiresAt), gt(contactUnlocksTable.expiresAt, new Date())),
+        ),
+      );
     unlocks.forEach((u) => unlockSet.add(u.professionalId));
 
     const [activeSub] = await db
@@ -346,6 +350,7 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
           and(
             eq(contactUnlocksTable.parentId, req.userId),
             eq(contactUnlocksTable.professionalId, profile.id),
+            or(isNull(contactUnlocksTable.expiresAt), gt(contactUnlocksTable.expiresAt, new Date())),
           ),
         );
       isUnlocked = !!unlock;

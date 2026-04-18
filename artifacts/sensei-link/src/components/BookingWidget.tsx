@@ -21,7 +21,7 @@ function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
-const CREDIT_SPECIALTIES = ["shadow_teacher", "special_tutor"];
+const CREDIT_SPECIALTIES = ["occupational_therapy", "speech_therapy", "psychiatrist"];
 
 export function BookingWidget({
   professionalId,
@@ -168,7 +168,7 @@ export function BookingWidget({
           <div>
             <p className="text-sm font-medium text-amber-800">No session credits</p>
             <p className="text-xs text-amber-700 mt-0.5 mb-2">
-              Booking with shadow teachers and special educators requires session credits.
+              Booking with occupational therapists, speech therapists, and psychiatrists requires session credits.
             </p>
             <Button size="sm" className="gap-1.5 h-7 text-xs" onClick={() => navigate("/account")}>
               <Ticket size={12} />
