@@ -452,33 +452,14 @@ export default function PricingPage() {
                   </Link>
                 ) : plan.id === "plan_a_subscription" ? (
                   <>
-                    <Button
-                      className="w-full"
-                      variant="default"
-                      disabled={!!loadingKey || !!hasActiveSub}
-                      onClick={() => handleRazorpay(plan.id)}
-                      data-testid={`cta-rzp-${plan.id}`}
-                    >
-                      {loadingKey === `rzp-${plan.id}` ? (
-                        <Loader2 size={14} className="animate-spin mr-2" />
-                      ) : null}
-                      {hasActiveSub ? "Already subscribed" : loadingKey === `rzp-${plan.id}` ? "Processing…" : "₹499 / 30 days — Razorpay"}
-                    </Button>
-                    <Button
-                      className="w-full"
-                      variant="outline"
-                      disabled={!!loadingKey || !!hasActiveSub}
-                      onClick={() => handleStripe(plan.id)}
-                      data-testid={`cta-stripe-${plan.id}`}
-                    >
-                      {loadingKey === `stripe-${plan.id}` ? (
-                        <Loader2 size={14} className="animate-spin mr-2" />
-                      ) : null}
-                      {loadingKey === `stripe-${plan.id}` ? "Redirecting…" : "₹499 / 30 days — Stripe"}
-                    </Button>
-                    <p className="text-xs text-muted-foreground/70 italic text-center mt-1">
-                      Or pay ₹99 per contact — click "Unlock" on any shadow teacher's profile.
+                    <p className="text-xs text-muted-foreground/70 italic mb-2">
+                      Unlocks are teacher-specific. Browse teachers, then click "Unlock" on a profile to pay ₹499 for 30-day access or ₹99 for a permanent unlock.
                     </p>
+                    <Link href="/search">
+                      <Button className="w-full" variant="default" data-testid="cta-browse-teachers">
+                        Browse teachers to unlock
+                      </Button>
+                    </Link>
                   </>
                 ) : (
                   <>

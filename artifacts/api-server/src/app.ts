@@ -33,7 +33,7 @@ app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
 app.use(cors({ credentials: true, origin: true }));
 
-const WEBHOOK_PATHS = ["/api/webhooks/stripe", "/api/webhooks/razorpay"];
+const WEBHOOK_PATHS = ["/api/webhooks/stripe", "/api/webhooks/razorpay", "/api/payments/razorpay/webhook"];
 
 app.use(
   express.json({

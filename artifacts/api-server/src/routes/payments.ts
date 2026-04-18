@@ -540,13 +540,18 @@ router.post("/payments/razorpay/webhook", async (req: Request, res: Response): P
   const signature = req.headers["x-razorpay-signature"] as string | undefined;
   const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
 
-  if (webhookSecret && signature && rawBody) {
+  if (webhookSecret) {
+    // Secret is configured: strictly enforce signature — fail closed on any missing/invalid input
+    if (!signature || !rawBody) {
+      res.status(401).json({ error: "Missing webhook signature or body" });
+      return;
+    }
     const expectedSig = crypto
       .createHmac("sha256", webhookSecret)
       .update(rawBody)
       .digest("hex");
     if (expectedSig !== signature) {
-      res.status(400).json({ error: "Invalid webhook signature" });
+      res.status(401).json({ error: "Invalid webhook signature" });
       return;
     }
   }
