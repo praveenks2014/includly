@@ -554,6 +554,10 @@ router.post("/payments/razorpay/webhook", async (req: Request, res: Response): P
       res.status(401).json({ error: "Invalid webhook signature" });
       return;
     }
+  } else if (process.env["NODE_ENV"] === "production") {
+    // In production without a configured secret, reject all webhook calls to prevent subscription tampering
+    res.status(503).json({ error: "RAZORPAY_WEBHOOK_SECRET must be configured in production" });
+    return;
   }
 
   const event = req.body as {

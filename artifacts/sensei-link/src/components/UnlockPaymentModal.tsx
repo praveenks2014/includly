@@ -74,7 +74,7 @@ export function UnlockPaymentModal({
         if (msg.includes("contact limit") || msg.includes("CONTACT_LIMIT_REACHED")) {
           toast({
             title: "Monthly contact limit reached",
-            description: "Upgrade to Plan A for unlimited contacts this month.",
+            description: "Unlock this teacher's contact for 30 days with Plan A.",
             variant: "destructive",
           });
           setActivePlan(null);
@@ -105,7 +105,7 @@ export function UnlockPaymentModal({
                 title: planId === "plan_b_per_contact" ? "Contact unlocked!" : "Premium activated!",
                 description: planId === "plan_b_per_contact"
                   ? "You can now see the contact details."
-                  : "Enjoy 30 days of unlimited access.",
+                  : `You can now see ${professionalName ? `${professionalName.split(" ")[0]}'s` : "this teacher's"} contact for 30 days.`,
               });
               onUnlockSuccess();
               onClose();
@@ -182,8 +182,8 @@ export function UnlockPaymentModal({
                 <PlanOption
                   title={plans.planA.name}
                   price={`${formatRupees(plans.planA.amountPaise)} / 30 days`}
-                  description={preferSubscription ? `Unlock ${professionalName ? `${professionalName.split(" ")[0]}'s` : "this professional's"} contact for 30 days` : "Unlock unlimited contacts for 30 days"}
-                  features={["30-day access per teacher", "Unlimited unlocks this month", "All specialties included"]}
+                  description={`Unlock ${professionalName ? `${professionalName.split(" ")[0]}'s` : "this teacher's"} contact for 30 days`}
+                  features={["30-day access to this teacher", "Renew anytime", "All specialties included"]}
                   badge={preferSubscription ? "Recommended" : "Best value"}
                   highlight
                   activePlanId={activePlan}
