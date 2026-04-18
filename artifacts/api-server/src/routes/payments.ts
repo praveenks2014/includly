@@ -216,6 +216,12 @@ router.post(
       return;
     }
 
+    // Session-pass plans are Razorpay-only (UPI/cards via India payment gateway)
+    if (plan === "plan_session_pass_5" || plan === "plan_session_pass_10") {
+      res.status(400).json({ error: "Session pass plans are only available via Razorpay. Please use the in-app purchase flow." });
+      return;
+    }
+
     // Plan A/B/F require professionalId (all are teacher-scoped unlocks)
     if ((plan === "plan_a_subscription" || plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && !professionalId) {
       res.status(400).json({ error: "professionalId is required for contact unlocks and session bookings." });

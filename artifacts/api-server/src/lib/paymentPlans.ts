@@ -1,8 +1,8 @@
 export const PLANS = {
   plan_a_subscription: {
     id: "plan_a_subscription",
-    name: "Premium Search (30 days)",
-    description: "Unlock unlimited contact details for 30 days. Ideal for parents actively searching.",
+    name: "30-Day Teacher Unlock",
+    description: "Unlock one teacher's contact details for 30 days. Renew anytime.",
     amountPaise: 49900,
     currency: "INR",
     durationDays: 30,
