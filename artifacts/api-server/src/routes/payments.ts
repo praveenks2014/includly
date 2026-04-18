@@ -710,23 +710,36 @@ export async function activatePayment(
 ): Promise<{ isSubscriptionActive: boolean; unlockedProfessionalId: number | null; paymentActivated?: boolean }> {
   // Plan A: teacher-scoped 30-day contact unlock (₹499 per teacher per 30 days)
   if (plan === "plan_a_subscription" && professionalId) {
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30);
-
     const now = new Date();
-    const existing = await db
-      .select({ id: contactUnlocksTable.id })
+
+    // Find any existing unlock (active or expired) for this parent+professional pair
+    const [existingUnlock] = await db
+      .select({ id: contactUnlocksTable.id, expiresAt: contactUnlocksTable.expiresAt })
       .from(contactUnlocksTable)
       .where(
         and(
           eq(contactUnlocksTable.parentId, userId),
           eq(contactUnlocksTable.professionalId, professionalId),
-          gt(contactUnlocksTable.expiresAt, now),
         ),
       )
       .limit(1);
 
-    if (existing.length === 0) {
+    if (existingUnlock) {
+      if (existingUnlock.expiresAt !== null) {
+        // Extend by 30 days from the later of current expiry or now (handles pre-expiry renewal)
+        const baseDate = existingUnlock.expiresAt > now ? existingUnlock.expiresAt : now;
+        const newExpiresAt = new Date(baseDate);
+        newExpiresAt.setDate(newExpiresAt.getDate() + 30);
+        await db
+          .update(contactUnlocksTable)
+          .set({ expiresAt: newExpiresAt })
+          .where(eq(contactUnlocksTable.id, existingUnlock.id));
+      }
+      // If expiresAt IS NULL (permanent unlock from plan_b), no update needed — it already grants access
+    } else {
+      // First-time unlock: insert new 30-day unlock
+      const expiresAt = new Date(now);
+      expiresAt.setDate(expiresAt.getDate() + 30);
       await db.insert(contactUnlocksTable).values({
         parentId: userId,
         professionalId,
