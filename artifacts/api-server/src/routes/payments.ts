@@ -86,7 +86,7 @@ router.get("/payments/plans", (_req: Request, res: Response): void => {
   });
 });
 
-router.get("/payments/session-credits", requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.get("/payments/session-credits", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
   const [user] = await db
     .select({ sessionCredits: usersTable.sessionCredits })
     .from(usersTable)
@@ -470,6 +470,23 @@ router.post(
 
   // plan_e_pro_monthly: use Razorpay recurring subscription instead of one-time order
   if (plan === "plan_e_pro_monthly") {
+    // Guard: prevent duplicate active Pro subscription
+    const [activePro] = await db
+      .select({ id: professionalProfilesTable.id })
+      .from(professionalProfilesTable)
+      .where(
+        and(
+          eq(professionalProfilesTable.userId, req.userId!),
+          eq(professionalProfilesTable.isPremium, true),
+        ),
+      )
+      .limit(1);
+
+    if (activePro) {
+      res.status(409).json({ error: "You already have an active Pro subscription." });
+      return;
+    }
+
     // Create a Razorpay billing plan for the monthly subscription
     const rzPlan = await razorpay.plans.create({
       period: "monthly",
