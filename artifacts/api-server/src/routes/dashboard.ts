@@ -96,6 +96,7 @@ router.get("/dashboard/professional", requireAuth, async (req, res): Promise<voi
   }
 
   // Compute isPremium live from active professional subscription — never trust stored flag
+  // Must check both status='active' AND expiresAt > now (consistent with search/profile routes)
   const now = new Date();
   const [activeSub] = await db
     .select({ id: professionalSubscriptionsTable.id })
@@ -103,6 +104,7 @@ router.get("/dashboard/professional", requireAuth, async (req, res): Promise<voi
     .where(
       and(
         eq(professionalSubscriptionsTable.professionalId, profile.id),
+        eq(professionalSubscriptionsTable.status, "active"),
         gt(professionalSubscriptionsTable.expiresAt, now),
       ),
     )
