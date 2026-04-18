@@ -533,6 +533,71 @@ router.post(
   });
 });
 
+// Razorpay webhook for subscription lifecycle (renewal, halt, cancellation)
+// Configure RAZORPAY_WEBHOOK_SECRET in the Razorpay dashboard webhook settings
+router.post("/payments/razorpay/webhook", async (req: Request, res: Response): Promise<void> => {
+  const webhookSecret = process.env["RAZORPAY_WEBHOOK_SECRET"];
+  const signature = req.headers["x-razorpay-signature"] as string | undefined;
+  const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+
+  if (webhookSecret && signature && rawBody) {
+    const expectedSig = crypto
+      .createHmac("sha256", webhookSecret)
+      .update(rawBody)
+      .digest("hex");
+    if (expectedSig !== signature) {
+      res.status(400).json({ error: "Invalid webhook signature" });
+      return;
+    }
+  }
+
+  const event = req.body as {
+    event?: string;
+    payload?: {
+      subscription?: {
+        entity?: {
+          id?: string;
+          status?: string;
+          current_end?: number;
+        };
+      };
+    };
+  };
+
+  const subscriptionId = event?.payload?.subscription?.entity?.id;
+  const eventType = event?.event;
+
+  if (!subscriptionId || !eventType) {
+    res.json({ ok: true });
+    return;
+  }
+
+  if (eventType === "subscription.charged") {
+    // Extend professional subscription by 30 days on successful auto-debit
+    const currentEnd = event.payload?.subscription?.entity?.current_end;
+    const expiresAt = currentEnd
+      ? new Date(currentEnd * 1000)
+      : (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d; })();
+
+    await db
+      .update(professionalSubscriptionsTable)
+      .set({ status: "active", expiresAt })
+      .where(eq(professionalSubscriptionsTable.providerSubscriptionId, subscriptionId));
+  } else if (eventType === "subscription.halted") {
+    await db
+      .update(professionalSubscriptionsTable)
+      .set({ status: "halted" })
+      .where(eq(professionalSubscriptionsTable.providerSubscriptionId, subscriptionId));
+  } else if (eventType === "subscription.cancelled") {
+    await db
+      .update(professionalSubscriptionsTable)
+      .set({ status: "cancelled" })
+      .where(eq(professionalSubscriptionsTable.providerSubscriptionId, subscriptionId));
+  }
+
+  res.json({ ok: true });
+});
+
 router.post("/payments/razorpay/verify", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const parsed = VerifyRazorpayPaymentBody.safeParse(req.body);
   if (!parsed.success) {
