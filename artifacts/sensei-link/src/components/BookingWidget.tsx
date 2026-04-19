@@ -76,7 +76,7 @@ export function BookingWidget({
 
   const { mutateAsync: bookSession } = useBookSession();
   const { mutateAsync: verifyPayment } = useVerifySessionPayment();
-  const { data: mySessions } = useGetMySessions({ query: { enabled: booked && bookedSessionId !== null, retry: false } });
+  const { data: mySessions } = useGetMySessions(undefined, { query: { enabled: booked && bookedSessionId !== null, retry: false } });
 
   const credits = sessionCreditsData?.credits ?? 0;
   const noCredits = isCreditSpecialty && credits < 1;
