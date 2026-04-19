@@ -29,9 +29,12 @@ router.get("/dashboard/parent", requireAuth, async (req, res): Promise<void> => 
       professional: professionalProfilesTable,
     })
     .from(contactUnlocksTable)
-    .leftJoin(
+    .innerJoin(
       professionalProfilesTable,
-      eq(contactUnlocksTable.professionalId, professionalProfilesTable.id),
+      and(
+        eq(contactUnlocksTable.professionalId, professionalProfilesTable.id),
+        eq(professionalProfilesTable.verificationStatus, "verified"),
+      ),
     )
     .where(eq(contactUnlocksTable.parentId, req.userId!))
     .limit(5);

@@ -386,50 +386,63 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
     );
   }
 
+  // Gate: if not yet approved, show only the status screen — no stats, upsells, or schedule tools
+  if (profile.verificationStatus !== "verified") {
+    return (
+      <div className="space-y-4">
+        {(profile.verificationStatus === "pending" || profile.verificationStatus === "unsubmitted") && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 flex items-start gap-3" data-testid="pending-approval-notice">
+            <AlertCircle size={22} className="text-yellow-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-yellow-800 text-base">
+                {profile.verificationStatus === "pending" ? "Awaiting admin approval" : "Profile not yet submitted for review"}
+              </p>
+              <p className="text-sm text-yellow-700 mt-1.5">
+                {profile.verificationStatus === "pending"
+                  ? "Your profile is under review. Once approved by an admin, you will appear in search results and this dashboard will unlock. No action needed from your side."
+                  : "You haven't submitted your verification documents yet. Complete your profile to start appearing in search results."}
+              </p>
+              <div className="mt-4 flex gap-2">
+                {profile.verificationStatus === "unsubmitted" && (
+                  <Link href="/onboard">
+                    <Button size="sm" className="gap-1">
+                      Complete profile
+                    </Button>
+                  </Link>
+                )}
+                <Link href="/onboard">
+                  <Button size="sm" variant="outline" className="gap-1">
+                    Edit profile
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+        {profile.verificationStatus === "rejected" && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6 flex items-start gap-3" data-testid="rejection-notice">
+            <XCircle size={22} className="text-red-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-red-800 text-base">Your application was not approved</p>
+              <p className="text-sm text-red-700 mt-1.5">
+                Your professional profile application has been reviewed and could not be approved at this time.
+                {(profile as { rejectionReason?: string | null }).rejectionReason && (
+                  <span> Reason: <em>{(profile as { rejectionReason?: string | null }).rejectionReason}</em>.</span>
+                )}
+              </p>
+              <p className="text-sm text-red-700 mt-1">
+                If you have questions or believe this is a mistake, please{" "}
+                <a href="/support" className="underline font-medium">contact our support team</a>.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Awaiting approval banner */}
-      {(profile.verificationStatus === "pending" || profile.verificationStatus === "unsubmitted") && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5 flex items-start gap-3" data-testid="pending-approval-notice">
-          <AlertCircle size={20} className="text-yellow-600 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-yellow-800">
-              {profile.verificationStatus === "pending" ? "Awaiting admin approval" : "Profile not yet submitted for review"}
-            </p>
-            <p className="text-sm text-yellow-700 mt-1">
-              {profile.verificationStatus === "pending"
-                ? "Your profile is under review. Once approved by an admin, you will appear in search results. No action needed from your side."
-                : "You haven't submitted your verification documents yet. Complete your profile to start appearing in search results."}
-            </p>
-            {profile.verificationStatus === "unsubmitted" && (
-              <Link href="/onboard">
-                <Button size="sm" className="mt-3 gap-1" variant="outline">
-                  Complete profile
-                </Button>
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Rejection notice */}
-      {profile.verificationStatus === "rejected" && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start gap-3" data-testid="rejection-notice">
-          <XCircle size={20} className="text-red-500 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-red-800">Your application was not approved</p>
-            <p className="text-sm text-red-700 mt-1">
-              Unfortunately, your professional profile application has been reviewed and could not be approved at this time.
-              {(profile as { rejectionReason?: string | null }).rejectionReason && (
-                <span> Reason: {(profile as { rejectionReason?: string | null }).rejectionReason}.</span>
-              )}
-              {" "}If you have questions, please{" "}
-              <a href="/support" className="underline font-medium">contact our support team</a>.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Featured listing upsell */}
       <div className="bg-gradient-to-r from-violet-50 to-blue-50 border border-violet-200 rounded-xl p-4 flex items-center justify-between gap-4">
         <div className="flex items-start gap-3">
