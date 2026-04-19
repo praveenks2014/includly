@@ -88,6 +88,19 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
     return;
   }
 
+  // Enforce that only hands-on specialties may enable home visits
+  const HOME_VISIT_SPECIALTIES = ["shadow_teacher", "special_tutor", "occupational_therapy", "speech_therapy"];
+  if (parsed.data.offersHomeVisits === true) {
+    const [existing] = await db
+      .select({ specialty: professionalProfilesTable.specialty })
+      .from(professionalProfilesTable)
+      .where(eq(professionalProfilesTable.userId, req.userId!));
+    if (!existing || !HOME_VISIT_SPECIALTIES.includes(existing.specialty)) {
+      res.status(400).json({ error: "Home visits are only available for Shadow Teachers, Special Educators, Occupational Therapists, and Speech Therapists." });
+      return;
+    }
+  }
+
   const [profile] = await db
     .update(professionalProfilesTable)
     .set(parsed.data)
@@ -273,8 +286,9 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       country: p.country,
       displayArea: p.displayArea ?? null,
       offersHomeVisits: p.offersHomeVisits,
-      latitude: p.latitude ?? null,
-      longitude: p.longitude ?? null,
+      // Coarsen coordinates to ~1km precision (2 decimal places) to prevent exact pre-booking location identification
+      latitude: p.latitude != null ? Math.round(p.latitude * 100) / 100 : null,
+      longitude: p.longitude != null ? Math.round(p.longitude * 100) / 100 : null,
       travelRadiusKm: p.travelRadiusKm,
       willingToTravel: p.willingToTravel,
       isVerified: p.isVerified,

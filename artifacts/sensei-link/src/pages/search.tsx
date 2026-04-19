@@ -3,8 +3,10 @@ import {
   useSearchProfessionals,
   getSearchProfessionalsQueryKey,
   type SearchProfessionalsSpecialty,
+  useGetMe,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useUser } from "@clerk/react";
 import { ProfessionalCard } from "@/components/ProfessionalCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Search, SlidersHorizontal, X, Map, List, Navigation2, MapPin } from "lucide-react";
+import { Loader2, Search, SlidersHorizontal, X, Map, List, Navigation2, MapPin, Info } from "lucide-react";
 import { SPECIALTY_OPTIONS, SPECIALTY_ICONS, SPECIALTY_ICON_COLORS, SPECIALTY_LABELS, isInPersonOnly } from "@/lib/specialties";
 import { UnlockPaymentModal } from "@/components/UnlockPaymentModal";
 import { PlacesAutocomplete, type PlaceResult } from "@/components/PlacesAutocomplete";
@@ -35,10 +37,37 @@ const TAG_OPTIONS = [
   "Learning Disabilities",
 ];
 
+function ParentLocationPrompt({ onDismiss }: { onDismiss: () => void }) {
+  const { data: meData } = useGetMe();
+  if (!meData || meData.location) return null;
+  return (
+    <div className="mb-4 flex items-start gap-3 bg-primary/5 border border-primary/20 rounded-lg px-4 py-3">
+      <Info size={16} className="text-primary mt-0.5 shrink-0" />
+      <div className="flex-1 text-sm">
+        <span className="font-medium text-foreground">Set your area to see home-visit specialists near you.</span>
+        <span className="text-muted-foreground"> Add your neighbourhood in your </span>
+        <a href="/dashboard" className="text-primary underline underline-offset-2">dashboard</a>
+        <span className="text-muted-foreground"> to enable home-visit matching and consent.</span>
+      </div>
+      <button
+        onClick={onDismiss}
+        className="text-muted-foreground hover:text-foreground"
+        aria-label="Dismiss"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
 export default function SearchPage() {
   const queryClient = useQueryClient();
   const [unlockTarget, setUnlockTarget] = useState<{ id: number; name?: string } | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
+  const [locationPromptDismissed, setLocationPromptDismissed] = useState(false);
+
+  const { user: clerkUser, isSignedIn } = useUser();
+  const parentRole = clerkUser?.publicMetadata?.role as string | undefined;
 
   const params = new URLSearchParams(
     typeof window !== "undefined" ? window.location.search : ""
@@ -371,6 +400,11 @@ export default function SearchPage() {
 
         {/* Results anchor */}
         <div ref={resultsRef} />
+
+        {/* Parent location prompt — shown when signed-in parent has no location set */}
+        {isSignedIn && parentRole === "parent" && !locationPromptDismissed && (
+          <ParentLocationPrompt onDismiss={() => setLocationPromptDismissed(true)} />
+        )}
 
         {/* View */}
         {viewMode === "map" ? (
