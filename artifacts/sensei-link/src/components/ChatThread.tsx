@@ -73,9 +73,13 @@ export function ChatThread({ bookingId, otherPartyName, onMessagesRead }: ChatTh
       setMessages(data.messages);
       setHasMore(data.hasMore);
       setNextBefore(data.nextBefore);
-      totalReadRef.current = data.messages.length;
-      localStorage.setItem(localStorageKey, String(data.messages.length));
-      if (onMessagesRead) onMessagesRead(data.messages.length);
+      // Only increase the stored read count (never decrease).
+      // handleOpenChat in sessions.tsx already sets it to session.messageCount
+      // (total from the sessions list API) so the badge immediately clears.
+      const stored = parseInt(localStorage.getItem(localStorageKey) ?? "0", 10);
+      const newCount = Math.max(stored, data.messages.length);
+      localStorage.setItem(localStorageKey, String(newCount));
+      if (onMessagesRead) onMessagesRead(newCount);
     } catch {
       if (!silent) toast({ title: "Could not load messages", variant: "destructive" });
     } finally {

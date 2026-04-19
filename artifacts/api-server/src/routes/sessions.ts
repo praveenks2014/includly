@@ -540,7 +540,7 @@ router.get("/sessions/:bookingId/messages", requireAuth, async (req: Request, re
     ? and(eq(bookingMessagesTable.bookingId, bookingId), sql`${bookingMessagesTable.id} < ${before}`)
     : eq(bookingMessagesTable.bookingId, bookingId);
 
-  const messages = await db
+  const rows = await db
     .select({
       id: bookingMessagesTable.id,
       bookingId: bookingMessagesTable.bookingId,
@@ -552,14 +552,17 @@ router.get("/sessions/:bookingId/messages", requireAuth, async (req: Request, re
     .from(bookingMessagesTable)
     .leftJoin(usersTable, eq(bookingMessagesTable.senderId, usersTable.id))
     .where(whereClause)
-    .orderBy(bookingMessagesTable.createdAt)
+    .orderBy(desc(bookingMessagesTable.id))
     .limit(limit + 1);
 
-  const hasMore = messages.length > limit;
-  const page = hasMore ? messages.slice(0, limit) : messages;
-  const nextBefore = hasMore ? page[0]?.id ?? null : null;
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  // nextBefore = oldest id in this page (for loading even-earlier messages)
+  const nextBefore = hasMore ? page[page.length - 1]?.id ?? null : null;
+  // Reverse to return chronological order (oldest → newest) for display
+  const messages = [...page].reverse();
 
-  res.json({ messages: page, total: page.length, hasMore, nextBefore });
+  res.json({ messages, total: messages.length, hasMore, nextBefore });
 });
 
 router.post("/sessions/:bookingId/messages", requireAuth, async (req: Request, res: Response): Promise<void> => {

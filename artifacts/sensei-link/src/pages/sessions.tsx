@@ -100,11 +100,16 @@ export default function SessionsPage() {
   }
 
   function handleOpenChat(session: SessionWithMessageCount) {
+    const totalCount = session.messageCount ?? 0;
+    if (totalCount > 0) {
+      localStorage.setItem(`chat_read_count_${session.id}`, String(totalCount));
+      setReadCounts((prev) => ({ ...prev, [session.id]: totalCount }));
+    }
     setChatSession(session);
   }
 
   function handleMessagesRead(bookingId: number, count: number) {
-    setReadCounts((prev) => ({ ...prev, [bookingId]: count }));
+    setReadCounts((prev) => ({ ...prev, [bookingId]: Math.max(prev[bookingId] ?? 0, count) }));
   }
 
   const typedSessions = (sessions ?? []) as SessionWithMessageCount[];
