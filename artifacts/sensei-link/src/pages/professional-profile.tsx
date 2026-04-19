@@ -373,6 +373,7 @@ export default function ProfessionalProfilePage() {
             professionalId={professionalId}
             professionalName={professional?.fullName}
             specialty={professional?.specialty}
+            offersHomeVisits={professional?.offersHomeVisits}
           />
         )}
 

@@ -58,6 +58,7 @@ router.get("/dashboard/parent", requireAuth, async (req, res): Promise<void> => 
             country: p.country,
             travelRadiusKm: p.travelRadiusKm,
             willingToTravel: p.willingToTravel,
+            offersHomeVisits: p.offersHomeVisits,
             isVerified: p.isVerified,
             verificationStatus: p.verificationStatus,
             averageRating: p.averageRating,
@@ -67,6 +68,7 @@ router.get("/dashboard/parent", requireAuth, async (req, res): Promise<void> => 
             isUnlocked: true,
             phone: p.phone,
             email: p.email,
+            paymentActivated: p.paymentActivated,
           }
         : null,
     };

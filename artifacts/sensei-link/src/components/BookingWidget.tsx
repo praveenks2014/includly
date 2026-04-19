@@ -6,16 +6,33 @@ import {
   useVerifySessionPayment,
   useGetSessionCredits,
   getGetSessionCreditsQueryKey,
+  useGetMe,
   type BookableSlot,
 } from "@workspace/api-client-react";
+import { useUser } from "@clerk/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, CalendarCheck, Clock, IndianRupee, ChevronRight, Ticket, AlertCircle, MessageCircle } from "lucide-react";
+import { Loader2, CalendarCheck, Clock, IndianRupee, ChevronRight, Ticket, AlertCircle, MessageCircle, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { loadRazorpayScript } from "@/lib/razorpay";
 import type { RazorpayPaymentResponse } from "@/lib/razorpay";
+
+function HomeVisitLocationPrompt() {
+  const { data: meData } = useGetMe();
+  if (!meData || meData.location) return null;
+  return (
+    <div className="mb-4 bg-primary/5 border border-primary/20 rounded-lg p-3 flex items-start gap-2">
+      <Info size={14} className="text-primary mt-0.5 shrink-0" />
+      <p className="text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">This specialist offers home visits.</span>{" "}
+        <a href="/dashboard" className="text-primary underline underline-offset-2">Set your area</a>{" "}
+        in your dashboard so they can plan home sessions for you.
+      </p>
+    </div>
+  );
+}
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
@@ -27,13 +44,17 @@ export function BookingWidget({
   professionalId,
   professionalName,
   specialty,
+  offersHomeVisits,
 }: {
   professionalId: number;
   professionalName?: string | null;
   specialty?: string;
+  offersHomeVisits?: boolean;
 }) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const { user: clerkUser, isSignedIn } = useUser();
+  const isParent = isSignedIn && (clerkUser?.publicMetadata?.role as string) === "parent";
   const [date, setDate] = useState<string>(todayIsoDate());
   const [selectedSlot, setSelectedSlot] = useState<BookableSlot | null>(null);
   const [notes, setNotes] = useState("");
@@ -176,6 +197,9 @@ export function BookingWidget({
           </div>
         )}
       </div>
+
+      {/* Home-visit location prompt for parents without a location set */}
+      {offersHomeVisits && isParent && <HomeVisitLocationPrompt />}
 
       {/* No credits warning for credit-specialty */}
       {noCredits && (
