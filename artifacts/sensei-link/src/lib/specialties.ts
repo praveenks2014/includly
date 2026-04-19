@@ -16,7 +16,7 @@ export const SPECIALTY_LABELS: Record<string, string> = {
   occupational_therapy: "Occupational Therapist",
   speech_therapy: "Speech Therapist",
   psychiatrist: "Psychiatrist",
-  developmental_pediatrician: "Developmental Paediatrician",
+  developmental_pediatrician: "Developmental Pediatrician",
   neurologist: "Neurologist",
   therapy_centre: "Therapy Centre",
 };
