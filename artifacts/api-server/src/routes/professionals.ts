@@ -286,9 +286,8 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       country: p.country,
       displayArea: p.displayArea ?? null,
       offersHomeVisits: p.offersHomeVisits,
-      // Coarsen coordinates to ~1km precision (2 decimal places) to prevent exact pre-booking location identification
-      latitude: p.latitude != null ? Math.round(p.latitude * 100) / 100 : null,
-      longitude: p.longitude != null ? Math.round(p.longitude * 100) / 100 : null,
+      // Coordinates intentionally excluded from search response (pre-booking privacy)
+      // Server-side geo filtering still uses exact coordinates internally
       travelRadiusKm: p.travelRadiusKm,
       willingToTravel: p.willingToTravel,
       isVerified: p.isVerified,

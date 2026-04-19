@@ -12,6 +12,10 @@ export interface UpdateUserBody {
   city?: string;
   country?: string;
   location?: string;
+  /** Parent's home latitude — stored for home-visit matching */
+  latitude?: number;
+  /** Parent's home longitude — stored for home-visit matching */
+  longitude?: number;
   shareHomeLocation?: boolean;
   avatarUrl?: string;
 }

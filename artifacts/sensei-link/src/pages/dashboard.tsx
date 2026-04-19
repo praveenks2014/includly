@@ -36,6 +36,7 @@ import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import { useToast } from "@/hooks/use-toast";
 import { NotificationBanner } from "@/components/NotificationBanner";
+import { PlacesAutocomplete, type PlaceResult } from "@/components/PlacesAutocomplete";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle, AlertCircle, Bell, CalendarCheck, CalendarClock, Crown, Columns, Lock, CheckCheck, Home, MapPin } from "lucide-react";
 import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
@@ -134,6 +135,7 @@ function ParentDashboard({
   const { data: me } = useGetMe();
   const { mutateAsync: updateMe } = useUpdateMe();
   const [locationDraft, setLocationDraft] = useState<string>("");
+  const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationEditing, setLocationEditing] = useState(false);
   const [locationSaving, setLocationSaving] = useState(false);
   const [consentSaving, setConsentSaving] = useState(false);
@@ -143,12 +145,25 @@ function ParentDashboard({
     if (me?.location !== undefined) setLocationDraft(me.location ?? "");
   }, [me?.location]);
 
+  function handleLocationSelect(place: PlaceResult) {
+    setLocationDraft(place.city || place.description);
+    setLocationCoords({ lat: place.lat, lng: place.lng });
+  }
+
   async function handleSaveLocation() {
     setLocationSaving(true);
     try {
-      await updateMe({ data: { location: locationDraft.trim() || undefined } });
+      const payload: { location?: string; latitude?: number; longitude?: number } = {
+        location: locationDraft.trim() || undefined,
+      };
+      if (locationCoords) {
+        payload.latitude = locationCoords.lat;
+        payload.longitude = locationCoords.lng;
+      }
+      await updateMe({ data: payload });
       queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
       setLocationEditing(false);
+      setLocationCoords(null);
       toast({ title: "Area saved" });
     } catch {
       toast({ title: "Could not save area", variant: "destructive" });
@@ -247,16 +262,19 @@ function ParentDashboard({
             <Label className="text-sm font-medium">Your area</Label>
             {locationEditing ? (
               <div className="flex gap-2 mt-1">
-                <Input
-                  value={locationDraft}
-                  onChange={(e) => setLocationDraft(e.target.value)}
-                  placeholder="e.g. Bandra West, Mumbai"
-                  data-testid="input-parent-location"
-                />
-                <Button size="sm" onClick={handleSaveLocation} disabled={locationSaving}>
+                <div className="flex-1">
+                  <PlacesAutocomplete
+                    value={locationDraft}
+                    onChange={setLocationDraft}
+                    onPlaceSelect={handleLocationSelect}
+                    placeholder="e.g. Bandra West, Mumbai"
+                    data-testid="input-parent-location"
+                  />
+                </div>
+                <Button size="sm" onClick={handleSaveLocation} disabled={locationSaving || !locationDraft.trim()}>
                   {locationSaving ? <Loader2 size={13} className="animate-spin" /> : "Save"}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => { setLocationDraft(me?.location ?? ""); setLocationEditing(false); }}>Cancel</Button>
+                <Button size="sm" variant="ghost" onClick={() => { setLocationDraft(me?.location ?? ""); setLocationCoords(null); setLocationEditing(false); }}>Cancel</Button>
               </div>
             ) : (
               <div className="flex items-center gap-2 mt-1">

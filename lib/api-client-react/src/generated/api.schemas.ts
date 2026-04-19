@@ -40,6 +40,16 @@ export interface UserProfile {
   country?: string | null;
   /** @nullable */
   location?: string | null;
+  /**
+   * Parent's home latitude — stored only with consent for home-visit matching
+   * @nullable
+   */
+  latitude?: number | null;
+  /**
+   * Parent's home longitude — stored only with consent for home-visit matching
+   * @nullable
+   */
+  longitude?: number | null;
   shareHomeLocation?: boolean;
   createdAt: string;
 }
@@ -50,6 +60,10 @@ export interface UpdateUserBody {
   city?: string;
   country?: string;
   location?: string;
+  /** Parent's home latitude — stored for home-visit matching */
+  latitude?: number;
+  /** Parent's home longitude — stored for home-visit matching */
+  longitude?: number;
   shareHomeLocation?: boolean;
   avatarUrl?: string;
 }
@@ -205,16 +219,6 @@ export interface ProfessionalSearchResult {
   city?: string | null;
   /** @nullable */
   country?: string | null;
-  /**
-   * Geographic coordinate — used for map markers and distance filtering
-   * @nullable
-   */
-  latitude?: number | null;
-  /**
-   * Geographic coordinate — used for map markers and distance filtering
-   * @nullable
-   */
-  longitude?: number | null;
   /**
    * Human-readable neighbourhood/area label shown to parents before booking (city-level, no exact address)
    * @nullable

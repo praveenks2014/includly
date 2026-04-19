@@ -25,6 +25,16 @@ export interface UserProfile {
   country?: string | null;
   /** @nullable */
   location?: string | null;
+  /**
+   * Parent's home latitude — stored only with consent for home-visit matching
+   * @nullable
+   */
+  latitude?: number | null;
+  /**
+   * Parent's home longitude — stored only with consent for home-visit matching
+   * @nullable
+   */
+  longitude?: number | null;
   shareHomeLocation?: boolean;
   createdAt: Date;
 }

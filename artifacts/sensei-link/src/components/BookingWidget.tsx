@@ -7,6 +7,7 @@ import {
   useGetSessionCredits,
   getGetSessionCreditsQueryKey,
   useGetMe,
+  useGetMySessions,
   type BookableSlot,
 } from "@workspace/api-client-react";
 import { useUser } from "@clerk/react";
@@ -14,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, CalendarCheck, Clock, IndianRupee, ChevronRight, Ticket, AlertCircle, MessageCircle, Info } from "lucide-react";
+import { Loader2, CalendarCheck, Clock, IndianRupee, ChevronRight, Ticket, AlertCircle, MessageCircle, Info, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { loadRazorpayScript } from "@/lib/razorpay";
 import type { RazorpayPaymentResponse } from "@/lib/razorpay";
@@ -75,6 +76,7 @@ export function BookingWidget({
 
   const { mutateAsync: bookSession } = useBookSession();
   const { mutateAsync: verifyPayment } = useVerifySessionPayment();
+  const { data: mySessions } = useGetMySessions({ query: { enabled: booked && bookedSessionId !== null, retry: false } });
 
   const credits = sessionCreditsData?.credits ?? 0;
   const noCredits = isCreditSpecialty && credits < 1;
@@ -155,6 +157,8 @@ export function BookingWidget({
   }
 
   if (booked) {
+    const confirmedSession = mySessions?.find((s) => s.id === bookedSessionId);
+    const specialistAddress = confirmedSession?.professionalAddress;
     return (
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm text-center">
         <CalendarCheck size={40} className="text-green-500 mx-auto mb-3" />
@@ -162,6 +166,12 @@ export function BookingWidget({
         <p className="text-sm text-muted-foreground">
           Your session on {selectedSlot?.date} at {selectedSlot?.startTime} has been booked.
         </p>
+        {specialistAddress && (
+          <div className="mt-3 inline-flex items-center gap-1.5 text-sm bg-muted/60 rounded-lg px-3 py-2 text-foreground">
+            <MapPin size={13} className="text-primary shrink-0" />
+            <span>{specialistAddress}</span>
+          </div>
+        )}
         <div className="mt-4 flex flex-col sm:flex-row gap-2 justify-center">
           <Button
             className="gap-2"

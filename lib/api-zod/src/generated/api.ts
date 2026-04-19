@@ -29,6 +29,18 @@ export const GetMeResponse = zod.object({
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   location: zod.string().nullish(),
+  latitude: zod
+    .number()
+    .nullish()
+    .describe(
+      "Parent's home latitude — stored only with consent for home-visit matching",
+    ),
+  longitude: zod
+    .number()
+    .nullish()
+    .describe(
+      "Parent's home longitude — stored only with consent for home-visit matching",
+    ),
   shareHomeLocation: zod.boolean().optional(),
   createdAt: zod.coerce.date(),
 });
@@ -42,6 +54,14 @@ export const UpdateMeBody = zod.object({
   city: zod.string().optional(),
   country: zod.string().optional(),
   location: zod.string().optional(),
+  latitude: zod
+    .number()
+    .optional()
+    .describe("Parent's home latitude — stored for home-visit matching"),
+  longitude: zod
+    .number()
+    .optional()
+    .describe("Parent's home longitude — stored for home-visit matching"),
   shareHomeLocation: zod.boolean().optional(),
   avatarUrl: zod.string().optional(),
 });
@@ -57,6 +77,18 @@ export const UpdateMeResponse = zod.object({
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   location: zod.string().nullish(),
+  latitude: zod
+    .number()
+    .nullish()
+    .describe(
+      "Parent's home latitude — stored only with consent for home-visit matching",
+    ),
+  longitude: zod
+    .number()
+    .nullish()
+    .describe(
+      "Parent's home longitude — stored only with consent for home-visit matching",
+    ),
   shareHomeLocation: zod.boolean().optional(),
   createdAt: zod.coerce.date(),
 });
@@ -80,6 +112,18 @@ export const SetMyRoleResponse = zod.object({
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   location: zod.string().nullish(),
+  latitude: zod
+    .number()
+    .nullish()
+    .describe(
+      "Parent's home latitude — stored only with consent for home-visit matching",
+    ),
+  longitude: zod
+    .number()
+    .nullish()
+    .describe(
+      "Parent's home longitude — stored only with consent for home-visit matching",
+    ),
   shareHomeLocation: zod.boolean().optional(),
   createdAt: zod.coerce.date(),
 });
@@ -410,18 +454,6 @@ export const SearchProfessionalsResponse = zod.object({
       yearsExperience: zod.number(),
       city: zod.string().nullish(),
       country: zod.string().nullish(),
-      latitude: zod
-        .number()
-        .nullish()
-        .describe(
-          "Geographic coordinate — used for map markers and distance filtering",
-        ),
-      longitude: zod
-        .number()
-        .nullish()
-        .describe(
-          "Geographic coordinate — used for map markers and distance filtering",
-        ),
       displayArea: zod
         .string()
         .nullish()
@@ -594,18 +626,6 @@ export const GetMyUnlocksResponseItem = zod.object({
       yearsExperience: zod.number(),
       city: zod.string().nullish(),
       country: zod.string().nullish(),
-      latitude: zod
-        .number()
-        .nullish()
-        .describe(
-          "Geographic coordinate — used for map markers and distance filtering",
-        ),
-      longitude: zod
-        .number()
-        .nullish()
-        .describe(
-          "Geographic coordinate — used for map markers and distance filtering",
-        ),
       displayArea: zod
         .string()
         .nullish()
@@ -661,18 +681,6 @@ export const GetParentDashboardResponse = zod.object({
           yearsExperience: zod.number(),
           city: zod.string().nullish(),
           country: zod.string().nullish(),
-          latitude: zod
-            .number()
-            .nullish()
-            .describe(
-              "Geographic coordinate — used for map markers and distance filtering",
-            ),
-          longitude: zod
-            .number()
-            .nullish()
-            .describe(
-              "Geographic coordinate — used for map markers and distance filtering",
-            ),
           displayArea: zod
             .string()
             .nullish()

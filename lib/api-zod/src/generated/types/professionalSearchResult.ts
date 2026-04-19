@@ -20,16 +20,6 @@ export interface ProfessionalSearchResult {
   /** @nullable */
   country?: string | null;
   /**
-   * Geographic coordinate — used for map markers and distance filtering
-   * @nullable
-   */
-  latitude?: number | null;
-  /**
-   * Geographic coordinate — used for map markers and distance filtering
-   * @nullable
-   */
-  longitude?: number | null;
-  /**
    * Human-readable neighbourhood/area label shown to parents before booking (city-level, no exact address)
    * @nullable
    */

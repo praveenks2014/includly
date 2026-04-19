@@ -118,8 +118,8 @@ export function ProfessionalsMap({
       </Map>
       {!hasGeoResults && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="bg-card/90 backdrop-blur-sm border border-border rounded-lg px-4 py-2 text-sm text-muted-foreground shadow">
-            No geo-located professionals in this search
+          <div className="bg-card/90 backdrop-blur-sm border border-border rounded-lg px-4 py-2 text-sm text-muted-foreground shadow text-center max-w-xs">
+            Specialist locations are shared only after a booking is confirmed
           </div>
         </div>
       )}

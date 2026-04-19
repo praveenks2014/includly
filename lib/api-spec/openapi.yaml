@@ -1585,6 +1585,12 @@ components:
           type: ["string", "null"]
         location:
           type: ["string", "null"]
+        latitude:
+          type: ["number", "null"]
+          description: Parent's home latitude — stored only with consent for home-visit matching
+        longitude:
+          type: ["number", "null"]
+          description: Parent's home longitude — stored only with consent for home-visit matching
         shareHomeLocation:
           type: boolean
         createdAt:
@@ -1609,6 +1615,12 @@ components:
           type: string
         location:
           type: string
+        latitude:
+          type: number
+          description: Parent's home latitude — stored for home-visit matching
+        longitude:
+          type: number
+          description: Parent's home longitude — stored for home-visit matching
         shareHomeLocation:
           type: boolean
         avatarUrl:
@@ -1810,12 +1822,6 @@ components:
           type: ["string", "null"]
         country:
           type: ["string", "null"]
-        latitude:
-          type: ["number", "null"]
-          description: Geographic coordinate — used for map markers and distance filtering
-        longitude:
-          type: ["number", "null"]
-          description: Geographic coordinate — used for map markers and distance filtering
         displayArea:
           type: ["string", "null"]
           description: Human-readable neighbourhood/area label shown to parents before booking (city-level, no exact address)

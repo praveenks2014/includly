@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, pgEnum, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -15,6 +15,8 @@ export const usersTable = pgTable("users", {
   city: text("city"),
   country: text("country"),
   location: text("location"),
+  latitude: real("latitude"),
+  longitude: real("longitude"),
   shareHomeLocation: boolean("share_home_location").notNull().default(false),
   sessionCredits: integer("session_credits").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
