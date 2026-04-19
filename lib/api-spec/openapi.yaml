@@ -1662,6 +1662,9 @@ components:
         displayArea:
           type: ["string", "null"]
           description: Human-readable neighbourhood/area label shown to parents
+        clinicAddress:
+          type: ["string", "null"]
+          description: Full clinic/practice address — revealed to parents only after a booking is confirmed
         offersHomeVisits:
           type: boolean
           description: Whether this specialist offers home-visit sessions
@@ -1733,6 +1736,9 @@ components:
         displayArea:
           type: ["string", "null"]
           description: Human-readable neighbourhood/area label shown to parents before booking
+        clinicAddress:
+          type: ["string", "null"]
+          description: Full clinic/practice address — revealed to parents only after a booking is confirmed
         offersHomeVisits:
           type: boolean
           description: Whether this specialist offers home-visit sessions
@@ -1804,6 +1810,12 @@ components:
           type: ["string", "null"]
         country:
           type: ["string", "null"]
+        latitude:
+          type: ["number", "null"]
+          description: Geographic coordinate — used for map markers and distance filtering
+        longitude:
+          type: ["number", "null"]
+          description: Geographic coordinate — used for map markers and distance filtering
         displayArea:
           type: ["string", "null"]
           description: Human-readable neighbourhood/area label shown to parents before booking (city-level, no exact address)
@@ -1921,6 +1933,12 @@ components:
         displayArea:
           type: string
           description: Human-readable neighbourhood/area label shown to parents (e.g. "Bandra West, Mumbai")
+        clinicAddress:
+          type: string
+          description: Full clinic/practice address — revealed to parents only after booking is confirmed
+        offersHomeVisits:
+          type: boolean
+          description: Whether this specialist offers home-visit sessions
         upiId:
           type: string
           description: UPI ID for receiving session payments (never exposed to parents/clients)
@@ -1975,6 +1993,9 @@ components:
         displayArea:
           type: string
           description: Human-readable neighbourhood/area label shown to parents (e.g. "Bandra West, Mumbai")
+        clinicAddress:
+          type: string
+          description: Full clinic/practice address — revealed to parents only after booking is confirmed
         offersHomeVisits:
           type: boolean
           description: Whether this specialist offers home-visit sessions
@@ -2901,6 +2922,9 @@ components:
         professionalDisplayArea:
           type: ["string", "null"]
           description: Specialist's display area — revealed to parent in confirmed bookings
+        professionalAddress:
+          type: ["string", "null"]
+          description: Full clinic/practice address — revealed to parent only after booking is confirmed
         parentName:
           type: string
         parentLocation:

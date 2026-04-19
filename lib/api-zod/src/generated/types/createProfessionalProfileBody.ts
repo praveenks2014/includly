@@ -25,6 +25,10 @@ export interface CreateProfessionalProfileBody {
   pricingMaxINR?: number;
   /** Human-readable neighbourhood/area label shown to parents (e.g. "Bandra West, Mumbai") */
   displayArea?: string;
+  /** Full clinic/practice address — revealed to parents only after booking is confirmed */
+  clinicAddress?: string;
+  /** Whether this specialist offers home-visit sessions */
+  offersHomeVisits?: boolean;
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
   upiId?: string;
 }

@@ -31,6 +31,11 @@ export interface ProfessionalProfile {
    * @nullable
    */
   displayArea?: string | null;
+  /**
+   * Full clinic/practice address — revealed to parents only after a booking is confirmed
+   * @nullable
+   */
+  clinicAddress?: string | null;
   /** Whether this specialist offers home-visit sessions */
   offersHomeVisits: boolean;
   travelRadiusKm: number;

@@ -366,7 +366,7 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
     .limit(1);
   const isPremiumLive = !!activeProfSub;
 
-  const { upiId: _upiId, latitude: _lat, longitude: _lng, ...safeProfile } = profile;
+  const { upiId: _upiId, latitude: _lat, longitude: _lng, clinicAddress: _clinicAddress, ...safeProfile } = profile;
   const result = {
     ...safeProfile,
     phoneBlurred: blurContact(profile.phone),

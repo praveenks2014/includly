@@ -112,6 +112,12 @@ export const GetMyProfessionalProfileResponse = zod.object({
     .string()
     .nullish()
     .describe("Human-readable neighbourhood\/area label shown to parents"),
+  clinicAddress: zod
+    .string()
+    .nullish()
+    .describe(
+      "Full clinic\/practice address — revealed to parents only after a booking is confirmed",
+    ),
   offersHomeVisits: zod
     .boolean()
     .describe("Whether this specialist offers home-visit sessions"),
@@ -172,6 +178,16 @@ export const CreateProfessionalProfileBody = zod.object({
     .describe(
       'Human-readable neighbourhood\/area label shown to parents (e.g. \"Bandra West, Mumbai\")',
     ),
+  clinicAddress: zod
+    .string()
+    .optional()
+    .describe(
+      "Full clinic\/practice address — revealed to parents only after booking is confirmed",
+    ),
+  offersHomeVisits: zod
+    .boolean()
+    .optional()
+    .describe("Whether this specialist offers home-visit sessions"),
   upiId: zod
     .string()
     .optional()
@@ -216,6 +232,12 @@ export const UpdateProfessionalProfileBody = zod.object({
     .describe(
       'Human-readable neighbourhood\/area label shown to parents (e.g. \"Bandra West, Mumbai\")',
     ),
+  clinicAddress: zod
+    .string()
+    .optional()
+    .describe(
+      "Full clinic\/practice address — revealed to parents only after booking is confirmed",
+    ),
   offersHomeVisits: zod
     .boolean()
     .optional()
@@ -253,6 +275,12 @@ export const UpdateProfessionalProfileResponse = zod.object({
     .string()
     .nullish()
     .describe("Human-readable neighbourhood\/area label shown to parents"),
+  clinicAddress: zod
+    .string()
+    .nullish()
+    .describe(
+      "Full clinic\/practice address — revealed to parents only after a booking is confirmed",
+    ),
   offersHomeVisits: zod
     .boolean()
     .describe("Whether this specialist offers home-visit sessions"),
@@ -301,6 +329,12 @@ export const GetProfessionalResponse = zod.object({
     .nullish()
     .describe(
       "Human-readable neighbourhood\/area label shown to parents before booking",
+    ),
+  clinicAddress: zod
+    .string()
+    .nullish()
+    .describe(
+      "Full clinic\/practice address — revealed to parents only after a booking is confirmed",
     ),
   offersHomeVisits: zod
     .boolean()
@@ -376,6 +410,18 @@ export const SearchProfessionalsResponse = zod.object({
       yearsExperience: zod.number(),
       city: zod.string().nullish(),
       country: zod.string().nullish(),
+      latitude: zod
+        .number()
+        .nullish()
+        .describe(
+          "Geographic coordinate — used for map markers and distance filtering",
+        ),
+      longitude: zod
+        .number()
+        .nullish()
+        .describe(
+          "Geographic coordinate — used for map markers and distance filtering",
+        ),
       displayArea: zod
         .string()
         .nullish()
@@ -548,6 +594,18 @@ export const GetMyUnlocksResponseItem = zod.object({
       yearsExperience: zod.number(),
       city: zod.string().nullish(),
       country: zod.string().nullish(),
+      latitude: zod
+        .number()
+        .nullish()
+        .describe(
+          "Geographic coordinate — used for map markers and distance filtering",
+        ),
+      longitude: zod
+        .number()
+        .nullish()
+        .describe(
+          "Geographic coordinate — used for map markers and distance filtering",
+        ),
       displayArea: zod
         .string()
         .nullish()
@@ -603,6 +661,18 @@ export const GetParentDashboardResponse = zod.object({
           yearsExperience: zod.number(),
           city: zod.string().nullish(),
           country: zod.string().nullish(),
+          latitude: zod
+            .number()
+            .nullish()
+            .describe(
+              "Geographic coordinate — used for map markers and distance filtering",
+            ),
+          longitude: zod
+            .number()
+            .nullish()
+            .describe(
+              "Geographic coordinate — used for map markers and distance filtering",
+            ),
           displayArea: zod
             .string()
             .nullish()
@@ -671,6 +741,12 @@ export const GetProfessionalDashboardResponse = zod.object({
         .string()
         .nullish()
         .describe("Human-readable neighbourhood\/area label shown to parents"),
+      clinicAddress: zod
+        .string()
+        .nullish()
+        .describe(
+          "Full clinic\/practice address — revealed to parents only after a booking is confirmed",
+        ),
       offersHomeVisits: zod
         .boolean()
         .describe("Whether this specialist offers home-visit sessions"),
@@ -1050,6 +1126,12 @@ export const AdminApproveProfessionalResponse = zod.object({
     .string()
     .nullish()
     .describe("Human-readable neighbourhood\/area label shown to parents"),
+  clinicAddress: zod
+    .string()
+    .nullish()
+    .describe(
+      "Full clinic\/practice address — revealed to parents only after a booking is confirmed",
+    ),
   offersHomeVisits: zod
     .boolean()
     .describe("Whether this specialist offers home-visit sessions"),
@@ -1108,6 +1190,12 @@ export const AdminRejectProfessionalResponse = zod.object({
     .string()
     .nullish()
     .describe("Human-readable neighbourhood\/area label shown to parents"),
+  clinicAddress: zod
+    .string()
+    .nullish()
+    .describe(
+      "Full clinic\/practice address — revealed to parents only after a booking is confirmed",
+    ),
   offersHomeVisits: zod
     .boolean()
     .describe("Whether this specialist offers home-visit sessions"),
@@ -1485,6 +1573,12 @@ export const GetMySessionsResponseItem = zod.object({
     .nullish()
     .describe(
       "Specialist's display area — revealed to parent in confirmed bookings",
+    ),
+  professionalAddress: zod
+    .string()
+    .nullish()
+    .describe(
+      "Full clinic\/practice address — revealed to parent only after booking is confirmed",
     ),
   parentName: zod.string().optional(),
   parentLocation: zod

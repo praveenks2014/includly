@@ -274,8 +274,14 @@ function SessionCard({
           </span>
         </div>
 
-        {/* Location — progressive disclosure */}
-        {session.status === "confirmed" && !isProfessional && (session.professionalDisplayArea || session.professionalCity) && (
+        {/* Location — progressive disclosure (area pre-booking, full address post-confirmation) */}
+        {session.status === "confirmed" && !isProfessional && session.professionalAddress && (
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <MapPin size={11} />
+            {session.professionalAddress}
+          </p>
+        )}
+        {session.status === "confirmed" && !isProfessional && !session.professionalAddress && (session.professionalDisplayArea || session.professionalCity) && (
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <MapPin size={11} />
             {session.professionalDisplayArea ?? session.professionalCity}

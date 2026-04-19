@@ -422,6 +422,7 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         professionalSpecialty: null,
         professionalCity: null,
         professionalDisplayArea: null,
+        professionalAddress: null,
         // Only share parent's area when: specialist offers home visits + booking confirmed + parent has given consent
         parentLocation: prof.offersHomeVisits && b.status === "confirmed" && b.parentSharesLocation ? (b.parentLocation ?? null) : null,
       })),
@@ -444,6 +445,7 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         professionalSpecialty: professionalProfilesTable.specialty,
         professionalCity: professionalProfilesTable.city,
         professionalDisplayArea: professionalProfilesTable.displayArea,
+        professionalAddress: professionalProfilesTable.clinicAddress,
         messageCount: msgCountSubquery,
       })
       .from(sessionBookingsTable)
@@ -456,9 +458,10 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         ...b,
         parentName: null,
         parentLocation: null,
-        // Location fields are always available — used in confirmed booking detail
         professionalCity: b.professionalCity ?? null,
         professionalDisplayArea: b.professionalDisplayArea ?? null,
+        // Full clinic address only revealed after booking is confirmed
+        professionalAddress: b.status === "confirmed" ? (b.professionalAddress ?? null) : null,
       })),
     );
   }

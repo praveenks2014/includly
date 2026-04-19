@@ -78,6 +78,7 @@ export default function OnboardPage() {
     latitude: existingProfile?.latitude ?? undefined as number | undefined,
     longitude: existingProfile?.longitude ?? undefined as number | undefined,
     displayArea: existingProfile?.displayArea ?? "",
+    clinicAddress: existingProfile?.clinicAddress ?? "",
     willingToTravel: existingProfile?.willingToTravel ?? false,
     travelRadiusKm: existingProfile?.travelRadiusKm?.toString() ?? "10",
     phone: existingProfile?.phone ?? "",
@@ -212,6 +213,7 @@ export default function OnboardPage() {
       city: form.city,
       country: form.country,
       displayArea: form.displayArea.trim() || undefined,
+      clinicAddress: form.clinicAddress.trim() || undefined,
       latitude: form.latitude,
       longitude: form.longitude,
       willingToTravel: form.willingToTravel,
@@ -580,6 +582,20 @@ export default function OnboardPage() {
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
                   Shown on your public profile. Your exact address is never shared before a booking is confirmed.
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="clinicAddress">Full clinic / practice address <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input
+                  id="clinicAddress"
+                  value={form.clinicAddress}
+                  onChange={(e) => set("clinicAddress", e.target.value)}
+                  placeholder="e.g. 204 Sunrise Chambers, SV Road, Bandra West, Mumbai 400050"
+                  className="mt-1"
+                  data-testid="input-clinic-address"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Shared with parents only after a booking is confirmed.
                 </p>
               </div>
             </div>

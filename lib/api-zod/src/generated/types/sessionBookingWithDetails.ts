@@ -31,6 +31,11 @@ export interface SessionBookingWithDetails {
    * @nullable
    */
   professionalDisplayArea?: string | null;
+  /**
+   * Full clinic/practice address — revealed to parent only after booking is confirmed
+   * @nullable
+   */
+  professionalAddress?: string | null;
   parentName?: string;
   /**
    * Parent's area — shown to specialist only if offersHomeVisits and parent has shared location
