@@ -140,7 +140,7 @@ function ParentDashboard({
         <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center justify-between gap-4">
           <div>
             <p className="font-semibold text-sm text-foreground">Get unlimited access</p>
-            <p className="text-xs text-muted-foreground">Subscribe for ₹499/30 days or unlock individual contacts for ₹99 each.</p>
+            <p className="text-xs text-muted-foreground">Subscribe for ₹499/30 days (up to 5 contacts) or unlock individual contacts for ₹149 each.</p>
           </div>
           <Link href="/pricing">
             <Button size="sm" className="gap-2 shrink-0" data-testid="upgrade-cta">

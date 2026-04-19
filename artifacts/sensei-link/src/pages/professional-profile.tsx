@@ -344,7 +344,7 @@ export default function ProfessionalProfilePage() {
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Unlock {p.fullName?.split(" ")[0]}'s direct phone &amp; email
                   </p>
-                  <p className="text-[11px] text-muted-foreground/70 mt-1">₹499 / 30 days · or ₹99 single contact</p>
+                  <p className="text-[11px] text-muted-foreground/70 mt-1">₹499 / 30 days (up to 5) · or ₹149 single contact</p>
                 </div>
                 <Button
                   onClick={handleUnlock}
