@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, boolean, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, boolean, pgEnum, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { professionalProfilesTable } from "./professionals";
@@ -44,13 +44,17 @@ export const sessionBookingsTable = pgTable("session_bookings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
-export const bookingMessagesTable = pgTable("booking_messages", {
-  id: serial("id").primaryKey(),
-  bookingId: integer("booking_id").notNull().references(() => sessionBookingsTable.id, { onDelete: "cascade" }),
-  senderId: integer("sender_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
-  body: text("body").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const bookingMessagesTable = pgTable(
+  "booking_messages",
+  {
+    id: serial("id").primaryKey(),
+    bookingId: integer("booking_id").notNull().references(() => sessionBookingsTable.id, { onDelete: "cascade" }),
+    senderId: integer("sender_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("booking_messages_booking_id_created_at_idx").on(t.bookingId, t.createdAt)],
+);
 
 export const insertProfessionalAvailabilitySchema = createInsertSchema(professionalAvailabilityTable).omit({
   id: true,

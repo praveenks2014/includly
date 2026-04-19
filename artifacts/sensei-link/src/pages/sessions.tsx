@@ -1,5 +1,5 @@
 import { useUser } from "@clerk/react";
-import { Redirect } from "wouter";
+import { Redirect, useSearch } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { useGetMySessions, useUpdateSessionStatus, type SessionBookingWithDetails } from "@workspace/api-client-react";
 import { Loader2, CalendarCheck, Clock, IndianRupee, User, MessageCircle } from "lucide-react";
@@ -57,6 +57,10 @@ export default function SessionsPage() {
   const [chatSession, setChatSession] = useState<SessionWithMessageCount | null>(null);
   const [readCounts, setReadCounts] = useState<Record<number, number>>({});
 
+  const search = useSearch();
+  const chatParam = new URLSearchParams(search).get("chat");
+  const chatParamId = chatParam ? parseInt(chatParam, 10) : null;
+
   const { data: sessions, isLoading, refetch } = useGetMySessions();
 
   const { mutateAsync: updateStatus } = useUpdateSessionStatus();
@@ -69,6 +73,12 @@ export default function SessionsPage() {
     }
     setReadCounts(counts);
   }, [sessions]);
+
+  useEffect(() => {
+    if (!chatParamId || !sessions || chatSession) return;
+    const target = (sessions as SessionWithMessageCount[]).find((s) => s.id === chatParamId);
+    if (target) setChatSession(target);
+  }, [chatParamId, sessions, chatSession]);
 
   if (!isLoaded) return null;
   if (!isSignedIn) return <Redirect to="/sign-in" />;

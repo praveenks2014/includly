@@ -144,7 +144,7 @@ export function BookingWidget({
         <div className="mt-4 flex flex-col sm:flex-row gap-2 justify-center">
           <Button
             className="gap-2"
-            onClick={() => navigate("/sessions")}
+            onClick={() => navigate(bookedSessionId ? `/sessions?chat=${bookedSessionId}` : "/sessions")}
             data-testid="booking-chat-cta"
           >
             <MessageCircle size={15} />

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, Send, MessageCircle } from "lucide-react";
+import { Loader2, Send, MessageCircle, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +15,13 @@ interface ChatMessage {
   createdAt: string;
 }
 
+interface MessagesResponse {
+  messages: ChatMessage[];
+  total: number;
+  hasMore: boolean;
+  nextBefore: number | null;
+}
+
 interface ChatThreadProps {
   bookingId: number;
   otherPartyName: string;
@@ -22,6 +29,7 @@ interface ChatThreadProps {
 }
 
 const POLL_INTERVAL_MS = 10_000;
+const PAGE_LIMIT = 100;
 
 export function ChatThread({ bookingId, otherPartyName, onMessagesRead }: ChatThreadProps) {
   const { getToken } = useAuth();
@@ -30,10 +38,14 @@ export function ChatThread({ bookingId, otherPartyName, onMessagesRead }: ChatTh
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextBefore, setNextBefore] = useState<number | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const totalReadRef = useRef(0);
 
   const localStorageKey = `chat_read_count_${bookingId}`;
 
@@ -43,27 +55,50 @@ export function ChatThread({ bookingId, otherPartyName, onMessagesRead }: ChatTh
     }
   }
 
+  async function fetchPage(url: string): Promise<MessagesResponse | null> {
+    const token = await getToken();
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    return res.json() as Promise<MessagesResponse>;
+  }
+
   const fetchMessages = useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
     try {
-      const token = await getToken();
-      const res = await fetch(`/api/sessions/${bookingId}/messages`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
+      const data = await fetchPage(`/api/sessions/${bookingId}/messages?limit=${PAGE_LIMIT}`);
+      if (!data) {
         if (!silent) toast({ title: "Could not load messages", variant: "destructive" });
         return;
       }
-      const data = await res.json() as { messages: ChatMessage[]; total: number };
       setMessages(data.messages);
-      localStorage.setItem(localStorageKey, String(data.total));
-      if (onMessagesRead) onMessagesRead(data.total);
+      setHasMore(data.hasMore);
+      setNextBefore(data.nextBefore);
+      totalReadRef.current = data.messages.length;
+      localStorage.setItem(localStorageKey, String(data.messages.length));
+      if (onMessagesRead) onMessagesRead(data.messages.length);
     } catch {
       if (!silent) toast({ title: "Could not load messages", variant: "destructive" });
     } finally {
       if (!silent) setIsLoading(false);
     }
-  }, [bookingId, getToken, localStorageKey, onMessagesRead, toast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingId, localStorageKey, onMessagesRead, toast]);
+
+  async function loadMore() {
+    if (!nextBefore || isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const data = await fetchPage(`/api/sessions/${bookingId}/messages?limit=${PAGE_LIMIT}&before=${nextBefore}`);
+      if (!data) return;
+      setMessages((prev) => [...data.messages, ...prev]);
+      setHasMore(data.hasMore);
+      setNextBefore(data.nextBefore);
+    } catch {
+      toast({ title: "Could not load earlier messages", variant: "destructive" });
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     fetchMessages(false);
@@ -101,6 +136,7 @@ export function ChatThread({ bookingId, otherPartyName, onMessagesRead }: ChatTh
       setDraft("");
       setMessages((prev) => {
         const updated = [...prev, newMsg];
+        totalReadRef.current = updated.length;
         localStorage.setItem(localStorageKey, String(updated.length));
         if (onMessagesRead) onMessagesRead(updated.length);
         return updated;
@@ -143,6 +179,22 @@ export function ChatThread({ bookingId, otherPartyName, onMessagesRead }: ChatTh
         className="flex-1 overflow-y-auto py-3 px-1 space-y-3 min-h-0"
         style={{ maxHeight: "380px" }}
       >
+        {hasMore && (
+          <div className="flex justify-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs text-muted-foreground"
+              onClick={loadMore}
+              disabled={isLoadingMore}
+              data-testid="load-more-messages"
+            >
+              {isLoadingMore ? <Loader2 size={12} className="animate-spin" /> : <ChevronUp size={12} />}
+              Load earlier messages
+            </Button>
+          </div>
+        )}
+
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 text-center">
             <MessageCircle size={32} className="text-muted-foreground/30 mb-2" />

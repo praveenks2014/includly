@@ -527,11 +527,18 @@ router.get("/sessions/:bookingId/messages", requireAuth, async (req: Request, re
     return;
   }
 
+  const limit = Math.min(parseInt((req.query["limit"] as string) ?? "100", 10) || 100, 200);
+  const before = req.query["before"] ? parseInt(req.query["before"] as string, 10) : null;
+
   const participant = await assertBookingParticipant(bookingId, req.userId!, req.userRole!);
   if (!participant) {
     res.status(404).json({ error: "Booking not found or access denied" });
     return;
   }
+
+  const whereClause = before && !isNaN(before)
+    ? and(eq(bookingMessagesTable.bookingId, bookingId), sql`${bookingMessagesTable.id} < ${before}`)
+    : eq(bookingMessagesTable.bookingId, bookingId);
 
   const messages = await db
     .select({
@@ -544,10 +551,15 @@ router.get("/sessions/:bookingId/messages", requireAuth, async (req: Request, re
     })
     .from(bookingMessagesTable)
     .leftJoin(usersTable, eq(bookingMessagesTable.senderId, usersTable.id))
-    .where(eq(bookingMessagesTable.bookingId, bookingId))
-    .orderBy(bookingMessagesTable.createdAt);
+    .where(whereClause)
+    .orderBy(bookingMessagesTable.createdAt)
+    .limit(limit + 1);
 
-  res.json({ messages, total: messages.length });
+  const hasMore = messages.length > limit;
+  const page = hasMore ? messages.slice(0, limit) : messages;
+  const nextBefore = hasMore ? page[0]?.id ?? null : null;
+
+  res.json({ messages: page, total: page.length, hasMore, nextBefore });
 });
 
 router.post("/sessions/:bookingId/messages", requireAuth, async (req: Request, res: Response): Promise<void> => {
