@@ -95,22 +95,36 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
     return;
   }
 
-  // Enforce that only hands-on specialties may enable home visits
+  // Enforce home-visit specialty invariant
   const HOME_VISIT_SPECIALTIES = ["shadow_teacher", "special_tutor", "occupational_therapy", "speech_therapy"];
+  const [existing] = await db
+    .select({ specialty: professionalProfilesTable.specialty, offersHomeVisits: professionalProfilesTable.offersHomeVisits })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.userId, req.userId!));
+
   if (parsed.data.offersHomeVisits === true) {
-    const [existing] = await db
-      .select({ specialty: professionalProfilesTable.specialty })
-      .from(professionalProfilesTable)
-      .where(eq(professionalProfilesTable.userId, req.userId!));
-    if (!existing || !HOME_VISIT_SPECIALTIES.includes(existing.specialty)) {
+    // Reject explicit attempt to enable home visits on ineligible specialty
+    const effectiveSpecialty = parsed.data.specialty ?? existing?.specialty;
+    if (!effectiveSpecialty || !HOME_VISIT_SPECIALTIES.includes(effectiveSpecialty)) {
       res.status(400).json({ error: "Home visits are only available for Shadow Teachers, Special Educators, Occupational Therapists, and Speech Therapists." });
       return;
     }
   }
 
+  // If specialty is changing to a non-eligible one while offersHomeVisits is currently true, auto-disable it
+  const updateData = { ...parsed.data };
+  if (
+    parsed.data.specialty &&
+    !HOME_VISIT_SPECIALTIES.includes(parsed.data.specialty) &&
+    existing?.offersHomeVisits === true &&
+    parsed.data.offersHomeVisits !== false
+  ) {
+    updateData.offersHomeVisits = false;
+  }
+
   const [profile] = await db
     .update(professionalProfilesTable)
-    .set(parsed.data)
+    .set(updateData)
     .where(eq(professionalProfilesTable.userId, req.userId!))
     .returning();
 

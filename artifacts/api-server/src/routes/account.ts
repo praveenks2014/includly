@@ -117,6 +117,9 @@ router.post("/account/delete", requireAuth, async (req, res): Promise<void> => {
         city: null,
         country: null,
         location: null,
+        latitude: null,
+        longitude: null,
+        shareHomeLocation: false,
         clerkId: `deleted-${userId}-${Date.now()}`,
       })
       .where(eq(usersTable.id, userId));
