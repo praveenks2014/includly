@@ -53,6 +53,13 @@ router.post("/professionals/me", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
+  // Enforce that only hands-on specialties may enable home visits (same allowlist as PATCH)
+  const HOME_VISIT_SPECIALTIES = ["shadow_teacher", "special_tutor", "occupational_therapy", "speech_therapy"];
+  if (parsed.data.offersHomeVisits === true && !HOME_VISIT_SPECIALTIES.includes(parsed.data.specialty)) {
+    res.status(400).json({ error: "Home visits are only available for Shadow Teachers, Special Educators, Occupational Therapists, and Speech Therapists." });
+    return;
+  }
+
   const existing = await db
     .select()
     .from(professionalProfilesTable)
