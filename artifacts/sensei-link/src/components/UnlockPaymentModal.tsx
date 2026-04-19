@@ -97,14 +97,10 @@ export function UnlockPaymentModal({
               },
             });
             if (result.success) {
-              toast({
-                title: planId === "plan_b_per_contact" ? "Contact unlocked!" : "Premium activated!",
-                description: planId === "plan_b_per_contact"
-                  ? "You can now see the contact details."
-                  : `You can now see ${professionalName ? `${professionalName.split(" ")[0]}'s` : "this teacher's"} contact for 30 days.`,
-              });
               onUnlockSuccess();
               onClose();
+              const successPath = `${basePath}/payment/success?professionalId=${professionalId}&plan=${planId}`;
+              setLocation(successPath);
             } else {
               toast({ title: "Payment verification failed", description: "Please contact support.", variant: "destructive" });
             }

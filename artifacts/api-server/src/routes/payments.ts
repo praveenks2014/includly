@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, desc, and, gt, gte, sql } from "drizzle-orm";
+import { eq, desc, and, gt, gte, sql, isNull, or } from "drizzle-orm";
 import Stripe from "stripe";
 import Razorpay from "razorpay";
 import crypto from "crypto";
@@ -14,6 +14,61 @@ import {
 import { notifyProfessionalOnUnlock } from "../lib/notificationService";
 
 const router: IRouter = Router();
+
+interface ProfessionalSnapshot {
+  fullName: string;
+  avatarUrl: string | null;
+  phone: string | null;
+  email: string | null;
+  city: string | null;
+  expiresAt: string | null;
+}
+
+async function fetchProfessionalSnapshot(
+  userId: number,
+  professionalId: number,
+): Promise<ProfessionalSnapshot | null> {
+  const [prof] = await db
+    .select({
+      fullName: professionalProfilesTable.fullName,
+      phone: professionalProfilesTable.phone,
+      email: professionalProfilesTable.email,
+      city: professionalProfilesTable.city,
+      avatarUrl: usersTable.avatarUrl,
+    })
+    .from(professionalProfilesTable)
+    .leftJoin(usersTable, eq(usersTable.id, professionalProfilesTable.userId))
+    .where(eq(professionalProfilesTable.id, professionalId))
+    .limit(1);
+
+  if (!prof) return null;
+
+  const now = new Date();
+  const [unlock] = await db
+    .select({ expiresAt: contactUnlocksTable.expiresAt })
+    .from(contactUnlocksTable)
+    .where(
+      and(
+        eq(contactUnlocksTable.parentId, userId),
+        eq(contactUnlocksTable.professionalId, professionalId),
+      ),
+    )
+    .limit(1);
+
+  // Only expose contact details when the unlock is currently active
+  const isUnlockActive = unlock
+    ? (unlock.expiresAt === null || unlock.expiresAt > now)
+    : false;
+
+  return {
+    fullName: prof.fullName ?? "",
+    avatarUrl: prof.avatarUrl ?? null,
+    phone: isUnlockActive ? prof.phone : null,
+    email: isUnlockActive ? prof.email : null,
+    city: prof.city,
+    expiresAt: unlock?.expiresAt ? unlock.expiresAt.toISOString() : null,
+  };
+}
 
 async function getContactLimit(): Promise<number> {
   try {
@@ -149,6 +204,42 @@ router.get("/payments/history", requireAuth, async (req: Request, res: Response)
   );
 });
 
+router.get("/payments/unlock-snapshot/:professionalId", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const raw = Array.isArray(req.params.professionalId) ? req.params.professionalId[0] : req.params.professionalId;
+  const professionalId = parseInt(raw, 10);
+  if (isNaN(professionalId)) {
+    res.status(400).json({ error: "Invalid professionalId" });
+    return;
+  }
+
+  // Verify caller has an active unlock for this professional before returning contact data
+  const now = new Date();
+  const [unlock] = await db
+    .select({ id: contactUnlocksTable.id })
+    .from(contactUnlocksTable)
+    .where(
+      and(
+        eq(contactUnlocksTable.parentId, req.userId!),
+        eq(contactUnlocksTable.professionalId, professionalId),
+        or(isNull(contactUnlocksTable.expiresAt), gt(contactUnlocksTable.expiresAt, now)),
+      ),
+    )
+    .limit(1);
+
+  if (!unlock) {
+    res.status(403).json({ error: "No active unlock for this professional" });
+    return;
+  }
+
+  const snapshot = await fetchProfessionalSnapshot(req.userId!, professionalId);
+  if (!snapshot) {
+    res.status(404).json({ error: "Professional not found" });
+    return;
+  }
+
+  res.json(snapshot);
+});
+
 router.post(
   "/payments/stripe/checkout",
   requireAuth,
@@ -263,14 +354,19 @@ router.post(
       professionalId: professionalId ? String(professionalId) : "",
     };
 
+    // Append Stripe session params safely — successUrl may already contain query params
+    // (e.g. professionalId, plan) appended by the frontend, so use & instead of ? when needed.
+    const successSep = successUrl.includes("?") ? "&" : "?";
+    const cancelSep = cancelUrl.includes("?") ? "&" : "?";
+
     let sessionConfig: Parameters<typeof stripe.checkout.sessions.create>[0];
 
     if (plan === "plan_a_subscription" && planDetails.stripePriceId) {
       sessionConfig = {
         mode: "subscription",
         line_items: [{ price: planDetails.stripePriceId, quantity: 1 }],
-        success_url: `${successUrl}?session_id={CHECKOUT_SESSION_ID}&payment_id=${payment.id}`,
-        cancel_url: `${cancelUrl}?payment_id=${payment.id}`,
+        success_url: `${successUrl}${successSep}session_id={CHECKOUT_SESSION_ID}&payment_id=${payment.id}`,
+        cancel_url: `${cancelUrl}${cancelSep}payment_id=${payment.id}`,
         metadata: commonMeta,
         subscription_data: { metadata: commonMeta },
       };
@@ -289,8 +385,8 @@ router.post(
       sessionConfig = {
         mode: "payment",
         line_items: [lineItem],
-        success_url: `${successUrl}?session_id={CHECKOUT_SESSION_ID}&payment_id=${payment.id}`,
-        cancel_url: `${cancelUrl}?payment_id=${payment.id}`,
+        success_url: `${successUrl}${successSep}session_id={CHECKOUT_SESSION_ID}&payment_id=${payment.id}`,
+        cancel_url: `${cancelUrl}${cancelSep}payment_id=${payment.id}`,
         metadata: commonMeta,
       };
     }
@@ -361,14 +457,23 @@ router.get("/payments/stripe/session/:sessionId", requireAuth, async (req: Reque
         stripeSubId,
       );
 
+      const profSnapshot = payment.professionalId
+        ? await fetchProfessionalSnapshot(payment.userId, payment.professionalId)
+        : null;
+
       res.json({
         status: "completed",
         plan: payment.plan,
         professionalId: payment.professionalId ?? null,
         ...result,
+        professional: profSnapshot,
       });
       return;
     }
+
+    const alreadyProfSnapshot = payment.professionalId && payment.status === "completed"
+      ? await fetchProfessionalSnapshot(payment.userId, payment.professionalId)
+      : null;
 
     res.json({
       status: payment.status,
@@ -378,6 +483,7 @@ router.get("/payments/stripe/session/:sessionId", requireAuth, async (req: Reque
       unlockedProfessionalId: payment.plan === "plan_b_per_contact" && payment.status === "completed"
         ? payment.professionalId
         : null,
+      professional: alreadyProfSnapshot,
     });
   } catch {
     res.status(400).json({ error: "Invalid session ID" });
