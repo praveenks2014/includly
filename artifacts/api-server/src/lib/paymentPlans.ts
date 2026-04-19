@@ -2,7 +2,7 @@ export const PLANS = {
   plan_a_subscription: {
     id: "plan_a_subscription",
     name: "30-Day Teacher Unlock",
-    description: "Unlock up to 5 shadow teacher contacts for 30 days. Renew anytime.",
+    description: "Unlock up to 5 shadow teacher contacts for 30 days.",
     amountPaise: 49900,
     currency: "INR",
     durationDays: 30,

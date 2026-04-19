@@ -52,7 +52,7 @@ export default function PaymentSuccessPage() {
 
   if (isSubscription) {
     title = "Premium activated!";
-    message = "You now have 30 days of unlimited contact access. Start searching for specialists right away.";
+    message = "You can now unlock up to 5 shadow teacher contacts for the next 30 days. Start searching right away.";
   } else if (isContact) {
     title = "Contact unlocked!";
     message = "You can now view the full contact details of this specialist.";
