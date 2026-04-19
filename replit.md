@@ -73,11 +73,17 @@ Enums:
 
 ## Admin Access
 
-To grant admin access to a user, run this SQL against the database:
-```sql
-UPDATE users SET role = 'admin' WHERE email = 'your@email.com';
+The canonical way to provision the Sproutly admin account is the **admin seed script**:
+```bash
+ADMIN_PASSWORD=<secret> pnpm --filter @workspace/api-server run seed:admin
 ```
-The user must be signed in to see the admin dashboard. Non-admins get a 403/Access Denied page.
+This creates (or updates) the Clerk user for `ADMIN_EMAIL` (default: `praveenece.mit@gmail.com`),
+sets `first_name=Admin, last_name=Sproutly`, and upserts the app DB row with `role=admin`.
+`ADMIN_PASSWORD` is required (no default). Re-running is fully idempotent.
+
+Current admin account: `praveenece.mit@gmail.com` — Clerk ID `user_3CXc6CPumc3S3dET3JMSCxzi3Xy` — DB user id 226.
+
+The admin can sign in via Google OAuth **or** email+password. The `/admin` route is gated to `role=admin` users only.
 
 ## Admin Routes (API)
 
@@ -117,6 +123,7 @@ All admin routes require `role = admin`:
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
+- `ADMIN_PASSWORD=<secret> pnpm --filter @workspace/api-server run seed:admin` — provision/update the admin Clerk account (idempotent)
 
 ## Seeded Data (dev only)
 
