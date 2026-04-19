@@ -8,7 +8,8 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "seed:admin": "node ./build-seed.mjs && node --enable-source-maps ./dist/seed-admin.mjs"
+    "seed:admin": "node ./build-seed.mjs && node --enable-source-maps ./dist/seed-admin.mjs",
+    "seed:demos": "node ./build-seed-demos.mjs && node --enable-source-maps ./dist/seed-demo-profiles.mjs"
   },
   "dependencies": {
     "@clerk/express": "^2.0.8",
