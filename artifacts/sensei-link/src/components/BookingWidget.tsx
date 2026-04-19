@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, CalendarCheck, Clock, IndianRupee, ChevronRight, Ticket, AlertCircle } from "lucide-react";
+import { Loader2, CalendarCheck, Clock, IndianRupee, ChevronRight, Ticket, AlertCircle, MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { loadRazorpayScript } from "@/lib/razorpay";
 import type { RazorpayPaymentResponse } from "@/lib/razorpay";
@@ -39,6 +39,7 @@ export function BookingWidget({
   const [notes, setNotes] = useState("");
   const [booking, setBooking] = useState(false);
   const [booked, setBooked] = useState(false);
+  const [bookedSessionId, setBookedSessionId] = useState<number | null>(null);
 
   const isCreditSpecialty = specialty ? CREDIT_SPECIALTIES.includes(specialty) : false;
 
@@ -77,6 +78,7 @@ export function BookingWidget({
       if (result.usedCredit) {
         toast({ title: "Session booked!", description: "1 session credit used. Your session is confirmed." });
         refetchCredits();
+        setBookedSessionId(result.sessionId as number);
         setBooked(true);
         return;
       }
@@ -107,6 +109,7 @@ export function BookingWidget({
                 },
               });
               toast({ title: "Session booked!", description: "Your session is confirmed." });
+              setBookedSessionId(result.sessionId as number);
               setBooked(true);
               resolve();
             } catch {
@@ -138,9 +141,22 @@ export function BookingWidget({
         <p className="text-sm text-muted-foreground">
           Your session on {selectedSlot?.date} at {selectedSlot?.startTime} has been booked.
         </p>
-        <Button variant="outline" className="mt-4" onClick={() => window.location.href = "/sessions"}>
-          View my sessions
-        </Button>
+        <div className="mt-4 flex flex-col sm:flex-row gap-2 justify-center">
+          <Button
+            className="gap-2"
+            onClick={() => navigate("/sessions")}
+            data-testid="booking-chat-cta"
+          >
+            <MessageCircle size={15} />
+            Message {professionalName?.split(" ")[0] ?? "specialist"}
+          </Button>
+          <Button variant="outline" onClick={() => navigate("/sessions")}>
+            View my sessions
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-3">
+          You can message your specialist anytime from the Sessions page.
+        </p>
       </div>
     );
   }

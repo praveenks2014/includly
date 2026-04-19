@@ -2,12 +2,22 @@ import { useUser } from "@clerk/react";
 import { Redirect } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { useGetMySessions, useUpdateSessionStatus, type SessionBookingWithDetails } from "@workspace/api-client-react";
-import { Loader2, CalendarCheck, Clock, IndianRupee, User } from "lucide-react";
+import { Loader2, CalendarCheck, Clock, IndianRupee, User, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { getSpecialtyLabel } from "@/lib/specialties";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { ChatThread } from "@/components/ChatThread";
+
+type SessionWithMessageCount = SessionBookingWithDetails & { messageCount?: number };
 
 const STATUS_COLORS: Record<string, string> = {
   pending_payment: "bg-yellow-100 text-yellow-800",
@@ -36,14 +46,29 @@ function formatDate(dateStr: string) {
   });
 }
 
+function getReadCount(bookingId: number): number {
+  return parseInt(localStorage.getItem(`chat_read_count_${bookingId}`) ?? "0", 10);
+}
+
 export default function SessionsPage() {
   const { isSignedIn, isLoaded, user } = useUser();
   const { toast } = useToast();
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [chatSession, setChatSession] = useState<SessionWithMessageCount | null>(null);
+  const [readCounts, setReadCounts] = useState<Record<number, number>>({});
 
   const { data: sessions, isLoading, refetch } = useGetMySessions();
 
   const { mutateAsync: updateStatus } = useUpdateSessionStatus();
+
+  useEffect(() => {
+    if (!sessions) return;
+    const counts: Record<number, number> = {};
+    for (const s of sessions) {
+      counts[s.id] = getReadCount(s.id);
+    }
+    setReadCounts(counts);
+  }, [sessions]);
 
   if (!isLoaded) return null;
   if (!isSignedIn) return <Redirect to="/sign-in" />;
@@ -64,8 +89,23 @@ export default function SessionsPage() {
     }
   }
 
-  const upcoming = sessions?.filter((s) => s.status === "confirmed" && s.bookedDate >= new Date().toISOString().slice(0, 10)) ?? [];
-  const other = sessions?.filter((s) => !upcoming.includes(s)) ?? [];
+  function handleOpenChat(session: SessionWithMessageCount) {
+    setChatSession(session);
+  }
+
+  function handleMessagesRead(bookingId: number, count: number) {
+    setReadCounts((prev) => ({ ...prev, [bookingId]: count }));
+  }
+
+  const typedSessions = (sessions ?? []) as SessionWithMessageCount[];
+  const upcoming = typedSessions.filter((s) => s.status === "confirmed" && s.bookedDate >= new Date().toISOString().slice(0, 10));
+  const other = typedSessions.filter((s) => !upcoming.includes(s));
+
+  const chatOtherParty = chatSession
+    ? isProfessional
+      ? (chatSession.parentName ?? "Parent")
+      : (chatSession.professionalName ?? "Specialist")
+    : "";
 
   return (
     <div className="min-h-screen bg-background">
@@ -110,6 +150,8 @@ export default function SessionsPage() {
                       isProfessional={isProfessional}
                       onStatusUpdate={handleStatusUpdate}
                       isUpdating={updatingId === session.id}
+                      unreadCount={Math.max(0, (session.messageCount ?? 0) - (readCounts[session.id] ?? 0))}
+                      onOpenChat={handleOpenChat}
                     />
                   ))}
                 </div>
@@ -126,6 +168,8 @@ export default function SessionsPage() {
                       isProfessional={isProfessional}
                       onStatusUpdate={handleStatusUpdate}
                       isUpdating={updatingId === session.id}
+                      unreadCount={Math.max(0, (session.messageCount ?? 0) - (readCounts[session.id] ?? 0))}
+                      onOpenChat={handleOpenChat}
                     />
                   ))}
                 </div>
@@ -134,6 +178,31 @@ export default function SessionsPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={!!chatSession} onOpenChange={(open) => { if (!open) setChatSession(null); }}>
+        <DialogContent className="max-w-lg w-full flex flex-col" style={{ maxHeight: "90vh" }}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-serif">
+              <MessageCircle size={18} className="text-primary" />
+              Chat with {chatOtherParty}
+            </DialogTitle>
+            {chatSession && (
+              <DialogDescription>
+                {formatDate(chatSession.bookedDate)} · {chatSession.startTime}–{chatSession.endTime}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          {chatSession && (
+            <div className="flex-1 min-h-0">
+              <ChatThread
+                bookingId={chatSession.id}
+                otherPartyName={chatOtherParty}
+                onMessagesRead={(count) => handleMessagesRead(chatSession.id, count)}
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -143,11 +212,15 @@ function SessionCard({
   isProfessional,
   onStatusUpdate,
   isUpdating,
+  unreadCount,
+  onOpenChat,
 }: {
-  session: SessionBookingWithDetails;
+  session: SessionWithMessageCount;
   isProfessional: boolean;
   onStatusUpdate: (id: number, status: string) => void;
   isUpdating: boolean;
+  unreadCount: number;
+  onOpenChat: (session: SessionWithMessageCount) => void;
 }) {
   return (
     <div className="bg-card border border-border rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
@@ -186,9 +259,25 @@ function SessionCard({
         )}
       </div>
 
-      {isProfessional && session.status === "confirmed" && (
-        <div className="flex-shrink-0">
-          {isUpdating ? (
+      <div className="flex items-center gap-2 shrink-0">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 relative"
+          onClick={() => onOpenChat(session)}
+          data-testid={`chat-btn-${session.id}`}
+        >
+          <MessageCircle size={14} />
+          Message
+          {unreadCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1" data-testid={`unread-badge-${session.id}`}>
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </Button>
+
+        {isProfessional && session.status === "confirmed" && (
+          isUpdating ? (
             <Loader2 size={18} className="animate-spin text-muted-foreground" />
           ) : (
             <Select onValueChange={(v) => onStatusUpdate(session.id, v)}>
@@ -201,9 +290,9 @@ function SessionCard({
                 <SelectItem value="cancelled_by_professional">Cancel Session</SelectItem>
               </SelectContent>
             </Select>
-          )}
-        </div>
-      )}
+          )
+        )}
+      </div>
     </div>
   );
 }

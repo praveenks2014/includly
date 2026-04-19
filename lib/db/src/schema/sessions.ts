@@ -44,6 +44,14 @@ export const sessionBookingsTable = pgTable("session_bookings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
+export const bookingMessagesTable = pgTable("booking_messages", {
+  id: serial("id").primaryKey(),
+  bookingId: integer("booking_id").notNull().references(() => sessionBookingsTable.id, { onDelete: "cascade" }),
+  senderId: integer("sender_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const insertProfessionalAvailabilitySchema = createInsertSchema(professionalAvailabilityTable).omit({
   id: true,
   createdAt: true,

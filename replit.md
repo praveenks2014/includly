@@ -42,6 +42,7 @@ Tables:
 - `identity_verifications` — professional_id FK, document_type (aadhar/passport/driving_licence/national_id), file_key (object storage path), status (pending/verified/rejected), dpdp_consent, submitted_at, reviewed_at
 - `professional_availability` — professional_id FK, day_of_week (0-6), start_time, end_time, slot_duration_minutes, price_inr, is_active
 - `session_bookings` — professional_id FK, parent_id FK, booked_date, start_time, end_time, duration_minutes, amount_inr, commission_inr (platform fee deducted from professional payout), status (enum), notes, provider_order_id, provider_payment_id, updated_at
+- `booking_messages` — booking_id FK, sender_id FK (users.id), body, created_at. Used for per-booking parent-specialist chat threads.
 - `professional_profiles` also has: `upi_id` text (private, never exposed on public API), `pricing_min_inr`, `pricing_max_inr`
 
 Enums:

@@ -6,6 +6,7 @@ import {
   db,
   professionalAvailabilityTable,
   sessionBookingsTable,
+  bookingMessagesTable,
   professionalProfilesTable,
   usersTable,
 } from "@workspace/db";
@@ -378,6 +379,8 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
     return;
   }
 
+  const msgCountSubquery = sql<number>`(SELECT COUNT(*)::int FROM booking_messages WHERE booking_id = ${sessionBookingsTable.id})`;
+
   if (user.role === "professional" || user.role === "admin") {
     const [prof] = await db
       .select({ id: professionalProfilesTable.id })
@@ -403,6 +406,7 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         notes: sessionBookingsTable.notes,
         createdAt: sessionBookingsTable.createdAt,
         parentName: usersTable.fullName,
+        messageCount: msgCountSubquery,
       })
       .from(sessionBookingsTable)
       .leftJoin(usersTable, eq(sessionBookingsTable.parentId, usersTable.id))
@@ -432,6 +436,7 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         createdAt: sessionBookingsTable.createdAt,
         professionalName: professionalProfilesTable.fullName,
         professionalSpecialty: professionalProfilesTable.specialty,
+        messageCount: msgCountSubquery,
       })
       .from(sessionBookingsTable)
       .leftJoin(professionalProfilesTable, eq(sessionBookingsTable.professionalId, professionalProfilesTable.id))
@@ -492,6 +497,101 @@ router.patch("/sessions/:id/status", requireAuth, requireRole("professional", "a
     .returning();
 
   res.json(updated);
+});
+
+async function assertBookingParticipant(bookingId: number, userId: number, userRole: string): Promise<{ booking: typeof sessionBookingsTable.$inferSelect } | null> {
+  const [booking] = await db
+    .select()
+    .from(sessionBookingsTable)
+    .where(eq(sessionBookingsTable.id, bookingId));
+
+  if (!booking) return null;
+
+  if (userRole === "admin") return { booking };
+  if (booking.parentId === userId) return { booking };
+
+  const [prof] = await db
+    .select({ id: professionalProfilesTable.id })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.userId, userId));
+
+  if (prof && prof.id === booking.professionalId) return { booking };
+
+  return null;
+}
+
+router.get("/sessions/:bookingId/messages", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const bookingId = parseInt(req.params["bookingId"] as string, 10);
+  if (isNaN(bookingId)) {
+    res.status(400).json({ error: "Invalid booking id" });
+    return;
+  }
+
+  const participant = await assertBookingParticipant(bookingId, req.userId!, req.userRole!);
+  if (!participant) {
+    res.status(404).json({ error: "Booking not found or access denied" });
+    return;
+  }
+
+  const messages = await db
+    .select({
+      id: bookingMessagesTable.id,
+      bookingId: bookingMessagesTable.bookingId,
+      senderId: bookingMessagesTable.senderId,
+      senderName: usersTable.fullName,
+      body: bookingMessagesTable.body,
+      createdAt: bookingMessagesTable.createdAt,
+    })
+    .from(bookingMessagesTable)
+    .leftJoin(usersTable, eq(bookingMessagesTable.senderId, usersTable.id))
+    .where(eq(bookingMessagesTable.bookingId, bookingId))
+    .orderBy(bookingMessagesTable.createdAt);
+
+  res.json({ messages, total: messages.length });
+});
+
+router.post("/sessions/:bookingId/messages", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const bookingId = parseInt(req.params["bookingId"] as string, 10);
+  if (isNaN(bookingId)) {
+    res.status(400).json({ error: "Invalid booking id" });
+    return;
+  }
+
+  const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
+  if (!body || body.length === 0) {
+    res.status(400).json({ error: "Message body is required" });
+    return;
+  }
+  if (body.length > 2000) {
+    res.status(400).json({ error: "Message is too long (max 2000 characters)" });
+    return;
+  }
+
+  const participant = await assertBookingParticipant(bookingId, req.userId!, req.userRole!);
+  if (!participant) {
+    res.status(404).json({ error: "Booking not found or access denied" });
+    return;
+  }
+
+  const [message] = await db
+    .insert(bookingMessagesTable)
+    .values({ bookingId, senderId: req.userId!, body })
+    .returning();
+
+  const [withSender] = await db
+    .select({
+      id: bookingMessagesTable.id,
+      bookingId: bookingMessagesTable.bookingId,
+      senderId: bookingMessagesTable.senderId,
+      senderName: usersTable.fullName,
+      body: bookingMessagesTable.body,
+      createdAt: bookingMessagesTable.createdAt,
+    })
+    .from(bookingMessagesTable)
+    .leftJoin(usersTable, eq(bookingMessagesTable.senderId, usersTable.id))
+    .where(eq(bookingMessagesTable.id, message.id));
+
+  res.status(201).json(withSender);
 });
 
 export default router;
