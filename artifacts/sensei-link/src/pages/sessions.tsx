@@ -6,7 +6,7 @@ import { Loader2, CalendarCheck, Clock, IndianRupee, User, MessageCircle } from 
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import {
   Dialog,
@@ -56,6 +56,7 @@ export default function SessionsPage() {
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [chatSession, setChatSession] = useState<SessionWithMessageCount | null>(null);
   const [readCounts, setReadCounts] = useState<Record<number, number>>({});
+  const chatAutoOpened = useRef(false);
 
   const search = useSearch();
   const chatParam = new URLSearchParams(search).get("chat");
@@ -75,10 +76,14 @@ export default function SessionsPage() {
   }, [sessions]);
 
   useEffect(() => {
-    if (!chatParamId || !sessions || chatSession) return;
+    if (!chatParamId || !sessions || chatAutoOpened.current) return;
     const target = (sessions as SessionWithMessageCount[]).find((s) => s.id === chatParamId);
-    if (target) setChatSession(target);
-  }, [chatParamId, sessions, chatSession]);
+    if (target) {
+      chatAutoOpened.current = true;
+      handleOpenChat(target);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatParamId, sessions]);
 
   if (!isLoaded) return null;
   if (!isSignedIn) return <Redirect to="/sign-in" />;
