@@ -344,10 +344,6 @@ export interface ContactUnlock {
   unlockedAt: string;
 }
 
-export interface CreateUnlockBody {
-  professionalId: number;
-}
-
 export interface ParentDashboard {
   totalUnlocks: number;
   recentUnlocks: ContactUnlock[];

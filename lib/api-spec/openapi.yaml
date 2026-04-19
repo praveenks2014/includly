@@ -525,31 +525,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ContactUnlock"
-    post:
-      operationId: createUnlock
-      tags: [unlocks]
-      summary: Unlock a professional's contact details (dev/test only — bypasses payment)
-      security:
-        - clerkAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateUnlockBody"
-      responses:
-        "201":
-          description: Contact unlocked
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ContactUnlock"
-        "400":
-          description: Already unlocked or validation error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
 
   /dashboard/parent:
     get:
@@ -2100,14 +2075,6 @@ components:
         - parentId
         - professionalId
         - unlockedAt
-
-    CreateUnlockBody:
-      type: object
-      properties:
-        professionalId:
-          type: integer
-      required:
-        - professionalId
 
     ParentDashboard:
       type: object

@@ -527,13 +527,6 @@ export const GetMyUnlocksResponseItem = zod.object({
 export const GetMyUnlocksResponse = zod.array(GetMyUnlocksResponseItem);
 
 /**
- * @summary Unlock a professional's contact details (dev/test only — bypasses payment)
- */
-export const CreateUnlockBody = zod.object({
-  professionalId: zod.number(),
-});
-
-/**
  * @summary Get parent dashboard summary
  */
 export const GetParentDashboardResponse = zod.object({

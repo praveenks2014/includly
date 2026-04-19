@@ -6,7 +6,6 @@ import {
   CheckUnlockStatusParams,
   CheckUnlockStatusResponse,
   GetMyUnlocksResponse,
-  CreateUnlockBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -184,93 +183,6 @@ router.get("/unlocks", requireAuth, requireRole("parent", "admin"), async (req, 
   });
 
   res.json(GetMyUnlocksResponse.parse(result));
-});
-
-router.post("/unlocks", requireAuth, requireRole("parent", "admin"), async (req, res): Promise<void> => {
-  const parsed = CreateUnlockBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  const { professionalId } = parsed.data;
-
-  const [existing] = await db
-    .select()
-    .from(contactUnlocksTable)
-    .where(
-      and(
-        eq(contactUnlocksTable.parentId, req.userId!),
-        eq(contactUnlocksTable.professionalId, professionalId),
-      ),
-    );
-
-  if (existing) {
-    res.status(400).json({ error: "Contact already unlocked" });
-    return;
-  }
-
-  const hasSub = await hasUnlimitedAccess(req.userId!);
-  if (!hasSub) {
-    res.status(402).json({
-      error: "Payment required",
-      code: "PAYMENT_REQUIRED",
-      pricingUrl: "/pricing",
-    });
-    return;
-  }
-
-  const [unlock] = await db
-    .insert(contactUnlocksTable)
-    .values({
-      parentId: req.userId!,
-      professionalId,
-    })
-    .returning();
-
-  const [prof] = await db
-    .select()
-    .from(professionalProfilesTable)
-    .where(eq(professionalProfilesTable.id, professionalId));
-
-  if (prof) {
-    await db
-      .update(professionalProfilesTable)
-      .set({ totalUnlocks: (prof.totalUnlocks ?? 0) + 1 })
-      .where(eq(professionalProfilesTable.id, professionalId));
-  }
-
-  const profWithUnlock = prof
-    ? {
-        id: prof.id,
-        userId: prof.userId,
-        fullName: prof.fullName,
-        specialty: prof.specialty,
-        bio: prof.bio,
-        yearsExperience: prof.yearsExperience,
-        city: prof.city,
-        country: prof.country,
-        travelRadiusKm: prof.travelRadiusKm,
-        willingToTravel: prof.willingToTravel,
-        isVerified: prof.isVerified,
-        verificationStatus: prof.verificationStatus,
-        averageRating: prof.averageRating,
-        totalRatings: prof.totalRatings,
-        phoneBlurred: blurContact(prof.phone),
-        emailBlurred: blurContact(prof.email),
-        isUnlocked: true,
-        phone: prof.phone,
-        email: prof.email,
-      }
-    : null;
-
-  res.status(201).json({
-    id: unlock!.id,
-    parentId: unlock!.parentId,
-    professionalId: unlock!.professionalId,
-    unlockedAt: unlock!.unlockedAt,
-    professional: profWithUnlock,
-  });
 });
 
 export { getContactLimit, getMonthBounds };

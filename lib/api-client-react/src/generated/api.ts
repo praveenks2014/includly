@@ -35,7 +35,6 @@ import type {
   CreateRatingBody,
   CreateRazorpayOrderBody,
   CreateStripeCheckoutBody,
-  CreateUnlockBody,
   DeleteAccountBody,
   ErrorResponse,
   GetBookableSlotsParams,
@@ -1521,92 +1520,6 @@ export function useGetMyUnlocks<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-/**
- * @summary Unlock a professional's contact details (dev/test only — bypasses payment)
- */
-export const getCreateUnlockUrl = () => {
-  return `/api/unlocks`;
-};
-
-export const createUnlock = async (
-  createUnlockBody: CreateUnlockBody,
-  options?: RequestInit,
-): Promise<ContactUnlock> => {
-  return customFetch<ContactUnlock>(getCreateUnlockUrl(), {
-    ...options,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(createUnlockBody),
-  });
-};
-
-export const getCreateUnlockMutationOptions = <
-  TError = ErrorType<ErrorResponse>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createUnlock>>,
-    TError,
-    { data: BodyType<CreateUnlockBody> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof createUnlock>>,
-  TError,
-  { data: BodyType<CreateUnlockBody> },
-  TContext
-> => {
-  const mutationKey = ["createUnlock"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof createUnlock>>,
-    { data: BodyType<CreateUnlockBody> }
-  > = (props) => {
-    const { data } = props ?? {};
-
-    return createUnlock(data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type CreateUnlockMutationResult = NonNullable<
-  Awaited<ReturnType<typeof createUnlock>>
->;
-export type CreateUnlockMutationBody = BodyType<CreateUnlockBody>;
-export type CreateUnlockMutationError = ErrorType<ErrorResponse>;
-
-/**
- * @summary Unlock a professional's contact details (dev/test only — bypasses payment)
- */
-export const useCreateUnlock = <
-  TError = ErrorType<ErrorResponse>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createUnlock>>,
-    TError,
-    { data: BodyType<CreateUnlockBody> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof createUnlock>>,
-  TError,
-  { data: BodyType<CreateUnlockBody> },
-  TContext
-> => {
-  return useMutation(getCreateUnlockMutationOptions(options));
-};
 
 /**
  * @summary Get parent dashboard summary

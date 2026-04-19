@@ -32,7 +32,6 @@ export * from "./createRazorpayOrderBody";
 export * from "./createRazorpayOrderBodyPlan";
 export * from "./createStripeCheckoutBody";
 export * from "./createStripeCheckoutBodyPlan";
-export * from "./createUnlockBody";
 export * from "./deleteAccountBody";
 export * from "./errorResponse";
 export * from "./getBookableSlotsParams";
