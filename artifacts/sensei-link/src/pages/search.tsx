@@ -415,14 +415,9 @@ export default function SearchPage() {
               </div>
             ) : null}
             <ProfessionalsMap
-              professionals={professionals}
               searchLat={geoMode && geoLocation ? geoLocation.lat : undefined}
               searchLng={geoMode && geoLocation ? geoLocation.lng : undefined}
               radiusKm={geoMode ? radiusKm : undefined}
-              onMarkerClick={(id) => {
-                const p = professionals.find((pr) => pr.id === id);
-                if (p && !p.isUnlocked) handleUnlock(id, p.fullName ?? undefined);
-              }}
             />
           </div>
         ) : isLoading || isFetching ? (
