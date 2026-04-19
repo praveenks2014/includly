@@ -2,7 +2,7 @@ export const PLANS = {
   plan_a_subscription: {
     id: "plan_a_subscription",
     name: "30-Day Teacher Unlock",
-    description: "Unlock one teacher's contact details for 30 days. Renew anytime.",
+    description: "Unlock up to 5 shadow teacher contacts for 30 days. Renew anytime.",
     amountPaise: 49900,
     currency: "INR",
     durationDays: 30,
@@ -11,8 +11,8 @@ export const PLANS = {
   plan_b_per_contact: {
     id: "plan_b_per_contact",
     name: "Single Contact Unlock",
-    description: "Unlock one professional's contact details. Pay as you go.",
-    amountPaise: 9900,
+    description: "Unlock one professional's contact details permanently. Pay as you go.",
+    amountPaise: 14900,
     currency: "INR",
     durationDays: null,
     stripePriceId: process.env["STRIPE_PLAN_B_PRICE_ID"] ?? null,
@@ -20,7 +20,7 @@ export const PLANS = {
   plan_c_featured: {
     id: "plan_c_featured",
     name: "Featured Listing (30 days)",
-    description: "Boost your profile to the top of search results for 30 days.",
+    description: "Boost your profile to the top of search results for 30 days. More visibility, more enquiries.",
     amountPaise: 29900,
     currency: "INR",
     durationDays: 30,

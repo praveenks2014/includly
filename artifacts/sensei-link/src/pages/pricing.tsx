@@ -7,7 +7,6 @@ import {
   useGetMySubscription,
   useCreateRazorpayOrder,
   useVerifyRazorpayPayment,
-  useCreateStripeCheckout,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -25,7 +24,7 @@ const PARENT_PLANS = [
     title: "Shadow Teacher Plan",
     price: "₹499",
     period: "/ 30 days",
-    description: "Unlimited access to all shadow teacher contacts for 30 days. Or pay ₹99 per contact if you only need one.",
+    description: "Unlock up to 5 shadow teacher contacts for 30 days. Or pay ₹149 per contact if you only need one.",
     features: [
       "30-day unlimited access to shadow teachers",
       "Unlock as many shadow teacher contacts as you need",
@@ -34,7 +33,7 @@ const PARENT_PLANS = [
     ],
     highlight: true,
     badge: "Best value",
-    altOption: { price: "₹99", label: "/ contact", planId: "plan_b_per_contact" },
+    altOption: { price: "₹149", label: "/ contact", planId: "plan_b_per_contact" },
   },
   {
     id: "plan_f_per_booking",
@@ -121,7 +120,6 @@ export default function PricingPage() {
 
   const { mutateAsync: createOrder } = useCreateRazorpayOrder();
   const { mutateAsync: verifyPayment } = useVerifyRazorpayPayment();
-  const { mutateAsync: createStripeCheckout } = useCreateStripeCheckout();
 
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
 
@@ -184,27 +182,6 @@ export default function PricingPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
       toast({ title: "Could not initiate payment", description: msg, variant: "destructive" });
-    } finally {
-      setLoadingKey(null);
-    }
-  }
-
-  async function handleStripe(planId: string) {
-    if (!requireSignIn()) return;
-    setLoadingKey(`stripe-${planId}`);
-    try {
-      const origin = window.location.origin;
-      const result = await createStripeCheckout({
-        data: {
-          plan: planId as "plan_a_subscription" | "plan_b_per_contact" | "plan_c_featured",
-          successUrl: `${origin}${basePath}/payment/success`,
-          cancelUrl: `${origin}${basePath}/payment/cancel`,
-        },
-      });
-      window.location.href = result.url;
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Stripe is not configured.";
-      toast({ title: "Stripe unavailable", description: msg, variant: "destructive" });
     } finally {
       setLoadingKey(null);
     }
@@ -453,7 +430,7 @@ export default function PricingPage() {
                 ) : plan.id === "plan_a_subscription" ? (
                   <>
                     <p className="text-xs text-muted-foreground/70 italic mb-2">
-                      Unlocks are teacher-specific. Browse teachers, then click "Unlock" on a profile to pay ₹499 for 30-day access or ₹99 for a permanent unlock.
+                      Unlocks are teacher-specific. Browse teachers, then click "Unlock" on a profile to pay ₹499 for 30-day access (up to 5 contacts) or ₹149 for a permanent single-contact unlock.
                     </p>
                     <Link href="/search">
                       <Button className="w-full" variant="default" data-testid="cta-browse-teachers">
@@ -479,7 +456,7 @@ export default function PricingPage() {
         </div>
 
         <div className="text-center text-xs text-muted-foreground">
-          Payments processed securely via Razorpay (UPI, cards, netbanking) or Stripe (international cards).
+          Payments processed securely via Razorpay (UPI, cards, netbanking).
           {" "}
           <Link href="/support" className="underline text-primary">Need help?</Link>
         </div>

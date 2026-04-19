@@ -410,12 +410,6 @@ router.post(
     return;
   }
 
-  // Plan C is Stripe-only; disallow via Razorpay
-  if (plan === "plan_c_featured") {
-    res.status(400).json({ error: "Featured listing (Plan C) is only available via Stripe." });
-    return;
-  }
-
   // Plan A/B/F are parent-only
   if ((plan === "plan_a_subscription" || plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && req.userRole === "professional") {
     res.status(403).json({ error: "Subscription and per-contact plans are for parents only." });

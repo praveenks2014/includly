@@ -4,7 +4,6 @@ import {
   useGetPaymentPlans,
   useCreateRazorpayOrder,
   useVerifyRazorpayPayment,
-  useCreateStripeCheckout,
   getGetPaymentPlansQueryKey,
 } from "@workspace/api-client-react";
 import {
@@ -16,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Check, Loader2, Zap, CreditCard } from "lucide-react";
+import { Check, Loader2, Zap } from "lucide-react";
 import { loadRazorpayScript, formatRupees, type RazorpayPaymentResponse } from "@/lib/razorpay";
 
 type RazorpayResponse = RazorpayPaymentResponse;
@@ -47,9 +46,6 @@ export function UnlockPaymentModal({
   const { data: plans, isLoading: plansLoading } = useGetPaymentPlans({ query: { enabled: open, queryKey: getGetPaymentPlansQueryKey() } });
   const { mutateAsync: createOrder } = useCreateRazorpayOrder();
   const { mutateAsync: verifyPayment } = useVerifyRazorpayPayment();
-  const { mutateAsync: createStripeCheckout } = useCreateStripeCheckout();
-
-  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
   async function handleRazorpayPlan(planId: "plan_a_subscription" | "plan_b_per_contact") {
     const loaded = await loadRazorpayScript();
@@ -134,28 +130,6 @@ export function UnlockPaymentModal({
     }
   }
 
-  async function handleStripe(planId: "plan_a_subscription" | "plan_b_per_contact") {
-    setActivePlan(`stripe_${planId}`);
-    try {
-      const origin = window.location.origin;
-      // Both plan_a (30-day teacher unlock) and plan_b (per-contact) require professionalId
-      const result = await createStripeCheckout({
-        data: {
-          plan: planId,
-          professionalId,
-          successUrl: `${origin}${basePath}/payment/success`,
-          cancelUrl: `${origin}${basePath}/payment/cancel`,
-        },
-      });
-      window.location.href = result.url;
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Stripe is not configured. Please use Razorpay.";
-      toast({ title: "Stripe unavailable", description: msg, variant: "destructive" });
-    } finally {
-      setActivePlan(null);
-    }
-  }
-
   const isLoading = activePlan !== null;
 
   return (
@@ -182,14 +156,13 @@ export function UnlockPaymentModal({
                 <PlanOption
                   title={plans.planA.name}
                   price={`${formatRupees(plans.planA.amountPaise)} / 30 days`}
-                  description={`Unlock ${professionalName ? `${professionalName.split(" ")[0]}'s` : "this teacher's"} contact for 30 days`}
-                  features={["30-day access to this teacher", "Renew anytime", "All specialties included"]}
+                  description={`Unlock ${professionalName ? `${professionalName.split(" ")[0]}'s` : "this teacher's"} contact for 30 days (up to 5 contacts)`}
+                  features={["30-day access to this teacher", "Up to 5 teacher contacts", "Renew anytime"]}
                   badge={preferSubscription ? "Recommended" : "Best value"}
                   highlight
                   activePlanId={activePlan}
                   planId="plan_a_subscription"
                   onRazorpay={() => handleRazorpayPlan("plan_a_subscription")}
-                  onStripe={() => handleStripe("plan_a_subscription")}
                   isLoading={isLoading}
                 />
 
@@ -205,13 +178,12 @@ export function UnlockPaymentModal({
                 <PlanOption
                   title={plans.planB.name}
                   price={formatRupees(plans.planB.amountPaise)}
-                  description="Single contact unlock — pay as you go"
-                  features={["One-time unlock", "Just this specialist", "Instant access"]}
+                  description="Single permanent contact unlock — pay as you go"
+                  features={["Permanent unlock", "Just this specialist", "Instant access"]}
                   badge="Pay per contact"
                   activePlanId={activePlan}
                   planId="plan_b_per_contact"
                   onRazorpay={() => handleRazorpayPlan("plan_b_per_contact")}
-                  onStripe={() => handleStripe("plan_b_per_contact")}
                   isLoading={isLoading}
                 />
               </>
@@ -233,7 +205,6 @@ function PlanOption({
   planId,
   activePlanId,
   onRazorpay,
-  onStripe,
   isLoading,
 }: {
   title: string;
@@ -245,11 +216,9 @@ function PlanOption({
   planId: string;
   activePlanId: string | null;
   onRazorpay: () => void;
-  onStripe: () => void;
   isLoading: boolean;
 }) {
   const rzpLoading = activePlanId === planId;
-  const stripeLoading = activePlanId === `stripe_${planId}`;
 
   return (
     <div className={`rounded-xl border p-4 ${highlight ? "border-primary bg-primary/5" : "border-border"}`}>
@@ -269,31 +238,17 @@ function PlanOption({
           </li>
         ))}
       </ul>
-      <div className="flex gap-2">
-        <Button
-          size="sm"
-          className="flex-1 gap-1"
-          variant={highlight ? "default" : "outline"}
-          disabled={isLoading}
-          onClick={onRazorpay}
-          data-testid={`pay-razorpay-${planId}`}
-        >
-          {rzpLoading ? <Loader2 size={13} className="animate-spin" /> : null}
-          Pay via UPI/Card
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="flex-1 gap-1 text-xs"
-          disabled={isLoading}
-          onClick={onStripe}
-          data-testid={`pay-stripe-${planId}`}
-        >
-          {stripeLoading ? <Loader2 size={13} className="animate-spin" /> : null}
-          <CreditCard size={13} />
-          International card
-        </Button>
-      </div>
+      <Button
+        size="sm"
+        className="w-full gap-1"
+        variant={highlight ? "default" : "outline"}
+        disabled={isLoading}
+        onClick={onRazorpay}
+        data-testid={`pay-razorpay-${planId}`}
+      >
+        {rzpLoading ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
+        Pay via UPI / Card
+      </Button>
     </div>
   );
 }
