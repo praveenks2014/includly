@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   useSearchProfessionals,
   getSearchProfessionalsQueryKey,
@@ -17,8 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Search, SlidersHorizontal, X, Map, List, Navigation2 } from "lucide-react";
-import { SPECIALTY_OPTIONS } from "@/lib/specialties";
+import { Loader2, Search, SlidersHorizontal, X, Map, List, Navigation2, MapPin } from "lucide-react";
+import { SPECIALTY_OPTIONS, SPECIALTY_ICONS, SPECIALTY_ICON_COLORS, SPECIALTY_LABELS, isInPersonOnly } from "@/lib/specialties";
 import { UnlockPaymentModal } from "@/components/UnlockPaymentModal";
 import { PlacesAutocomplete, type PlaceResult } from "@/components/PlacesAutocomplete";
 import { ProfessionalsMap } from "@/components/ProfessionalsMap";
@@ -45,6 +45,7 @@ export default function SearchPage() {
   );
 
   const [specialty, setSpecialty] = useState(params.get("specialty") ?? "");
+  const resultsRef = useRef<HTMLDivElement>(null);
   const [city, setCity] = useState(params.get("city") ?? "");
   const [minExperience, setMinExperience] = useState("");
   const [willingToTravel, setWillingToTravel] = useState(false);
@@ -152,6 +153,47 @@ export default function SearchPage() {
               <Map size={15} />
               Map
             </button>
+          </div>
+        </div>
+
+        {/* Category icon grid */}
+        <div className="mb-6 overflow-x-auto -mx-1 px-1">
+          <div className="flex gap-3 min-w-max sm:min-w-0 sm:grid sm:grid-cols-4 lg:grid-cols-8">
+            {SPECIALTY_OPTIONS.map((opt) => {
+              const Icon = SPECIALTY_ICONS[opt.value];
+              const colorClass = SPECIALTY_ICON_COLORS[opt.value] ?? "text-gray-600 bg-gray-50";
+              const active = specialty === opt.value;
+              const inPerson = isInPersonOnly(opt.value);
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  data-testid={`category-${opt.value}`}
+                  onClick={() => {
+                    setSpecialty(active ? "" : opt.value);
+                    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                  className={`group flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-center w-24 sm:w-auto ${
+                    active
+                      ? "border-primary bg-primary/5 shadow-sm"
+                      : "border-border bg-card hover:border-primary/40 hover:shadow-sm"
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colorClass} ${active ? "ring-1 ring-primary/30" : ""}`}>
+                    {Icon && <Icon size={20} />}
+                  </div>
+                  <span className={`text-xs font-medium leading-tight ${active ? "text-primary" : "text-foreground group-hover:text-primary"} transition-colors`}>
+                    {SPECIALTY_LABELS[opt.value]}
+                  </span>
+                  {inPerson && (
+                    <span className="flex items-center gap-0.5 text-[10px] text-rose-600 font-medium">
+                      <MapPin size={9} />
+                      In-Person Only
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -326,6 +368,9 @@ export default function SearchPage() {
             </div>
           )}
         </div>
+
+        {/* Results anchor */}
+        <div ref={resultsRef} />
 
         {/* View */}
         {viewMode === "map" ? (

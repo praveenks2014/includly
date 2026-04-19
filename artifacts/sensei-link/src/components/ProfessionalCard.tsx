@@ -1,9 +1,10 @@
 import { Link } from "wouter";
 import { BadgeCheck, Clock, MapPin, Star, Navigation, IndianRupee } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getSpecialtyLabel, SPECIALTY_COLORS } from "@/lib/specialties";
+import { getSpecialtyLabel, SPECIALTY_COLORS, getSpecialtyIcon, isInPersonOnly } from "@/lib/specialties";
 
 interface Professional {
   id: number;
@@ -42,6 +43,8 @@ export function ProfessionalCard({ professional: p, onUnlock, unlocking, distanc
   const specialtyColor = SPECIALTY_COLORS[p.specialty] ?? "bg-gray-100 text-gray-800";
   const phone = p.isUnlocked ? p.phone : p.phoneBlurred;
   const email = p.isUnlocked ? p.email : p.emailBlurred;
+  const SpecialtyIcon = getSpecialtyIcon(p.specialty);
+  const inPersonOnly = isInPersonOnly(p.specialty);
 
   return (
     <Card className="hover:shadow-md transition-shadow duration-200 border-border">
@@ -69,8 +72,14 @@ export function ProfessionalCard({ professional: p, onUnlock, unlocking, distanc
                 </span>
               )}
             </div>
-            <span className={`inline-block mt-1 text-xs font-medium px-2.5 py-0.5 rounded-full ${specialtyColor}`}>
+            <span className={`inline-flex items-center gap-1 mt-1 text-xs font-medium px-2.5 py-0.5 rounded-full ${specialtyColor}`}>
+              <SpecialtyIcon size={11} />
               {getSpecialtyLabel(p.specialty)}
+              {inPersonOnly && (
+                <span className="ml-0.5 flex items-center gap-0.5 text-rose-700 font-semibold">
+                  · <MapPin size={9} /> In-Person
+                </span>
+              )}
             </span>
           </div>
           {p.averageRating ? (

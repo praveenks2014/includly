@@ -1,10 +1,22 @@
+import {
+  GraduationCap,
+  BookOpen,
+  Hand,
+  MessageCircle,
+  Brain,
+  Baby,
+  Activity,
+  Building2,
+  type LucideIcon,
+} from "lucide-react";
+
 export const SPECIALTY_LABELS: Record<string, string> = {
   shadow_teacher: "Shadow Teacher",
   special_tutor: "Special Tutor",
-  occupational_therapy: "Occupational Therapy",
-  speech_therapy: "Speech Therapy",
+  occupational_therapy: "Occupational Therapist",
+  speech_therapy: "Speech Therapist",
   psychiatrist: "Psychiatrist",
-  developmental_pediatrician: "Developmental Pediatrician",
+  developmental_pediatrician: "Developmental Paediatrician",
   neurologist: "Neurologist",
   therapy_centre: "Therapy Centre",
 };
@@ -27,3 +39,37 @@ export const SPECIALTY_COLORS: Record<string, string> = {
   neurologist: "bg-purple-100 text-purple-800",
   therapy_centre: "bg-rose-100 text-rose-800",
 };
+
+export const SPECIALTY_ICON_COLORS: Record<string, string> = {
+  shadow_teacher: "text-blue-600 bg-blue-50",
+  special_tutor: "text-violet-600 bg-violet-50",
+  occupational_therapy: "text-teal-600 bg-teal-50",
+  speech_therapy: "text-cyan-600 bg-cyan-50",
+  psychiatrist: "text-indigo-600 bg-indigo-50",
+  developmental_pediatrician: "text-emerald-600 bg-emerald-50",
+  neurologist: "text-purple-600 bg-purple-50",
+  therapy_centre: "text-rose-600 bg-rose-50",
+};
+
+export const SPECIALTY_ICONS: Record<string, LucideIcon> = {
+  shadow_teacher: GraduationCap,
+  special_tutor: BookOpen,
+  occupational_therapy: Hand,
+  speech_therapy: MessageCircle,
+  psychiatrist: Brain,
+  developmental_pediatrician: Baby,
+  neurologist: Activity,
+  therapy_centre: Building2,
+};
+
+export const SPECIALTY_IN_PERSON_ONLY: Record<string, boolean> = {
+  therapy_centre: true,
+};
+
+export function getSpecialtyIcon(specialty: string): LucideIcon {
+  return SPECIALTY_ICONS[specialty] ?? GraduationCap;
+}
+
+export function isInPersonOnly(specialty: string): boolean {
+  return SPECIALTY_IN_PERSON_ONLY[specialty] === true;
+}
