@@ -625,22 +625,24 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
             </Badge>
             {profile.city && <Badge variant="outline">{profile.city}</Badge>}
           </div>
-          {/* Home visits toggle */}
-          <div className="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Home size={15} className="text-muted-foreground" />
-              <div>
-                <p className="text-sm font-medium">Home visits</p>
-                <p className="text-xs text-muted-foreground">Let parents book sessions at their home</p>
+          {/* Home visits toggle — only relevant for hands-on specialties */}
+          {["shadow_teacher", "special_tutor", "occupational_therapy", "speech_therapy"].includes(profile.specialty) && (
+            <div className="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Home size={15} className="text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Home visits</p>
+                  <p className="text-xs text-muted-foreground">Let parents book sessions at their home</p>
+                </div>
               </div>
+              <Switch
+                checked={!!profile.offersHomeVisits}
+                onCheckedChange={handleToggleHomeVisits}
+                disabled={homeVisitsLoading}
+                data-testid="switch-home-visits"
+              />
             </div>
-            <Switch
-              checked={!!profile.offersHomeVisits}
-              onCheckedChange={handleToggleHomeVisits}
-              disabled={homeVisitsLoading}
-              data-testid="switch-home-visits"
-            />
-          </div>
+          )}
         </div>
       </div>
 

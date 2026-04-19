@@ -421,8 +421,8 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         professionalSpecialty: null,
         professionalCity: null,
         professionalDisplayArea: null,
-        // Only share parent's area with specialists who offer home visits
-        parentLocation: prof.offersHomeVisits ? (b.parentLocation ?? null) : null,
+        // Only share parent's area with home-visit specialists, and only after booking is confirmed
+        parentLocation: prof.offersHomeVisits && b.status === "confirmed" ? (b.parentLocation ?? null) : null,
       })),
     );
   } else {
