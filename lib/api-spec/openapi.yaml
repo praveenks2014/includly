@@ -1585,6 +1585,8 @@ components:
           type: ["string", "null"]
         location:
           type: ["string", "null"]
+        shareHomeLocation:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -1607,6 +1609,8 @@ components:
           type: string
         location:
           type: string
+        shareHomeLocation:
+          type: boolean
         avatarUrl:
           type: string
 

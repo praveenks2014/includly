@@ -29,6 +29,7 @@ export const GetMeResponse = zod.object({
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   location: zod.string().nullish(),
+  shareHomeLocation: zod.boolean().optional(),
   createdAt: zod.coerce.date(),
 });
 
@@ -41,6 +42,7 @@ export const UpdateMeBody = zod.object({
   city: zod.string().optional(),
   country: zod.string().optional(),
   location: zod.string().optional(),
+  shareHomeLocation: zod.boolean().optional(),
   avatarUrl: zod.string().optional(),
 });
 
@@ -55,6 +57,7 @@ export const UpdateMeResponse = zod.object({
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   location: zod.string().nullish(),
+  shareHomeLocation: zod.boolean().optional(),
   createdAt: zod.coerce.date(),
 });
 
@@ -77,6 +80,7 @@ export const SetMyRoleResponse = zod.object({
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   location: zod.string().nullish(),
+  shareHomeLocation: zod.boolean().optional(),
   createdAt: zod.coerce.date(),
 });
 

@@ -4,6 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/react";
 import {
   useGetMe,
+  useUpdateMe,
+  getGetMeQueryKey,
   useGetParentDashboard,
   useGetProfessionalDashboard,
   useGetMySubscription,
@@ -35,7 +37,7 @@ import { getSpecialtyLabel } from "@/lib/specialties";
 import { useToast } from "@/hooks/use-toast";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle, AlertCircle, Bell, CalendarCheck, CalendarClock, Crown, Columns, Lock, CheckCheck, Home } from "lucide-react";
+import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle, AlertCircle, Bell, CalendarCheck, CalendarClock, Crown, Columns, Lock, CheckCheck, Home, MapPin } from "lucide-react";
 import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
 
 export default function DashboardPage() {
@@ -127,6 +129,47 @@ function ParentDashboard({
   paymentHistory: PaymentRecord[];
   contactUsage: ContactUsage | undefined;
 }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: me } = useGetMe();
+  const { mutateAsync: updateMe } = useUpdateMe();
+  const [locationDraft, setLocationDraft] = useState<string>("");
+  const [locationEditing, setLocationEditing] = useState(false);
+  const [locationSaving, setLocationSaving] = useState(false);
+  const [consentSaving, setConsentSaving] = useState(false);
+
+  // Sync draft when me loads
+  useEffect(() => {
+    if (me?.location !== undefined) setLocationDraft(me.location ?? "");
+  }, [me?.location]);
+
+  async function handleSaveLocation() {
+    setLocationSaving(true);
+    try {
+      await updateMe({ data: { location: locationDraft.trim() || undefined } });
+      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      setLocationEditing(false);
+      toast({ title: "Area saved" });
+    } catch {
+      toast({ title: "Could not save area", variant: "destructive" });
+    } finally {
+      setLocationSaving(false);
+    }
+  }
+
+  async function handleToggleConsent(enabled: boolean) {
+    setConsentSaving(true);
+    try {
+      await updateMe({ data: { shareHomeLocation: enabled } });
+      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      toast({ title: enabled ? "Location sharing enabled" : "Location sharing disabled" });
+    } catch {
+      toast({ title: "Could not update setting", variant: "destructive" });
+    } finally {
+      setConsentSaving(false);
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -190,6 +233,64 @@ function ParentDashboard({
           label="Search professionals"
           value={<Link href="/search"><Button size="sm" className="mt-1" data-testid="parent-search-cta">Find now</Button></Link>}
         />
+      </div>
+
+      {/* Parent location + home-visit consent */}
+      <div className="bg-card border border-border rounded-xl shadow-sm">
+        <div className="p-5 border-b border-border">
+          <h2 className="font-semibold">Your area &amp; home-visit preferences</h2>
+          <p className="text-xs text-muted-foreground mt-1">Specialists offering home visits can see your area only on confirmed bookings — and only if you opt in below.</p>
+        </div>
+        <div className="p-5 space-y-4">
+          {/* Location field */}
+          <div>
+            <Label className="text-sm font-medium">Your area</Label>
+            {locationEditing ? (
+              <div className="flex gap-2 mt-1">
+                <Input
+                  value={locationDraft}
+                  onChange={(e) => setLocationDraft(e.target.value)}
+                  placeholder="e.g. Bandra West, Mumbai"
+                  data-testid="input-parent-location"
+                />
+                <Button size="sm" onClick={handleSaveLocation} disabled={locationSaving}>
+                  {locationSaving ? <Loader2 size={13} className="animate-spin" /> : "Save"}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => { setLocationDraft(me?.location ?? ""); setLocationEditing(false); }}>Cancel</Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-sm text-muted-foreground flex items-center gap-1">
+                  <MapPin size={13} />
+                  {me?.location ? me.location : <em>Not set</em>}
+                </span>
+                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setLocationEditing(true)} data-testid="btn-edit-parent-location">Edit</Button>
+              </div>
+            )}
+          </div>
+          {/* Consent toggle */}
+          <div className="flex items-center justify-between gap-3 pt-2 border-t border-border">
+            <div className="flex items-center gap-2">
+              <Home size={15} className="text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Share my area for home visits</p>
+                <p className="text-xs text-muted-foreground">Your area will be visible to the specialist only after a home-visit booking is confirmed</p>
+              </div>
+            </div>
+            <Switch
+              checked={!!me?.shareHomeLocation}
+              onCheckedChange={handleToggleConsent}
+              disabled={consentSaving || !me?.location}
+              data-testid="switch-parent-share-location"
+            />
+          </div>
+          {me?.shareHomeLocation && !me?.location && (
+            <p className="text-xs text-amber-600 flex items-center gap-1">
+              <AlertCircle size={12} />
+              Add your area above to enable location sharing
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Recent unlocks */}

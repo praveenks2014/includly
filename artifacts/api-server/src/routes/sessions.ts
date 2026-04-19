@@ -407,6 +407,7 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         createdAt: sessionBookingsTable.createdAt,
         parentName: usersTable.fullName,
         parentLocation: usersTable.location,
+        parentSharesLocation: usersTable.shareHomeLocation,
         messageCount: msgCountSubquery,
       })
       .from(sessionBookingsTable)
@@ -421,8 +422,8 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         professionalSpecialty: null,
         professionalCity: null,
         professionalDisplayArea: null,
-        // Only share parent's area with home-visit specialists, and only after booking is confirmed
-        parentLocation: prof.offersHomeVisits && b.status === "confirmed" ? (b.parentLocation ?? null) : null,
+        // Only share parent's area when: specialist offers home visits + booking confirmed + parent has given consent
+        parentLocation: prof.offersHomeVisits && b.status === "confirmed" && b.parentSharesLocation ? (b.parentLocation ?? null) : null,
       })),
     );
   } else {

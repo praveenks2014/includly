@@ -40,6 +40,7 @@ export interface UserProfile {
   country?: string | null;
   /** @nullable */
   location?: string | null;
+  shareHomeLocation?: boolean;
   createdAt: string;
 }
 
@@ -49,6 +50,7 @@ export interface UpdateUserBody {
   city?: string;
   country?: string;
   location?: string;
+  shareHomeLocation?: boolean;
   avatarUrl?: string;
 }
 

@@ -12,5 +12,6 @@ export interface UpdateUserBody {
   city?: string;
   country?: string;
   location?: string;
+  shareHomeLocation?: boolean;
   avatarUrl?: string;
 }

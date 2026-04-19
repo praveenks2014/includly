@@ -25,5 +25,6 @@ export interface UserProfile {
   country?: string | null;
   /** @nullable */
   location?: string | null;
+  shareHomeLocation?: boolean;
   createdAt: Date;
 }
