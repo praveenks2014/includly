@@ -383,7 +383,7 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
 
   if (user.role === "professional" || user.role === "admin") {
     const [prof] = await db
-      .select({ id: professionalProfilesTable.id })
+      .select({ id: professionalProfilesTable.id, offersHomeVisits: professionalProfilesTable.offersHomeVisits })
       .from(professionalProfilesTable)
       .where(eq(professionalProfilesTable.userId, req.userId!));
 
@@ -406,6 +406,7 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         notes: sessionBookingsTable.notes,
         createdAt: sessionBookingsTable.createdAt,
         parentName: usersTable.fullName,
+        parentLocation: usersTable.location,
         messageCount: msgCountSubquery,
       })
       .from(sessionBookingsTable)
@@ -418,6 +419,10 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         ...b,
         professionalName: null,
         professionalSpecialty: null,
+        professionalCity: null,
+        professionalDisplayArea: null,
+        // Only share parent's area with specialists who offer home visits
+        parentLocation: prof.offersHomeVisits ? (b.parentLocation ?? null) : null,
       })),
     );
   } else {
@@ -436,6 +441,8 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         createdAt: sessionBookingsTable.createdAt,
         professionalName: professionalProfilesTable.fullName,
         professionalSpecialty: professionalProfilesTable.specialty,
+        professionalCity: professionalProfilesTable.city,
+        professionalDisplayArea: professionalProfilesTable.displayArea,
         messageCount: msgCountSubquery,
       })
       .from(sessionBookingsTable)
@@ -447,6 +454,10 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
       bookings.map((b) => ({
         ...b,
         parentName: null,
+        parentLocation: null,
+        // Location fields are always available — used in confirmed booking detail
+        professionalCity: b.professionalCity ?? null,
+        professionalDisplayArea: b.professionalDisplayArea ?? null,
       })),
     );
   }

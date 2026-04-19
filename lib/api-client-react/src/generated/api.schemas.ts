@@ -106,6 +106,13 @@ export interface ProfessionalProfile {
   latitude?: number | null;
   /** @nullable */
   longitude?: number | null;
+  /**
+   * Human-readable neighbourhood/area label shown to parents
+   * @nullable
+   */
+  displayArea?: string | null;
+  /** Whether this specialist offers home-visit sessions */
+  offersHomeVisits: boolean;
   travelRadiusKm: number;
   willingToTravel: boolean;
   isVerified: boolean;
@@ -144,6 +151,13 @@ export interface ProfessionalDetail {
   city?: string | null;
   /** @nullable */
   country?: string | null;
+  /**
+   * Human-readable neighbourhood/area label shown to parents before booking
+   * @nullable
+   */
+  displayArea?: string | null;
+  /** Whether this specialist offers home-visit sessions */
+  offersHomeVisits: boolean;
   travelRadiusKm: number;
   willingToTravel: boolean;
   isVerified: boolean;
@@ -179,10 +193,13 @@ export interface ProfessionalSearchResult {
   city?: string | null;
   /** @nullable */
   country?: string | null;
-  /** @nullable */
-  latitude?: number | null;
-  /** @nullable */
-  longitude?: number | null;
+  /**
+   * Human-readable neighbourhood/area label shown to parents before booking (city-level, no exact address)
+   * @nullable
+   */
+  displayArea?: string | null;
+  /** Whether this specialist offers home-visit sessions */
+  offersHomeVisits: boolean;
   travelRadiusKm: number;
   willingToTravel: boolean;
   isVerified: boolean;
@@ -246,6 +263,8 @@ export interface CreateProfessionalProfileBody {
   email?: string;
   pricingMinINR?: number;
   pricingMaxINR?: number;
+  /** Human-readable neighbourhood/area label shown to parents (e.g. "Bandra West, Mumbai") */
+  displayArea?: string;
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
   upiId?: string;
 }
@@ -280,6 +299,10 @@ export interface UpdateProfessionalProfileBody {
   email?: string;
   pricingMinINR?: number;
   pricingMaxINR?: number;
+  /** Human-readable neighbourhood/area label shown to parents (e.g. "Bandra West, Mumbai") */
+  displayArea?: string;
+  /** Whether this specialist offers home-visit sessions */
+  offersHomeVisits?: boolean;
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
   upiId?: string;
 }
@@ -822,7 +845,22 @@ export interface SessionBookingWithDetails {
   createdAt?: string;
   professionalName?: string;
   professionalSpecialty?: string;
+  /**
+   * Specialist's city — revealed to parent in confirmed bookings
+   * @nullable
+   */
+  professionalCity?: string | null;
+  /**
+   * Specialist's display area — revealed to parent in confirmed bookings
+   * @nullable
+   */
+  professionalDisplayArea?: string | null;
   parentName?: string;
+  /**
+   * Parent's area — shown to specialist only if offersHomeVisits and parent has shared location
+   * @nullable
+   */
+  parentLocation?: string | null;
 }
 
 export type UpdateSessionStatusBodyStatus =

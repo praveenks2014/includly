@@ -104,6 +104,13 @@ export const GetMyProfessionalProfileResponse = zod.object({
   country: zod.string().nullish(),
   latitude: zod.number().nullish(),
   longitude: zod.number().nullish(),
+  displayArea: zod
+    .string()
+    .nullish()
+    .describe("Human-readable neighbourhood\/area label shown to parents"),
+  offersHomeVisits: zod
+    .boolean()
+    .describe("Whether this specialist offers home-visit sessions"),
   travelRadiusKm: zod.number(),
   willingToTravel: zod.boolean(),
   isVerified: zod.boolean(),
@@ -155,6 +162,12 @@ export const CreateProfessionalProfileBody = zod.object({
   email: zod.string().optional(),
   pricingMinINR: zod.number().optional(),
   pricingMaxINR: zod.number().optional(),
+  displayArea: zod
+    .string()
+    .optional()
+    .describe(
+      'Human-readable neighbourhood\/area label shown to parents (e.g. \"Bandra West, Mumbai\")',
+    ),
   upiId: zod
     .string()
     .optional()
@@ -193,6 +206,16 @@ export const UpdateProfessionalProfileBody = zod.object({
   email: zod.string().optional(),
   pricingMinINR: zod.number().optional(),
   pricingMaxINR: zod.number().optional(),
+  displayArea: zod
+    .string()
+    .optional()
+    .describe(
+      'Human-readable neighbourhood\/area label shown to parents (e.g. \"Bandra West, Mumbai\")',
+    ),
+  offersHomeVisits: zod
+    .boolean()
+    .optional()
+    .describe("Whether this specialist offers home-visit sessions"),
   upiId: zod
     .string()
     .optional()
@@ -222,6 +245,13 @@ export const UpdateProfessionalProfileResponse = zod.object({
   country: zod.string().nullish(),
   latitude: zod.number().nullish(),
   longitude: zod.number().nullish(),
+  displayArea: zod
+    .string()
+    .nullish()
+    .describe("Human-readable neighbourhood\/area label shown to parents"),
+  offersHomeVisits: zod
+    .boolean()
+    .describe("Whether this specialist offers home-visit sessions"),
   travelRadiusKm: zod.number(),
   willingToTravel: zod.boolean(),
   isVerified: zod.boolean(),
@@ -262,6 +292,15 @@ export const GetProfessionalResponse = zod.object({
   qualifications: zod.string(),
   city: zod.string().nullish(),
   country: zod.string().nullish(),
+  displayArea: zod
+    .string()
+    .nullish()
+    .describe(
+      "Human-readable neighbourhood\/area label shown to parents before booking",
+    ),
+  offersHomeVisits: zod
+    .boolean()
+    .describe("Whether this specialist offers home-visit sessions"),
   travelRadiusKm: zod.number(),
   willingToTravel: zod.boolean(),
   isVerified: zod.boolean(),
@@ -333,8 +372,15 @@ export const SearchProfessionalsResponse = zod.object({
       yearsExperience: zod.number(),
       city: zod.string().nullish(),
       country: zod.string().nullish(),
-      latitude: zod.number().nullish(),
-      longitude: zod.number().nullish(),
+      displayArea: zod
+        .string()
+        .nullish()
+        .describe(
+          "Human-readable neighbourhood\/area label shown to parents before booking (city-level, no exact address)",
+        ),
+      offersHomeVisits: zod
+        .boolean()
+        .describe("Whether this specialist offers home-visit sessions"),
       travelRadiusKm: zod.number(),
       willingToTravel: zod.boolean(),
       isVerified: zod.boolean(),
@@ -498,8 +544,15 @@ export const GetMyUnlocksResponseItem = zod.object({
       yearsExperience: zod.number(),
       city: zod.string().nullish(),
       country: zod.string().nullish(),
-      latitude: zod.number().nullish(),
-      longitude: zod.number().nullish(),
+      displayArea: zod
+        .string()
+        .nullish()
+        .describe(
+          "Human-readable neighbourhood\/area label shown to parents before booking (city-level, no exact address)",
+        ),
+      offersHomeVisits: zod
+        .boolean()
+        .describe("Whether this specialist offers home-visit sessions"),
       travelRadiusKm: zod.number(),
       willingToTravel: zod.boolean(),
       isVerified: zod.boolean(),
@@ -546,8 +599,15 @@ export const GetParentDashboardResponse = zod.object({
           yearsExperience: zod.number(),
           city: zod.string().nullish(),
           country: zod.string().nullish(),
-          latitude: zod.number().nullish(),
-          longitude: zod.number().nullish(),
+          displayArea: zod
+            .string()
+            .nullish()
+            .describe(
+              "Human-readable neighbourhood\/area label shown to parents before booking (city-level, no exact address)",
+            ),
+          offersHomeVisits: zod
+            .boolean()
+            .describe("Whether this specialist offers home-visit sessions"),
           travelRadiusKm: zod.number(),
           willingToTravel: zod.boolean(),
           isVerified: zod.boolean(),
@@ -603,6 +663,13 @@ export const GetProfessionalDashboardResponse = zod.object({
       country: zod.string().nullish(),
       latitude: zod.number().nullish(),
       longitude: zod.number().nullish(),
+      displayArea: zod
+        .string()
+        .nullish()
+        .describe("Human-readable neighbourhood\/area label shown to parents"),
+      offersHomeVisits: zod
+        .boolean()
+        .describe("Whether this specialist offers home-visit sessions"),
       travelRadiusKm: zod.number(),
       willingToTravel: zod.boolean(),
       isVerified: zod.boolean(),
@@ -975,6 +1042,13 @@ export const AdminApproveProfessionalResponse = zod.object({
   country: zod.string().nullish(),
   latitude: zod.number().nullish(),
   longitude: zod.number().nullish(),
+  displayArea: zod
+    .string()
+    .nullish()
+    .describe("Human-readable neighbourhood\/area label shown to parents"),
+  offersHomeVisits: zod
+    .boolean()
+    .describe("Whether this specialist offers home-visit sessions"),
   travelRadiusKm: zod.number(),
   willingToTravel: zod.boolean(),
   isVerified: zod.boolean(),
@@ -1026,6 +1100,13 @@ export const AdminRejectProfessionalResponse = zod.object({
   country: zod.string().nullish(),
   latitude: zod.number().nullish(),
   longitude: zod.number().nullish(),
+  displayArea: zod
+    .string()
+    .nullish()
+    .describe("Human-readable neighbourhood\/area label shown to parents"),
+  offersHomeVisits: zod
+    .boolean()
+    .describe("Whether this specialist offers home-visit sessions"),
   travelRadiusKm: zod.number(),
   willingToTravel: zod.boolean(),
   isVerified: zod.boolean(),
@@ -1391,7 +1472,23 @@ export const GetMySessionsResponseItem = zod.object({
   createdAt: zod.coerce.date().optional(),
   professionalName: zod.string().optional(),
   professionalSpecialty: zod.string().optional(),
+  professionalCity: zod
+    .string()
+    .nullish()
+    .describe("Specialist's city — revealed to parent in confirmed bookings"),
+  professionalDisplayArea: zod
+    .string()
+    .nullish()
+    .describe(
+      "Specialist's display area — revealed to parent in confirmed bookings",
+    ),
   parentName: zod.string().optional(),
+  parentLocation: zod
+    .string()
+    .nullish()
+    .describe(
+      "Parent's area — shown to specialist only if offersHomeVisits and parent has shared location",
+    ),
 });
 export const GetMySessionsResponse = zod.array(GetMySessionsResponseItem);
 

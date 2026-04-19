@@ -26,6 +26,13 @@ export interface ProfessionalProfile {
   latitude?: number | null;
   /** @nullable */
   longitude?: number | null;
+  /**
+   * Human-readable neighbourhood/area label shown to parents
+   * @nullable
+   */
+  displayArea?: string | null;
+  /** Whether this specialist offers home-visit sessions */
+  offersHomeVisits: boolean;
   travelRadiusKm: number;
   willingToTravel: boolean;
   isVerified: boolean;

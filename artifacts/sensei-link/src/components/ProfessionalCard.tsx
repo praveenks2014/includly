@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { BadgeCheck, Clock, MapPin, Star, Navigation, IndianRupee } from "lucide-react";
+import { BadgeCheck, Clock, MapPin, Star, Navigation, IndianRupee, Home } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,8 @@ interface Professional {
   yearsExperience: number;
   city?: string | null;
   country?: string | null;
+  displayArea?: string | null;
+  offersHomeVisits?: boolean;
   travelRadiusKm?: number | null;
   willingToTravel?: boolean;
   isVerified: boolean;
@@ -113,10 +115,16 @@ export function ProfessionalCard({ professional: p, onUnlock, unlocking, distanc
             <Clock size={12} />
             {p.yearsExperience} {p.yearsExperience === 1 ? "yr" : "yrs"} experience
           </span>
-          {p.city && (
+          {(p.displayArea || p.city) && (
             <span className="flex items-center gap-1">
               <MapPin size={12} />
-              {p.city}{p.country && p.country !== "India" ? `, ${p.country}` : ""}
+              {p.displayArea ?? p.city}{p.country && p.country !== "India" ? `, ${p.country}` : ""}
+            </span>
+          )}
+          {p.offersHomeVisits && (
+            <span className="flex items-center gap-1">
+              <Home size={12} />
+              Home visits
             </span>
           )}
           {p.willingToTravel && p.travelRadiusKm && (

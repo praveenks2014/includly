@@ -26,6 +26,7 @@ import {
   Clock,
   MapPin,
   Navigation,
+  Home,
   Phone,
   Mail,
   Lock,
@@ -233,10 +234,16 @@ export default function ProfessionalProfilePage() {
               <Clock size={14} />
               {p.yearsExperience} {p.yearsExperience === 1 ? "year" : "years"} experience
             </span>
-            {p.city && (
+            {(p.displayArea || p.city) && (
               <span className="flex items-center gap-1.5">
                 <MapPin size={14} />
-                {p.city}{p.country ? `, ${p.country}` : ""}
+                {p.displayArea ?? p.city}{p.country ? `, ${p.country}` : ""}
+              </span>
+            )}
+            {p.offersHomeVisits && (
+              <span className="flex items-center gap-1.5">
+                <Home size={14} />
+                Home visits available
               </span>
             )}
             {p.willingToTravel && p.travelRadiusKm && (

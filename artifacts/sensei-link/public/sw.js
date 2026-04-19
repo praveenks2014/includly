@@ -21,17 +21,32 @@ self.addEventListener("push", function (event) {
 
 self.addEventListener("notificationclick", function (event) {
   event.notification.close();
-  const url = event.notification.data?.url || "/";
+
+  const rawUrl = event.notification.data?.url || "/";
+  // Build absolute URL so client.url comparison works (client.url is always absolute)
+  const targetUrl = new URL(rawUrl, self.location.origin).href;
+
   event.waitUntil(
-    clients.matchAll({ type: "window" }).then(function (clientList) {
-      for (const client of clientList) {
-        if (client.url === url && "focus" in client) {
-          return client.focus();
+    clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then(function (clientList) {
+        // Focus an existing tab that is already on the target page
+        for (const client of clientList) {
+          if (client.url === targetUrl && "focus" in client) {
+            return client.focus();
+          }
         }
-      }
-      if (clients.openWindow) {
-        return clients.openWindow(url);
-      }
-    }),
+        // If any tab is open on this origin, navigate it to the target URL
+        for (const client of clientList) {
+          if ("navigate" in client) {
+            client.focus();
+            return client.navigate(targetUrl);
+          }
+        }
+        // No open tab — open a new window
+        if (clients.openWindow) {
+          return clients.openWindow(targetUrl);
+        }
+      }),
   );
 });

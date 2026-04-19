@@ -19,10 +19,13 @@ export interface ProfessionalSearchResult {
   city?: string | null;
   /** @nullable */
   country?: string | null;
-  /** @nullable */
-  latitude?: number | null;
-  /** @nullable */
-  longitude?: number | null;
+  /**
+   * Human-readable neighbourhood/area label shown to parents before booking (city-level, no exact address)
+   * @nullable
+   */
+  displayArea?: string | null;
+  /** Whether this specialist offers home-visit sessions */
+  offersHomeVisits: boolean;
   travelRadiusKm: number;
   willingToTravel: boolean;
   isVerified: boolean;

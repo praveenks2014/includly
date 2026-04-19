@@ -2,7 +2,7 @@ import { useUser } from "@clerk/react";
 import { Redirect, useSearch } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { useGetMySessions, useUpdateSessionStatus, type SessionBookingWithDetails } from "@workspace/api-client-react";
-import { Loader2, CalendarCheck, Clock, IndianRupee, User, MessageCircle } from "lucide-react";
+import { Loader2, CalendarCheck, Clock, IndianRupee, User, MessageCircle, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -273,6 +273,20 @@ function SessionCard({
             ₹{session.amountInr}
           </span>
         </div>
+
+        {/* Location — progressive disclosure */}
+        {session.status === "confirmed" && !isProfessional && (session.professionalDisplayArea || session.professionalCity) && (
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <MapPin size={11} />
+            {session.professionalDisplayArea ?? session.professionalCity}
+          </p>
+        )}
+        {session.status === "confirmed" && isProfessional && session.parentLocation && (
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <MapPin size={11} />
+            Parent area: {session.parentLocation}
+          </p>
+        )}
 
         {session.notes && (
           <p className="text-xs text-muted-foreground italic">"{session.notes}"</p>

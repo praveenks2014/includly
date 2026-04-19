@@ -77,6 +77,7 @@ export default function OnboardPage() {
     country: existingProfile?.country ?? "India",
     latitude: existingProfile?.latitude ?? undefined as number | undefined,
     longitude: existingProfile?.longitude ?? undefined as number | undefined,
+    displayArea: existingProfile?.displayArea ?? "",
     willingToTravel: existingProfile?.willingToTravel ?? false,
     travelRadiusKm: existingProfile?.travelRadiusKm?.toString() ?? "10",
     phone: existingProfile?.phone ?? "",
@@ -210,6 +211,7 @@ export default function OnboardPage() {
       yearsExperience: Number(form.yearsExperience),
       city: form.city,
       country: form.country,
+      displayArea: form.displayArea.trim() || undefined,
       latitude: form.latitude,
       longitude: form.longitude,
       willingToTravel: form.willingToTravel,
@@ -565,6 +567,20 @@ export default function OnboardPage() {
                     data-testid="input-country"
                   />
                 </div>
+              </div>
+              <div>
+                <Label htmlFor="displayArea">Area shown to parents <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input
+                  id="displayArea"
+                  value={form.displayArea}
+                  onChange={(e) => set("displayArea", e.target.value)}
+                  placeholder="e.g. Bandra West, Mumbai"
+                  className="mt-1"
+                  data-testid="input-display-area"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Shown on your public profile. Your exact address is never shared before a booking is confirmed.
+                </p>
               </div>
             </div>
           )}

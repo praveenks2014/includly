@@ -50,6 +50,8 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   paymentActivated: boolean("payment_activated").notNull().default(false),
   isPremium: boolean("is_premium").notNull().default(false),
   specializationTags: text("specialization_tags").array().notNull().default([]),
+  displayArea: text("display_area"),
+  offersHomeVisits: boolean("offers_home_visits").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

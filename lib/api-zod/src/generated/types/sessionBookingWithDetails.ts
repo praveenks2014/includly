@@ -21,5 +21,20 @@ export interface SessionBookingWithDetails {
   createdAt?: Date;
   professionalName?: string;
   professionalSpecialty?: string;
+  /**
+   * Specialist's city — revealed to parent in confirmed bookings
+   * @nullable
+   */
+  professionalCity?: string | null;
+  /**
+   * Specialist's display area — revealed to parent in confirmed bookings
+   * @nullable
+   */
+  professionalDisplayArea?: string | null;
   parentName?: string;
+  /**
+   * Parent's area — shown to specialist only if offersHomeVisits and parent has shared location
+   * @nullable
+   */
+  parentLocation?: string | null;
 }

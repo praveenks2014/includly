@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/react";
 import {
   useGetMe,
@@ -12,6 +13,9 @@ import {
   useVerifyRazorpayPayment,
   useBroadcastNotification,
   useSetAvailability,
+  useUpdateProfessionalProfile,
+  getGetMyProfessionalProfileQueryKey,
+  getGetProfessionalDashboardQueryKey,
   getGetMySubscriptionQueryKey,
   getGetPaymentHistoryQueryKey,
   getGetContactUsageQueryKey,
@@ -30,7 +34,8 @@ import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import { useToast } from "@/hooks/use-toast";
 import { NotificationBanner } from "@/components/NotificationBanner";
-import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle, AlertCircle, Bell, CalendarCheck, CalendarClock, Crown, Columns, Lock, CheckCheck } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle, AlertCircle, Bell, CalendarCheck, CalendarClock, Crown, Columns, Lock, CheckCheck, Home } from "lucide-react";
 import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
 
 export default function DashboardPage() {
@@ -295,11 +300,28 @@ const SCHEDULE_TEMPLATES = [
 
 function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboard | undefined; isLoading: boolean }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { mutateAsync: createOrder } = useCreateRazorpayOrder();
   const { mutateAsync: verifyPayment } = useVerifyRazorpayPayment();
+  const { mutateAsync: patchProfile } = useUpdateProfessionalProfile();
   const [featuredLoading, setFeaturedLoading] = useState(false);
+  const [homeVisitsLoading, setHomeVisitsLoading] = useState(false);
   const { mutateAsync: setAvailability, isPending: applyingTemplate } = useSetAvailability();
   const [applyingLabel, setApplyingLabel] = useState<string | null>(null);
+
+  async function handleToggleHomeVisits(enabled: boolean) {
+    setHomeVisitsLoading(true);
+    try {
+      await patchProfile({ data: { offersHomeVisits: enabled } });
+      toast({ title: enabled ? "Home visits enabled" : "Home visits disabled", description: enabled ? "Parents can now request home sessions." : "Home visit requests are now paused." });
+      queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetProfessionalDashboardQueryKey() });
+    } catch {
+      toast({ title: "Could not update setting", variant: "destructive" });
+    } finally {
+      setHomeVisitsLoading(false);
+    }
+  }
 
   async function handleApplyTemplate(label: string, slots: { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number; priceInr: number }[]) {
     setApplyingLabel(label);
@@ -602,6 +624,22 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
                "Not verified"}
             </Badge>
             {profile.city && <Badge variant="outline">{profile.city}</Badge>}
+          </div>
+          {/* Home visits toggle */}
+          <div className="mt-4 pt-4 border-t border-border flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Home size={15} className="text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Home visits</p>
+                <p className="text-xs text-muted-foreground">Let parents book sessions at their home</p>
+              </div>
+            </div>
+            <Switch
+              checked={!!profile.offersHomeVisits}
+              onCheckedChange={handleToggleHomeVisits}
+              disabled={homeVisitsLoading}
+              data-testid="switch-home-visits"
+            />
           </div>
         </div>
       </div>

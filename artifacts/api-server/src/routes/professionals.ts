@@ -221,8 +221,8 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       yearsExperience: professionalProfilesTable.yearsExperience,
       city: professionalProfilesTable.city,
       country: professionalProfilesTable.country,
-      latitude: professionalProfilesTable.latitude,
-      longitude: professionalProfilesTable.longitude,
+      displayArea: professionalProfilesTable.displayArea,
+      offersHomeVisits: professionalProfilesTable.offersHomeVisits,
       travelRadiusKm: professionalProfilesTable.travelRadiusKm,
       willingToTravel: professionalProfilesTable.willingToTravel,
       isVerified: professionalProfilesTable.isVerified,
@@ -269,8 +269,8 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       yearsExperience: p.yearsExperience,
       city: p.city,
       country: p.country,
-      latitude: p.latitude ?? null,
-      longitude: p.longitude ?? null,
+      displayArea: p.displayArea ?? null,
+      offersHomeVisits: p.offersHomeVisits,
       travelRadiusKm: p.travelRadiusKm,
       willingToTravel: p.willingToTravel,
       isVerified: p.isVerified,
@@ -362,7 +362,7 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
     .limit(1);
   const isPremiumLive = !!activeProfSub;
 
-  const { upiId: _upiId, ...safeProfile } = profile;
+  const { upiId: _upiId, latitude: _lat, longitude: _lng, ...safeProfile } = profile;
   const result = {
     ...safeProfile,
     phoneBlurred: blurContact(profile.phone),
@@ -375,6 +375,8 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
     paymentActivated: profile.paymentActivated,
     isPremium: isPremiumLive,
     specializationTags: profile.specializationTags ?? [],
+    displayArea: profile.displayArea ?? null,
+    offersHomeVisits: profile.offersHomeVisits,
     upiId: null,
   };
 

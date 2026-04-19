@@ -20,6 +20,13 @@ export interface ProfessionalDetail {
   city?: string | null;
   /** @nullable */
   country?: string | null;
+  /**
+   * Human-readable neighbourhood/area label shown to parents before booking
+   * @nullable
+   */
+  displayArea?: string | null;
+  /** Whether this specialist offers home-visit sessions */
+  offersHomeVisits: boolean;
   travelRadiusKm: number;
   willingToTravel: boolean;
   isVerified: boolean;
