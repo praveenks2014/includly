@@ -1,41 +1,49 @@
 /**
  * seed-admin.ts
  *
- * One-time (idempotent) script to provision the Sproutly admin account.
+ * Idempotent script to provision the Sproutly admin account.
  *
  * What it does:
- *  1. Looks up the Clerk user for ADMIN_EMAIL in the Clerk API.
- *  2. Enables email/password login on that Clerk account (so the admin can
- *     log in via both Google-OAuth and email+password).
+ *  1. Searches for an existing Clerk user by email. If none exists, creates one.
+ *  2. Ensures a password is set so the admin can log in via both Google-OAuth
+ *     and email+password.
  *  3. Upserts a row in the `users` table with role = 'admin'.
  *
  * Usage:
- *   pnpm --filter @workspace/api-server run seed:admin
+ *   ADMIN_PASSWORD=<secret> pnpm --filter @workspace/api-server run seed:admin
  *
  * Required environment variables (already set as Replit secrets):
  *   CLERK_SECRET_KEY   — Clerk backend secret key
  *   DATABASE_URL       — PostgreSQL connection string
+ *   ADMIN_PASSWORD     — password to set on the admin Clerk account (REQUIRED, no default)
  *
- * Optional override:
+ * Optional overrides:
  *   ADMIN_EMAIL        — defaults to "praveenece.mit@gmail.com"
- *   ADMIN_PASSWORD     — defaults to "Emerald-09A" (Clerk password to set)
- *   ADMIN_FULL_NAME    — defaults to "Praveen Kumar"
+ *   ADMIN_FIRST_NAME   — defaults to "Admin"
+ *   ADMIN_LAST_NAME    — defaults to "Sproutly"
  */
 
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "praveenece.mit@gmail.com";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "Emerald-09A";
-const ADMIN_FULL_NAME = process.env.ADMIN_FULL_NAME ?? "Praveen Kumar";
+const ADMIN_FIRST_NAME = process.env.ADMIN_FIRST_NAME ?? "Admin";
+const ADMIN_LAST_NAME = process.env.ADMIN_LAST_NAME ?? "Sproutly";
+const ADMIN_FULL_NAME = `${ADMIN_FIRST_NAME} ${ADMIN_LAST_NAME}`;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY;
 
 if (!CLERK_SECRET_KEY) {
-  console.error("CLERK_SECRET_KEY env var is required");
+  console.error("Error: CLERK_SECRET_KEY env var is required");
   process.exit(1);
 }
 
-async function clerkRequest(path: string, options: RequestInit = {}) {
+if (!ADMIN_PASSWORD) {
+  console.error("Error: ADMIN_PASSWORD env var is required (e.g. ADMIN_PASSWORD=<secret> pnpm seed:admin)");
+  process.exit(1);
+}
+
+async function clerkRequest<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`https://api.clerk.com/v1${path}`, {
     ...options,
     headers: {
@@ -48,34 +56,53 @@ async function clerkRequest(path: string, options: RequestInit = {}) {
     const body = await res.text();
     throw new Error(`Clerk ${options.method ?? "GET"} ${path} → ${res.status}: ${body}`);
   }
-  return res.json();
+  return res.json() as Promise<T>;
 }
+
+type ClerkUser = { id: string; first_name?: string | null; last_name?: string | null };
 
 async function main() {
   console.log(`Provisioning admin account for: ${ADMIN_EMAIL}`);
 
-  // 1. Find the Clerk user by email
-  const searchResult = await clerkRequest(
+  // 1. Find the Clerk user by email; create one if missing
+  const searchResult = await clerkRequest<ClerkUser[]>(
     `/users?email_address=${encodeURIComponent(ADMIN_EMAIL)}&limit=1`,
-  ) as Array<{ id: string; first_name?: string | null; last_name?: string | null }>;
+  );
 
-  if (!searchResult.length) {
-    console.error(`No Clerk user found with email ${ADMIN_EMAIL}. Create the account first.`);
-    process.exit(1);
+  let clerkId: string;
+
+  if (searchResult.length) {
+    clerkId = searchResult[0].id;
+    console.log(`Found existing Clerk user: ${clerkId}`);
+
+    // Update name fields to match canonical admin identity
+    await clerkRequest(`/users/${clerkId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        first_name: ADMIN_FIRST_NAME,
+        last_name: ADMIN_LAST_NAME,
+        password: ADMIN_PASSWORD,
+        skip_password_checks: true,
+      }),
+    });
+    console.log("Updated name + password on existing Clerk account");
+  } else {
+    console.log("No existing Clerk user found — creating one");
+    const created = await clerkRequest<ClerkUser>("/users", {
+      method: "POST",
+      body: JSON.stringify({
+        email_address: [ADMIN_EMAIL],
+        first_name: ADMIN_FIRST_NAME,
+        last_name: ADMIN_LAST_NAME,
+        password: ADMIN_PASSWORD,
+        skip_password_checks: true,
+      }),
+    });
+    clerkId = created.id;
+    console.log(`Created new Clerk user: ${clerkId}`);
   }
 
-  const clerkUser = searchResult[0];
-  const clerkId = clerkUser.id;
-  console.log(`Found Clerk user: ${clerkId}`);
-
-  // 2. Set a password so the admin can log in with email+password (idempotent)
-  await clerkRequest(`/users/${clerkId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ password: ADMIN_PASSWORD, skip_password_checks: true }),
-  });
-  console.log("Password set (or updated) on Clerk account");
-
-  // 3. Upsert the user in the application database with role = 'admin'
+  // 2. Upsert the user in the application database with role = 'admin'
   const existing = await db
     .select({ id: usersTable.id })
     .from(usersTable)
