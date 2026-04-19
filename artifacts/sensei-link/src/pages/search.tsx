@@ -188,7 +188,7 @@ export default function SearchPage() {
                   {inPerson && (
                     <span className="flex items-center gap-0.5 text-[10px] text-rose-600 font-medium">
                       <MapPin size={9} />
-                      In-Person Only
+                      In-Person Visit Only
                     </span>
                   )}
                 </button>

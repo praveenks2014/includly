@@ -77,7 +77,7 @@ export function ProfessionalCard({ professional: p, onUnlock, unlocking, distanc
               {getSpecialtyLabel(p.specialty)}
               {inPersonOnly && (
                 <span className="ml-0.5 flex items-center gap-0.5 text-rose-700 font-semibold">
-                  · <MapPin size={9} /> In-Person
+                  · <MapPin size={9} /> In-Person Visit Only
                 </span>
               )}
             </span>

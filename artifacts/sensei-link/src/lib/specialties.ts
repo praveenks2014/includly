@@ -12,7 +12,7 @@ import {
 
 export const SPECIALTY_LABELS: Record<string, string> = {
   shadow_teacher: "Shadow Teacher",
-  special_tutor: "Special Tutor",
+  special_tutor: "Special Educator",
   occupational_therapy: "Occupational Therapist",
   speech_therapy: "Speech Therapist",
   psychiatrist: "Psychiatrist",
