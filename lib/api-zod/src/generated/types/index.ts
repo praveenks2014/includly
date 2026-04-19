@@ -68,6 +68,7 @@ export * from "./sessionBookingOrderResponse";
 export * from "./sessionBookingStatus";
 export * from "./sessionBookingWithDetails";
 export * from "./sessionBookingWithDetailsStatus";
+export * from "./sessionCredits";
 export * from "./setAvailabilityBody";
 export * from "./setAvailabilityBodySlotsItem";
 export * from "./setRoleBody";

@@ -596,12 +596,16 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
 }
 
 function ContactUsageCard({ usage }: { usage: ContactUsage }) {
-  const { used, limit, resetsAt } = usage;
+  const { used, limit, resetsAt, activeUnlockCount, nearestExpiryAt } = usage;
   const pct = Math.min((used / limit) * 100, 100);
   const isNearLimit = used >= limit - 1;
   const isAtLimit = used >= limit;
 
   const resetsAtDate = new Date(resetsAt);
+  const nearestExpiry = nearestExpiryAt ? new Date(nearestExpiryAt) : null;
+  const daysUntilExpiry = nearestExpiry
+    ? Math.max(0, Math.ceil((nearestExpiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null;
 
   return (
     <div
@@ -611,10 +615,13 @@ function ContactUsageCard({ usage }: { usage: ContactUsage }) {
       <div className="flex items-start justify-between gap-4 mb-3">
         <div>
           <p className={`font-semibold text-sm ${isAtLimit ? "text-red-800" : isNearLimit ? "text-yellow-800" : "text-foreground"}`}>
-            Contacts used this month
+            Teachers unlocked this month
           </p>
           <p className={`text-xs mt-0.5 ${isAtLimit ? "text-red-700" : isNearLimit ? "text-yellow-700" : "text-muted-foreground"}`}>
             Resets {resetsAtDate.toLocaleDateString("en-IN", { month: "long", day: "numeric" })}
+            {activeUnlockCount != null && activeUnlockCount > 0 && (
+              <span className="ml-2">· {activeUnlockCount} active unlock{activeUnlockCount !== 1 ? "s" : ""}</span>
+            )}
           </p>
         </div>
         <span className={`text-xl font-bold ${isAtLimit ? "text-red-700" : isNearLimit ? "text-yellow-700" : "text-foreground"}`}>
@@ -629,11 +636,20 @@ function ContactUsageCard({ usage }: { usage: ContactUsage }) {
         />
       </div>
 
+      {daysUntilExpiry !== null && daysUntilExpiry <= 7 && !isAtLimit && (
+        <div className="flex items-start gap-2 text-sm text-muted-foreground mb-2">
+          <AlertCircle size={14} className="shrink-0 mt-0.5 text-orange-500" />
+          <span className="text-orange-700">
+            Your earliest unlock expires in {daysUntilExpiry === 0 ? "less than a day" : `${daysUntilExpiry} day${daysUntilExpiry !== 1 ? "s" : ""}`}.
+          </span>
+        </div>
+      )}
+
       {isAtLimit && (
         <div className="flex items-start gap-2 text-sm text-red-700">
           <AlertCircle size={14} className="shrink-0 mt-0.5" />
           <span>
-            You've reached your contact limit for this month. <Link href="/pricing" className="font-semibold underline">Upgrade to Plan A</Link> for unlimited contacts.
+            You've reached your monthly unlock limit. <Link href="/pricing" className="font-semibold underline">See our plans</Link> for more access.
           </span>
         </div>
       )}
@@ -641,7 +657,7 @@ function ContactUsageCard({ usage }: { usage: ContactUsage }) {
         <div className="flex items-start gap-2 text-sm text-yellow-700">
           <AlertCircle size={14} className="shrink-0 mt-0.5" />
           <span>
-            You're almost at your limit. <Link href="/pricing" className="font-semibold underline">Upgrade to Plan A</Link> for unlimited contacts.
+            You're almost at your monthly limit. <Link href="/pricing" className="font-semibold underline">See our plans</Link> for more access.
           </span>
         </div>
       )}

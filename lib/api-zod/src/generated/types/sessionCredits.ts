@@ -6,11 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface UpdateUserBody {
-  fullName?: string;
-  phone?: string;
-  city?: string;
-  country?: string;
-  location?: string;
-  avatarUrl?: string;
+export interface SessionCredits {
+  /** Number of session credits available */
+  credits: number;
 }

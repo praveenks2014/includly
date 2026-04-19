@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gt, gte, or, isNull } from "drizzle-orm";
-import { db, contactUnlocksTable, professionalProfilesTable, subscriptionsTable, adminSettingsTable, DEFAULT_CONTACT_LIMIT } from "@workspace/db";
+import { db, contactUnlocksTable, professionalProfilesTable, adminSettingsTable, DEFAULT_CONTACT_LIMIT } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import {
   CheckUnlockStatusParams,
@@ -20,20 +20,18 @@ function blurContact(value: string | null | undefined): string {
   return value.slice(0, 3) + "•".repeat(value.length - 3);
 }
 
-async function hasActiveSubscription(userId: number): Promise<boolean> {
-  const now = new Date();
-  const [sub] = await db
-    .select({ id: subscriptionsTable.id })
-    .from(subscriptionsTable)
+async function hasUnlimitedAccess(userId: number): Promise<boolean> {
+  const [unlock] = await db
+    .select({ id: contactUnlocksTable.id })
+    .from(contactUnlocksTable)
     .where(
       and(
-        eq(subscriptionsTable.userId, userId),
-        eq(subscriptionsTable.status, "active"),
-        gt(subscriptionsTable.expiresAt, now),
+        eq(contactUnlocksTable.parentId, userId),
+        isNull(contactUnlocksTable.expiresAt),
       ),
     )
     .limit(1);
-  return !!sub;
+  return !!unlock;
 }
 
 async function getContactLimit(): Promise<number> {
@@ -72,13 +70,33 @@ router.get("/contacts/usage", requireAuth, requireRole("parent", "admin"), async
     );
 
   const used = unlocks.length;
-  const hasActiveSub = await hasActiveSubscription(req.userId!);
+  const now = new Date();
+  const activeUnlocks = await db
+    .select({ expiresAt: contactUnlocksTable.expiresAt })
+    .from(contactUnlocksTable)
+    .where(
+      and(
+        eq(contactUnlocksTable.parentId, req.userId!),
+        or(
+          isNull(contactUnlocksTable.expiresAt),
+          gt(contactUnlocksTable.expiresAt, now),
+        ),
+      ),
+    );
+
+  const hasUnlimited = await hasUnlimitedAccess(req.userId!);
+  const nearestExpiry = activeUnlocks
+    .map((u) => u.expiresAt)
+    .filter((d): d is Date => d !== null)
+    .sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
 
   res.json({
     used,
     limit,
     resetsAt: end.toISOString(),
-    hasActiveSubscription: hasActiveSub,
+    hasActiveSubscription: hasUnlimited,
+    activeUnlockCount: activeUnlocks.length,
+    nearestExpiryAt: nearestExpiry ? nearestExpiry.toISOString() : null,
   });
 });
 
@@ -192,7 +210,7 @@ router.post("/unlocks", requireAuth, requireRole("parent", "admin"), async (req,
     return;
   }
 
-  const hasSub = await hasActiveSubscription(req.userId!);
+  const hasSub = await hasUnlimitedAccess(req.userId!);
   if (!hasSub) {
     res.status(402).json({
       error: "Payment required",

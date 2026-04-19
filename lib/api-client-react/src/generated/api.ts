@@ -58,10 +58,10 @@ import type {
   RazorpayWebhookBody,
   SearchProfessionalsParams,
   SearchProfessionalsResponse,
-  SessionCredits,
   SessionBooking,
   SessionBookingOrderResponse,
   SessionBookingWithDetails,
+  SessionCredits,
   SetAvailabilityBody,
   SetRoleBody,
   StripeCheckoutSession,
@@ -2397,6 +2397,81 @@ export const useVerifyRazorpayPayment = <
 > => {
   return useMutation(getVerifyRazorpayPaymentMutationOptions(options));
 };
+
+/**
+ * @summary Get the authenticated parent's current session credit balance
+ */
+export const getGetSessionCreditsUrl = () => {
+  return `/api/payments/session-credits`;
+};
+
+export const getSessionCredits = async (
+  options?: RequestInit,
+): Promise<SessionCredits> => {
+  return customFetch<SessionCredits>(getGetSessionCreditsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSessionCreditsQueryKey = () => {
+  return [`/api/payments/session-credits`] as const;
+};
+
+export const getGetSessionCreditsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSessionCredits>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSessionCredits>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSessionCreditsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSessionCredits>>
+  > = ({ signal }) => getSessionCredits({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSessionCredits>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSessionCreditsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSessionCredits>>
+>;
+export type GetSessionCreditsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get the authenticated parent's current session credit balance
+ */
+
+export function useGetSessionCredits<
+  TData = Awaited<ReturnType<typeof getSessionCredits>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSessionCredits>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSessionCreditsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Stripe webhook handler
@@ -4880,72 +4955,3 @@ export const useUpdateSessionStatus = <
 > => {
   return useMutation(getUpdateSessionStatusMutationOptions(options));
 };
-
-
-export const getGetSessionCreditsUrl = () => {
-  return `/api/payments/session-credits`;
-};
-
-export const getSessionCredits = async (
-  options?: RequestInit,
-): Promise<SessionCredits> => {
-  return customFetch<SessionCredits>(getGetSessionCreditsUrl(), {
-    ...options,
-    method: "GET",
-  });
-};
-
-export const getGetSessionCreditsQueryKey = () => {
-  return [`/api/payments/session-credits`] as const;
-};
-
-export const getGetSessionCreditsQueryOptions = <
-  TData = Awaited<ReturnType<typeof getSessionCredits>>,
-  TError = ErrorType<ErrorResponse>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getSessionCredits>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-
-  const queryKey = queryOptions?.queryKey ?? getGetSessionCreditsQueryKey();
-
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSessionCredits>>> = ({
-    signal,
-  }) => getSessionCredits({ signal, ...requestOptions });
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof getSessionCredits>>,
-    TError,
-    TData
-  > & { queryKey: QueryKey };
-};
-
-export type GetSessionCreditsQueryResult = NonNullable<
-  Awaited<ReturnType<typeof getSessionCredits>>
->;
-export type GetSessionCreditsQueryError = ErrorType<ErrorResponse>;
-
-export function useGetSessionCredits<
-  TData = Awaited<ReturnType<typeof getSessionCredits>>,
-  TError = ErrorType<ErrorResponse>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getSessionCredits>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getGetSessionCreditsQueryOptions(options);
-
-  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
-    queryKey: QueryKey;
-  };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}

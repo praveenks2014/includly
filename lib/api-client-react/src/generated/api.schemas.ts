@@ -48,8 +48,8 @@ export interface UpdateUserBody {
   phone?: string;
   city?: string;
   country?: string;
-  avatarUrl?: string;
   location?: string;
+  avatarUrl?: string;
 }
 
 export type SetRoleBodyRole =
@@ -127,10 +127,6 @@ export interface ProfessionalProfile {
    */
   upiId?: string | null;
   paymentActivated: boolean;
-  isPremium: boolean;
-  specializationTags: string[];
-  /** @nullable */
-  rejectionReason?: string | null;
   createdAt: string;
 }
 
@@ -167,8 +163,6 @@ export interface ProfessionalDetail {
   /** @nullable */
   pricingMaxINR?: number | null;
   paymentActivated: boolean;
-  isPremium: boolean;
-  specializationTags: string[];
   createdAt: string;
 }
 
@@ -213,8 +207,6 @@ export interface ProfessionalSearchResult {
   /** @nullable */
   pricingMaxINR?: number | null;
   paymentActivated: boolean;
-  isPremium: boolean;
-  specializationTags: string[];
 }
 
 export interface SearchProfessionalsResponse {
@@ -256,7 +248,6 @@ export interface CreateProfessionalProfileBody {
   pricingMaxINR?: number;
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
   upiId?: string;
-  specializationTags?: string[];
 }
 
 export type UpdateProfessionalProfileBodySpecialty =
@@ -291,7 +282,6 @@ export interface UpdateProfessionalProfileBody {
   pricingMaxINR?: number;
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
   upiId?: string;
-  specializationTags?: string[];
 }
 
 export interface Rating {
@@ -314,15 +304,24 @@ export interface MyRatingResponse {
   rating: Rating | null;
 }
 
+export interface SessionCredits {
+  /** Number of session credits available */
+  credits: number;
+}
+
 export interface ContactUsage {
-  /** Number of contacts unlocked this calendar month */
+  /** Number of teacher contacts unlocked this calendar month */
   used: number;
   /** Monthly contact unlock limit */
   limit: number;
   /** When the monthly counter resets (start of next month) */
   resetsAt: string;
-  /** If true, the parent has unlimited access and the limit does not apply */
+  /** If true, the parent has permanent (Plan B) unlocks and the monthly limit does not apply */
   hasActiveSubscription: boolean;
+  /** Total number of currently active (non-expired) teacher unlocks */
+  activeUnlockCount: number;
+  /** ISO timestamp of the soonest-expiring active Plan A unlock, or null if none */
+  nearestExpiryAt?: string | null;
 }
 
 export interface CreateRatingBody {
@@ -418,13 +417,8 @@ export interface PaymentPlans {
   planC: PaymentPlan;
   planD: PaymentPlan;
   planE: PaymentPlan;
-  planSessionPass5: PaymentPlan;
-  planSessionPass10: PaymentPlan;
-}
-
-export interface SessionCredits {
-  /** Remaining session credits for the parent */
-  credits: number;
+  planSessionPass5?: PaymentPlan;
+  planSessionPass10?: PaymentPlan;
 }
 
 export type SubscriptionStatusSubscription = {
@@ -461,6 +455,8 @@ export const CreateStripeCheckoutBodyPlan = {
   plan_d_pro_onetime: "plan_d_pro_onetime",
   plan_e_pro_monthly: "plan_e_pro_monthly",
   plan_f_per_booking: "plan_f_per_booking",
+  plan_session_pass_5: "plan_session_pass_5",
+  plan_session_pass_10: "plan_session_pass_10",
 } as const;
 
 export interface CreateStripeCheckoutBody {
@@ -496,10 +492,8 @@ export interface CreateRazorpayOrderBody {
 }
 
 export interface RazorpayOrder {
-  orderId?: string;
-  subscriptionId?: string;
-  isSubscription?: boolean;
-  amount?: number;
+  orderId: string;
+  amount: number;
   currency: string;
   keyId: string;
   paymentId: number;
@@ -508,8 +502,7 @@ export interface RazorpayOrder {
 
 export interface VerifyRazorpayBody {
   razorpayPaymentId: string;
-  razorpayOrderId?: string;
-  razorpaySubscriptionId?: string;
+  razorpayOrderId: string;
   razorpaySignature: string;
   paymentId: number;
 }
@@ -767,12 +760,11 @@ export interface BookSessionBody {
 
 export interface SessionBookingOrderResponse {
   sessionId: number;
-  usedCredit?: boolean;
-  orderId?: string;
+  orderId: string;
   /** Amount in paise */
-  amount?: number;
-  currency?: string;
-  keyId?: string;
+  amount: number;
+  currency: string;
+  keyId: string;
 }
 
 export interface VerifySessionPaymentBody {

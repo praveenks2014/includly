@@ -13,4 +13,6 @@ export interface PaymentPlans {
   planC: PaymentPlan;
   planD: PaymentPlan;
   planE: PaymentPlan;
+  planSessionPass5?: PaymentPlan;
+  planSessionPass10?: PaymentPlan;
 }

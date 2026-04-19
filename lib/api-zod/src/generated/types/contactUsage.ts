@@ -7,12 +7,16 @@
  */
 
 export interface ContactUsage {
-  /** Number of contacts unlocked this calendar month */
+  /** Number of teacher contacts unlocked this calendar month */
   used: number;
   /** Monthly contact unlock limit */
   limit: number;
   /** When the monthly counter resets (start of next month) */
   resetsAt: Date;
-  /** If true, the parent has unlimited access and the limit does not apply */
+  /** If true, the parent has permanent (Plan B) unlocks and the monthly limit does not apply */
   hasActiveSubscription: boolean;
+  /** Total number of currently active (non-expired) teacher unlocks */
+  activeUnlockCount: number;
+  /** ISO timestamp of the soonest-expiring active Plan A unlock, or null if none */
+  nearestExpiryAt?: Date | null;
 }

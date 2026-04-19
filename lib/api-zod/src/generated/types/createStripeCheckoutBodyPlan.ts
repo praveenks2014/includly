@@ -16,4 +16,6 @@ export const CreateStripeCheckoutBodyPlan = {
   plan_d_pro_onetime: "plan_d_pro_onetime",
   plan_e_pro_monthly: "plan_e_pro_monthly",
   plan_f_per_booking: "plan_f_per_booking",
+  plan_session_pass_5: "plan_session_pass_5",
+  plan_session_pass_10: "plan_session_pass_10",
 } as const;

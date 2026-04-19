@@ -777,6 +777,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /payments/session-credits:
+    get:
+      operationId: getSessionCredits
+      tags: [payments]
+      summary: Get the authenticated parent's current session credit balance
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Current session credit balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionCredits"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /webhooks/stripe:
     post:
       operationId: stripeWebhook
@@ -1996,12 +2017,21 @@ components:
       required:
         - rating
 
+    SessionCredits:
+      type: object
+      properties:
+        credits:
+          type: integer
+          description: Number of session credits available
+      required:
+        - credits
+
     ContactUsage:
       type: object
       properties:
         used:
           type: integer
-          description: Number of contacts unlocked this calendar month
+          description: Number of teacher contacts unlocked this calendar month
         limit:
           type: integer
           description: Monthly contact unlock limit
@@ -2011,12 +2041,21 @@ components:
           description: When the monthly counter resets (start of next month)
         hasActiveSubscription:
           type: boolean
-          description: If true, the parent has unlimited access and the limit does not apply
+          description: If true, the parent has permanent (Plan B) unlocks and the monthly limit does not apply
+        activeUnlockCount:
+          type: integer
+          description: Total number of currently active (non-expired) teacher unlocks
+        nearestExpiryAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO timestamp of the soonest-expiring active Plan A unlock, or null if none
       required:
         - used
         - limit
         - resetsAt
         - hasActiveSubscription
+        - activeUnlockCount
 
     CreateRatingBody:
       type: object
@@ -2223,6 +2262,10 @@ components:
           $ref: "#/components/schemas/PaymentPlan"
         planE:
           $ref: "#/components/schemas/PaymentPlan"
+        planSessionPass5:
+          $ref: "#/components/schemas/PaymentPlan"
+        planSessionPass10:
+          $ref: "#/components/schemas/PaymentPlan"
       required:
         - planA
         - planB
@@ -2292,6 +2335,8 @@ components:
             - plan_d_pro_onetime
             - plan_e_pro_monthly
             - plan_f_per_booking
+            - plan_session_pass_5
+            - plan_session_pass_10
         professionalId:
           type: integer
         successUrl:
@@ -2329,6 +2374,8 @@ components:
             - plan_d_pro_onetime
             - plan_e_pro_monthly
             - plan_f_per_booking
+            - plan_session_pass_5
+            - plan_session_pass_10
         professionalId:
           type: integer
       required:
