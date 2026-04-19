@@ -388,6 +388,30 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
 
   return (
     <div className="space-y-6">
+      {/* Awaiting approval banner */}
+      {(profile.verificationStatus === "pending" || profile.verificationStatus === "unsubmitted") && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5 flex items-start gap-3" data-testid="pending-approval-notice">
+          <AlertCircle size={20} className="text-yellow-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-yellow-800">
+              {profile.verificationStatus === "pending" ? "Awaiting admin approval" : "Profile not yet submitted for review"}
+            </p>
+            <p className="text-sm text-yellow-700 mt-1">
+              {profile.verificationStatus === "pending"
+                ? "Your profile is under review. Once approved by an admin, you will appear in search results. No action needed from your side."
+                : "You haven't submitted your verification documents yet. Complete your profile to start appearing in search results."}
+            </p>
+            {profile.verificationStatus === "unsubmitted" && (
+              <Link href="/onboard">
+                <Button size="sm" className="mt-3 gap-1" variant="outline">
+                  Complete profile
+                </Button>
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Rejection notice */}
       {profile.verificationStatus === "rejected" && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start gap-3" data-testid="rejection-notice">
@@ -396,7 +420,10 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
             <p className="font-semibold text-red-800">Your application was not approved</p>
             <p className="text-sm text-red-700 mt-1">
               Unfortunately, your professional profile application has been reviewed and could not be approved at this time.
-              If you have questions or believe this is a mistake, please{" "}
+              {(profile as { rejectionReason?: string | null }).rejectionReason && (
+                <span> Reason: {(profile as { rejectionReason?: string | null }).rejectionReason}.</span>
+              )}
+              {" "}If you have questions, please{" "}
               <a href="/support" className="underline font-medium">contact our support team</a>.
             </p>
           </div>

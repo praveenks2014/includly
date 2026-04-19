@@ -127,6 +127,9 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
 
   const conditions: SQL<unknown>[] = [];
 
+  // Only show approved (verified) profiles in public search — pending/rejected are invisible
+  conditions.push(eq(professionalProfilesTable.verificationStatus, "verified"));
+
   if (verifiedOnly) {
     conditions.push(eq(professionalProfilesTable.isVerified, true));
   }
@@ -316,10 +319,19 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
     return;
   }
 
-  await db
-    .update(professionalProfilesTable)
-    .set({ totalViews: (profile.totalViews ?? 0) + 1 })
-    .where(eq(professionalProfilesTable.id, profile.id));
+  // Gate unapproved profiles — only admins can view pending/rejected profiles publicly
+  if (profile.verificationStatus !== "verified" && req.userRole !== "admin") {
+    res.status(404).json({ error: "Professional not found" });
+    return;
+  }
+
+  // Only increment views for approved profiles (admin previews don't count)
+  if (profile.verificationStatus === "verified") {
+    await db
+      .update(professionalProfilesTable)
+      .set({ totalViews: (profile.totalViews ?? 0) + 1 })
+      .where(eq(professionalProfilesTable.id, profile.id));
+  }
 
   let isUnlocked = false;
   if (req.userId) {

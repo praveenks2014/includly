@@ -81,6 +81,7 @@ export const optionalAuth = async (
     const [user] = await db.select().from(usersTable).where(eq(usersTable.clerkId, clerkId));
     if (user) {
       req.userId = user.id;
+      req.userRole = user.role as UserRole;
     }
   }
 
