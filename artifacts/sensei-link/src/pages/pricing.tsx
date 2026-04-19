@@ -26,9 +26,8 @@ const PARENT_PLANS = [
     period: "/ 30 days",
     description: "Unlock up to 5 shadow teacher contacts for 30 days. Or pay ₹149 per contact if you only need one.",
     features: [
-      "30-day unlimited access to shadow teachers",
-      "Unlock as many shadow teacher contacts as you need",
-      "Download contact info",
+      "Unlock up to 5 shadow teacher contacts for 30 days",
+      "Download contact info for each unlock",
       "Priority listings first",
     ],
     highlight: true,

@@ -8,7 +8,8 @@ import {
   useGetMySubscription,
   useGetPaymentHistory,
   useGetContactUsage,
-  useCreateStripeCheckout,
+  useCreateRazorpayOrder,
+  useVerifyRazorpayPayment,
   useBroadcastNotification,
   useSetAvailability,
   getGetMySubscriptionQueryKey,
@@ -30,6 +31,7 @@ import { getSpecialtyLabel } from "@/lib/specialties";
 import { useToast } from "@/hooks/use-toast";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle, AlertCircle, Bell, CalendarCheck, CalendarClock, Crown, Columns, Lock, CheckCheck } from "lucide-react";
+import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
 
 export default function DashboardPage() {
   const { user } = useUser();
@@ -293,7 +295,9 @@ const SCHEDULE_TEMPLATES = [
 
 function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboard | undefined; isLoading: boolean }) {
   const { toast } = useToast();
-  const { mutateAsync: createStripeCheckout, isPending: stripeLoading } = useCreateStripeCheckout();
+  const { mutateAsync: createOrder } = useCreateRazorpayOrder();
+  const { mutateAsync: verifyPayment } = useVerifyRazorpayPayment();
+  const [featuredLoading, setFeaturedLoading] = useState(false);
   const { mutateAsync: setAvailability, isPending: applyingTemplate } = useSetAvailability();
   const [applyingLabel, setApplyingLabel] = useState<string | null>(null);
 
@@ -309,25 +313,51 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
     }
   }
 
-  const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-
   async function handleFeaturedListing() {
+    setFeaturedLoading(true);
     try {
-      const origin = window.location.origin;
-      const result = await createStripeCheckout({
-        data: {
-          plan: "plan_c_featured",
-          successUrl: `${origin}${basePath}/payment/success?plan=plan_c_featured`,
-          cancelUrl: `${origin}${basePath}/payment/cancel`,
-        },
+      const loaded = await loadRazorpayScript();
+      if (!loaded) {
+        toast({ title: "Could not load payment module", description: "Please try again or contact support.", variant: "destructive" });
+        return;
+      }
+      const orderResult = await createOrder({ data: { plan: "plan_c_featured" } });
+      await new Promise<void>((resolve, reject) => {
+        const rzp = new (window as unknown as { Razorpay: new (opts: unknown) => { open: () => void } }).Razorpay({
+          key: orderResult.keyId,
+          amount: orderResult.amount,
+          currency: orderResult.currency,
+          name: "Sproutly",
+          description: orderResult.planName,
+          order_id: orderResult.orderId,
+          handler: async function (response: RazorpayPaymentResponse) {
+            try {
+              await verifyPayment({
+                data: {
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySignature: response.razorpay_signature,
+                  paymentId: orderResult.paymentId,
+                },
+              });
+              toast({ title: "Featured listing activated!", description: "Your profile is now featured in search results." });
+              resolve();
+            } catch {
+              reject(new Error("Payment verification failed."));
+            }
+          },
+          modal: { ondismiss: () => reject(new Error("cancelled")) },
+          theme: { color: "#7c3aed" },
+        });
+        rzp.open();
       });
-      window.location.href = result.url;
-    } catch {
-      toast({
-        title: "Stripe not configured",
-        description: "Featured listing requires Stripe. Please contact support.",
-        variant: "destructive",
-      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Something went wrong.";
+      if (msg !== "cancelled") {
+        toast({ title: "Payment failed", description: msg, variant: "destructive" });
+      }
+    } finally {
+      setFeaturedLoading(false);
     }
   }
 
@@ -386,11 +416,11 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
           size="sm"
           variant="outline"
           className="gap-2 shrink-0 border-violet-300 text-violet-700 hover:bg-violet-50"
-          disabled={stripeLoading}
+          disabled={featuredLoading}
           onClick={handleFeaturedListing}
           data-testid="featured-listing-cta"
         >
-          {stripeLoading ? <Loader2 size={13} className="animate-spin" /> : <CreditCard size={13} />}
+          {featuredLoading ? <Loader2 size={13} className="animate-spin" /> : <CreditCard size={13} />}
           Get featured
         </Button>
       </div>

@@ -416,6 +416,12 @@ router.post(
     return;
   }
 
+  // Plan C is professional/admin-only (Featured Listing)
+  if (plan === "plan_c_featured" && req.userRole !== "professional" && req.userRole !== "admin") {
+    res.status(403).json({ error: "Featured listing is only available to professional accounts." });
+    return;
+  }
+
   // Plan D/E are professional-only
   if ((plan === "plan_d_pro_onetime" || plan === "plan_e_pro_monthly") && req.userRole === "parent") {
     res.status(403).json({ error: "Professional billing plans are for professional accounts only." });
