@@ -23,6 +23,7 @@ import AvailabilityPage from "@/pages/availability";
 import SessionsPage from "@/pages/sessions";
 import SignUpPage from "@/pages/sign-up";
 import SignInPage from "@/pages/sign-in";
+import SsoCallbackPage from "@/pages/sso-callback";
 import DevSignInPage from "@/pages/dev-signin";
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -67,7 +68,7 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
-const HIDE_NAVBAR_PATHS = ["/sign-in", "/sign-up", "/dev-signin"];
+const HIDE_NAVBAR_PATHS = ["/sign-in", "/sign-up", "/dev-signin", "/sso-callback"];
 
 function Layout({ children }: { children: React.ReactNode }) {
   const [loc] = useLocation();
@@ -102,6 +103,7 @@ function Router() {
         <Route path="/" component={HomePage} />
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/sign-up/*?" component={SignUpPage} />
+        <Route path="/sso-callback" component={SsoCallbackPage} />
         <Route path="/dev-signin" component={DevSignInPage} />
         <Route path="/search" component={SearchPage} />
         <Route path="/professionals/:id" component={ProfessionalProfilePage} />
