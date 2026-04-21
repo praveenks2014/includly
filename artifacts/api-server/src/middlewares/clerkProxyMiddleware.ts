@@ -1,27 +1,21 @@
 /**
  * Clerk Frontend API Proxy Middleware
  *
- * Proxies Clerk Frontend API requests through your domain.
+ * Proxies Clerk Frontend API requests through your domain, enabling Clerk
+ * authentication on custom domains and .replit.app deployments.
  *
- * NOTE: This proxy is only needed for Clerk PRODUCTION instances (pk_live_...).
- * Development instances (pk_test_...) support direct browser FAPI calls from
- * any origin — no proxy required. Using a proxy with dev keys causes 504 errors
- * in Replit's production environment because the target domain is unreachable
- * from the server side.
+ * Only active in production. Production Clerk setup is managed by Replit's
+ * Clerk integration — this middleware should not need any code changes.
  */
 
 import { createProxyMiddleware } from "http-proxy-middleware";
 import type { RequestHandler } from "express";
 
+const CLERK_FAPI = "https://frontend-api.clerk.dev";
 export const CLERK_PROXY_PATH = "/api/__clerk";
 
 export function clerkProxyMiddleware(): RequestHandler {
-  const pk = process.env.CLERK_PUBLISHABLE_KEY || "";
-
-  // Only proxy for Clerk PRODUCTION keys (pk_live_...).
-  // Development keys (pk_test_...) allow direct browser FAPI calls — skip proxy.
-  const isLiveKey = pk.startsWith("pk_live_");
-  if (!isLiveKey) {
+  if (process.env.NODE_ENV !== "production") {
     return (_req, _res, next) => next();
   }
 
@@ -30,18 +24,8 @@ export function clerkProxyMiddleware(): RequestHandler {
     return (_req, _res, next) => next();
   }
 
-  // For live keys, derive the FAPI domain from the publishable key
-  let clerkFapi = "https://frontend-api.clerk.dev";
-  try {
-    const encoded = pk.replace(/^pk_live_/, "").replace(/\$$/, "");
-    const domain = Buffer.from(encoded, "base64").toString("utf8").replace(/\0/g, "").replace(/\$$/, "");
-    if (domain && domain.includes(".")) clerkFapi = `https://${domain}`;
-  } catch {
-    // fall through to default
-  }
-
   return createProxyMiddleware({
-    target: clerkFapi,
+    target: CLERK_FAPI,
     changeOrigin: true,
     pathRewrite: (path: string) =>
       path.replace(new RegExp(`^${CLERK_PROXY_PATH}`), ""),
