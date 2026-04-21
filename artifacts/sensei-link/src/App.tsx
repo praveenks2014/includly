@@ -26,18 +26,8 @@ import SignInPage from "@/pages/sign-in";
 import SsoCallbackPage from "@/pages/sso-callback";
 import DevSignInPage from "@/pages/dev-signin";
 
-const rawClerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-const FALLBACK_DEV_CLERK_KEY =
-  "pk_test_dG9nZXRoZXItbGlvbi0yMS5jbGVyay5hY2NvdW50cy5kZXYk";
-const BROKEN_PROD_CLERK_KEY =
-  "pk_live_Y2xlcmsuc3Byb3V0bHkucmVwbGl0LmFwcCQ";
-const clerkPubKey =
-  rawClerkPubKey === BROKEN_PROD_CLERK_KEY || !rawClerkPubKey
-    ? FALLBACK_DEV_CLERK_KEY
-    : rawClerkPubKey;
-const clerkProxyUrl: string | undefined = clerkPubKey.startsWith("pk_test_")
-  ? undefined
-  : import.meta.env.VITE_CLERK_PROXY_URL;
+const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const clerkProxyUrl: string | undefined = import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 if (!clerkPubKey) {
