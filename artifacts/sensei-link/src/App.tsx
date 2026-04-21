@@ -27,7 +27,12 @@ import SsoCallbackPage from "@/pages/sso-callback";
 import DevSignInPage from "@/pages/dev-signin";
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+// In production, dynamically compute the proxy URL from the current origin so
+// Clerk works on any .replit.app domain without needing a build-time secret.
+// In development, skip the proxy (Clerk dev instances use FAPI directly).
+const clerkProxyUrl: string | undefined =
+  import.meta.env.VITE_CLERK_PROXY_URL ||
+  (import.meta.env.PROD ? `${window.location.origin}/api/__clerk` : undefined);
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 if (!clerkPubKey) {

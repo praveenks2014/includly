@@ -19,7 +19,22 @@
 import { createProxyMiddleware } from "http-proxy-middleware";
 import type { RequestHandler } from "express";
 
-const CLERK_FAPI = "https://frontend-api.clerk.dev";
+// Instance-specific FAPI domain derived from the publishable key.
+// The generic "frontend-api.clerk.dev" returns 501 for this instance;
+// the accounts domain is the correct FAPI endpoint.
+function getClerkFapi(): string {
+  const pk = process.env.CLERK_PUBLISHABLE_KEY || "";
+  try {
+    // pk_test_<base64-encoded-domain>$  → decode → "together-lion-21.clerk.accounts.dev"
+    const encoded = pk.replace(/^pk_(test|live)_/, "").replace(/\$$/, "");
+    const domain = Buffer.from(encoded, "base64").toString("utf8").replace(/\0/g, "").replace(/\$$/, "");
+    if (domain && domain.includes(".")) return `https://${domain}`;
+  } catch {
+    // fall through to default
+  }
+  return "https://frontend-api.clerk.dev";
+}
+
 export const CLERK_PROXY_PATH = "/api/__clerk";
 
 export function clerkProxyMiddleware(): RequestHandler {
@@ -32,6 +47,8 @@ export function clerkProxyMiddleware(): RequestHandler {
   if (!secretKey) {
     return (_req, _res, next) => next();
   }
+
+  const CLERK_FAPI = getClerkFapi();
 
   return createProxyMiddleware({
     target: CLERK_FAPI,
