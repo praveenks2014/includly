@@ -90,7 +90,7 @@ export default function SignInPage() {
           variant="outline"
           className="w-full mb-4 gap-2"
           onClick={handleGoogleSignIn}
-          disabled={googleLoading || loading}
+          disabled={!isLoaded || googleLoading || loading}
         >
           {googleLoading ? (
             <Loader2 size={16} className="animate-spin" />
@@ -160,7 +160,7 @@ export default function SignInPage() {
             </p>
           )}
 
-          <Button type="submit" className="w-full" disabled={loading || !email || !password}>
+          <Button type="submit" className="w-full" disabled={!isLoaded || loading || !email || !password}>
             {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
             Sign in
           </Button>
