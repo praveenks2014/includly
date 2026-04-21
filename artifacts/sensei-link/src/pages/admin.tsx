@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useUser } from "@clerk/react";
+import { useUser, useAuth } from "@clerk/react";
 import {
   useGetMe,
   useAdminListProfessionals,
@@ -798,12 +798,39 @@ function StatsTab() {
 function SettingsTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { getToken } = useAuth();
   const { data: settings, isLoading } = useGetAdminSettings({
     query: { queryKey: getGetAdminSettingsQueryKey() },
   });
   const { mutateAsync: updateSettings, isPending: saving } = useUpdateAdminSettings();
 
   const [contactLimit, setContactLimit] = useState<number | null>(null);
+  const [seeding, setSeeding] = useState(false);
+
+  async function handleSeedDemos() {
+    setSeeding(true);
+    try {
+      const token = await getToken();
+      const res = await fetch("/api/admin/seed-demos", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Unknown error");
+      toast({
+        title: "Demo profiles seeded",
+        description: `Created ${json.profilesCreated} new profiles, ${json.skipped} already existed.`,
+      });
+    } catch (e: unknown) {
+      toast({
+        title: "Seed failed",
+        description: e instanceof Error ? e.message : "An error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setSeeding(false);
+    }
+  }
 
   const currentLimit = contactLimit ?? settings?.contactLimitPerParent ?? 5;
 
@@ -846,6 +873,16 @@ function SettingsTab() {
         </div>
         <Button className="mt-4" onClick={handleSave} disabled={saving} data-testid="save-settings-btn">
           {saving ? <><Loader2 size={14} className="animate-spin mr-2" />Saving...</> : "Save settings"}
+        </Button>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+        <h2 className="font-semibold text-foreground mb-1">Demo Professional Profiles</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Seed 16 verified demo specialist profiles into the database. Safe to run multiple times — existing profiles are skipped.
+        </p>
+        <Button variant="outline" onClick={handleSeedDemos} disabled={seeding}>
+          {seeding ? <><Loader2 size={14} className="animate-spin mr-2" />Seeding...</> : "Seed demo profiles"}
         </Button>
       </div>
 
