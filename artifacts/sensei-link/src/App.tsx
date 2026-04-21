@@ -27,14 +27,8 @@ import SsoCallbackPage from "@/pages/sso-callback";
 import DevSignInPage from "@/pages/dev-signin";
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-// In production, route Clerk's FAPI calls through our own server proxy so they
-// work from any domain without CORS issues. In dev the proxy middleware is
-// disabled, so Clerk talks directly to its servers (which is fine for local dev).
-const clerkProxyUrl: string | undefined =
-  import.meta.env.VITE_CLERK_PROXY_URL ||
-  (import.meta.env.PROD ? `${window.location.origin}/api/__clerk` : undefined);
 
 if (!clerkPubKey) {
   throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
