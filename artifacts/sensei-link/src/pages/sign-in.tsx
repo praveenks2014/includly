@@ -31,12 +31,25 @@ export default function SignInPage() {
 
   async function handleEmailSignIn(e: React.FormEvent) {
     e.preventDefault();
-    if (!isLoaded) return;
-    setLoading(true);
     setError("");
+
+    if (!email.trim()) {
+      setError("Please enter your email address.");
+      return;
+    }
+    if (!password) {
+      setError("Please enter your password.");
+      return;
+    }
+    if (!isLoaded) {
+      setError("Authentication is still loading. Please wait a moment and try again.");
+      return;
+    }
+
+    setLoading(true);
     try {
       const result = await signIn.create({
-        identifier: email,
+        identifier: email.trim(),
         password,
       });
       if (result.status === "complete") {
@@ -62,17 +75,22 @@ export default function SignInPage() {
   }
 
   async function handleGoogleSignIn() {
-    if (!isLoaded) return;
+    if (!isLoaded) {
+      setError("Authentication is still loading. Please try again in a moment.");
+      return;
+    }
     setGoogleLoading(true);
     setError("");
     try {
       await signIn.authenticateWithRedirect({
         strategy: "oauth_google",
         redirectUrl: `${window.location.origin}${basePath}/sso-callback`,
-        redirectUrlComplete: redirectUrl,
+        redirectUrlComplete: `${window.location.origin}${redirectUrl}`,
       });
-    } catch {
-      setError("Could not start Google sign-in. Please try again.");
+    } catch (err: unknown) {
+      const clerkError = err as { errors?: { message?: string; longMessage?: string }[] };
+      const msg = clerkError?.errors?.[0]?.longMessage || clerkError?.errors?.[0]?.message;
+      setError(msg || "Could not start Google sign-in. Please try signing in with email and password instead.");
       setGoogleLoading(false);
     }
   }
@@ -125,7 +143,6 @@ export default function SignInPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1"
-              required
               disabled={loading}
             />
           </div>
@@ -140,7 +157,6 @@ export default function SignInPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="pr-10"
-                required
                 disabled={loading}
               />
               <button
@@ -160,7 +176,7 @@ export default function SignInPage() {
             </p>
           )}
 
-          <Button type="submit" className="w-full" disabled={loading || !email || !password}>
+          <Button type="submit" className="w-full" disabled={loading}>
             {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
             Sign in
           </Button>
@@ -179,10 +195,13 @@ export default function SignInPage() {
             className="hover:underline"
             onClick={(e) => {
               e.preventDefault();
-              if (!isLoaded || !email) return;
-              signIn.create({ strategy: "reset_password_email_code", identifier: email })
+              if (!isLoaded || !email.trim()) {
+                setError("Enter your email address above, then click 'Forgot password?'.");
+                return;
+              }
+              signIn.create({ strategy: "reset_password_email_code", identifier: email.trim() })
                 .then(() => setError("Password reset email sent — check your inbox."))
-                .catch(() => setError("Enter your email above, then click this link."));
+                .catch(() => setError("Could not send password reset. Please check your email address."));
             }}
           >
             Forgot password?
