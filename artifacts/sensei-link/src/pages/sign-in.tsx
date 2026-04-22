@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSignIn, useAuth } from "@clerk/react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,13 @@ export default function SignInPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
+  const [clerkTimedOut, setClerkTimedOut] = useState(false);
+
+  useEffect(() => {
+    if (isLoaded) return;
+    const timer = setTimeout(() => setClerkTimedOut(true), 5000);
+    return () => clearTimeout(timer);
+  }, [isLoaded]);
 
   if (isSignedIn) {
     setLocation(redirectUrl);
@@ -91,12 +98,18 @@ export default function SignInPage() {
           <p className="text-sm text-muted-foreground mt-1">Welcome back! Please sign in to continue.</p>
         </div>
 
+        {clerkTimedOut && !isLoaded && (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-4">
+            The authentication service is taking longer than expected. You can try signing in, but it may not work. Try refreshing the page if problems persist.
+          </p>
+        )}
+
         <Button
           type="button"
           variant="outline"
           className="w-full mb-4 gap-2"
           onClick={handleGoogleSignIn}
-          disabled={googleLoading || loading}
+          disabled={googleLoading || loading || (!isLoaded && !clerkTimedOut)}
         >
           {googleLoading ? (
             <Loader2 size={16} className="animate-spin" />
@@ -166,7 +179,7 @@ export default function SignInPage() {
             </p>
           )}
 
-          <Button type="submit" className="w-full" disabled={loading || !email || !password}>
+          <Button type="submit" className="w-full" disabled={loading || !email || !password || (!isLoaded && !clerkTimedOut)}>
             {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
             Sign in
           </Button>
