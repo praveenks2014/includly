@@ -31,7 +31,10 @@ export default function SignInPage() {
 
   async function handleEmailSignIn(e: React.FormEvent) {
     e.preventDefault();
-    if (!isLoaded) return;
+    if (!isLoaded) {
+      setError("Authentication service is still loading. Please try again in a moment.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -62,7 +65,10 @@ export default function SignInPage() {
   }
 
   async function handleGoogleSignIn() {
-    if (!isLoaded) return;
+    if (!isLoaded) {
+      setError("Authentication service is still loading. Please try again in a moment.");
+      return;
+    }
     setGoogleLoading(true);
     setError("");
     try {
@@ -90,7 +96,7 @@ export default function SignInPage() {
           variant="outline"
           className="w-full mb-4 gap-2"
           onClick={handleGoogleSignIn}
-          disabled={!isLoaded || googleLoading || loading}
+          disabled={googleLoading || loading}
         >
           {googleLoading ? (
             <Loader2 size={16} className="animate-spin" />
@@ -160,7 +166,7 @@ export default function SignInPage() {
             </p>
           )}
 
-          <Button type="submit" className="w-full" disabled={!isLoaded || loading || !email || !password}>
+          <Button type="submit" className="w-full" disabled={loading || !email || !password}>
             {loading ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
             Sign in
           </Button>
@@ -179,7 +185,8 @@ export default function SignInPage() {
             className="hover:underline"
             onClick={(e) => {
               e.preventDefault();
-              if (!isLoaded || !email) return;
+              if (!email) { setError("Enter your email above, then click this link."); return; }
+              if (!isLoaded) { setError("Authentication service is still loading. Please try again in a moment."); return; }
               signIn.create({ strategy: "reset_password_email_code", identifier: email })
                 .then(() => setError("Password reset email sent — check your inbox."))
                 .catch(() => setError("Enter your email above, then click this link."));
