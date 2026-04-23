@@ -54,15 +54,10 @@ export function clerkProxyMiddleware(): RequestHandler {
     },
   }) as RequestHandler;
 
-  const npmProxy = createProxyMiddleware({
-    target: CLERK_NPM_CDN,
-    changeOrigin: true,
-    pathRewrite: (path: string) => path.replace(/^\/npm/, ""),
-  }) as RequestHandler;
-
   return (req, res, next) => {
     if (req.path.startsWith("/npm")) {
-      return npmProxy(req, res, next);
+      const cdnPath = req.path.replace(/^\/npm/, "");
+      return res.redirect(302, `${CLERK_NPM_CDN}${cdnPath}`);
     }
     return fapiProxy(req, res, next);
   };
