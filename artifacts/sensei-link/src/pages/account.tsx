@@ -79,7 +79,7 @@ export default function AccountPage() {
         key: order.keyId,
         amount: order.amount!,
         currency: order.currency,
-        name: "Sproutly",
+        name: "Includly",
         description: order.planName,
         order_id: order.orderId!,
         handler: async (response: RazorpayPaymentResponse) => {
@@ -132,7 +132,7 @@ export default function AccountPage() {
         const rzp = new window.Razorpay({
           key: order.keyId,
           subscription_id: order.subscriptionId,
-          name: "Sproutly",
+          name: "Includly",
           description: order.planName,
           handler: async (response: RazorpaySubscriptionResponse) => {
             try {
@@ -145,7 +145,7 @@ export default function AccountPage() {
                 },
               });
               if (result.success) {
-                toast({ title: "Pro activated!", description: "Your Sproutly Pro subscription is now active." });
+                toast({ title: "Pro activated!", description: "Your Includly Pro subscription is now active." });
               } else {
                 toast({ title: "Payment verification failed", variant: "destructive" });
               }
@@ -561,7 +561,7 @@ export default function AccountPage() {
               </div>
               <div>
                 <h2 className="font-semibold text-amber-900 flex items-center gap-1.5">
-                  Sproutly Pro
+                  Includly Pro
                   <span className="text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded-full">₹499/month</span>
                 </h2>
                 <p className="text-sm text-amber-700 mt-1">

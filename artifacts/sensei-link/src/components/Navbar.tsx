@@ -33,9 +33,9 @@ export function Navbar() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
         <Link href="/" className="flex items-center gap-2 group">
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <span className="text-white font-bold text-sm">SL</span>
+            <span className="text-white font-bold text-sm">In</span>
           </div>
-          <span className="font-serif font-semibold text-lg text-foreground">Sproutly</span>
+          <span className="font-serif font-semibold text-lg text-foreground">Includly</span>
         </Link>
 
         {/* Desktop nav */}

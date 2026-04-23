@@ -146,7 +146,7 @@ export default function PricingPage() {
         key: order.keyId,
         amount: order.amount!,
         currency: order.currency,
-        name: "Sproutly",
+        name: "Includly",
         description: order.planName,
         order_id: order.orderId!,
         handler: async (response: RazorpayResponse) => {
@@ -202,7 +202,7 @@ export default function PricingPage() {
         const rzp = new window.Razorpay({
           key: order.keyId,
           subscription_id: order.subscriptionId,
-          name: "Sproutly",
+          name: "Includly",
           description: order.planName,
           handler: async (response: RazorpaySubscriptionResponse) => {
             try {
@@ -215,7 +215,7 @@ export default function PricingPage() {
                 },
               });
               if (result.success) {
-                toast({ title: "Pro activated!", description: "Your Sproutly Pro subscription is now active." });
+                toast({ title: "Pro activated!", description: "Your Includly Pro subscription is now active." });
               } else {
                 toast({ title: "Payment verification failed", variant: "destructive" });
               }
@@ -280,7 +280,7 @@ export default function PricingPage() {
               How session commissions work
             </h3>
             <p className="text-sm text-muted-foreground">
-              When a parent books and pays for a session through Sproutly, a small platform fee is deducted before your payout. This covers payment processing and platform maintenance.
+              When a parent books and pays for a session through Includly, a small platform fee is deducted before your payout. This covers payment processing and platform maintenance.
             </p>
             <div className="grid sm:grid-cols-3 gap-3 mt-2">
               {[
@@ -318,7 +318,7 @@ export default function PricingPage() {
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-bold text-amber-900 text-lg">Sproutly Pro</h3>
+                  <h3 className="font-bold text-amber-900 text-lg">Includly Pro</h3>
                   <span className="text-[10px] font-bold text-amber-700 bg-amber-200 border border-amber-300 px-2 py-0.5 rounded-full">PRO</span>
                 </div>
                 <p className="text-sm text-amber-800 mb-3">Unlock premium tools: multi-day schedule templates, priority placement in search, and a Pro badge on your profile.</p>
@@ -462,7 +462,7 @@ export default function PricingPage() {
 
         <div className="mt-10 bg-muted/30 border border-border rounded-xl p-6 text-center">
           <h3 className="font-semibold text-foreground mb-1">Are you a specialist or therapy centre?</h3>
-          <p className="text-sm text-muted-foreground mb-4">Join Sproutly and reach families actively looking for specialists like you.</p>
+          <p className="text-sm text-muted-foreground mb-4">Join Includly and reach families actively looking for specialists like you.</p>
           <Link href="/sign-up?as=professional">
             <Button variant="outline" size="sm" className="gap-2">
               <UserCheck size={14} />

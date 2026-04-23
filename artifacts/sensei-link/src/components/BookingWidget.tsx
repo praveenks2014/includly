@@ -119,7 +119,7 @@ export function BookingWidget({
           amount: result.amount as number,
           currency: result.currency as string,
           order_id: result.orderId as string,
-          name: "Sproutly",
+          name: "Includly",
           description: `Session with ${professionalName ?? "specialist"}`,
           handler: async (response: RazorpayPaymentResponse) => {
             try {

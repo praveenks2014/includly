@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Eye, EyeOff, Mail } from "lucide-react";
 
-const SIGNUP_AS_KEY = "sproutly_signup_as";
+const SIGNUP_AS_KEY = "includly_signup_as";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function SignUpPage() {

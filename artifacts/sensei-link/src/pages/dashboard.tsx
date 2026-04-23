@@ -52,7 +52,7 @@ export default function DashboardPage() {
   // and send them to /onboard so their role gets set correctly.
   useEffect(() => {
     if (meLoading) return;
-    const intent = localStorage.getItem("sproutly_signup_as");
+    const intent = localStorage.getItem("includly_signup_as");
     if (intent === "professional" && role !== "professional" && role !== "admin") {
       setLocation("/onboard");
     }
@@ -468,7 +468,7 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
           key: orderResult.keyId,
           amount: orderResult.amount,
           currency: orderResult.currency,
-          name: "Sproutly",
+          name: "Includly",
           description: orderResult.planName,
           order_id: orderResult.orderId,
           handler: async function (response: RazorpayPaymentResponse) {

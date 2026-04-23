@@ -1,7 +1,7 @@
 /**
  * seed-admin.ts
  *
- * Idempotent script to provision the Sproutly admin account.
+ * Idempotent script to provision the Includly admin account.
  *
  * What it does:
  *  1. Searches for an existing Clerk user by email. If none exists, creates one.
@@ -28,7 +28,7 @@ import { eq } from "drizzle-orm";
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "praveenece.mit@gmail.com";
 const ADMIN_FIRST_NAME = process.env.ADMIN_FIRST_NAME ?? "Admin";
-const ADMIN_LAST_NAME = process.env.ADMIN_LAST_NAME ?? "Sproutly";
+const ADMIN_LAST_NAME = process.env.ADMIN_LAST_NAME ?? "Includly";
 const ADMIN_FULL_NAME = `${ADMIN_FIRST_NAME} ${ADMIN_LAST_NAME}`;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY;

@@ -94,7 +94,7 @@ export default function SignInPage() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-sm bg-card border border-border rounded-xl shadow-sm p-8">
         <div className="text-center mb-6">
-          <h1 className="text-xl font-semibold text-foreground">Sign in to Sproutly</h1>
+          <h1 className="text-xl font-semibold text-foreground">Sign in to Includly</h1>
           <p className="text-sm text-muted-foreground mt-1">Welcome back! Please sign in to continue.</p>
         </div>
 

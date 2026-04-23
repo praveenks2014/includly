@@ -1,8 +1,8 @@
-# Sproutly
+# Includly
 
 ## Overview
 
-Sproutly is a marketplace connecting parents with Shadow Teachers, Special Educators (OT, Speech Therapy, Special Tutors), and Medical Specialists (Psychiatrist, Developmental Pediatrician, Neurologist) for children with special needs.
+Includly is a marketplace connecting parents with Shadow Teachers, Special Educators (OT, Speech Therapy, Special Tutors), and Medical Specialists (Psychiatrist, Developmental Pediatrician, Neurologist) for children with special needs.
 
 pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
 
@@ -74,12 +74,12 @@ Enums:
 
 ## Admin Access
 
-The canonical way to provision the Sproutly admin account is the **admin seed script**:
+The canonical way to provision the Includly admin account is the **admin seed script**:
 ```bash
 ADMIN_PASSWORD=<secret> pnpm --filter @workspace/api-server run seed:admin
 ```
 This creates (or updates) the Clerk user for `ADMIN_EMAIL` (default: `praveenece.mit@gmail.com`),
-sets `first_name=Admin, last_name=Sproutly`, and upserts the app DB row with `role=admin`.
+sets `first_name=Admin, last_name=Includly`, and upserts the app DB row with `role=admin`.
 `ADMIN_PASSWORD` is required (no default). Re-running is fully idempotent.
 
 Current admin account: `praveenece.mit@gmail.com` — Clerk ID `user_3CXc6CPumc3S3dET3JMSCxzi3Xy` — DB user id 226.

@@ -85,12 +85,12 @@ export default function HomePage() {
             <Heart size={14} className="fill-primary" />
             Trusted by parents across India
           </div>
-          <h1 className="text-4xl sm:text-5xl font-serif font-semibold text-foreground mb-6 leading-tight">
-            Find the right specialist<br />
-            <span className="text-primary">for your child's journey</span>
+          <h1 className="text-4xl sm:text-5xl font-serif font-semibold text-foreground mb-4 leading-tight">
+            Find the right support,<br />
+            <span className="text-primary">faster.</span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
-            Sproutly connects parents with verified Shadow Teachers, Special Educators, and Medical Specialists — so every child gets the support they deserve.
+            Includly connects parents with verified Shadow Teachers, Special Educators, and Medical Specialists — so every child gets the support they deserve.
           </p>
 
           {/* Prominent Toggle */}
@@ -191,7 +191,7 @@ export default function HomePage() {
           <section className="py-16 px-4">
             <div className="max-w-5xl mx-auto">
               <h2 className="text-2xl font-serif font-semibold text-center text-foreground mb-2">Browse by specialty</h2>
-              <p className="text-muted-foreground text-center mb-10">Every specialist on Sproutly is background-checked and reviewed by parents like you.</p>
+              <p className="text-muted-foreground text-center mb-10">Every specialist on Includly is background-checked and reviewed by parents like you.</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {SPECIALTIES.map((s) => (
                   <Link key={s.value} href={`/search?specialty=${s.value}`}>
@@ -207,10 +207,10 @@ export default function HomePage() {
             </div>
           </section>
 
-          {/* Why Sproutly */}
+          {/* Why Includly */}
           <section className="py-16 px-4 bg-muted/20 border-y border-border">
             <div className="max-w-5xl mx-auto">
-              <h2 className="text-2xl font-serif font-semibold text-center mb-10">Why parents choose Sproutly</h2>
+              <h2 className="text-2xl font-serif font-semibold text-center mb-10">Why parents choose Includly</h2>
               <div className="grid sm:grid-cols-3 gap-8">
                 <div className="text-center">
                   <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -241,7 +241,7 @@ export default function HomePage() {
           <section className="py-20 px-4 text-center">
             <div className="max-w-2xl mx-auto">
               <h2 className="text-3xl font-serif font-semibold mb-4">Ready to find the right support?</h2>
-              <p className="text-muted-foreground mb-8">Join thousands of families who've found the perfect specialist through Sproutly.</p>
+              <p className="text-muted-foreground mb-8">Join thousands of families who've found the perfect specialist through Includly.</p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <Link href="/sign-up">
                   <Button size="lg" className="gap-2 px-8">
@@ -267,7 +267,7 @@ export default function HomePage() {
           <section className="py-16 px-4">
             <div className="max-w-5xl mx-auto">
               <div className="text-center mb-12">
-                <h2 className="text-2xl font-serif font-semibold text-foreground mb-2">Grow your practice with Sproutly</h2>
+                <h2 className="text-2xl font-serif font-semibold text-foreground mb-2">Grow your practice with Includly</h2>
                 <p className="text-muted-foreground max-w-xl mx-auto">Reach families actively looking for specialists like you. First month is completely free — no credit card required.</p>
               </div>
               <div className="grid sm:grid-cols-3 gap-8 mb-12">
@@ -276,7 +276,7 @@ export default function HomePage() {
                     <Users size={24} className="text-primary" />
                   </div>
                   <h3 className="font-semibold mb-2">Qualified leads</h3>
-                  <p className="text-sm text-muted-foreground">Parents on Sproutly are actively searching for specialists. These are high-intent, ready-to-engage families.</p>
+                  <p className="text-sm text-muted-foreground">Parents on Includly are actively searching for specialists. These are high-intent, ready-to-engage families.</p>
                 </div>
                 <div className="text-center">
                   <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -359,13 +359,13 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="border-t border-border py-8 px-4 text-center text-sm text-muted-foreground">
         <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="font-serif font-semibold text-foreground">Sproutly</div>
+          <div className="font-serif font-semibold text-foreground">Includly</div>
           <div className="flex gap-4">
             <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy</Link>
             <Link href="/terms" className="hover:text-foreground transition-colors">Terms</Link>
             <Link href="/support" className="hover:text-foreground transition-colors">Support</Link>
           </div>
-          <div>2026 Sproutly. All rights reserved.</div>
+          <div>2026 Includly. All rights reserved.</div>
         </div>
       </footer>
     </div>

@@ -5,10 +5,10 @@ self.addEventListener("push", function (event) {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: "Sproutly", body: event.data.text() };
+    payload = { title: "Includly", body: event.data.text() };
   }
 
-  const title = payload.title || "Sproutly";
+  const title = payload.title || "Includly";
   const options = {
     body: payload.body || "",
     icon: "/favicon.svg",

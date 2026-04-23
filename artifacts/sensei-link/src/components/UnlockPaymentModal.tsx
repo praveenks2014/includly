@@ -83,7 +83,7 @@ export function UnlockPaymentModal({
         key: order.keyId,
         amount: order.amount!,
         currency: order.currency,
-        name: "Sproutly",
+        name: "Includly",
         description: order.planName,
         order_id: order.orderId!,
         handler: async (response: RazorpayResponse) => {
