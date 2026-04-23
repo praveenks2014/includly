@@ -12,6 +12,7 @@ import { createProxyMiddleware } from "http-proxy-middleware";
 import type { RequestHandler } from "express";
 
 const CLERK_FAPI = "https://frontend-api.clerk.dev";
+const CLERK_NPM_CDN = "https://npm.clerk.dev";
 export const CLERK_PROXY_PATH = "/api/__clerk";
 
 export function clerkProxyMiddleware(): RequestHandler {
@@ -24,7 +25,7 @@ export function clerkProxyMiddleware(): RequestHandler {
     return (_req, _res, next) => next();
   }
 
-  return createProxyMiddleware({
+  const fapiProxy = createProxyMiddleware({
     target: CLERK_FAPI,
     changeOrigin: true,
     pathRewrite: (path: string) =>
@@ -49,4 +50,18 @@ export function clerkProxyMiddleware(): RequestHandler {
       },
     },
   }) as RequestHandler;
+
+  const npmProxy = createProxyMiddleware({
+    target: CLERK_NPM_CDN,
+    changeOrigin: true,
+    pathRewrite: (path: string) =>
+      path.replace(new RegExp(`^${CLERK_PROXY_PATH}/npm`), ""),
+  }) as RequestHandler;
+
+  return (req, res, next) => {
+    if (req.path.startsWith(`${CLERK_PROXY_PATH}/npm`)) {
+      return npmProxy(req, res, next);
+    }
+    return fapiProxy(req, res, next);
+  };
 }
