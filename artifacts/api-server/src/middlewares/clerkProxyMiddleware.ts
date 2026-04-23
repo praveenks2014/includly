@@ -6,6 +6,10 @@
  *
  * Only active in production. Production Clerk setup is managed by Replit's
  * Clerk integration — this middleware should not need any code changes.
+ *
+ * Mount point: app.use(CLERK_PROXY_PATH, clerkProxyMiddleware())
+ * Express strips the mount prefix before this handler runs, so req.path
+ * is relative: e.g. /npm/... or /v1/... — NOT /api/__clerk/npm/...
  */
 
 import { createProxyMiddleware } from "http-proxy-middleware";
@@ -28,8 +32,7 @@ export function clerkProxyMiddleware(): RequestHandler {
   const fapiProxy = createProxyMiddleware({
     target: CLERK_FAPI,
     changeOrigin: true,
-    pathRewrite: (path: string) =>
-      path.replace(new RegExp(`^${CLERK_PROXY_PATH}`), ""),
+    pathRewrite: (path: string) => path,
     on: {
       proxyReq: (proxyReq, req) => {
         const protocol = req.headers["x-forwarded-proto"] || "https";
@@ -54,12 +57,11 @@ export function clerkProxyMiddleware(): RequestHandler {
   const npmProxy = createProxyMiddleware({
     target: CLERK_NPM_CDN,
     changeOrigin: true,
-    pathRewrite: (path: string) =>
-      path.replace(new RegExp(`^${CLERK_PROXY_PATH}/npm`), ""),
+    pathRewrite: (path: string) => path.replace(/^\/npm/, ""),
   }) as RequestHandler;
 
   return (req, res, next) => {
-    if (req.path.startsWith(`${CLERK_PROXY_PATH}/npm`)) {
+    if (req.path.startsWith("/npm")) {
       return npmProxy(req, res, next);
     }
     return fapiProxy(req, res, next);
