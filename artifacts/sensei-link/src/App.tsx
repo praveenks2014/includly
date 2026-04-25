@@ -29,20 +29,12 @@ import DevSignInPage from "@/pages/dev-signin";
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-// In production, always proxy Clerk API calls through our own server so the
-// domain embedded in the pk_live key resolves correctly on .replit.app.
-// In development, VITE_CLERK_PROXY_URL can override this, or leave unset to
-// use Clerk's default (accounts.dev) — which works fine for pk_test keys.
+// Only use a proxy if VITE_CLERK_PROXY_URL is explicitly configured.
+// For pk_test_* keys no proxy is needed. For pk_live_* keys pointing at a
+// custom domain (e.g. clerk.includly.in), set this env var to your deployed
+// origin + /api/__clerk so Clerk routes through your own server.
 const clerkProxyUrl: string | undefined =
-  import.meta.env.VITE_CLERK_PROXY_URL ||
-  (import.meta.env.PROD
-    ? `${window.location.origin}/api/__clerk`
-    : undefined);
-
-// Load the Clerk JS bundle directly from the CDN so the browser fetches it
-// itself, avoiding server-side proxy timeouts or redirect-chain issues.
-const CLERK_JS_URL =
-  "https://npm.clerk.dev/@clerk/clerk-js@6/dist/clerk.browser.js";
+  import.meta.env.VITE_CLERK_PROXY_URL || undefined;
 
 if (!clerkPubKey) {
   throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
@@ -158,7 +150,6 @@ function ClerkProviderWithRoutes() {
     <ClerkProvider
       publishableKey={clerkPubKey}
       proxyUrl={clerkProxyUrl}
-      clerkJSUrl={CLERK_JS_URL}
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
