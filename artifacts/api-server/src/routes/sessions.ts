@@ -11,6 +11,7 @@ import {
   usersTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
+import { sendPushNotification } from "../lib/notificationService";
 import {
   SetAvailabilityBody,
   BookSessionBody,
@@ -622,6 +623,42 @@ router.post("/sessions/:bookingId/messages", requireAuth, async (req: Request, r
     .where(eq(bookingMessagesTable.id, message.id));
 
   res.status(201).json(withSender);
+
+  // Fire-and-forget push notification to the other participant.
+  // Admin senders do not trigger notifications.
+  if (req.userRole !== "admin") {
+    void (async () => {
+      try {
+        const booking = participant.booking;
+        const senderName = withSender?.senderName ?? "Someone";
+        const notifBody = body.length > 80 ? body.slice(0, 79) + "…" : body;
+
+        if (req.userId === booking.parentId) {
+          // Sender is parent → notify the professional
+          const [prof] = await db
+            .select({ userId: professionalProfilesTable.userId })
+            .from(professionalProfilesTable)
+            .where(eq(professionalProfilesTable.id, booking.professionalId));
+          if (prof) {
+            await sendPushNotification(prof.userId, {
+              title: `New message from ${senderName}`,
+              body: notifBody,
+              url: "/sessions",
+            });
+          }
+        } else {
+          // Sender is professional → notify the parent
+          await sendPushNotification(booking.parentId, {
+            title: `New message from ${senderName}`,
+            body: notifBody,
+            url: "/sessions",
+          });
+        }
+      } catch {
+        // Push errors must never affect the message response
+      }
+    })();
+  }
 });
 
 export default router;
