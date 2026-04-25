@@ -631,7 +631,7 @@ router.post("/sessions/:bookingId/messages", requireAuth, async (req: Request, r
       try {
         const booking = participant.booking;
         const senderName = withSender?.senderName ?? "Someone";
-        const notifBody = body.length > 80 ? body.slice(0, 79) + "…" : body;
+        const notifBody = body.slice(0, 80);
 
         if (req.userId === booking.parentId) {
           // Sender is parent → notify the professional
