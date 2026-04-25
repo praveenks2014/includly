@@ -3,9 +3,9 @@ import { Router } from "express";
 const router = Router();
 
 const ALLOWED_TEST_EMAILS = new Set([
-  "parent.test@sproutly.app",
-  "specialist.test@sproutly.app",
-  "centre.test@sproutly.app",
+  "parent.test@includly.app",
+  "specialist.test@includly.app",
+  "centre.test@includly.app",
 ]);
 
 router.get("/dev/signin", async (req, res) => {

@@ -25,7 +25,7 @@ interface ProfileData {
 const PROFILES: ProfileData[] = [
   // shadow_teacher (2)
   {
-    email: "priya.sharma@sproutly.app",
+    email: "priya.sharma@includly.app",
     firstName: "Priya",
     lastName: "Sharma",
     specialty: "shadow_teacher",
@@ -43,7 +43,7 @@ const PROFILES: ProfileData[] = [
     travelRadiusKm: 10,
   },
   {
-    email: "arjun.mehta@sproutly.app",
+    email: "arjun.mehta@includly.app",
     firstName: "Arjun",
     lastName: "Mehta",
     specialty: "shadow_teacher",
@@ -63,7 +63,7 @@ const PROFILES: ProfileData[] = [
 
   // special_tutor (2)
   {
-    email: "kavya.reddy@sproutly.app",
+    email: "kavya.reddy@includly.app",
     firstName: "Kavya",
     lastName: "Reddy",
     specialty: "special_tutor",
@@ -81,7 +81,7 @@ const PROFILES: ProfileData[] = [
     travelRadiusKm: 0,
   },
   {
-    email: "rohit.nair@sproutly.app",
+    email: "rohit.nair@includly.app",
     firstName: "Rohit",
     lastName: "Nair",
     specialty: "special_tutor",
@@ -101,7 +101,7 @@ const PROFILES: ProfileData[] = [
 
   // occupational_therapy (2)
   {
-    email: "deepa.krishnan@sproutly.app",
+    email: "deepa.krishnan@includly.app",
     firstName: "Deepa",
     lastName: "Krishnan",
     specialty: "occupational_therapy",
@@ -119,7 +119,7 @@ const PROFILES: ProfileData[] = [
     travelRadiusKm: 10,
   },
   {
-    email: "vikram.joshi@sproutly.app",
+    email: "vikram.joshi@includly.app",
     firstName: "Vikram",
     lastName: "Joshi",
     specialty: "occupational_therapy",
@@ -139,7 +139,7 @@ const PROFILES: ProfileData[] = [
 
   // speech_therapy (2)
   {
-    email: "ananya.das@sproutly.app",
+    email: "ananya.das@includly.app",
     firstName: "Ananya",
     lastName: "Das",
     specialty: "speech_therapy",
@@ -157,7 +157,7 @@ const PROFILES: ProfileData[] = [
     travelRadiusKm: 8,
   },
   {
-    email: "suresh.pillai@sproutly.app",
+    email: "suresh.pillai@includly.app",
     firstName: "Suresh",
     lastName: "Pillai",
     specialty: "speech_therapy",
@@ -177,7 +177,7 @@ const PROFILES: ProfileData[] = [
 
   // psychiatrist (2)
   {
-    email: "meera.iyer@sproutly.app",
+    email: "meera.iyer@includly.app",
     firstName: "Meera",
     lastName: "Iyer",
     specialty: "psychiatrist",
@@ -195,7 +195,7 @@ const PROFILES: ProfileData[] = [
     travelRadiusKm: 0,
   },
   {
-    email: "amit.sinha@sproutly.app",
+    email: "amit.sinha@includly.app",
     firstName: "Amit",
     lastName: "Sinha",
     specialty: "psychiatrist",
@@ -215,7 +215,7 @@ const PROFILES: ProfileData[] = [
 
   // developmental_pediatrician (2)
   {
-    email: "sunita.rao@sproutly.app",
+    email: "sunita.rao@includly.app",
     firstName: "Sunita",
     lastName: "Rao",
     specialty: "developmental_pediatrician",
@@ -233,7 +233,7 @@ const PROFILES: ProfileData[] = [
     travelRadiusKm: 0,
   },
   {
-    email: "prakash.kumar@sproutly.app",
+    email: "prakash.kumar@includly.app",
     firstName: "Prakash",
     lastName: "Kumar",
     specialty: "developmental_pediatrician",
@@ -253,7 +253,7 @@ const PROFILES: ProfileData[] = [
 
   // neurologist (2)
   {
-    email: "lalita.verma@sproutly.app",
+    email: "lalita.verma@includly.app",
     firstName: "Lalita",
     lastName: "Verma",
     specialty: "neurologist",
@@ -271,7 +271,7 @@ const PROFILES: ProfileData[] = [
     travelRadiusKm: 0,
   },
   {
-    email: "sanjay.patel@sproutly.app",
+    email: "sanjay.patel@includly.app",
     firstName: "Sanjay",
     lastName: "Patel",
     specialty: "neurologist",
@@ -291,7 +291,7 @@ const PROFILES: ProfileData[] = [
 
   // therapy_centre (2)
   {
-    email: "centre.mumbai@sproutly.app",
+    email: "centre.mumbai@includly.app",
     firstName: "Bloom",
     lastName: "Centre Mumbai",
     specialty: "therapy_centre",
@@ -309,7 +309,7 @@ const PROFILES: ProfileData[] = [
     travelRadiusKm: 0,
   },
   {
-    email: "centre.delhi@sproutly.app",
+    email: "centre.delhi@includly.app",
     firstName: "Sprout",
     lastName: "Centre Delhi",
     specialty: "therapy_centre",

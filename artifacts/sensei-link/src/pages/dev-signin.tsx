@@ -8,9 +8,9 @@ function apiLink(email: string) {
 }
 
 const TEST_ACCOUNTS = [
-  { label: "Parent", email: "parent.test@sproutly.app" },
-  { label: "Specialist (Shadow Teacher)", email: "specialist.test@sproutly.app" },
-  { label: "Therapy Centre", email: "centre.test@sproutly.app" },
+  { label: "Parent", email: "parent.test@includly.app" },
+  { label: "Specialist (Shadow Teacher)", email: "specialist.test@includly.app" },
+  { label: "Therapy Centre", email: "centre.test@includly.app" },
 ];
 
 export default function DevSignInPage() {
