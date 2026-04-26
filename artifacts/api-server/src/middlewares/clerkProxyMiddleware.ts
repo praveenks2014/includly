@@ -54,10 +54,19 @@ export function clerkProxyMiddleware(): RequestHandler {
     },
   }) as RequestHandler;
 
+  // Transparent proxy for Clerk's npm CDN — clerk.browser.js and related assets.
+  // Previously this was a 302 redirect which broke Clerk's script loader
+  // (it validates the origin of the script response). Now we pipe the content
+  // through our own domain so no cross-origin redirect occurs.
+  const cdnProxy = createProxyMiddleware({
+    target: CLERK_NPM_CDN,
+    changeOrigin: true,
+    pathRewrite: (path: string) => path.replace(/^\/npm/, ""),
+  }) as RequestHandler;
+
   return (req, res, next) => {
     if (req.path.startsWith("/npm")) {
-      const cdnPath = req.path.replace(/^\/npm/, "");
-      return res.redirect(302, `${CLERK_NPM_CDN}${cdnPath}`);
+      return cdnProxy(req, res, next);
     }
     return fapiProxy(req, res, next);
   };
