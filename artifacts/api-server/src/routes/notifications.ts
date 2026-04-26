@@ -139,6 +139,59 @@ router.patch("/notifications/preferences", requireAuth, async (req: Request, res
 });
 
 router.post(
+  "/admin/notifications/test",
+  requireAuth,
+  requireRole("admin"),
+  async (req: Request, res: Response): Promise<void> => {
+    if (!setupWebPush()) {
+      res.status(503).json({ error: "Push notifications not configured" });
+      return;
+    }
+
+    const subscriptions = await db
+      .select()
+      .from(pushSubscriptionsTable)
+      .where(eq(pushSubscriptionsTable.userId, req.userId!));
+
+    if (subscriptions.length === 0) {
+      res.status(404).json({ error: "No push subscriptions found for your account. Enable push notifications in your browser first." });
+      return;
+    }
+
+    const payload = JSON.stringify({
+      title: "Test notification",
+      body: "Push notifications are working correctly.",
+      url: "/admin",
+    });
+
+    let sent = 0;
+    await Promise.allSettled(
+      subscriptions.map(async (sub) => {
+        try {
+          await webpush.sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            payload,
+          );
+          sent++;
+        } catch (err: unknown) {
+          const statusCode = (err as { statusCode?: number }).statusCode;
+          if (statusCode === 404 || statusCode === 410) {
+            await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.id, sub.id));
+          }
+        }
+      }),
+    );
+
+    if (sent === 0) {
+      res.status(500).json({ error: "Failed to deliver the test notification. Your subscription may have expired — try re-enabling push notifications." });
+      return;
+    }
+
+    res.json({ sent, total: subscriptions.length });
+  },
+);
+
+router.post(
   "/admin/notifications/broadcast",
   requireAuth,
   requireRole("admin"),

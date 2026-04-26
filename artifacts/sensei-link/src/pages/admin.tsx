@@ -34,6 +34,7 @@ import {
   FileText,
   Eye,
   ExternalLink,
+  Bell,
 } from "lucide-react";
 import {
   Dialog,
@@ -804,6 +805,31 @@ function SettingsTab() {
   const { mutateAsync: updateSettings, isPending: saving } = useUpdateAdminSettings();
 
   const [contactLimit, setContactLimit] = useState<number | null>(null);
+  const [testPushLoading, setTestPushLoading] = useState(false);
+
+  async function handleTestPush() {
+    setTestPushLoading(true);
+    try {
+      const res = await fetch("/api/admin/notifications/test", { method: "POST" });
+      const data = await res.json() as { sent?: number; total?: number; error?: string };
+      if (!res.ok) {
+        toast({
+          title: "Test failed",
+          description: data.error ?? "Could not send test notification.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Test notification sent",
+          description: `Delivered to ${data.sent} of ${data.total} subscription(s). Check your device.`,
+        });
+      }
+    } catch {
+      toast({ title: "Error", description: "Request failed. Check the server is running.", variant: "destructive" });
+    } finally {
+      setTestPushLoading(false);
+    }
+  }
 
   const currentLimit = contactLimit ?? settings?.contactLimitPerParent ?? 5;
 
@@ -847,6 +873,31 @@ function SettingsTab() {
         <Button className="mt-4" onClick={handleSave} disabled={saving} data-testid="save-settings-btn">
           {saving ? <><Loader2 size={14} className="animate-spin mr-2" />Saving...</> : "Save settings"}
         </Button>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+        <div className="flex items-center gap-2 mb-1">
+          <Bell size={16} className="text-primary" />
+          <h2 className="font-semibold text-foreground">Push Notification Health</h2>
+        </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          Send a test push notification to your own device to confirm the pipeline is working after deployments or config changes.
+        </p>
+        <Button
+          variant="outline"
+          onClick={handleTestPush}
+          disabled={testPushLoading}
+          data-testid="test-push-btn"
+        >
+          {testPushLoading ? (
+            <><Loader2 size={14} className="animate-spin mr-2" />Sending…</>
+          ) : (
+            <><Bell size={14} className="mr-2" />Send test push</>
+          )}
+        </Button>
+        <p className="text-xs text-muted-foreground mt-3">
+          You must have push notifications enabled in your browser for this to work.
+        </p>
       </div>
 
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
