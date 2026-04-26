@@ -706,7 +706,15 @@ export default function OnboardPage() {
           {/* Step 5: Verify Identity */}
           {step === 5 && (
             <div className="space-y-5">
-              {verificationDone ? (
+              {existingProfile?.verificationStatus === "verified" ? (
+                <div className="text-center py-6">
+                  <ShieldCheck size={48} className="text-green-500 mx-auto mb-3" />
+                  <h3 className="text-lg font-semibold text-foreground mb-1">Verified ✓</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Your identity has been verified. Your profile shows a Verified badge to parents.
+                  </p>
+                </div>
+              ) : verificationDone ? (
                 <div className="text-center py-6">
                   <ShieldCheck size={48} className="text-primary mx-auto mb-3" />
                   <h3 className="text-lg font-semibold text-foreground mb-1">Documents Submitted</h3>
@@ -723,6 +731,18 @@ export default function OnboardPage() {
                       Upload your ID and qualifications to earn a Verified badge. Parents trust verified professionals more.
                     </p>
                   </div>
+                  {existingProfile?.verificationStatus === "pending" && (
+                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm">
+                      <ShieldCheck size={15} className="shrink-0" />
+                      Your documents are under review. You can re-upload if needed.
+                    </div>
+                  )}
+                  {existingProfile?.verificationStatus === "rejected" && (
+                    <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-800 rounded-lg px-4 py-3 text-sm">
+                      <ShieldCheck size={15} className="shrink-0" />
+                      Your previous submission was not approved. Please upload clearer documents.
+                    </div>
+                  )}
 
                   <div className="bg-card border border-border rounded-xl p-5 space-y-4">
                     <h4 className="font-medium text-sm">Identity Document <span className="text-destructive">*</span></h4>
@@ -923,7 +943,7 @@ export default function OnboardPage() {
           </div>
         )}
 
-        {isVerifyStep && verificationDone && (
+        {isVerifyStep && (verificationDone || existingProfile?.verificationStatus === "verified") && (
           <div className="mt-6">
             <Button className="w-full" onClick={() => setStep(6)}>
               Continue to Activate

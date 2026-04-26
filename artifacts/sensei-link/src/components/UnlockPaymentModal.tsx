@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
 import {
   useGetPaymentPlans,
   useCreateRazorpayOrder,
@@ -15,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Check, Loader2, Zap } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { loadRazorpayScript, formatRupees, type RazorpayPaymentResponse } from "@/lib/razorpay";
 
 type RazorpayResponse = RazorpayPaymentResponse;
@@ -39,7 +38,6 @@ export function UnlockPaymentModal({
 }) {
   // For shadow teachers / special tutors, default CTA is the ₹499 / 30 days plan
   const preferSubscription = specialty ? SUBSCRIPTION_SPECIALTIES.includes(specialty) : false;
-  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [activePlan, setActivePlan] = useState<string | null>(null);
 
@@ -242,8 +240,8 @@ function PlanOption({
         onClick={onRazorpay}
         data-testid={`pay-razorpay-${planId}`}
       >
-        {rzpLoading ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
-        Pay via UPI / Card
+        {rzpLoading ? <Loader2 size={13} className="animate-spin" /> : null}
+        Pay via UPI
       </Button>
     </div>
   );

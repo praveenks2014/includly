@@ -10,7 +10,7 @@ import {
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Check, Loader2, Zap, CreditCard, UserCheck, Stethoscope, Building2, IndianRupee, CheckCircle2, Crown } from "lucide-react";
+import { Check, Loader2, Zap, UserCheck, Stethoscope, Building2, IndianRupee, CheckCircle2, Crown } from "lucide-react";
 import { loadRazorpayScript, formatRupees, type RazorpayPaymentResponse, type RazorpaySubscriptionResponse } from "@/lib/razorpay";
 import { getSpecialtyLabel } from "@/lib/specialties";
 
@@ -236,6 +236,7 @@ export default function PricingPage() {
     }
   }
 
+
   const role = me?.role;
   const isProfessional = role === "professional";
   const hasActiveSub = sub?.hasActiveSubscription;
@@ -428,8 +429,20 @@ export default function PricingPage() {
                   </Link>
                 ) : plan.id === "plan_a_subscription" ? (
                   <>
-                    <p className="text-xs text-muted-foreground/70 italic mb-2">
-                      Unlocks are teacher-specific. Browse teachers, then click "Unlock" on a profile to pay ₹499 for 30-day access (up to 5 contacts) or ₹149 for a permanent single-contact unlock.
+                    <Button
+                      className="w-full"
+                      variant="default"
+                      disabled={!!loadingKey || !!hasActiveSub}
+                      onClick={() => handleRazorpay(plan.id)}
+                      data-testid={`cta-rzp-${plan.id}`}
+                    >
+                      {loadingKey === `rzp-${plan.id}` ? (
+                        <Loader2 size={14} className="animate-spin mr-2" />
+                      ) : null}
+                      {hasActiveSub ? "Already subscribed" : loadingKey === `rzp-${plan.id}` ? "Processing…" : "₹499 / 30 days — Pay via UPI"}
+                    </Button>
+                    <p className="text-xs text-muted-foreground/70 italic text-center mt-1">
+                      Or pay ₹99 per contact — click "Unlock" on any shadow teacher's profile.
                     </p>
                     <Link href="/search">
                       <Button className="w-full" variant="default" data-testid="cta-browse-teachers">

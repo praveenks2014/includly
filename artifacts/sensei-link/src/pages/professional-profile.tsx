@@ -190,12 +190,12 @@ export default function ProfessionalProfilePage() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
         {/* Back */}
         <button
-          onClick={() => window.history.back()}
+          onClick={() => setLocation(`/search?specialty=${encodeURIComponent(p.specialty)}`)}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
           data-testid="back-btn"
         >
           <ArrowLeft size={16} />
-          Back
+          Back to search
         </button>
 
         {/* Profile header */}

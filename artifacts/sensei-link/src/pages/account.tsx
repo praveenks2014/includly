@@ -164,9 +164,6 @@ export default function AccountPage() {
     }
   }
 
-  const [fullName, setFullName] = useState("");
-  const [city, setCity] = useState("");
-  const [country, setCountry] = useState("");
   const [location, setLocation_] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
@@ -182,9 +179,6 @@ export default function AccountPage() {
 
   useEffect(() => {
     if (me) {
-      setFullName(me.fullName ?? "");
-      setCity(me.city ?? "");
-      setCountry(me.country ?? "");
       setLocation_(me.location ?? "");
     }
   }, [me]);
@@ -212,7 +206,7 @@ export default function AccountPage() {
   });
 
   function handleSave() {
-    updateMutation.mutate({ data: { fullName, city, country, location } });
+    updateMutation.mutate({ data: { location } });
   }
 
   async function handleDeleteAccount() {
@@ -297,19 +291,8 @@ export default function AccountPage() {
 
           <Separator className="mb-5" />
 
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="fullName">Full name</Label>
-              <Input
-                id="fullName"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Your full name"
-                className="mt-1"
-                data-testid="account-fullName"
-              />
-            </div>
-            {me?.role === "parent" && (
+          {me?.role === "parent" && (
+            <div className="space-y-4">
               <div>
                 <Label htmlFor="location">Your location</Label>
                 <p className="text-xs text-muted-foreground mb-1">
@@ -324,42 +307,17 @@ export default function AccountPage() {
                   data-testid="account-location"
                 />
               </div>
-            )}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="city">City</Label>
-                <Input
-                  id="city"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="Mumbai"
-                  className="mt-1"
-                  data-testid="account-city"
-                />
-              </div>
-              <div>
-                <Label htmlFor="country">Country</Label>
-                <Input
-                  id="country"
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                  placeholder="India"
-                  className="mt-1"
-                  data-testid="account-country"
-                />
-              </div>
+              <Button
+                onClick={handleSave}
+                disabled={updateMutation.isPending}
+                className="gap-2"
+                data-testid="save-account-btn"
+              >
+                {updateMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                Save changes
+              </Button>
             </div>
-          </div>
-
-          <Button
-            onClick={handleSave}
-            disabled={updateMutation.isPending}
-            className="mt-5 gap-2"
-            data-testid="save-account-btn"
-          >
-            {updateMutation.isPending && <Loader2 size={14} className="animate-spin" />}
-            Save changes
-          </Button>
+          )}
         </div>
 
         {/* Session Credits (parent only) */}

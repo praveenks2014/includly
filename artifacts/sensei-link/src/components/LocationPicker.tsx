@@ -212,22 +212,29 @@ function LocationPickerInner({ lat, lng, city, country, onLocationChange }: Loca
         const newLat = pos.coords.latitude;
         const newLng = pos.coords.longitude;
         setMarkerPos({ lat: newLat, lng: newLng });
+        let resolvedCity = city ?? "";
+        let resolvedCountry = country ?? "India";
         try {
-          const { city: newCity, country: newCountry } = await reverseGeocode(newLat, newLng);
-          onLocationChange({ lat: newLat, lng: newLng, city: newCity, country: newCountry });
+          const result = await reverseGeocode(newLat, newLng);
+          resolvedCity = result.city || resolvedCity;
+          resolvedCountry = result.country || resolvedCountry;
         } catch {
-          onLocationChange({ lat: newLat, lng: newLng, city: city ?? "", country: country ?? "India" });
+          // fall through with existing city/country values
         }
+        onLocationChange({ lat: newLat, lng: newLng, city: resolvedCity, country: resolvedCountry });
         setDetecting(false);
       },
       (err) => {
         setDetecting(false);
         if (err.code === err.PERMISSION_DENIED) {
-          setGpsError("Location access was denied. Please enter your city manually.");
+          setGpsError("Location access was denied. Please allow location in your browser settings, or enter your city manually below.");
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          setGpsError("Location unavailable. Please enter your city manually below.");
         } else {
-          setGpsError("Could not detect location. Please enter your city manually.");
+          setGpsError("Could not detect location. Please enter your city manually below.");
         }
       },
+      { timeout: 10000, maximumAge: 60000 },
     );
   }
 
