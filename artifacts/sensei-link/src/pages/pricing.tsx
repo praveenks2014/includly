@@ -10,7 +10,7 @@ import {
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Check, Loader2, Zap, UserCheck, Stethoscope, Building2, IndianRupee, CheckCircle2, Crown } from "lucide-react";
+import { Check, Loader2, Zap, UserCheck, Stethoscope, Building2, IndianRupee, CheckCircle2, Crown, CreditCard } from "lucide-react";
 import { loadRazorpayScript, formatRupees, type RazorpayPaymentResponse, type RazorpaySubscriptionResponse } from "@/lib/razorpay";
 import { getSpecialtyLabel } from "@/lib/specialties";
 
