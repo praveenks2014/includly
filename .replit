@@ -33,3 +33,4 @@ channel = "stable-25_05"
 [userenv.shared]
 VAPID_PUBLIC_KEY = "BBZwJ6mAeSF3QAdCKjVTrhiF8UFde34DWomAK6Kkxneu3ia80lnpCXbYuVLtQiRNlPBzi3NrU7K1zJHOnIjxsO0"
 VAPID_SUBJECT = "mailto:admin@senseilink.com"
+VITE_VAPID_PUBLIC_KEY = "BBZwJ6mAeSF3QAdCKjVTrhiF8UFde34DWomAK6Kkxneu3ia80lnpCXbYuVLtQiRNlPBzi3NrU7K1zJHOnIjxsO0"

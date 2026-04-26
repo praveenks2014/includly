@@ -22,4 +22,7 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  const vapidConfigured = !!(process.env["VAPID_PUBLIC_KEY"] && process.env["VAPID_PRIVATE_KEY"]);
+  logger.info({ vapidConfigured }, "Push notification VAPID config status");
 });
