@@ -26,24 +26,16 @@ import SignInPage from "@/pages/sign-in";
 import SsoCallbackPage from "@/pages/sso-callback";
 import DevSignInPage from "@/pages/dev-signin";
 
-const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+// VITE_CLERK_PK is a shared env var in .replit (guaranteed available at Vite
+// build time in both dev and deployment). VITE_CLERK_PUBLISHABLE_KEY is kept
+// as a fallback for local overrides via Replit Secrets.
+const clerkPubKey =
+  import.meta.env.VITE_CLERK_PK ||
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 if (!clerkPubKey) {
-  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
-}
-
-// Warn loudly if a live key is used — live keys tied to a custom domain
-// (e.g. clerk.includly.in) will try to auto-proxy through /api/__clerk
-// which cannot make outbound connections in Replit's production environment.
-// Always use pk_test_* keys for this deployment.
-if (clerkPubKey.startsWith("pk_live_")) {
-  console.error(
-    "[Includly] MISCONFIGURATION: VITE_CLERK_PUBLISHABLE_KEY is a pk_live_* key. " +
-    "Live keys tied to clerk.includly.in will fail on sproutly.replit.app because " +
-    "the Clerk proxy cannot reach npm.clerk.dev from Replit's production container. " +
-    "Set VITE_CLERK_PUBLISHABLE_KEY to your pk_test_* key in Replit Secrets."
-  );
+  throw new Error("Missing Clerk publishable key (VITE_CLERK_PK)");
 }
 
 function stripBase(path: string): string {
