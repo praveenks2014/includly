@@ -29,15 +29,21 @@ import DevSignInPage from "@/pages/dev-signin";
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-// Only use a proxy if VITE_CLERK_PROXY_URL is explicitly configured.
-// For pk_test_* keys no proxy is needed. For pk_live_* keys pointing at a
-// custom domain (e.g. clerk.includly.in), set this env var to your deployed
-// origin + /api/__clerk so Clerk routes through your own server.
-const clerkProxyUrl: string | undefined =
-  import.meta.env.VITE_CLERK_PROXY_URL || undefined;
-
 if (!clerkPubKey) {
   throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
+}
+
+// Warn loudly if a live key is used — live keys tied to a custom domain
+// (e.g. clerk.includly.in) will try to auto-proxy through /api/__clerk
+// which cannot make outbound connections in Replit's production environment.
+// Always use pk_test_* keys for this deployment.
+if (clerkPubKey.startsWith("pk_live_")) {
+  console.error(
+    "[Includly] MISCONFIGURATION: VITE_CLERK_PUBLISHABLE_KEY is a pk_live_* key. " +
+    "Live keys tied to clerk.includly.in will fail on sproutly.replit.app because " +
+    "the Clerk proxy cannot reach npm.clerk.dev from Replit's production container. " +
+    "Set VITE_CLERK_PUBLISHABLE_KEY to your pk_test_* key in Replit Secrets."
+  );
 }
 
 function stripBase(path: string): string {
@@ -149,7 +155,6 @@ function ClerkProviderWithRoutes() {
   return (
     <ClerkProvider
       publishableKey={clerkPubKey}
-      proxyUrl={clerkProxyUrl}
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
