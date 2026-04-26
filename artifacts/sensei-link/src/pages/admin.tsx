@@ -8,6 +8,7 @@ import {
   useGetAdminSettings,
   useAdminApproveProfessional,
   useUpdateAdminSettings,
+  useBroadcastNotification,
   getAdminListProfessionalsQueryKey,
   getAdminGetStatsQueryKey,
   getGetAdminSettingsQueryKey,
@@ -45,6 +46,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 type TabId = "pending-approvals" | "professionals" | "stats" | "settings";
 
@@ -803,9 +805,13 @@ function SettingsTab() {
     query: { queryKey: getGetAdminSettingsQueryKey() },
   });
   const { mutateAsync: updateSettings, isPending: saving } = useUpdateAdminSettings();
+  const { mutateAsync: broadcast, isPending: broadcasting } = useBroadcastNotification();
 
   const [contactLimit, setContactLimit] = useState<number | null>(null);
   const [testPushLoading, setTestPushLoading] = useState(false);
+  const [broadcastTitle, setBroadcastTitle] = useState("");
+  const [broadcastBody, setBroadcastBody] = useState("");
+  const [broadcastAudience, setBroadcastAudience] = useState<"all" | "professionals" | "parents">("all");
 
   async function handleTestPush() {
     setTestPushLoading(true);
@@ -828,6 +834,30 @@ function SettingsTab() {
       toast({ title: "Error", description: "Request failed. Check the server is running.", variant: "destructive" });
     } finally {
       setTestPushLoading(false);
+    }
+  }
+
+  async function handleBroadcast() {
+    if (!broadcastTitle.trim() || !broadcastBody.trim()) {
+      toast({ title: "Title and message are required", variant: "destructive" });
+      return;
+    }
+    try {
+      const result = await broadcast({ data: { title: broadcastTitle.trim(), body: broadcastBody.trim(), audience: broadcastAudience } });
+      const total = (result as { total?: number }).total;
+      const description = total != null
+        ? `Delivered to ${result.sent} of ${total} subscriber(s).`
+        : result.sent > 0
+          ? `Delivered to ${result.sent} subscriber(s).`
+          : "No subscribers found for this audience.";
+      toast({
+        title: "Notification sent",
+        description,
+      });
+      setBroadcastTitle("");
+      setBroadcastBody("");
+    } catch {
+      toast({ title: "Failed to send", description: "An error occurred while sending the broadcast.", variant: "destructive" });
     }
   }
 
@@ -898,6 +928,67 @@ function SettingsTab() {
         <p className="text-xs text-muted-foreground mt-3">
           You must have push notifications enabled in your browser for this to work.
         </p>
+      </div>
+
+      <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+        <div className="flex items-center gap-2 mb-1">
+          <Bell size={16} className="text-primary" />
+          <h2 className="font-semibold text-foreground">Broadcast Push Notification</h2>
+        </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          Send an announcement to all subscribed users or a specific audience segment.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="broadcast-title">Title</Label>
+            <Input
+              id="broadcast-title"
+              value={broadcastTitle}
+              onChange={(e) => setBroadcastTitle(e.target.value)}
+              placeholder="Notification title"
+              className="mt-1"
+              data-testid="broadcast-title"
+            />
+          </div>
+          <div>
+            <Label htmlFor="broadcast-body">Message</Label>
+            <Textarea
+              id="broadcast-body"
+              value={broadcastBody}
+              onChange={(e) => setBroadcastBody(e.target.value)}
+              placeholder="Notification message"
+              className="mt-1"
+              rows={3}
+              data-testid="broadcast-body"
+            />
+          </div>
+          <div>
+            <Label>Audience</Label>
+            <div className="flex gap-2 mt-1">
+              {(["all", "professionals", "parents"] as const).map((a) => (
+                <Button
+                  key={a}
+                  size="sm"
+                  variant={broadcastAudience === a ? "default" : "outline"}
+                  onClick={() => setBroadcastAudience(a)}
+                  className="capitalize"
+                  data-testid={`audience-${a}`}
+                >
+                  {a}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <Button
+            onClick={handleBroadcast}
+            disabled={broadcasting || !broadcastTitle.trim() || !broadcastBody.trim()}
+            className="gap-2"
+            data-testid="send-broadcast-btn"
+          >
+            {broadcasting && <Loader2 size={14} className="animate-spin" />}
+            Send notification
+          </Button>
+        </div>
       </div>
 
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
