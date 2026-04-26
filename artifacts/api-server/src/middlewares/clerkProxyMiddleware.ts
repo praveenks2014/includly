@@ -4,20 +4,63 @@
  * Proxies Clerk Frontend API requests through your domain, enabling Clerk
  * authentication on custom domains and .replit.app deployments.
  *
- * Only active in production. Production Clerk setup is managed by Replit's
- * Clerk integration — this middleware should not need any code changes.
+ * Uses native fetch + stream piping instead of http-proxy-middleware so it
+ * works correctly inside Replit's production container networking.
+ *
+ * Only active in production. Development uses Clerk test keys directly.
  *
  * Mount point: app.use(CLERK_PROXY_PATH, clerkProxyMiddleware())
  * Express strips the mount prefix before this handler runs, so req.path
  * is relative: e.g. /npm/... or /v1/... — NOT /api/__clerk/npm/...
  */
 
-import { createProxyMiddleware } from "http-proxy-middleware";
 import type { RequestHandler } from "express";
+import { Readable } from "stream";
 
 const CLERK_FAPI = "https://frontend-api.clerk.dev";
 const CLERK_NPM_CDN = "https://npm.clerk.dev";
 export const CLERK_PROXY_PATH = "/api/__clerk";
+
+const SKIP_REQ_HEADERS = new Set(["host", "connection", "transfer-encoding"]);
+const SKIP_RES_HEADERS = new Set(["connection", "transfer-encoding", "keep-alive"]);
+
+async function fetchProxy(
+  upstreamUrl: string,
+  req: Parameters<RequestHandler>[0],
+  res: Parameters<RequestHandler>[1],
+  extraHeaders: Record<string, string> = {}
+): Promise<void> {
+  const upstreamHeaders: Record<string, string> = { ...extraHeaders };
+
+  for (const [key, val] of Object.entries(req.headers)) {
+    if (SKIP_REQ_HEADERS.has(key.toLowerCase())) continue;
+    if (val == null) continue;
+    upstreamHeaders[key] = Array.isArray(val) ? val.join(", ") : val;
+  }
+
+  const upstream = await fetch(upstreamUrl, {
+    method: req.method,
+    headers: upstreamHeaders,
+    // @ts-expect-error — Node 18 fetch accepts a Readable body
+    body: req.method !== "GET" && req.method !== "HEAD" ? req : undefined,
+    redirect: "follow",
+  });
+
+  res.status(upstream.status);
+
+  for (const [key, val] of upstream.headers.entries()) {
+    if (SKIP_RES_HEADERS.has(key.toLowerCase())) continue;
+    res.setHeader(key, val);
+  }
+
+  if (!upstream.body) {
+    res.end();
+    return;
+  }
+
+  // Pipe the upstream ReadableStream into the Express response
+  Readable.fromWeb(upstream.body as import("stream/web").ReadableStream).pipe(res);
+}
 
 export function clerkProxyMiddleware(): RequestHandler {
   if (process.env.NODE_ENV !== "production") {
@@ -29,45 +72,33 @@ export function clerkProxyMiddleware(): RequestHandler {
     return (_req, _res, next) => next();
   }
 
-  const fapiProxy = createProxyMiddleware({
-    target: CLERK_FAPI,
-    changeOrigin: true,
-    pathRewrite: (path: string) => path,
-    on: {
-      proxyReq: (proxyReq, req) => {
-        const protocol = req.headers["x-forwarded-proto"] || "https";
-        const host = req.headers.host || "";
-        const proxyUrl = `${protocol}://${host}${CLERK_PROXY_PATH}`;
-
-        proxyReq.setHeader("Clerk-Proxy-Url", proxyUrl);
-        proxyReq.setHeader("Clerk-Secret-Key", secretKey);
-
-        const xff = req.headers["x-forwarded-for"];
-        const clientIp =
-          (Array.isArray(xff) ? xff[0] : xff)?.split(",")[0]?.trim() ||
-          req.socket?.remoteAddress ||
-          "";
-        if (clientIp) {
-          proxyReq.setHeader("X-Forwarded-For", clientIp);
-        }
-      },
-    },
-  }) as RequestHandler;
-
-  // Transparent proxy for Clerk's npm CDN — clerk.browser.js and related assets.
-  // Previously this was a 302 redirect which broke Clerk's script loader
-  // (it validates the origin of the script response). Now we pipe the content
-  // through our own domain so no cross-origin redirect occurs.
-  const cdnProxy = createProxyMiddleware({
-    target: CLERK_NPM_CDN,
-    changeOrigin: true,
-    pathRewrite: (path: string) => path.replace(/^\/npm/, ""),
-  }) as RequestHandler;
-
   return (req, res, next) => {
+    // /npm/* — Clerk's JS SDK assets (clerk.browser.js, etc.)
     if (req.path.startsWith("/npm")) {
-      return cdnProxy(req, res, next);
+      const cdnPath = req.path.replace(/^\/npm/, "") + (req.url.includes("?") ? `?${req.url.split("?")[1]}` : "");
+      fetchProxy(`${CLERK_NPM_CDN}${cdnPath}`, req, res).catch(next);
+      return;
     }
-    return fapiProxy(req, res, next);
+
+    // All other paths — Clerk Frontend API
+    const protocol = (Array.isArray(req.headers["x-forwarded-proto"])
+      ? req.headers["x-forwarded-proto"][0]
+      : req.headers["x-forwarded-proto"]) || "https";
+    const host = req.headers.host || "";
+    const proxyUrl = `${protocol}://${host}${CLERK_PROXY_PATH}`;
+
+    const xff = req.headers["x-forwarded-for"];
+    const clientIp =
+      (Array.isArray(xff) ? xff[0] : xff)?.split(",")[0]?.trim() ||
+      req.socket?.remoteAddress ||
+      "";
+
+    const extraHeaders: Record<string, string> = {
+      "Clerk-Proxy-Url": proxyUrl,
+      "Clerk-Secret-Key": secretKey,
+    };
+    if (clientIp) extraHeaders["X-Forwarded-For"] = clientIp;
+
+    fetchProxy(`${CLERK_FAPI}${req.path}`, req, res, extraHeaders).catch(next);
   };
 }
