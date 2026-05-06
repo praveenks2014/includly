@@ -36,11 +36,10 @@ const clerkPubKey = import.meta.env.DEV
   : import.meta.env.VITE_CLERK_PK ||
     import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
-// In production, route all Clerk FAPI requests through our own API server proxy
-// to avoid CORS issues (clerk.includly.in does not set Access-Control-Allow-Origin
-// for www.includly.in, so direct browser→FAPI requests are blocked).
-// In dev, Clerk's test instance allows all origins so no proxy is needed.
-const clerkProxyUrl = import.meta.env.DEV ? undefined : "/api/__clerk";
+// No proxy needed: clerk.includly.in sets Access-Control-Allow-Origin: https://www.includly.in
+// on fresh FAPI responses and serves its npm assets with access-control-allow-origin: *
+// Routing through a server-side proxy caused failures because Replit's production
+// container cannot resolve npm.clerk.dev (external DNS blocked).
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 if (!clerkPubKey) {
@@ -156,7 +155,6 @@ function ClerkProviderWithRoutes() {
   return (
     <ClerkProvider
       publishableKey={clerkPubKey}
-      proxyUrl={clerkProxyUrl}
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
       signInFallbackRedirectUrl="/dashboard"
