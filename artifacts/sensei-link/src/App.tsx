@@ -26,12 +26,15 @@ import SignInPage from "@/pages/sign-in";
 import SsoCallbackPage from "@/pages/sso-callback";
 import DevSignInPage from "@/pages/dev-signin";
 
-// VITE_CLERK_PK is a shared env var in .replit (guaranteed available at Vite
-// build time in both dev and deployment). VITE_CLERK_PUBLISHABLE_KEY is kept
-// as a fallback for local overrides via Replit Secrets.
-const clerkPubKey =
-  import.meta.env.VITE_CLERK_PK ||
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+// In development (Replit workspace preview) use the dev-instance key so Clerk
+// initialises on any origin. In production the pk_live key is used, which
+// only works on includly.in and its subdomains.
+const DEV_CLERK_KEY =
+  "pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA";
+const clerkPubKey = import.meta.env.DEV
+  ? DEV_CLERK_KEY
+  : import.meta.env.VITE_CLERK_PK ||
+    import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 if (!clerkPubKey) {
