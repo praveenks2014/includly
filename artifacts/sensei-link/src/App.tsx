@@ -24,27 +24,20 @@ import SessionsPage from "@/pages/sessions";
 import SignUpPage from "@/pages/sign-up";
 import SignInPage from "@/pages/sign-in";
 import SsoCallbackPage from "@/pages/sso-callback";
-import DevSignInPage from "@/pages/dev-signin";
 
-// In development (Replit workspace preview) use the dev-instance key so Clerk
-// initialises on any origin. In production the pk_live key is used, which
-// only works on includly.in and its subdomains.
-const DEV_CLERK_KEY =
-  "pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA";
-const clerkPubKey = import.meta.env.DEV
-  ? DEV_CLERK_KEY
-  : import.meta.env.VITE_CLERK_PK ||
-    import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-
-// No proxy needed: clerk.includly.in sets Access-Control-Allow-Origin: https://www.includly.in
-// on fresh FAPI responses and serves its npm assets with access-control-allow-origin: *
-// Routing through a server-side proxy caused failures because Replit's production
-// container cannot resolve npm.clerk.dev (external DNS blocked).
-const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+// Single source of truth for the Clerk publishable key.
+// VITE_CLERK_PK is set in shared env vars → available in both dev and prod builds.
+// Do NOT fall back to VITE_CLERK_PUBLISHABLE_KEY — that secret is provisioned by
+// Replit for a different (non-functional) Clerk instance (clerk.www.includly.in).
+const clerkPubKey = import.meta.env.VITE_CLERK_PK;
 
 if (!clerkPubKey) {
-  throw new Error("Missing Clerk publishable key (VITE_CLERK_PK)");
+  throw new Error(
+    "VITE_CLERK_PK is not set. Add it as a shared environment variable with your Clerk publishable key."
+  );
 }
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
@@ -80,7 +73,7 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
-const HIDE_NAVBAR_PATHS = ["/sign-in", "/sign-up", "/dev-signin", "/sso-callback"];
+const HIDE_NAVBAR_PATHS = ["/sign-in", "/sign-up", "/sso-callback"];
 
 function Layout({ children }: { children: React.ReactNode }) {
   const [loc] = useLocation();
@@ -116,7 +109,6 @@ function Router() {
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/sign-up/*?" component={SignUpPage} />
         <Route path="/sso-callback" component={SsoCallbackPage} />
-        <Route path="/dev-signin" component={DevSignInPage} />
         <Route path="/search" component={SearchPage} />
         <Route path="/professionals/:id" component={ProfessionalProfilePage} />
         <Route path="/dashboard">
