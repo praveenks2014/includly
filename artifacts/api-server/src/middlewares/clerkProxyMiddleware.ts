@@ -17,7 +17,17 @@
 import type { RequestHandler } from "express";
 import { Readable } from "stream";
 
-const CLERK_FAPI = "https://frontend-api.clerk.dev";
+// Derive the FAPI URL from the publishable key at server start-up.
+// pk_live_Y2xlcmsuaW5jbHVkbHkuaW4k → base64-decode body → "clerk.includly.in$" → strip trailing "$"
+function fapiFromKey(pk: string): string {
+  const body = pk.replace(/^pk_(live|test)_/, "");
+  const decoded = Buffer.from(body, "base64").toString("utf8");
+  return "https://" + (decoded.endsWith("$") ? decoded.slice(0, -1) : decoded);
+}
+
+const CLERK_FAPI =
+  process.env.CLERK_FAPI_URL ||
+  (process.env.VITE_CLERK_PK ? fapiFromKey(process.env.VITE_CLERK_PK) : "https://clerk.includly.in");
 const CLERK_NPM_CDN = "https://npm.clerk.dev";
 export const CLERK_PROXY_PATH = "/api/__clerk";
 

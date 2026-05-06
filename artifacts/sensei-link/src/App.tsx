@@ -154,8 +154,20 @@ function ClerkProviderWithRoutes() {
       signUpUrl="/sign-up"
       signInFallbackRedirectUrl="/dashboard"
       signUpFallbackRedirectUrl="/onboard"
-      routerPush={(to) => setLocation(stripBase(to))}
-      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+      routerPush={(to) => {
+        if (to.startsWith("http://") || to.startsWith("https://")) {
+          window.location.href = to;
+        } else {
+          setLocation(stripBase(to));
+        }
+      }}
+      routerReplace={(to) => {
+        if (to.startsWith("http://") || to.startsWith("https://")) {
+          window.location.replace(to);
+        } else {
+          setLocation(stripBase(to), { replace: true });
+        }
+      }}
     >
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />

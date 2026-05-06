@@ -5,6 +5,7 @@ import { clerkMiddleware } from "@clerk/express";
 import router from "./routes";
 import webhooksRouter from "./routes/webhooks";
 import { logger } from "./lib/logger";
+import { clerkProxyMiddleware, CLERK_PROXY_PATH } from "./middlewares/clerkProxyMiddleware";
 
 const app: Express = express();
 
@@ -43,6 +44,10 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: true }));
+
+// Clerk Frontend API proxy — must be registered before clerkMiddleware
+// so Clerk SDK requests are forwarded correctly when VITE_CLERK_PROXY_URL is set.
+app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
 app.use(clerkMiddleware());
 
