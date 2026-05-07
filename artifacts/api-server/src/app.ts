@@ -44,7 +44,12 @@ app.use(
 
 app.use(express.urlencoded({ extended: true }));
 
-app.use(clerkMiddleware());
+// Explicitly pass the correct publishable key so clerkMiddleware fetches
+// JWKS from clerk.includly.in — not from CLERK_PUBLISHABLE_KEY which is set
+// to an invalid instance (clerk.www.includly.in) in the Replit secrets.
+app.use(clerkMiddleware({
+  publishableKey: process.env.VITE_CLERK_PK ?? process.env.CLERK_PUBLISHABLE_KEY,
+}));
 
 app.use("/api", webhooksRouter);
 app.use("/api", router);
