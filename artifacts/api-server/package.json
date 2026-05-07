@@ -22,6 +22,7 @@
     "express": "^5",
     "google-auth-library": "^10.6.2",
     "http-proxy-middleware": "^3.0.5",
+    "jose": "^6.2.3",
     "pino": "^9",
     "pino-http": "^10",
     "razorpay": "^2.9.6",

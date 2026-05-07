@@ -1,7 +1,6 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
-import { clerkMiddleware } from "@clerk/express";
 import router from "./routes";
 import webhooksRouter from "./routes/webhooks";
 import { logger } from "./lib/logger";
@@ -43,13 +42,6 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: true }));
-
-// Explicitly pass the correct publishable key so clerkMiddleware fetches
-// JWKS from clerk.includly.in — not from CLERK_PUBLISHABLE_KEY which is set
-// to an invalid instance (clerk.www.includly.in) in the Replit secrets.
-app.use(clerkMiddleware({
-  publishableKey: process.env.VITE_CLERK_PK ?? process.env.CLERK_PUBLISHABLE_KEY,
-}));
 
 app.use("/api", webhooksRouter);
 app.use("/api", router);
