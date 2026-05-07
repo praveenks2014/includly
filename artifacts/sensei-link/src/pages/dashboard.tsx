@@ -38,7 +38,10 @@ import { useToast } from "@/hooks/use-toast";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { PlacesAutocomplete, type PlaceResult } from "@/components/PlacesAutocomplete";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle, AlertCircle, Bell, CalendarCheck, CalendarClock, Crown, Columns, Lock, CheckCheck, Home, MapPin } from "lucide-react";
+import { FileUploadField } from "@/components/FileUploadField";
+import { Checkbox } from "@/components/ui/checkbox";
+import { fetchWithAuth } from "@/lib/api";
+import { Loader2, Search, User, BarChart3, Star, Eye, Phone, Sparkles, CreditCard, TrendingUp, XCircle, AlertCircle, Bell, CalendarCheck, CalendarClock, Crown, Columns, Lock, CheckCheck, Home, MapPin, ShieldCheck, Upload } from "lucide-react";
 import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
 
 export default function DashboardPage() {
@@ -428,6 +431,54 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
   const { mutateAsync: setAvailability, isPending: applyingTemplate } = useSetAvailability();
   const [applyingLabel, setApplyingLabel] = useState<string | null>(null);
 
+  const [idDocType, setIdDocType] = useState("aadhar");
+  const [idFileKey, setIdFileKey] = useState("");
+  const [certFileKey, setCertFileKey] = useState("");
+  const [certDocType, setCertDocType] = useState("");
+  const [dpdpConsent, setDpdpConsent] = useState(false);
+  const [verificationSubmitting, setVerificationSubmitting] = useState(false);
+  const [verificationDone, setVerificationDone] = useState(false);
+
+  async function handleSubmitVerification() {
+    if (!idFileKey) {
+      toast({ title: "Please upload your ID document first", variant: "destructive" });
+      return;
+    }
+    if (!dpdpConsent) {
+      toast({ title: "Please accept the data processing consent to continue", variant: "destructive" });
+      return;
+    }
+    setVerificationSubmitting(true);
+    try {
+      const idRes = await fetchWithAuth("/api/verifications/identity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documentType: idDocType, fileKey: idFileKey, dpdpConsent }),
+      });
+      if (!idRes.ok) throw new Error("Failed to submit identity verification");
+
+      if (certFileKey) {
+        const certRes = await fetchWithAuth("/api/verifications/certifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documentType: certDocType || "certificate", fileKey: certFileKey }),
+        });
+        if (!certRes.ok) {
+          const body = await certRes.json().catch(() => ({}));
+          throw new Error((body as { error?: string }).error ?? "Failed to submit qualification document");
+        }
+      }
+      setVerificationDone(true);
+      queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetProfessionalDashboardQueryKey() });
+      toast({ title: "Documents submitted!", description: "We'll review and verify your profile within 2–3 business days." });
+    } catch {
+      toast({ title: "Could not submit documents", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setVerificationSubmitting(false);
+    }
+  }
+
   async function handleToggleHomeVisits(enabled: boolean) {
     setHomeVisitsLoading(true);
     try {
@@ -531,33 +582,130 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
   if (profile.verificationStatus !== "verified") {
     return (
       <div className="space-y-4">
-        {(profile.verificationStatus === "pending" || profile.verificationStatus === "unsubmitted") && (
+        {profile.verificationStatus === "pending" && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 flex items-start gap-3" data-testid="pending-approval-notice">
             <AlertCircle size={22} className="text-yellow-600 shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold text-yellow-800 text-base">
-                {profile.verificationStatus === "pending" ? "Awaiting admin approval" : "Profile not yet submitted for review"}
-              </p>
+              <p className="font-semibold text-yellow-800 text-base">Documents under review</p>
               <p className="text-sm text-yellow-700 mt-1.5">
-                {profile.verificationStatus === "pending"
-                  ? "Your profile is under review. Once approved by an admin, you will appear in search results and this dashboard will unlock. No action needed from your side."
-                  : "You haven't submitted your verification documents yet. Complete your profile to start appearing in search results."}
+                Your profile and verification documents are being reviewed. Once approved, you will appear in search results. This usually takes 2–3 business days.
               </p>
-              <div className="mt-4 flex gap-2">
-                {profile.verificationStatus === "unsubmitted" && (
-                  <Link href="/onboard">
-                    <Button size="sm" className="gap-1">
-                      Complete profile
-                    </Button>
-                  </Link>
-                )}
+              <div className="mt-3">
                 <Link href="/onboard">
-                  <Button size="sm" variant="outline" className="gap-1">
-                    Edit profile
-                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1">Edit profile</Button>
                 </Link>
               </div>
             </div>
+          </div>
+        )}
+
+        {profile.verificationStatus === "unsubmitted" && (
+          <div className="space-y-4" data-testid="doc-upload-section">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 flex items-start gap-3">
+              <ShieldCheck size={22} className="text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-blue-900 text-base">Upload your verification document to appear in search</p>
+                <p className="text-sm text-blue-700 mt-1">
+                  Your profile is active. Submit an identity document (Aadhaar, Passport, etc.) and optionally a qualification certificate to get a Verified badge. Parents trust verified professionals more.
+                </p>
+              </div>
+            </div>
+
+            {verificationDone ? (
+              <div className="bg-green-50 border border-green-200 rounded-xl p-5 flex items-center gap-3">
+                <ShieldCheck size={22} className="text-green-600 shrink-0" />
+                <div>
+                  <p className="font-semibold text-green-800">Documents submitted!</p>
+                  <p className="text-sm text-green-700 mt-0.5">We'll review and verify your profile within 2–3 business days.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-card border border-border rounded-xl p-5 space-y-5">
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-foreground flex items-center gap-1.5">
+                    <ShieldCheck size={14} className="text-primary" /> Identity Document <span className="text-destructive">*</span>
+                  </h4>
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1 block">Document type</Label>
+                    <select
+                      value={idDocType}
+                      onChange={(e) => setIdDocType(e.target.value)}
+                      className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+                      data-testid="id-doc-type-select"
+                    >
+                      <option value="aadhar">Aadhaar Card (India)</option>
+                      <option value="passport">Passport</option>
+                      <option value="driving_licence">Driving Licence</option>
+                      <option value="national_id">National ID</option>
+                    </select>
+                  </div>
+                  <FileUploadField
+                    label="Upload ID document"
+                    onUploaded={setIdFileKey}
+                    uploadedPath={idFileKey}
+                  />
+                </div>
+
+                <div className="border-t border-border pt-4 space-y-3">
+                  <h4 className="font-medium text-sm text-foreground flex items-center gap-1.5">
+                    <Upload size={14} className="text-muted-foreground" /> Qualification Certificate <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+                  </h4>
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1 block">Certificate type</Label>
+                    <input
+                      type="text"
+                      value={certDocType}
+                      onChange={(e) => setCertDocType(e.target.value)}
+                      placeholder="e.g. B.Ed, OT Diploma, Speech Therapy Degree"
+                      className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+                      data-testid="cert-doc-type-input"
+                    />
+                  </div>
+                  <FileUploadField
+                    label="Upload certificate"
+                    onUploaded={setCertFileKey}
+                    uploadedPath={certFileKey}
+                  />
+                </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+                  <p className="text-xs font-semibold text-amber-900">Data Processing Consent — DPDP Act 2023 / GDPR</p>
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    Your documents are collected solely for professional verification on Includly, stored securely, and will not be shared with third parties.
+                    You may request deletion at any time via Account Settings.
+                  </p>
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="dpdp-consent-dashboard"
+                      checked={dpdpConsent}
+                      onCheckedChange={(v) => setDpdpConsent(v === true)}
+                      data-testid="dpdp-consent-checkbox"
+                    />
+                    <label htmlFor="dpdp-consent-dashboard" className="text-xs text-amber-900 leading-relaxed cursor-pointer">
+                      I consent to Includly processing my documents for identity verification as described above.
+                    </label>
+                  </div>
+                </div>
+
+                <Button
+                  className="w-full gap-2"
+                  onClick={handleSubmitVerification}
+                  disabled={verificationSubmitting || !idFileKey || !dpdpConsent}
+                  data-testid="submit-verification-btn"
+                >
+                  {verificationSubmitting ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                  {verificationSubmitting ? "Submitting…" : "Submit for Verification"}
+                </Button>
+
+                <div className="flex justify-center">
+                  <Link href="/onboard">
+                    <Button size="sm" variant="ghost" className="text-muted-foreground text-xs gap-1">
+                      Edit profile
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
         )}
         {profile.verificationStatus === "rejected" && (

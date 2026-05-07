@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
+
 import {
   Select,
   SelectContent,
@@ -27,12 +27,11 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { SPECIALTY_OPTIONS } from "@/lib/specialties";
-import { Loader2, CheckCircle2, IndianRupee, ShieldCheck } from "lucide-react";
+import { Loader2, CheckCircle2, IndianRupee } from "lucide-react";
 import { LocationPicker, type PickedLocation } from "@/components/LocationPicker";
-import { FileUploadField } from "@/components/FileUploadField";
 
 const TRAVEL_RADIUS_OPTIONS = [5, 10, 25, 50];
-const STEPS = ["Basic info", "Details", "Location", "Contact", "Pricing", "Verify ID", "Activate"];
+const STEPS = ["Basic info", "Details", "Location", "Contact", "Pricing"];
 
 const TAG_OPTIONS = [
   "ADHD",
@@ -44,13 +43,6 @@ const TAG_OPTIONS = [
   "Learning Disabilities",
 ];
 
-const ID_DOCUMENT_TYPES = [
-  { value: "aadhar", label: "Aadhaar Card (India)" },
-  { value: "passport", label: "Passport" },
-  { value: "driving_licence", label: "Driving Licence" },
-  { value: "national_id", label: "National ID" },
-] as const;
-
 export default function OnboardPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -58,16 +50,7 @@ export default function OnboardPage() {
   const { data: existingProfile, isLoading } = useGetMyProfessionalProfile();
 
   const [step, setStep] = useState(0);
-  const [profileCreatedId, setProfileCreatedId] = useState<number | null>(null);
-  const [paymentDone, setPaymentDone] = useState(false);
-  const [paymentLoading, setPaymentLoading] = useState(false);
-  const [verificationSubmitting, setVerificationSubmitting] = useState(false);
-  const [verificationDone, setVerificationDone] = useState(false);
-  const [idDocType, setIdDocType] = useState<string>("aadhar");
-  const [idFileKey, setIdFileKey] = useState<string>("");
-  const [certFileKey, setCertFileKey] = useState<string>("");
-  const [certDocType, setCertDocType] = useState<string>("degree");
-  const [dpdpConsent, setDpdpConsent] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     fullName: existingProfile?.fullName ?? "",
     specialty: existingProfile?.specialty ?? "",
@@ -131,36 +114,8 @@ export default function OnboardPage() {
       });
   }, [me]);
 
-  const createMutation = useMutation({
-    ...getCreateProfessionalProfileMutationOptions(),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
-      toast({ title: "Profile created!", description: "Now verify your identity." });
-      if (data && typeof data === "object" && "id" in data) {
-        setProfileCreatedId((data as { id: number }).id);
-      }
-      setStep(5); // Verify ID step
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Could not save your profile. Please try again.", variant: "destructive" });
-    },
-  });
-
-  const updateMutation = useMutation({
-    ...getUpdateProfessionalProfileMutationOptions(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
-      toast({ title: "Profile updated!" });
-      if (existingProfile?.paymentActivated) {
-        setLocation("/dashboard");
-      } else {
-        setStep(5); // Verify ID step
-      }
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Could not update your profile.", variant: "destructive" });
-    },
-  });
+  const createMutation = useMutation(getCreateProfessionalProfileMutationOptions());
+  const updateMutation = useMutation(getUpdateProfessionalProfileMutationOptions());
 
   if (isLoading || !roleReady) {
     return (
@@ -195,8 +150,7 @@ export default function OnboardPage() {
     if (step > 0) setStep(step - 1);
   }
 
-  function handleSubmit() {
-    // For therapy centres, append registration number and therapist count into qualifications
+  async function handleSubmit() {
     const qualificationsValue = isTherapyCentre
       ? [
           form.qualifications,
@@ -227,90 +181,40 @@ export default function OnboardPage() {
       specializationTags: form.specializationTags.length > 0 ? form.specializationTags : undefined,
     };
 
-    if (existingProfile) {
-      updateMutation.mutate({ data: payload });
-    } else {
-      createMutation.mutate({ data: payload });
-    }
-  }
-
-  async function handleFreeActivate() {
-    setPaymentLoading(true);
+    setIsSubmitting(true);
     try {
-      const res = await fetchWithAuth("/api/professionals/me/free-activate", { method: "POST" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error ?? "Activation failed");
+      if (existingProfile) {
+        await updateMutation.mutateAsync({ data: payload });
+      } else {
+        await createMutation.mutateAsync({ data: payload });
       }
-      toast({ title: "Profile activated!", description: "Your first month is FREE. Billing starts after 30 days." });
-      setPaymentDone(true);
       queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
-      setTimeout(() => setLocation("/dashboard"), 1500);
+
+      if (!existingProfile?.paymentActivated) {
+        const activateRes = await fetchWithAuth("/api/professionals/me/free-activate", { method: "POST" });
+        if (!activateRes.ok) {
+          const body = await activateRes.json().catch(() => ({}));
+          throw new Error((body as { error?: string }).error ?? "Activation failed");
+        }
+        queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
+        toast({
+          title: "Profile created & activated!",
+          description: "Next: upload your verification document from your dashboard to appear in search results.",
+        });
+      } else {
+        toast({ title: "Profile updated!" });
+      }
+      setTimeout(() => setLocation("/dashboard"), 1200);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
-      toast({ title: "Could not activate profile", description: msg, variant: "destructive" });
+      toast({ title: "Error", description: msg, variant: "destructive" });
     } finally {
-      setPaymentLoading(false);
+      setIsSubmitting(false);
     }
   }
-
-  async function handleSubmitVerification() {
-    if (!idFileKey) {
-      toast({ title: "Please upload your ID document first", variant: "destructive" });
-      return;
-    }
-    if (!dpdpConsent) {
-      toast({ title: "Please accept the consent to proceed", variant: "destructive" });
-      return;
-    }
-    setVerificationSubmitting(true);
-    try {
-      const idRes = await fetchWithAuth("/api/verifications/identity", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documentType: idDocType, fileKey: idFileKey, dpdpConsent }),
-      });
-      if (!idRes.ok) throw new Error("Failed to submit identity verification");
-
-      if (certFileKey) {
-        const certRes = await fetchWithAuth("/api/verifications/certifications", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ documentType: certDocType, fileKey: certFileKey }),
-        });
-        if (!certRes.ok) {
-          const body = await certRes.json().catch(() => ({}));
-          throw new Error((body as { error?: string }).error ?? "Failed to submit certification document");
-        }
-      }
-      setVerificationDone(true);
-      toast({ title: "Documents submitted", description: "Your profile will show Verified once reviewed (2-3 business days)." });
-    } catch {
-      toast({ title: "Error", description: "Could not submit documents. Please try again.", variant: "destructive" });
-    } finally {
-      setVerificationSubmitting(false);
-    }
-  }
-
-  const isPending = createMutation.isPending || updateMutation.isPending;
-  const isVerifyStep = step === 5;
-  const isActivationStep = step === 6;
-  const alreadyActivated = existingProfile?.paymentActivated ?? false;
 
   const isTherapyCentre = form.specialty === "therapy_centre";
   const isGeoFencedSpecialty = ["shadow_teacher", "special_tutor"].includes(form.specialty);
-
-  function getMonthlyAmount(specialty: string): number {
-    if (specialty === "therapy_centre") return 999;
-    if (["psychiatrist", "neurologist", "developmental_pediatrician"].includes(specialty)) return 299;
-    return 99;
-  }
-
-  const monthlyAmount = getMonthlyAmount(form.specialty);
-  const activationAmount = `₹${monthlyAmount}/month`;
-  const activationLabel = "Monthly subscription — first month FREE, then renews every 30 days";
-
-  const stepsToShow = existingProfile && alreadyActivated ? STEPS.slice(0, 5) : STEPS;
 
   return (
     <div className="min-h-screen bg-background">
@@ -319,12 +223,12 @@ export default function OnboardPage() {
           <h1 className="text-2xl font-serif font-semibold text-foreground mb-1">
             {existingProfile ? "Edit your profile" : "Set up your profile"}
           </h1>
-          <p className="text-muted-foreground text-sm">Step {step + 1} of {stepsToShow.length}: {stepsToShow[step]}</p>
+          <p className="text-muted-foreground text-sm">Step {step + 1} of {STEPS.length}: {STEPS[step]}</p>
         </div>
 
         {/* Step progress */}
         <div className="flex gap-2 mb-8">
-          {stepsToShow.map((s, i) => (
+          {STEPS.map((s, i) => (
             <div
               key={s}
               className={`flex-1 h-1.5 rounded-full transition-colors ${i <= step ? "bg-primary" : "bg-muted"}`}
@@ -704,261 +608,41 @@ export default function OnboardPage() {
             </div>
           )}
 
-          {/* Step 5: Verify Identity */}
-          {step === 5 && (
-            <div className="space-y-5">
-              {existingProfile?.verificationStatus === "verified" ? (
-                <div className="text-center py-6">
-                  <ShieldCheck size={48} className="text-green-500 mx-auto mb-3" />
-                  <h3 className="text-lg font-semibold text-foreground mb-1">Verified ✓</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Your identity has been verified. Your profile shows a Verified badge to parents.
-                  </p>
-                </div>
-              ) : verificationDone ? (
-                <div className="text-center py-6">
-                  <ShieldCheck size={48} className="text-primary mx-auto mb-3" />
-                  <h3 className="text-lg font-semibold text-foreground mb-1">Documents Submitted</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Your verification is under review. We'll update your status within 2–3 business days.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="text-center">
-                    <ShieldCheck size={36} className="text-primary mx-auto mb-2" />
-                    <h3 className="text-lg font-semibold text-foreground mb-1">Verify Your Identity</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Upload your ID and qualifications to earn a Verified badge. Parents trust verified professionals more.
-                    </p>
-                  </div>
-                  {existingProfile?.verificationStatus === "pending" && (
-                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm">
-                      <ShieldCheck size={15} className="shrink-0" />
-                      Your documents are under review. You can re-upload if needed.
-                    </div>
-                  )}
-                  {existingProfile?.verificationStatus === "rejected" && (
-                    <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-800 rounded-lg px-4 py-3 text-sm">
-                      <ShieldCheck size={15} className="shrink-0" />
-                      Your previous submission was not approved. Please upload clearer documents.
-                    </div>
-                  )}
-
-                  <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-                    <h4 className="font-medium text-sm">Identity Document <span className="text-destructive">*</span></h4>
-                    <div>
-                      <Label className="text-xs text-muted-foreground mb-1 block">Document type</Label>
-                      <Select value={idDocType} onValueChange={setIdDocType}>
-                        <SelectTrigger data-testid="id-doc-type-select">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ID_DOCUMENT_TYPES.map((t) => (
-                            <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <FileUploadField
-                      label="Upload ID document"
-                      onUploaded={setIdFileKey}
-                      uploadedPath={idFileKey}
-                    />
-                  </div>
-
-                  <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-                    <h4 className="font-medium text-sm">Qualification Certificate <span className="text-muted-foreground text-xs">(optional)</span></h4>
-                    <div>
-                      <Label className="text-xs text-muted-foreground mb-1 block">Certificate type</Label>
-                      <Input
-                        value={certDocType}
-                        onChange={(e) => setCertDocType(e.target.value)}
-                        placeholder="e.g. B.Ed, OT Diploma, Speech Therapy Degree"
-                        data-testid="cert-doc-type-input"
-                      />
-                    </div>
-                    <FileUploadField
-                      label="Upload certificate"
-                      onUploaded={setCertFileKey}
-                      uploadedPath={certFileKey}
-                    />
-                  </div>
-
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
-                    <p className="text-xs font-semibold text-amber-900">Data Processing Consent — DPDP / GDPR</p>
-                    <p className="text-xs text-amber-800 leading-relaxed">
-                      Your identity and qualification documents are collected solely for professional verification purposes on Includly.
-                      Documents are stored securely and will not be shared with third parties.
-                      Under India's DPDP Act 2023 and GDPR, you have the right to request deletion of your documents at any time
-                      by using the "Delete My Account" option in Account Settings.
-                    </p>
-                    <div className="flex items-start gap-2">
-                      <Checkbox
-                        id="dpdp-consent"
-                        checked={dpdpConsent}
-                        onCheckedChange={(v) => setDpdpConsent(v === true)}
-                        data-testid="dpdp-consent-checkbox"
-                      />
-                      <label htmlFor="dpdp-consent" className="text-xs text-amber-900 leading-relaxed cursor-pointer">
-                        I consent to Includly processing my documents for identity verification as described above.
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <Button
-                      className="flex-1 gap-2"
-                      onClick={handleSubmitVerification}
-                      disabled={verificationSubmitting || !idFileKey || !dpdpConsent}
-                      data-testid="submit-verification-btn"
-                    >
-                      {verificationSubmitting ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
-                      {verificationSubmitting ? "Submitting…" : "Submit for Verification"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => setStep(6)}
-                      data-testid="skip-verification-btn"
-                    >
-                      Skip for now
-                    </Button>
-                  </div>
-
-                  <p className="text-xs text-center text-muted-foreground">
-                    Verification typically takes 2–3 business days. Your profile will show "Verification Pending" until reviewed.
-                  </p>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Step 6: Activate Profile */}
-          {step === 6 && (
-            <div className="space-y-4">
-              {alreadyActivated || paymentDone ? (
-                <div className="text-center py-4">
-                  <CheckCircle2 size={48} className="text-green-500 mx-auto mb-3" />
-                  <h3 className="text-lg font-semibold text-foreground mb-1">
-                    {isTherapyCentre ? "Centre is Live!" : "Profile is Live!"}
-                  </h3>
-                  <p className="text-muted-foreground text-sm">
-                    {isTherapyCentre
-                      ? "Your centre is active and visible to families searching for therapy services."
-                      : "Your profile is active and visible to parents."}
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="text-center py-2">
-                    <div className="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 rounded-full px-4 py-1 text-sm font-medium mb-3">
-                      <CheckCircle2 size={13} /> First month — completely FREE
-                    </div>
-                    <h3 className="text-lg font-semibold text-foreground mb-2">
-                      {isTherapyCentre ? "Activate Your Centre Listing" : "Activate Your Profile"}
-                    </h3>
-                    <p className="text-muted-foreground text-sm mb-4">
-                      Your listing goes live immediately. After 30 days, your subscription of {activationAmount} starts via UPI auto-debit.
-                    </p>
-                  </div>
-                  <div className="bg-muted/40 border border-border rounded-xl p-5 space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-foreground">
-                        {isTherapyCentre ? "Therapy Centre Listing" : "Professional Listing"}
-                      </span>
-                      <div className="text-right">
-                        <div className="text-xs text-muted-foreground line-through">{activationAmount}</div>
-                        <div className="text-lg font-bold text-green-600">₹0 today</div>
-                      </div>
-                    </div>
-                    <ul className="space-y-1.5 text-sm text-muted-foreground">
-                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> {activationLabel}</li>
-                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> Listing goes live immediately — no waiting</li>
-                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" />
-                        {isTherapyCentre ? "Visible to families searching in your area" : "Visible to parents searching in your city"}
-                      </li>
-                      <li className="flex items-center gap-2"><CheckCircle2 size={14} className="text-green-500" /> Your UPI ID on file used for recurring billing</li>
-                    </ul>
-                    <div className="border-t border-border pt-3 flex justify-between text-sm">
-                      <span className="text-muted-foreground">From month 2 onwards</span>
-                      <span className="font-semibold text-foreground">{activationAmount}</span>
-                    </div>
-                  </div>
-                  <Button
-                    className="w-full gap-2"
-                    onClick={handleFreeActivate}
-                    disabled={paymentLoading}
-                    data-testid="pay-listing-fee-btn"
-                  >
-                    {paymentLoading ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
-                    {paymentLoading
-                      ? "Activating…"
-                      : `Activate ${isTherapyCentre ? "Centre" : "Profile"} — First Month Free`}
-                  </Button>
-                  <p className="text-xs text-center text-muted-foreground">
-                    No payment today. Recurring billing starts after your free trial via UPI auto-debit.
-                  </p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full text-muted-foreground"
-                    onClick={() => setLocation("/dashboard")}
-                  >
-                    Skip for now ({isTherapyCentre ? "centre" : "profile"} won't be visible)
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Navigation */}
-        {!isActivationStep && !isVerifyStep && (
-          <div className="flex justify-between mt-6">
-            <Button variant="outline" onClick={handleBack} disabled={step === 0}>
-              Back
+        <div className="flex justify-between mt-6">
+          <Button variant="outline" onClick={handleBack} disabled={step === 0 || isSubmitting}>
+            Back
+          </Button>
+          {step < STEPS.length - 1 ? (
+            <Button
+              onClick={handleNext}
+              disabled={step === 0 && (!form.specialty || !form.fullName)}
+              data-testid="next-step-btn"
+            >
+              Continue
             </Button>
-            {step < 4 ? (
-              <Button
-                onClick={handleNext}
-                disabled={step === 0 && (!form.specialty || !form.fullName)}
-                data-testid="next-step-btn"
-              >
-                Continue
-              </Button>
-            ) : (
-              <Button
-                onClick={handleSubmit}
-                disabled={isPending}
-                className="gap-2"
-                data-testid="submit-profile-btn"
-              >
-                {isPending ? (
-                  <Loader2 size={15} className="animate-spin" />
-                ) : (
-                  <CheckCircle2 size={15} />
-                )}
-                {existingProfile ? "Save changes" : "Create profile"}
-              </Button>
-            )}
-          </div>
-        )}
-
-        {isVerifyStep && (verificationDone || existingProfile?.verificationStatus === "verified") && (
-          <div className="mt-6">
-            <Button className="w-full" onClick={() => setStep(6)}>
-              Continue to Activate
+          ) : (
+            <Button
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="gap-2"
+              data-testid="submit-profile-btn"
+            >
+              {isSubmitting ? (
+                <Loader2 size={15} className="animate-spin" />
+              ) : (
+                <CheckCircle2 size={15} />
+              )}
+              {isSubmitting
+                ? "Saving…"
+                : existingProfile
+                ? "Save changes"
+                : "Create & activate profile"}
             </Button>
-          </div>
-        )}
-
-        {isActivationStep && (alreadyActivated || paymentDone) && (
-          <div className="mt-6">
-            <Button className="w-full" onClick={() => setLocation("/dashboard")}>
-              Go to Dashboard
-            </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

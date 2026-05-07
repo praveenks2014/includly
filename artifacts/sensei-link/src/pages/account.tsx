@@ -32,7 +32,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, User, Bell, Trash2, ShieldAlert, CheckCircle2, Clock, XCircle, AlertCircle, Ticket, Crown } from "lucide-react";
+import { Loader2, User, Bell, Trash2, ShieldAlert, CheckCircle2, Clock, XCircle, AlertCircle, Ticket, Crown, LocateFixed } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import {
@@ -166,6 +166,7 @@ export default function AccountPage() {
   }
 
   const [location, setLocation_] = useState("");
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -208,6 +209,39 @@ export default function AccountPage() {
 
   function handleSave() {
     updateMutation.mutate({ data: { location } });
+  }
+
+  async function handleAutoDetect() {
+    if (!navigator.geolocation) {
+      toast({ title: "Not supported", description: "Your browser doesn't support location detection.", variant: "destructive" });
+      return;
+    }
+    setIsGettingLocation(true);
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
+      );
+      const { latitude: lat, longitude: lng } = pos.coords;
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+        { headers: { "Accept-Language": "en" } }
+      );
+      if (!res.ok) throw new Error("Geocode failed");
+      const data = await res.json() as { address?: { suburb?: string; city_district?: string; city?: string; state_district?: string } };
+      const area = data.address?.suburb || data.address?.city_district || "";
+      const city = data.address?.city || data.address?.state_district || "";
+      const detected = [area, city].filter(Boolean).join(", ");
+      if (detected) {
+        setLocation_(detected);
+        toast({ title: "Location detected", description: detected });
+      } else {
+        toast({ title: "Could not identify area", description: "Please type your area manually.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Location access denied", description: "Please allow location access or enter your area manually.", variant: "destructive" });
+    } finally {
+      setIsGettingLocation(false);
+    }
   }
 
   async function handleDeleteAccount() {
@@ -309,8 +343,19 @@ export default function AccountPage() {
                 />
               </div>
               <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAutoDetect}
+                disabled={isGettingLocation || updateMutation.isPending}
+                className="gap-2 w-full"
+              >
+                {isGettingLocation ? <Loader2 size={13} className="animate-spin" /> : <LocateFixed size={13} />}
+                {isGettingLocation ? "Detecting location…" : "Auto-detect my location"}
+              </Button>
+              <Button
                 onClick={handleSave}
-                disabled={updateMutation.isPending}
+                disabled={updateMutation.isPending || isGettingLocation}
                 className="gap-2"
                 data-testid="save-account-btn"
               >
