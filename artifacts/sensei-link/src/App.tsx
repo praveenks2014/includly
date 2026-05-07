@@ -25,11 +25,14 @@ import SignUpPage from "@/pages/sign-up";
 import SignInPage from "@/pages/sign-in";
 import SsoCallbackPage from "@/pages/sso-callback";
 
-// Single source of truth for the Clerk publishable key.
-// VITE_CLERK_PK is set in shared env vars → available in both dev and prod builds.
-// Do NOT fall back to VITE_CLERK_PUBLISHABLE_KEY — that secret is provisioned by
-// Replit for a different (non-functional) Clerk instance (clerk.www.includly.in).
-const clerkPubKey = import.meta.env.VITE_CLERK_PK;
+// Production: use the live key (only works on includly.in and subdomains).
+// Development (Replit workspace preview): use a test-instance key so Clerk
+// initialises on any origin without domain restrictions.
+const DEV_CLERK_KEY = "pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA";
+
+const clerkPubKey = import.meta.env.DEV
+  ? DEV_CLERK_KEY
+  : import.meta.env.VITE_CLERK_PK;
 
 if (!clerkPubKey) {
   throw new Error(
