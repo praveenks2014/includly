@@ -12,6 +12,12 @@ uri = "file://attached_assets/includly-icon-v2.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "uNnUmOjXEi705Uxc8VmLJ"
+uri = "file://attached_assets/brand/includly-icon-hd.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "u7oG6WYHolJ87TwnUh8uW"
 uri = "file://attached_assets/includly-icon.png"
@@ -23,3 +29,9 @@ id = "HysrGUtfxCAUF7ymGFpEU"
 uri = "file://attached_assets/includly-icon-v2.png"
 type = "image"
 title = "Includly Icon — Modern Minimalist"
+
+[[outputs]]
+id = "VhpVGuFxzk3_RD-5TsbGb"
+uri = "file://attached_assets/brand/includly-icon-hd.png"
+type = "image"
+title = "Includly HD Icon"
