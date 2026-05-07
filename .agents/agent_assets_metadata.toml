@@ -1,0 +1,13 @@
+uploads = []
+
+[[generated]]
+id = "pYHg7G6Fib1huzkexca5a"
+uri = "file://attached_assets/includly-icon.png"
+type = "image"
+title = "generated_image"
+
+[[outputs]]
+id = "u7oG6WYHolJ87TwnUh8uW"
+uri = "file://attached_assets/includly-icon.png"
+type = "image"
+title = "Includly App Icon"
