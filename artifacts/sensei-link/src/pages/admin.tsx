@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useUser } from "@clerk/react";
+import { fetchWithAuth } from "@/lib/api";
 import {
   useGetMe,
   useAdminListProfessionals,
@@ -175,7 +176,7 @@ function PendingApprovalsTab() {
     setDocuments(null);
     setDocsLoading(true);
     try {
-      const res = await fetch(`/api/admin/professionals/${prof.id}/documents`);
+      const res = await fetchWithAuth(`/api/admin/professionals/${prof.id}/documents`);
       if (res.ok) {
         const docData = await res.json() as ProfDocuments;
         setDocuments(docData);
@@ -202,7 +203,7 @@ function PendingApprovalsTab() {
   async function handleReject(id: number) {
     setIsRejecting(true);
     try {
-      const res = await fetch(`/api/admin/professionals/${id}/reject`, {
+      const res = await fetchWithAuth(`/api/admin/professionals/${id}/reject`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason: rejectReason.trim() || null }),
@@ -450,7 +451,7 @@ function ProfessionalsTab() {
     setDocuments(null);
     setDocsLoading(true);
     try {
-      const res = await fetch(`/api/admin/professionals/${prof.id}/documents`);
+      const res = await fetchWithAuth(`/api/admin/professionals/${prof.id}/documents`);
       if (res.ok) {
         const docData = await res.json() as ProfDocuments;
         setDocuments(docData);
@@ -477,7 +478,7 @@ function ProfessionalsTab() {
   async function handleReject(id: number) {
     setIsRejecting(true);
     try {
-      const res = await fetch(`/api/admin/professionals/${id}/reject`, {
+      const res = await fetchWithAuth(`/api/admin/professionals/${id}/reject`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason: rejectReason.trim() || null }),
@@ -816,7 +817,7 @@ function SettingsTab() {
   async function handleTestPush() {
     setTestPushLoading(true);
     try {
-      const res = await fetch("/api/admin/notifications/test", { method: "POST" });
+      const res = await fetchWithAuth("/api/admin/notifications/test", { method: "POST" });
       const data = await res.json() as { sent?: number; total?: number; error?: string };
       if (!res.ok) {
         toast({

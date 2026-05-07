@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
+import { fetchWithAuth } from "@/lib/api";
 import {
   useGetMyProfessionalProfile,
   useGetMe,
@@ -236,7 +237,7 @@ export default function OnboardPage() {
   async function handleFreeActivate() {
     setPaymentLoading(true);
     try {
-      const res = await fetch("/api/professionals/me/free-activate", { method: "POST" });
+      const res = await fetchWithAuth("/api/professionals/me/free-activate", { method: "POST" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error((body as { error?: string }).error ?? "Activation failed");
@@ -264,7 +265,7 @@ export default function OnboardPage() {
     }
     setVerificationSubmitting(true);
     try {
-      const idRes = await fetch("/api/verifications/identity", {
+      const idRes = await fetchWithAuth("/api/verifications/identity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ documentType: idDocType, fileKey: idFileKey, dpdpConsent }),
@@ -272,7 +273,7 @@ export default function OnboardPage() {
       if (!idRes.ok) throw new Error("Failed to submit identity verification");
 
       if (certFileKey) {
-        const certRes = await fetch("/api/verifications/certifications", {
+        const certRes = await fetchWithAuth("/api/verifications/certifications", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ documentType: certDocType, fileKey: certFileKey }),

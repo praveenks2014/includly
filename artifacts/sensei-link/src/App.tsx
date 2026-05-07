@@ -1,6 +1,8 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, useClerk, useAuth } from "@clerk/react";
+import { setAuthTokenGetter } from "@workspace/api-client-react";
+import { setFetchAuthTokenGetter } from "@/lib/api";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, useRef } from "react";
@@ -56,6 +58,22 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function ClerkAuthBridge() {
+  const { getToken } = useAuth();
+
+  useEffect(() => {
+    const getter = () => getToken();
+    setAuthTokenGetter(getter);
+    setFetchAuthTokenGetter(getter);
+    return () => {
+      setAuthTokenGetter(null);
+      setFetchAuthTokenGetter(null);
+    };
+  }, [getToken]);
+
+  return null;
+}
 
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();
@@ -170,6 +188,7 @@ function ClerkProviderWithRoutes() {
       }}
     >
       <QueryClientProvider client={queryClient}>
+        <ClerkAuthBridge />
         <ClerkQueryClientCacheInvalidator />
         <TooltipProvider>
           <Router />

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useUser, useClerk } from "@clerk/react";
+import { fetchWithAuth } from "@/lib/api";
 import {
   useGetMe,
   getUpdateMeMutationOptions,
@@ -216,7 +217,7 @@ export default function AccountPage() {
     }
     setIsDeleting(true);
     try {
-      const res = await fetch("/api/account/delete", {
+      const res = await fetchWithAuth("/api/account/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmPhrase: "DELETE MY ACCOUNT" }),
