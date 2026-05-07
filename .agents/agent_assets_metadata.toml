@@ -24,6 +24,24 @@ uri = "file://attached_assets/brand/includly-icon-pro.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "yAuPny1lu1B6X1CKlbIcs"
+uri = "file://attached_assets/brand/includly-v4a.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "N4eQr3APrz5CYxc8bwrc9"
+uri = "file://attached_assets/brand/includly-v4b.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "8dcggWmy_uJ2cw5vRRrRk"
+uri = "file://attached_assets/brand/includly-v4c.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "u7oG6WYHolJ87TwnUh8uW"
 uri = "file://attached_assets/includly-icon.png"
@@ -47,3 +65,21 @@ id = "q-_00xeiVLwGrdiJPzzs0"
 uri = "file://attached_assets/brand/includly-icon-pro.png"
 type = "image"
 title = "Includly — Professional Icon"
+
+[[outputs]]
+id = "GA1QGThR3xPum1YotntRT"
+uri = "file://attached_assets/brand/includly-v4a.png"
+type = "image"
+title = "Option A — Family & Specialist Circles"
+
+[[outputs]]
+id = "yWFCWPQWsBnXTX7B97nc9"
+uri = "file://attached_assets/brand/includly-v4b.png"
+type = "image"
+title = "Option B — Star with Inclusion Dots"
+
+[[outputs]]
+id = "FM4Vvob_b15F9uxw4TnXP"
+uri = "file://attached_assets/brand/includly-v4c.png"
+type = "image"
+title = "Option C — Hand Cradling Growth"
