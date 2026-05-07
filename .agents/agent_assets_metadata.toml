@@ -18,6 +18,12 @@ uri = "file://attached_assets/brand/includly-icon-hd.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "h-zJHduo60H81j_9MA2fq"
+uri = "file://attached_assets/brand/includly-icon-pro.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "u7oG6WYHolJ87TwnUh8uW"
 uri = "file://attached_assets/includly-icon.png"
@@ -35,3 +41,9 @@ id = "VhpVGuFxzk3_RD-5TsbGb"
 uri = "file://attached_assets/brand/includly-icon-hd.png"
 type = "image"
 title = "Includly HD Icon"
+
+[[outputs]]
+id = "q-_00xeiVLwGrdiJPzzs0"
+uri = "file://attached_assets/brand/includly-icon-pro.png"
+type = "image"
+title = "Includly — Professional Icon"
