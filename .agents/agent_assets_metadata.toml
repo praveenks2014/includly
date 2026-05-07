@@ -6,8 +6,20 @@ uri = "file://attached_assets/includly-icon.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "9AFn1d2PiUkuHSu_E80sv"
+uri = "file://attached_assets/includly-icon-v2.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "u7oG6WYHolJ87TwnUh8uW"
 uri = "file://attached_assets/includly-icon.png"
 type = "image"
 title = "Includly App Icon"
+
+[[outputs]]
+id = "HysrGUtfxCAUF7ymGFpEU"
+uri = "file://attached_assets/includly-icon-v2.png"
+type = "image"
+title = "Includly Icon — Modern Minimalist"
