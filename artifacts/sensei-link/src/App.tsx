@@ -26,6 +26,7 @@ import SessionsPage from "@/pages/sessions";
 import SignUpPage from "@/pages/sign-up";
 import SignInPage from "@/pages/sign-in";
 import SsoCallbackPage from "@/pages/sso-callback";
+import ChooseRolePage from "@/pages/choose-role";
 
 // Production: use the live key (only works on includly.in and subdomains).
 // Development (Replit workspace preview): use a test-instance key so Clerk
@@ -94,7 +95,7 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
-const HIDE_NAVBAR_PATHS = ["/sign-in", "/sign-up", "/sso-callback"];
+const HIDE_NAVBAR_PATHS = ["/sign-in", "/sign-up", "/sso-callback", "/choose-role"];
 
 function Layout({ children }: { children: React.ReactNode }) {
   const [loc] = useLocation();
@@ -130,6 +131,9 @@ function Router() {
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/sign-up/*?" component={SignUpPage} />
         <Route path="/sso-callback" component={SsoCallbackPage} />
+        <Route path="/choose-role">
+          <RequireAuth><ChooseRolePage /></RequireAuth>
+        </Route>
         <Route path="/search" component={SearchPage} />
         <Route path="/professionals/:id" component={ProfessionalProfilePage} />
         <Route path="/dashboard">
@@ -171,7 +175,7 @@ function ClerkProviderWithRoutes() {
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
       signInFallbackRedirectUrl="/dashboard"
-      signUpFallbackRedirectUrl="/onboard"
+      signUpFallbackRedirectUrl="/choose-role"
       routerPush={(to) => {
         if (to.startsWith("http://") || to.startsWith("https://")) {
           window.location.href = to;

@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useUser, useClerk } from "@clerk/react";
+import { useGetMe, getGetMeQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, LayoutDashboard, LogOut, User, Menu, X, Sparkles } from "lucide-react";
+import { Search, LayoutDashboard, LogOut, User, Menu, X, Sparkles, Shield } from "lucide-react";
 import { useState } from "react";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -19,6 +20,8 @@ export function Navbar() {
   const { signOut } = useClerk();
   const [, setLocation] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: me } = useGetMe({ query: { enabled: !!isSignedIn, queryKey: getGetMeQueryKey() } });
+  const isAdmin = me?.role === "admin";
 
   const initials = user?.fullName
     ? user.fullName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -60,6 +63,14 @@ export function Navbar() {
                   Dashboard
                 </Button>
               </Link>
+              {isAdmin && (
+                <Link href="/admin">
+                  <Button variant="ghost" size="sm" className="gap-2 text-violet-700 hover:text-violet-800 hover:bg-violet-50">
+                    <Shield size={16} />
+                    Admin
+                  </Button>
+                </Link>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="rounded-full w-9 h-9 p-0" data-testid="user-menu-trigger">
@@ -131,6 +142,13 @@ export function Navbar() {
                   <LayoutDashboard size={16} /> Dashboard
                 </Button>
               </Link>
+              {isAdmin && (
+                <Link href="/admin" onClick={() => setMobileOpen(false)}>
+                  <Button variant="ghost" className="w-full justify-start gap-2 text-violet-700 hover:text-violet-800 hover:bg-violet-50">
+                    <Shield size={16} /> Admin
+                  </Button>
+                </Link>
+              )}
               <Link href="/account" onClick={() => setMobileOpen(false)}>
                 <Button variant="ghost" className="w-full justify-start gap-2">
                   <User size={16} /> Account
