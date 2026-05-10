@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { SPECIALTY_OPTIONS } from "@/lib/specialties";
+import { SPECIALTY_OPTIONS, SPECIALTY_ICONS, SPECIALTY_ICON_COLORS } from "@/lib/specialties";
 import { Loader2, CheckCircle2, IndianRupee } from "lucide-react";
 import { LocationPicker, type PickedLocation } from "@/components/LocationPicker";
 
@@ -241,20 +241,80 @@ export default function OnboardPage() {
           {step === 0 && (
             <div className="space-y-4">
               <div>
-                <Label htmlFor="specialty">
-                  {isTherapyCentre ? "Centre type" : "Specialty"}
-                </Label>
-                <Select value={form.specialty} onValueChange={(v) => set("specialty", v)}>
-                  <SelectTrigger className="mt-1" data-testid="select-specialty">
-                    <SelectValue placeholder="Select your specialty" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SPECIALTY_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="mb-2 block">Primary specialty</Label>
+                <div className="grid grid-cols-2 gap-2" data-testid="select-specialty">
+                  {SPECIALTY_OPTIONS.map((opt) => {
+                    const Icon = SPECIALTY_ICONS[opt.value] ?? CheckCircle2;
+                    const selected = form.specialty === opt.value;
+                    const colorClass = SPECIALTY_ICON_COLORS[opt.value] ?? "text-primary bg-primary/10";
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          set("specialty", opt.value);
+                          setForm((prev) => ({
+                            ...prev,
+                            specialty: opt.value,
+                            specializationTags: prev.specializationTags.filter(
+                              (t) => !t.startsWith("specialty:") || t === `specialty:${opt.value}`
+                            ).filter((t) => t !== `specialty:${opt.value}`),
+                          }));
+                        }}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium text-left transition-all ${
+                          selected
+                            ? "border-primary bg-primary/10 text-primary shadow-sm"
+                            : "border-border bg-background text-foreground hover:border-primary/50"
+                        }`}
+                        data-testid={`specialty-card-${opt.value}`}
+                      >
+                        <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${colorClass}`}>
+                          <Icon size={15} />
+                        </span>
+                        <span className="leading-tight">{opt.label}</span>
+                        {selected && <CheckCircle2 size={14} className="ml-auto text-primary shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+
+              {form.specialty && form.specialty !== "therapy_centre" && (
+                <div>
+                  <Label className="mb-2 block text-sm">
+                    Also practise as <span className="text-muted-foreground font-normal">(optional)</span>
+                  </Label>
+                  <div className="flex flex-wrap gap-2">
+                    {SPECIALTY_OPTIONS
+                      .filter((opt) => opt.value !== form.specialty && opt.value !== "therapy_centre")
+                      .map((opt) => {
+                        const tagKey = `specialty:${opt.value}`;
+                        const selected = form.specializationTags.includes(tagKey);
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => {
+                              setForm((prev) => ({
+                                ...prev,
+                                specializationTags: selected
+                                  ? prev.specializationTags.filter((t) => t !== tagKey)
+                                  : [...prev.specializationTags, tagKey],
+                              }));
+                            }}
+                            className={`px-3 py-1 rounded-full text-xs border transition-colors ${
+                              selected
+                                ? "bg-primary/10 border-primary text-primary font-medium"
+                                : "bg-background border-border text-muted-foreground hover:border-primary/50"
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
               <div>
                 <Label htmlFor="fullName">
                   {isTherapyCentre ? "Centre name" : "Full name"}

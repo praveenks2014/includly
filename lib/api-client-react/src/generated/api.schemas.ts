@@ -51,6 +51,8 @@ export interface UserProfile {
    */
   longitude?: number | null;
   shareHomeLocation?: boolean;
+  /** @nullable */
+  deletionScheduledAt?: string | null;
   createdAt: string;
 }
 
@@ -155,6 +157,12 @@ export interface ProfessionalProfile {
    */
   upiId?: string | null;
   paymentActivated: boolean;
+  /** Whether the professional has an active Pro subscription */
+  isPremium?: boolean;
+  /** Additional specialization tags e.g. ["specialty:OT", "ADHD"] */
+  specializationTags?: string[];
+  /** @nullable */
+  rejectionReason?: string | null;
   createdAt: string;
 }
 
@@ -203,6 +211,10 @@ export interface ProfessionalDetail {
   /** @nullable */
   pricingMaxINR?: number | null;
   paymentActivated: boolean;
+  /** Whether the professional has an active Pro subscription */
+  isPremium?: boolean;
+  /** Additional specialization tags e.g. ["specialty:OT", "ADHD"] */
+  specializationTags?: string[];
   createdAt: string;
 }
 
@@ -549,11 +561,16 @@ export interface RazorpayOrder {
   keyId: string;
   paymentId: number;
   planName: string;
+  /** True when the order represents a Razorpay subscription (not a one-time order) */
+  isSubscription?: boolean;
+  /** @nullable */
+  subscriptionId?: string | null;
 }
 
 export interface VerifyRazorpayBody {
   razorpayPaymentId: string;
-  razorpayOrderId: string;
+  razorpayOrderId?: string;
+  razorpaySubscriptionId?: string;
   razorpaySignature: string;
   paymentId: number;
 }
@@ -609,6 +626,11 @@ export interface AdminStats {
   pendingProfessionals: number;
   verifiedProfessionals: number;
   rejectedProfessionals: number;
+  totalPaymentsCompleted: number;
+  totalRevenueInPaise: number;
+  totalBookingsThisMonth: number;
+  newUsersThisMonth: number;
+  professionalsBySpecialty: Record<string, number>;
 }
 
 export interface AdminSettings {

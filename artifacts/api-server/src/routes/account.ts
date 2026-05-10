@@ -16,12 +16,90 @@ const clerkClient = createClerkClient({ secretKey: process.env["CLERK_SECRET_KEY
 const router: IRouter = Router();
 
 /**
+ * POST /account/schedule-delete
+ *
+ * Schedules account deletion 60 days from now. The user is removed from
+ * search immediately (professional profile set to unsubmitted) but all data
+ * is preserved. The user can undo this within the 60-day window.
+ * After 60 days a background cleanup (or the next login check) will
+ * permanently anonymize the record and delete from Clerk.
+ */
+router.post("/account/schedule-delete", requireAuth, async (req, res): Promise<void> => {
+  const { confirmPhrase } = (req.body ?? {}) as { confirmPhrase?: string };
+
+  if (confirmPhrase !== "DELETE MY ACCOUNT") {
+    res.status(400).json({ error: "Please type DELETE MY ACCOUNT to confirm" });
+    return;
+  }
+
+  const userId = req.userId!;
+
+  const deletionScheduledAt = new Date();
+  deletionScheduledAt.setDate(deletionScheduledAt.getDate() + 60);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(usersTable)
+      .set({ deletionScheduledAt })
+      .where(eq(usersTable.id, userId));
+
+    await tx
+      .update(professionalProfilesTable)
+      .set({ verificationStatus: "unsubmitted", isVerified: false })
+      .where(eq(professionalProfilesTable.userId, userId));
+  });
+
+  res.json({ success: true, deletionScheduledAt: deletionScheduledAt.toISOString() });
+});
+
+/**
+ * POST /account/cancel-delete
+ *
+ * Undoes a scheduled deletion within the 60-day grace window.
+ */
+router.post("/account/cancel-delete", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.userId!;
+
+  const [user] = await db
+    .select({ deletionScheduledAt: usersTable.deletionScheduledAt })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+
+  if (!user?.deletionScheduledAt) {
+    res.status(400).json({ error: "No deletion is scheduled for this account." });
+    return;
+  }
+
+  if (user.deletionScheduledAt < new Date()) {
+    res.status(400).json({ error: "The 60-day grace period has expired. Please contact support." });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(usersTable)
+      .set({ deletionScheduledAt: null })
+      .where(eq(usersTable.id, userId));
+
+    await tx
+      .update(professionalProfilesTable)
+      .set({ verificationStatus: "pending" })
+      .where(eq(professionalProfilesTable.userId, userId));
+  });
+
+  res.json({ success: true });
+});
+
+/**
  * POST /account/delete
  *
- * GDPR/DPDP right-to-erasure: anonymizes the user record and removes uploaded files.
+ * GDPR/DPDP right-to-erasure: immediately anonymizes the user record and removes
+ * uploaded files. For scheduled deletions past their grace period, or for immediate
+ * hard-delete requests from admin flows.
+ *
  * Soft-delete approach (preserves FK integrity for relational history):
  *   1. Attempts to delete uploaded identity + certification documents from object storage
- *      (object-delete failures are logged but do not abort the operation)
  *   2. Nullifies file references in identity_verifications and professional_certifications rows
  *   3. Anonymizes professional_profiles PII
  *   4. Anonymizes users PII and sets clerkId tombstone
@@ -39,13 +117,11 @@ router.post("/account/delete", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId!;
   const storageService = new ObjectStorageService();
 
-  // Fetch data outside the transaction (read-only, no contention)
   const [profile] = await db
     .select()
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.userId, userId));
 
-  // Attempt file deletions before the transaction (failures logged, never fatal)
   if (profile) {
     const [idVerifs, certs] = await Promise.all([
       db.select().from(identityVerificationsTable).where(eq(identityVerificationsTable.professionalId, profile.id)),
@@ -71,13 +147,10 @@ router.post("/account/delete", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
-  // Save the Clerk ID before we tombstone it in the DB
   const clerkId = req.clerkId!;
 
-  // All DB anonymization in a single transaction — no partial state on failure
   await db.transaction(async (tx) => {
     if (profile) {
-      // Null file references so paths cannot be used to infer document identity
       await tx
         .update(identityVerificationsTable)
         .set({ fileKey: "[deleted]", status: "rejected" })
@@ -88,7 +161,6 @@ router.post("/account/delete", requireAuth, async (req, res): Promise<void> => {
         .set({ fileKey: "[deleted]" })
         .where(eq(professionalCertificationsTable.professionalId, profile.id));
 
-      // Anonymize professional profile PII
       await tx
         .update(professionalProfilesTable)
         .set({
@@ -106,7 +178,6 @@ router.post("/account/delete", requireAuth, async (req, res): Promise<void> => {
         .where(eq(professionalProfilesTable.userId, userId));
     }
 
-    // Anonymize user PII + tombstone clerkId to prevent re-linking
     await tx
       .update(usersTable)
       .set({
@@ -120,14 +191,12 @@ router.post("/account/delete", requireAuth, async (req, res): Promise<void> => {
         latitude: null,
         longitude: null,
         shareHomeLocation: false,
+        deletionScheduledAt: null,
         clerkId: `deleted-${userId}-${Date.now()}`,
       })
       .where(eq(usersTable.id, userId));
   });
 
-  // Delete the user from Clerk so the email/OAuth identity is fully released.
-  // This runs after the DB transaction so a Clerk API failure doesn't roll back
-  // the anonymization, but we log the error so it can be retried manually.
   try {
     await clerkClient.users.deleteUser(clerkId);
   } catch (err) {

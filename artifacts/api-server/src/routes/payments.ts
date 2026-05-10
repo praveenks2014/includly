@@ -313,8 +313,8 @@ router.post(
       return;
     }
 
-    // Plan A/B/F require professionalId (all are teacher-scoped unlocks)
-    if ((plan === "plan_a_subscription" || plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && !professionalId) {
+    // Plan B/F require professionalId (teacher-scoped unlocks and session bookings)
+    if ((plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && !professionalId) {
       res.status(400).json({ error: "professionalId is required for contact unlocks and session bookings." });
       return;
     }
@@ -540,8 +540,8 @@ router.post(
     return;
   }
 
-  // Plan A/B/F require professionalId (all are teacher-scoped unlocks)
-  if ((plan === "plan_a_subscription" || plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && !professionalId) {
+  // Plan B/F require professionalId (teacher-scoped unlocks and session bookings)
+  if ((plan === "plan_b_per_contact" || plan === "plan_f_per_booking") && !professionalId) {
     res.status(400).json({ error: "professionalId is required for contact unlocks and session bookings." });
     return;
   }
@@ -850,7 +850,24 @@ export async function activatePayment(
   provider: "stripe" | "razorpay" = "razorpay",
   providerSubscriptionId: string | null = null,
 ): Promise<{ isSubscriptionActive: boolean; unlockedProfessionalId: number | null; paymentActivated?: boolean }> {
-  // Plan A: teacher-scoped 30-day contact unlock (₹499 per teacher per 30 days)
+  // Plan A without professionalId: general 30-day subscription (bought from pricing page)
+  if (plan === "plan_a_subscription" && !professionalId) {
+    const now = new Date();
+    const expiresAt = new Date(now);
+    expiresAt.setDate(expiresAt.getDate() + 30);
+    await db.insert(subscriptionsTable).values({
+      userId,
+      provider,
+      plan: "plan_a",
+      status: "active",
+      startsAt: now,
+      expiresAt,
+      providerSubscriptionId: providerSubscriptionId ?? undefined,
+    });
+    return { isSubscriptionActive: true, unlockedProfessionalId: null };
+  }
+
+  // Plan A with professionalId: teacher-scoped 30-day contact unlock
   if (plan === "plan_a_subscription" && professionalId) {
     const now = new Date();
 

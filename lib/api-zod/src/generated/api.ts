@@ -42,6 +42,7 @@ export const GetMeResponse = zod.object({
       "Parent's home longitude — stored only with consent for home-visit matching",
     ),
   shareHomeLocation: zod.boolean().optional(),
+  deletionScheduledAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -90,6 +91,7 @@ export const UpdateMeResponse = zod.object({
       "Parent's home longitude — stored only with consent for home-visit matching",
     ),
   shareHomeLocation: zod.boolean().optional(),
+  deletionScheduledAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -992,7 +994,8 @@ export const CreateRazorpayOrderResponse = zod.object({
  */
 export const VerifyRazorpayPaymentBody = zod.object({
   razorpayPaymentId: zod.string(),
-  razorpayOrderId: zod.string(),
+  razorpayOrderId: zod.string().optional(),
+  razorpaySubscriptionId: zod.string().optional(),
   razorpaySignature: zod.string(),
   paymentId: zod.number(),
 });

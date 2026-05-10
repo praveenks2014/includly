@@ -166,9 +166,12 @@ export default function AccountPage() {
   }
 
   const [location, setLocation_] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSchedulingDelete, setIsSchedulingDelete] = useState(false);
+  const [isCancellingDelete, setIsCancellingDelete] = useState(false);
 
   const {
     isSupported: pushSupported,
@@ -182,6 +185,8 @@ export default function AccountPage() {
   useEffect(() => {
     if (me) {
       setLocation_(me.location ?? "");
+      setFullName(me.fullName ?? "");
+      setPhone(me.phone ?? "");
     }
   }, [me]);
 
@@ -208,7 +213,7 @@ export default function AccountPage() {
   });
 
   function handleSave() {
-    updateMutation.mutate({ data: { location } });
+    updateMutation.mutate({ data: { location, fullName: fullName || undefined, phone: phone || undefined } });
   }
 
   async function handleAutoDetect() {
@@ -244,29 +249,49 @@ export default function AccountPage() {
     }
   }
 
-  async function handleDeleteAccount() {
+  async function handleScheduleDelete() {
     if (deleteConfirm !== "DELETE MY ACCOUNT") {
       toast({ title: "Please type DELETE MY ACCOUNT exactly to confirm", variant: "destructive" });
       return;
     }
-    setIsDeleting(true);
+    setIsSchedulingDelete(true);
     try {
-      const res = await fetchWithAuth("/api/account/delete", {
+      const res = await fetchWithAuth("/api/account/schedule-delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmPhrase: "DELETE MY ACCOUNT" }),
       });
       if (!res.ok) {
         const body = await res.json() as { error?: string };
-        throw new Error(body.error ?? "Failed to delete account");
+        throw new Error(body.error ?? "Failed to schedule deletion");
       }
-      await signOut();
-      setLocation("/");
-      toast({ title: "Account deleted", description: "Your data has been permanently removed." });
+      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      setDeleteConfirm("");
+      toast({ title: "Deletion scheduled", description: "Your account will be permanently deleted in 60 days. You can undo this any time before then." });
     } catch (err) {
-      toast({ title: "Error", description: err instanceof Error ? err.message : "Could not delete account.", variant: "destructive" });
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Could not schedule deletion.", variant: "destructive" });
     } finally {
-      setIsDeleting(false);
+      setIsSchedulingDelete(false);
+    }
+  }
+
+  async function handleCancelDeletion() {
+    setIsCancellingDelete(true);
+    try {
+      const res = await fetchWithAuth("/api/account/cancel-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) {
+        const body = await res.json() as { error?: string };
+        throw new Error(body.error ?? "Failed to cancel deletion");
+      }
+      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      toast({ title: "Deletion cancelled", description: "Your account has been restored and will no longer be deleted." });
+    } catch (err) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Could not cancel deletion.", variant: "destructive" });
+    } finally {
+      setIsCancellingDelete(false);
     }
   }
 
@@ -315,8 +340,10 @@ export default function AccountPage() {
             </div>
             <div>
               <p className="font-semibold text-foreground">{me?.fullName ?? user?.fullName ?? "Your account"}</p>
-              <div className="flex items-center gap-2">
-                <p className="text-sm text-muted-foreground">{me?.phone ?? user?.primaryPhoneNumber?.phoneNumber}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                {(me?.email ?? user?.primaryEmailAddress?.emailAddress) && (
+                  <p className="text-sm text-muted-foreground">{me?.email ?? user?.primaryEmailAddress?.emailAddress}</p>
+                )}
                 {me?.role && (
                   <Badge variant="secondary" className="text-xs capitalize">{me.role}</Badge>
                 )}
@@ -328,6 +355,28 @@ export default function AccountPage() {
 
           {me?.role === "parent" && (
             <div className="space-y-4">
+              <div>
+                <Label htmlFor="fullName">Your name</Label>
+                <Input
+                  id="fullName"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Your full name"
+                  className="mt-1"
+                  data-testid="account-fullName"
+                />
+              </div>
+              <div>
+                <Label htmlFor="phone">Phone number</Label>
+                <Input
+                  id="phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  className="mt-1"
+                  data-testid="account-phone"
+                />
+              </div>
               <div>
                 <Label htmlFor="location">Your location</Label>
                 <p className="text-xs text-muted-foreground mb-1">
@@ -596,53 +645,81 @@ export default function AccountPage() {
             <ShieldAlert size={18} className="text-destructive" />
             <h2 className="font-semibold text-destructive">Delete My Account & Data</h2>
           </div>
-          <p className="text-sm text-muted-foreground mb-2">
-            Under GDPR and India's DPDP Act 2023, you have the right to erasure of your personal data.
-            This will permanently delete your account, all uploaded documents, and anonymize associated records.
-            <strong className="block mt-1 text-foreground">This action cannot be undone.</strong>
-          </p>
 
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm" className="gap-2 mt-2" data-testid="delete-account-btn">
-                <Trash2 size={14} />
-                Delete My Account
+          {me?.deletionScheduledAt ? (
+            <div className="space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-start gap-3">
+                <AlertCircle size={16} className="text-amber-600 mt-0.5 shrink-0" />
+                <div className="text-sm text-amber-800">
+                  <p className="font-medium">Deletion scheduled</p>
+                  <p className="mt-0.5">
+                    Your account and data will be permanently deleted on{" "}
+                    <strong>{new Date(me.deletionScheduledAt).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</strong>.
+                    You can undo this before that date.
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 border-green-300 text-green-700 hover:bg-green-50"
+                onClick={handleCancelDeletion}
+                disabled={isCancellingDelete}
+                data-testid="cancel-delete-btn"
+              >
+                {isCancellingDelete ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
+                Undo — keep my account
               </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Permanently delete your account?</AlertDialogTitle>
-                <AlertDialogDescription className="space-y-3">
-                  <span className="block">
-                    All your personal data, documents, and associated records will be permanently deleted.
-                    This cannot be undone.
-                  </span>
-                  <span className="block">
-                    Type <strong>DELETE MY ACCOUNT</strong> to confirm:
-                  </span>
-                  <Input
-                    value={deleteConfirm}
-                    onChange={(e) => setDeleteConfirm(e.target.value)}
-                    placeholder="DELETE MY ACCOUNT"
-                    className="mt-1"
-                    data-testid="delete-confirm-input"
-                  />
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setDeleteConfirm("")}>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDeleteAccount}
-                  disabled={isDeleting || deleteConfirm !== "DELETE MY ACCOUNT"}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
-                  data-testid="confirm-delete-btn"
-                >
-                  {isDeleting && <Loader2 size={14} className="animate-spin" />}
-                  Yes, delete everything
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground mb-2">
+                Under GDPR and India's DPDP Act 2023, you have the right to erasure of your personal data.
+                Requesting deletion schedules your account for permanent removal in <strong>60 days</strong>. You can undo this any time during the grace period.
+              </p>
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm" className="gap-2 mt-2" data-testid="delete-account-btn">
+                    <Trash2 size={14} />
+                    Request account deletion
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Schedule account deletion?</AlertDialogTitle>
+                    <AlertDialogDescription className="space-y-3">
+                      <span className="block">
+                        Your account and all personal data will be <strong>permanently deleted after 60 days</strong>. You will be removed from search results immediately. You can undo this any time before the 60-day deadline.
+                      </span>
+                      <span className="block">
+                        Type <strong>DELETE MY ACCOUNT</strong> to confirm:
+                      </span>
+                      <Input
+                        value={deleteConfirm}
+                        onChange={(e) => setDeleteConfirm(e.target.value)}
+                        placeholder="DELETE MY ACCOUNT"
+                        className="mt-1"
+                        data-testid="delete-confirm-input"
+                      />
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setDeleteConfirm("")}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleScheduleDelete}
+                      disabled={isSchedulingDelete || deleteConfirm !== "DELETE MY ACCOUNT"}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
+                      data-testid="confirm-delete-btn"
+                    >
+                      {isSchedulingDelete && <Loader2 size={14} className="animate-spin" />}
+                      Schedule deletion
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
+          )}
         </div>
       </div>
     </div>

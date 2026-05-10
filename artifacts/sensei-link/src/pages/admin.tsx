@@ -432,6 +432,22 @@ function ProfessionalsTab() {
   const [rejectReason, setRejectReason] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
+
+  async function handleDeleteUser(userId: number, name: string) {
+    if (!window.confirm(`Permanently delete ${name}'s account and all data? This cannot be undone.`)) return;
+    setDeletingUserId(userId);
+    try {
+      const res = await fetchWithAuth(`/api/admin/users/${userId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed");
+      invalidateQueries();
+      toast({ title: "User deleted", description: `${name}'s account has been permanently removed.` });
+    } catch {
+      toast({ title: "Error", description: "Could not delete user.", variant: "destructive" });
+    } finally {
+      setDeletingUserId(null);
+    }
+  }
 
   const { data, isLoading } = useAdminListProfessionals(
     { status: statusFilter as "pending" | "verified" | "rejected" | "unsubmitted" | undefined, page, limit: 20 },
@@ -565,16 +581,29 @@ function ProfessionalsTab() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1"
-                            onClick={() => openReview(prof)}
-                            data-testid={`review-btn-${prof.id}`}
-                          >
-                            <Eye size={13} />
-                            Review
-                          </Button>
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1"
+                              onClick={() => openReview(prof)}
+                              data-testid={`review-btn-${prof.id}`}
+                            >
+                              <Eye size={13} />
+                              Review
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => handleDeleteUser(prof.userId, prof.fullName ?? prof.userName ?? "this user")}
+                              disabled={deletingUserId === prof.userId}
+                              data-testid={`delete-user-btn-${prof.id}`}
+                            >
+                              {deletingUserId === prof.userId ? <Loader2 size={13} className="animate-spin" /> : <UserX size={13} />}
+                              Delete
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -774,27 +803,93 @@ function StatsTab() {
     );
   }
 
-  const cards = [
+  const platformCards = [
     { label: "Total Users", value: stats?.totalUsers ?? 0, icon: <Users size={20} className="text-primary" /> },
-    { label: "Total Professionals", value: stats?.totalProfessionals ?? 0, icon: <UserCheck size={20} className="text-blue-600" /> },
-    { label: "Total Parents", value: stats?.totalParents ?? 0, icon: <Users size={20} className="text-green-600" /> },
-    { label: "Unlocks This Month", value: stats?.totalUnlocksThisMonth ?? 0, icon: <Phone size={20} className="text-accent" /> },
-    { label: "Pending Review", value: stats?.pendingProfessionals ?? 0, icon: <Clock size={20} className="text-yellow-600" /> },
-    { label: "Verified Professionals", value: stats?.verifiedProfessionals ?? 0, icon: <TrendingUp size={20} className="text-green-600" /> },
-    { label: "Rejected Applications", value: stats?.rejectedProfessionals ?? 0, icon: <XCircle size={20} className="text-red-500" /> },
+    { label: "Professionals", value: stats?.totalProfessionals ?? 0, icon: <UserCheck size={20} className="text-blue-600" /> },
+    { label: "Parents", value: stats?.totalParents ?? 0, icon: <Users size={20} className="text-green-600" /> },
+    { label: "New This Month", value: stats?.newUsersThisMonth ?? 0, icon: <TrendingUp size={20} className="text-emerald-600" /> },
   ];
 
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {cards.map((card) => (
-        <div key={card.label} className="bg-card border border-border rounded-xl p-5 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            {card.icon}
-            <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{card.label}</span>
-          </div>
-          <div className="text-3xl font-bold text-foreground">{card.value.toLocaleString()}</div>
+  const activityCards = [
+    { label: "Unlocks This Month", value: stats?.totalUnlocksThisMonth ?? 0, icon: <Phone size={20} className="text-accent" /> },
+    { label: "Bookings This Month", value: stats?.totalBookingsThisMonth ?? 0, icon: <TrendingUp size={20} className="text-violet-600" /> },
+    { label: "Total Payments Done", value: stats?.totalPaymentsCompleted ?? 0, icon: <BarChart3 size={20} className="text-indigo-600" /> },
+    {
+      label: "Total Revenue",
+      value: `₹${((stats?.totalRevenueInPaise ?? 0) / 100).toLocaleString("en-IN")}`,
+      icon: <TrendingUp size={20} className="text-green-600" />,
+      isString: true,
+    },
+  ];
+
+  const approvalCards = [
+    { label: "Pending Review", value: stats?.pendingProfessionals ?? 0, icon: <Clock size={20} className="text-yellow-600" /> },
+    { label: "Verified", value: stats?.verifiedProfessionals ?? 0, icon: <UserCheck size={20} className="text-green-600" /> },
+    { label: "Rejected", value: stats?.rejectedProfessionals ?? 0, icon: <XCircle size={20} className="text-red-500" /> },
+  ];
+
+  const specialtyRows = Object.entries(stats?.professionalsBySpecialty ?? {}).sort(([, a], [, b]) => b - a);
+
+  function StatCard({ label, value, icon, isString }: { label: string; value: number | string; icon: React.ReactNode; isString?: boolean }) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+        <div className="flex items-center gap-2 mb-2">
+          {icon}
+          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</span>
         </div>
-      ))}
+        <div className="text-3xl font-bold text-foreground">
+          {isString ? value : (value as number).toLocaleString()}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Platform Overview</h3>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {platformCards.map((card) => <StatCard key={card.label} {...card} />)}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Revenue & Activity</h3>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {activityCards.map((card) => <StatCard key={card.label} {...card} />)}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Verification Pipeline</h3>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          {approvalCards.map((card) => <StatCard key={card.label} {...card} />)}
+        </div>
+      </div>
+
+      {specialtyRows.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Professionals by Specialty</h3>
+          <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 border-b border-border">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Specialty</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Count</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {specialtyRows.map(([specialty, cnt]) => (
+                  <tr key={specialty}>
+                    <td className="px-4 py-2.5">{getSpecialtyLabel(specialty as Parameters<typeof getSpecialtyLabel>[0])}</td>
+                    <td className="px-4 py-2.5 text-right font-semibold">{cnt}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

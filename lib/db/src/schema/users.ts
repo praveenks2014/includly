@@ -19,6 +19,7 @@ export const usersTable = pgTable("users", {
   longitude: real("longitude"),
   shareHomeLocation: boolean("share_home_location").notNull().default(false),
   sessionCredits: integer("session_credits").notNull().default(0),
+  deletionScheduledAt: timestamp("deletion_scheduled_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

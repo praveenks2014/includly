@@ -174,10 +174,15 @@ export default function PaymentSuccessPage() {
     });
   }, [unlockedProfId, verifying, snapshot, result?.professional]);
 
+  const isGeneralSubscription = isSubscription && !unlockedProfId;
+
   let title = "Payment successful!";
   let message = "Thank you for your purchase.";
 
-  if (isSubscription || isContact) {
+  if (isGeneralSubscription) {
+    title = "Subscription activated!";
+    message = "Your 30-day shadow teacher access is now active. Browse and unlock up to 5 shadow teacher profiles.";
+  } else if (isSubscription || isContact) {
     const firstName = resolvedSnapshot?.fullName?.split(" ")[0];
     title = "Contact unlocked!";
     message = isSubscription
@@ -212,6 +217,26 @@ export default function PaymentSuccessPage() {
         <h1 className="text-2xl font-serif font-bold text-foreground mb-3">{title}</h1>
         <p className="text-muted-foreground mb-2">{message}</p>
 
+        {isGeneralSubscription && (
+          <div className="mt-6 rounded-2xl border border-primary/30 bg-primary/5 p-5 text-left space-y-3">
+            <p className="text-sm font-medium text-foreground">What's included in your subscription:</p>
+            <ul className="text-sm text-muted-foreground space-y-1.5">
+              <li className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-green-600 shrink-0" />
+                Unlock and view contact details for up to 5 shadow teachers
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-green-600 shrink-0" />
+                30 days of access starting from today
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-green-600 shrink-0" />
+                Direct phone &amp; email access to each teacher
+              </li>
+            </ul>
+          </div>
+        )}
+
         {showTeacherCard && unlockedProfId && resolvedSnapshot ? (
           <TeacherCard
             professional={resolvedSnapshot}
@@ -229,6 +254,14 @@ export default function PaymentSuccessPage() {
               </Button>
             </Link>
           ) : null}
+          {isGeneralSubscription ? (
+            <Link href="/search?specialty=shadow_teacher">
+              <Button className="gap-2 w-full sm:w-auto" data-testid="go-search-btn">
+                <Search size={16} />
+                Browse shadow teachers
+              </Button>
+            </Link>
+          ) : null}
           {!isSubscription && !isContact && !isFeatured ? (
             <Link href="/search">
               <Button className="gap-2 w-full sm:w-auto" data-testid="go-search-btn">
@@ -237,7 +270,7 @@ export default function PaymentSuccessPage() {
               </Button>
             </Link>
           ) : null}
-          {(isSubscription || isContact) && !showTeacherCard ? (
+          {(isSubscription || isContact) && !showTeacherCard && !isGeneralSubscription ? (
             <Link href="/search">
               <Button className="gap-2 w-full sm:w-auto" data-testid="go-search-btn">
                 <Search size={16} />

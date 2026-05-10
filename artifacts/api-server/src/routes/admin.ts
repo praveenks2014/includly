@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, count, gte, and } from "drizzle-orm";
+import { eq, count, gte, and, sum } from "drizzle-orm";
+import { createClerkClient } from "@clerk/express";
 import {
   db,
   usersTable,
@@ -8,6 +9,7 @@ import {
   adminSettingsTable,
   identityVerificationsTable,
   professionalCertificationsTable,
+  paymentsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import {
@@ -15,6 +17,7 @@ import {
   UpdateAdminSettingsBody,
 } from "@workspace/api-zod";
 
+const clerkClient = createClerkClient({ secretKey: process.env["CLERK_SECRET_KEY"] });
 const router: IRouter = Router();
 
 const adminGuard = [requireAuth, requireRole("admin")] as const;
@@ -111,44 +114,98 @@ router.patch("/admin/professionals/:id/reject", ...adminGuard, async (req, res):
 });
 
 router.get("/admin/stats", ...adminGuard, async (_req, res): Promise<void> => {
-  const [totalUsersResult] = await db.select({ count: count() }).from(usersTable);
-  const [totalProfessionalsResult] = await db.select({ count: count() }).from(professionalProfilesTable);
-  const [totalParentsResult] = await db
-    .select({ count: count() })
-    .from(usersTable)
-    .where(eq(usersTable.role, "parent"));
-
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const [totalUnlocksThisMonthResult] = await db
-    .select({ count: count() })
-    .from(contactUnlocksTable)
-    .where(gte(contactUnlocksTable.unlockedAt, startOfMonth));
 
-  const [pendingResult] = await db
-    .select({ count: count() })
-    .from(professionalProfilesTable)
-    .where(eq(professionalProfilesTable.verificationStatus, "pending"));
+  const [
+    totalUsersResult,
+    totalProfessionalsResult,
+    totalParentsResult,
+    totalUnlocksThisMonthResult,
+    pendingResult,
+    verifiedResult,
+    rejectedResult,
+    completedPaymentsResult,
+    revenueResult,
+    bookingsThisMonthResult,
+    newUsersThisMonthResult,
+  ] = await Promise.all([
+    db.select({ count: count() }).from(usersTable),
+    db.select({ count: count() }).from(professionalProfilesTable),
+    db.select({ count: count() }).from(usersTable).where(eq(usersTable.role, "parent")),
+    db.select({ count: count() }).from(contactUnlocksTable).where(gte(contactUnlocksTable.unlockedAt, startOfMonth)),
+    db.select({ count: count() }).from(professionalProfilesTable).where(eq(professionalProfilesTable.verificationStatus, "pending")),
+    db.select({ count: count() }).from(professionalProfilesTable).where(eq(professionalProfilesTable.verificationStatus, "verified")),
+    db.select({ count: count() }).from(professionalProfilesTable).where(eq(professionalProfilesTable.verificationStatus, "rejected")),
+    db.select({ count: count() }).from(paymentsTable).where(eq(paymentsTable.status, "completed")),
+    db.select({ total: sum(paymentsTable.amountPaise) }).from(paymentsTable).where(eq(paymentsTable.status, "completed")),
+    db.select({ count: count() }).from(paymentsTable).where(
+      and(eq(paymentsTable.plan, "plan_f_per_booking"), eq(paymentsTable.status, "completed"), gte(paymentsTable.createdAt, startOfMonth))
+    ),
+    db.select({ count: count() }).from(usersTable).where(gte(usersTable.createdAt, startOfMonth)),
+  ]);
 
-  const [verifiedResult] = await db
-    .select({ count: count() })
+  const specialtyRows = await db
+    .select({ specialty: professionalProfilesTable.specialty, cnt: count() })
     .from(professionalProfilesTable)
-    .where(eq(professionalProfilesTable.verificationStatus, "verified"));
+    .groupBy(professionalProfilesTable.specialty);
 
-  const [rejectedResult] = await db
-    .select({ count: count() })
-    .from(professionalProfilesTable)
-    .where(eq(professionalProfilesTable.verificationStatus, "rejected"));
+  const professionalsBySpecialty: Record<string, number> = {};
+  for (const row of specialtyRows) {
+    professionalsBySpecialty[row.specialty] = Number(row.cnt);
+  }
 
   res.json({
-    totalUsers: Number(totalUsersResult?.count ?? 0),
-    totalProfessionals: Number(totalProfessionalsResult?.count ?? 0),
-    totalParents: Number(totalParentsResult?.count ?? 0),
-    totalUnlocksThisMonth: Number(totalUnlocksThisMonthResult?.count ?? 0),
-    pendingProfessionals: Number(pendingResult?.count ?? 0),
-    verifiedProfessionals: Number(verifiedResult?.count ?? 0),
-    rejectedProfessionals: Number(rejectedResult?.count ?? 0),
+    totalUsers: Number(totalUsersResult[0]?.count ?? 0),
+    totalProfessionals: Number(totalProfessionalsResult[0]?.count ?? 0),
+    totalParents: Number(totalParentsResult[0]?.count ?? 0),
+    totalUnlocksThisMonth: Number(totalUnlocksThisMonthResult[0]?.count ?? 0),
+    pendingProfessionals: Number(pendingResult[0]?.count ?? 0),
+    verifiedProfessionals: Number(verifiedResult[0]?.count ?? 0),
+    rejectedProfessionals: Number(rejectedResult[0]?.count ?? 0),
+    totalPaymentsCompleted: Number(completedPaymentsResult[0]?.count ?? 0),
+    totalRevenueInPaise: Number(revenueResult[0]?.total ?? 0),
+    totalBookingsThisMonth: Number(bookingsThisMonthResult[0]?.count ?? 0),
+    newUsersThisMonth: Number(newUsersThisMonthResult[0]?.count ?? 0),
+    professionalsBySpecialty,
   });
+});
+
+router.delete("/admin/users/:userId", ...adminGuard, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
+  const userId = parseInt(rawId, 10);
+  if (isNaN(userId)) {
+    res.status(400).json({ error: "Invalid userId" });
+    return;
+  }
+
+  const [user] = await db
+    .select({ id: usersTable.id, clerkId: usersTable.clerkId, role: usersTable.role })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  if (user.role === "admin") {
+    res.status(403).json({ error: "Cannot delete admin accounts" });
+    return;
+  }
+
+  await db.delete(usersTable).where(eq(usersTable.id, userId));
+
+  if (user.clerkId && !user.clerkId.startsWith("deleted-")) {
+    try {
+      await clerkClient.users.deleteUser(user.clerkId);
+    } catch (err) {
+      console.error("admin/users delete: failed to delete from Clerk", { err, clerkId: user.clerkId });
+    }
+  }
+
+  res.json({ success: true });
 });
 
 router.get("/admin/settings", ...adminGuard, async (_req, res): Promise<void> => {
