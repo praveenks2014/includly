@@ -56,7 +56,9 @@ export default function DashboardPage() {
   useEffect(() => {
     if (meLoading) return;
     const intent = localStorage.getItem("includly_signup_as");
+    localStorage.removeItem("includly_signup_as");
     if (intent === "professional" && role !== "professional" && role !== "admin") {
+      sessionStorage.setItem("chose_professional", "true");
       setLocation("/onboard");
     }
   }, [meLoading, role, setLocation]);

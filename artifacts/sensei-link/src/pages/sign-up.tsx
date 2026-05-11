@@ -9,7 +9,7 @@ export default function SignUpPage() {
         routing="path"
         path={`${basePath}/sign-up`}
         signInUrl={`${basePath}/sign-in`}
-        fallbackRedirectUrl={`${basePath}/onboard`}
+        fallbackRedirectUrl={`${basePath}/choose-role`}
       />
     </div>
   );

@@ -99,6 +99,15 @@ export default function OnboardPage() {
       setRoleReady(true);
       return;
     }
+    // User has role "parent" — only proceed if they explicitly chose
+    // "I'm a professional" on the choose-role page. Otherwise send them back
+    // to choose-role so they can make the choice themselves.
+    const choseProf = sessionStorage.getItem("chose_professional");
+    sessionStorage.removeItem("chose_professional");
+    if (!choseProf) {
+      setLocation("/choose-role");
+      return;
+    }
     roleSetTriggered.current = true;
     setMyRoleAsync({ data: { role: "professional" } })
       .then(() => {

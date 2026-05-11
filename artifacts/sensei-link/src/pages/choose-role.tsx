@@ -133,6 +133,7 @@ export default function ChooseRolePage() {
   }
 
   function handleChooseProfessional() {
+    sessionStorage.setItem("chose_professional", "true");
     setLocation("/onboard");
   }
 
