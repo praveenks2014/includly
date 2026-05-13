@@ -104,6 +104,23 @@ export const requireAuth = async (
     return;
   }
 
+  // If ADMIN_CLERK_ID is set and this user is the designated admin, ensure the
+  // DB row always reflects role=admin — this self-heals without any startup race.
+  const adminClerkId = process.env["ADMIN_CLERK_ID"];
+  if (adminClerkId && clerkId === adminClerkId && user.role !== "admin") {
+    const [fixed] = await db
+      .update(usersTable)
+      .set({ role: "admin" })
+      .where(eq(usersTable.id, user.id))
+      .returning();
+    if (fixed) {
+      req.userId = fixed.id;
+      req.userRole = "admin";
+      next();
+      return;
+    }
+  }
+
   req.userId = user.id;
   req.userRole = user.role as UserRole;
   next();
