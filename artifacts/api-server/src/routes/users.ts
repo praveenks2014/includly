@@ -39,6 +39,12 @@ router.patch("/users/me", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.patch("/users/me/role", requireAuth, async (req, res): Promise<void> => {
+  // Never allow the admin role to be changed — protect against accidental downgrade.
+  if (req.userRole === "admin") {
+    res.status(403).json({ error: "Admin role cannot be changed via this endpoint." });
+    return;
+  }
+
   const parsed = SetMyRoleBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
