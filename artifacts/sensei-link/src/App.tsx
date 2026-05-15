@@ -27,6 +27,8 @@ import SignUpPage from "@/pages/sign-up";
 import SignInPage from "@/pages/sign-in";
 import SsoCallbackPage from "@/pages/sso-callback";
 import ChooseRolePage from "@/pages/choose-role";
+import ResourcesPage from "@/pages/resources";
+import ForumPage from "@/pages/forum";
 
 // Production: use the live key (only works on includly.in and subdomains).
 // Development (Replit workspace preview): use a test-instance key so Clerk
@@ -157,6 +159,8 @@ function Router() {
         <Route path="/sessions">
           <RequireAuth><SessionsPage /></RequireAuth>
         </Route>
+        <Route path="/resources" component={ResourcesPage} />
+        <Route path="/forum" component={ForumPage} />
         <Route path="/privacy" component={PrivacyPage} />
         <Route path="/terms" component={TermsPage} />
         <Route path="/support" component={SupportPage} />

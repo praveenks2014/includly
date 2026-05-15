@@ -21,7 +21,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 const GUEST_NAV = [
   { label: "How It Works", href: "/#how-it-works" },
   { label: "Find Professionals", href: "/search" },
-  { label: "Find Centres", href: "/search?specialty=therapy_centre" },
+  { label: "Resources", href: "/resources" },
   { label: "Pricing", href: "/pricing" },
 ];
 

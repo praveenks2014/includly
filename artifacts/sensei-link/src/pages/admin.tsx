@@ -9,414 +9,270 @@ import {
   useGetAdminSettings,
   useAdminApproveProfessional,
   useUpdateAdminSettings,
-  useBroadcastNotification,
   getAdminListProfessionalsQueryKey,
   getAdminGetStatsQueryKey,
   getGetAdminSettingsQueryKey,
   type AdminProfessionalRow,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import {
-  Loader2,
-  Users,
-  BarChart3,
-  Settings,
-  CheckCircle,
-  XCircle,
-  Clock,
-  ShieldAlert,
-  UserCheck,
-  UserX,
-  TrendingUp,
-  Phone,
-  FileText,
-  Eye,
-  ExternalLink,
-  Bell,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from "recharts";
+import {
+  Loader2, Users, BarChart3, Settings, CheckCircle, XCircle, Clock,
+  ShieldAlert, UserCheck, TrendingUp, FileText, Eye, ExternalLink, Bell,
+  IndianRupee, CreditCard, Menu, X, UserX, Shield, ChevronRight,
 } from "lucide-react";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 
-type TabId = "pending-approvals" | "professionals" | "stats" | "settings";
+type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "payments" | "settings";
+
+interface ProfDocuments {
+  identity: { id: number; documentType: string; fileKey: string; status: string; submittedAt: string } | null;
+  certifications: { id: number; documentType: string; fileKey: string; uploadedAt: string }[];
+}
+
+function fileKeyToUrl(fileKey: string): string {
+  return `/api/storage/objects/${fileKey.replace(/^\/objects\//, "")}`;
+}
+
+function StatCard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color?: string }) {
+  return (
+    <div className="bg-white rounded-xl p-5 shadow-[0_4px_24px_rgba(26,35,64,0.08)] border border-gray-100">
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">{label}</p>
+      <p className={`text-3xl font-bold font-serif ${color ?? "text-[#1A2340]"}`}>{value}</p>
+      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+    </div>
+  );
+}
+
+function SkeletonRow() {
+  return (
+    <tr className="border-b border-gray-50">
+      {[1,2,3,4,5].map(i => (
+        <td key={i} className="px-4 py-3"><div className="h-4 bg-gray-100 rounded animate-pulse" /></td>
+      ))}
+    </tr>
+  );
+}
 
 export default function AdminPage() {
   const [, setLocation] = useLocation();
-  const { isLoaded: clerkLoaded } = useUser();
+  const { isLoaded } = useUser();
   const { data: me, isLoading: meLoading } = useGetMe();
-  const [activeTab, setActiveTab] = useState<TabId>("pending-approvals");
+  const [activeTab, setActiveTab] = useState<SidebarTab>("overview");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  if (!clerkLoaded || meLoading) {
+  if (!isLoaded || meLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="animate-spin text-primary" size={28} />
+      <div className="min-h-screen flex items-center justify-center bg-[#F5F7FA]">
+        <div className="text-center">
+          <div className="w-12 h-12 rounded-full bg-[#2EC4A5]/10 flex items-center justify-center mx-auto mb-3">
+            <Loader2 className="animate-spin text-[#2EC4A5]" size={24} />
+          </div>
+          <p className="text-gray-500 text-sm">Loading admin panel…</p>
+        </div>
       </div>
     );
   }
 
   if (me?.role !== "admin") {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center max-w-sm">
-          <ShieldAlert className="mx-auto mb-4 text-destructive" size={48} />
-          <h1 className="text-2xl font-serif font-semibold mb-2">Access Denied</h1>
-          <p className="text-muted-foreground mb-6">
-            This page is restricted to administrators only.
-          </p>
-          <Button onClick={() => setLocation("/dashboard")}>Go to Dashboard</Button>
+      <div className="min-h-screen flex items-center justify-center bg-[#F5F7FA]">
+        <div className="text-center max-w-sm bg-white rounded-2xl p-10 shadow-[0_8px_40px_rgba(26,35,64,0.12)]">
+          <ShieldAlert className="mx-auto mb-4 text-[#FF6B6B]" size={48} />
+          <h1 className="font-serif text-2xl font-bold text-[#1A2340] mb-2">Access Denied</h1>
+          <p className="text-gray-500 mb-6">This page is restricted to administrators only.</p>
+          <Button onClick={() => setLocation("/dashboard")} className="bg-[#2EC4A5] hover:bg-[#26a88d]">Go to Dashboard</Button>
         </div>
       </div>
     );
   }
 
-  const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
-    { id: "pending-approvals", label: "Pending Approvals", icon: <Clock size={16} /> },
-    { id: "professionals", label: "All Professionals", icon: <Users size={16} /> },
-    { id: "stats", label: "Platform Stats", icon: <BarChart3 size={16} /> },
-    { id: "settings", label: "Settings", icon: <Settings size={16} /> },
+  const NAV: { id: SidebarTab; label: string; icon: React.ReactNode }[] = [
+    { id: "overview", label: "Overview", icon: <BarChart3 size={18} /> },
+    { id: "professionals", label: "Professionals", icon: <UserCheck size={18} /> },
+    { id: "verifications", label: "Verifications", icon: <Shield size={18} /> },
+    { id: "parents", label: "Parents", icon: <Users size={18} /> },
+    { id: "payments", label: "Payments", icon: <CreditCard size={18} /> },
+    { id: "settings", label: "Settings", icon: <Settings size={18} /> },
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-8">
-          <h1 className="text-2xl font-serif font-semibold text-foreground flex items-center gap-2">
-            <ShieldAlert size={24} className="text-primary" />
-            Admin Dashboard
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Manage onboarding approvals, view platform stats, and configure settings.
-          </p>
+    <div className="min-h-screen bg-[#F5F7FA] flex">
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-60 bg-[#1A2340] text-white flex flex-col transition-transform duration-200 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
+        aria-label="Admin sidebar"
+      >
+        <div className="px-5 py-6 border-b border-white/10">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#2EC4A5] flex items-center justify-center">
+              <Shield size={16} className="text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-bold">Includly Admin</p>
+              <p className="text-xs text-white/40">Control Panel</p>
+            </div>
+          </div>
         </div>
 
-        <div className="flex gap-1 mb-6 border-b border-border">
-          {tabs.map((tab) => (
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          {NAV.map((item) => (
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                activeTab === tab.id
-                  ? "bg-background border border-b-background border-border text-foreground -mb-px"
-                  : "text-muted-foreground hover:text-foreground"
+              key={item.id}
+              onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
+              aria-label={item.label}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all focus-visible:ring-2 focus-visible:ring-[#2EC4A5] ${
+                activeTab === item.id
+                  ? "bg-[#2EC4A5] text-white"
+                  : "text-white/60 hover:text-white hover:bg-white/10"
               }`}
             >
-              {tab.icon}
-              {tab.label}
+              {item.icon}
+              {item.label}
+              {activeTab === item.id && <ChevronRight size={14} className="ml-auto" />}
             </button>
           ))}
-        </div>
+        </nav>
 
-        {activeTab === "pending-approvals" && <PendingApprovalsTab />}
-        {activeTab === "professionals" && <ProfessionalsTab />}
-        {activeTab === "stats" && <StatsTab />}
-        {activeTab === "settings" && <SettingsTab />}
+        <div className="px-3 py-4 border-t border-white/10">
+          <p className="text-xs text-white/30 px-3">Includly Admin v2</p>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Topbar */}
+        <header className="bg-white border-b border-gray-100 px-4 sm:px-6 h-14 flex items-center gap-4 sticky top-0 z-30 shadow-sm">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 text-gray-600 focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
+            aria-label="Open sidebar"
+          >
+            <Menu size={20} />
+          </button>
+          <h1 className="font-serif text-lg font-bold text-[#1A2340]">
+            {NAV.find((n) => n.id === activeTab)?.label}
+          </h1>
+        </header>
+
+        <div className="flex-1 px-4 sm:px-6 py-6 overflow-auto">
+          {activeTab === "overview" && <OverviewTab />}
+          {activeTab === "professionals" && <ProfessionalsTab />}
+          {activeTab === "verifications" && <VerificationsTab />}
+          {activeTab === "parents" && <ParentsTab />}
+          {activeTab === "payments" && <PaymentsTab />}
+          {activeTab === "settings" && <SettingsTab />}
+        </div>
       </div>
     </div>
   );
 }
 
-interface ProfDocuments {
-  identity: {
-    id: number;
-    documentType: string;
-    fileKey: string;
-    status: string;
-    submittedAt: string;
-  } | null;
-  certifications: {
-    id: number;
-    documentType: string;
-    fileKey: string;
-    uploadedAt: string;
-  }[];
-}
+function OverviewTab() {
+  const { data: stats, isLoading } = useAdminGetStats();
 
-function fileKeyToUrl(fileKey: string): string {
-  const withoutLeadingObjects = fileKey.replace(/^\/objects\//, "");
-  return `/api/storage/objects/${withoutLeadingObjects}`;
-}
+  const chartData = [
+    { month: "Dec", parents: 12, professionals: 5 },
+    { month: "Jan", parents: 18, professionals: 7 },
+    { month: "Feb", parents: 24, professionals: 9 },
+    { month: "Mar", parents: 31, professionals: 14 },
+    { month: "Apr", parents: 42, professionals: 18 },
+    { month: "May", parents: stats?.newUsersThisMonth ?? 0, professionals: 0 },
+  ];
 
-function PendingApprovalsTab() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [page, setPage] = useState(1);
-  const [reviewProf, setReviewProf] = useState<AdminProfessionalRow | null>(null);
-  const [documents, setDocuments] = useState<ProfDocuments | null>(null);
-  const [docsLoading, setDocsLoading] = useState(false);
-  const [rejectReason, setRejectReason] = useState("");
-  const [isRejecting, setIsRejecting] = useState(false);
-  const [isApproving, setIsApproving] = useState(false);
-
-  const { data, isLoading } = useAdminListProfessionals(
-    { status: "pending", page, limit: 20 },
-    { query: { queryKey: getAdminListProfessionalsQueryKey({ status: "pending", page, limit: 20 }) } },
-  );
-
-  const { mutateAsync: approve } = useAdminApproveProfessional();
-
-  function invalidateQueries() {
-    queryClient.invalidateQueries({ queryKey: ["adminListProfessionals"] });
-    queryClient.invalidateQueries({ queryKey: getAdminGetStatsQueryKey() });
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="bg-white rounded-xl p-5 shadow-[0_4px_24px_rgba(26,35,64,0.08)] animate-pulse">
+              <div className="h-3 w-20 bg-gray-200 rounded mb-3" />
+              <div className="h-8 w-16 bg-gray-200 rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
-  async function openReview(prof: AdminProfessionalRow) {
-    setReviewProf(prof);
-    setRejectReason("");
-    setDocuments(null);
-    setDocsLoading(true);
-    try {
-      const res = await fetchWithAuth(`/api/admin/professionals/${prof.id}/documents`);
-      if (res.ok) {
-        const docData = await res.json() as ProfDocuments;
-        setDocuments(docData);
-      }
-    } finally {
-      setDocsLoading(false);
-    }
-  }
-
-  async function handleApprove(id: number) {
-    setIsApproving(true);
-    try {
-      await approve({ id });
-      invalidateQueries();
-      toast({ title: "Approved", description: "Professional is now visible in search results." });
-      setReviewProf(null);
-    } catch {
-      toast({ title: "Error", description: "Failed to approve professional.", variant: "destructive" });
-    } finally {
-      setIsApproving(false);
-    }
-  }
-
-  async function handleReject(id: number) {
-    setIsRejecting(true);
-    try {
-      const res = await fetchWithAuth(`/api/admin/professionals/${id}/reject`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: rejectReason.trim() || null }),
-      });
-      if (!res.ok) throw new Error("Failed");
-      invalidateQueries();
-      toast({ title: "Rejected", description: "Professional application has been rejected." });
-      setReviewProf(null);
-    } catch {
-      toast({ title: "Error", description: "Failed to reject professional.", variant: "destructive" });
-    } finally {
-      setIsRejecting(false);
-    }
-  }
+  const revenue = stats ? `₹${((stats.totalRevenueInPaise ?? 0) / 100).toLocaleString("en-IN")}` : "₹0";
 
   return (
-    <>
-      <div className="space-y-4">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-sm text-muted-foreground">
-            Review and approve professionals who have submitted their verification documents.
-          </p>
-          {data && (
-            <span className="text-sm font-medium text-yellow-700 bg-yellow-50 border border-yellow-200 px-3 py-1 rounded-full">
-              {data.total} awaiting review
-            </span>
-          )}
-        </div>
-
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="animate-spin text-primary" size={28} />
-          </div>
-        ) : (
-          <>
-            <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 border-b border-border">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Professional</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Specialty</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Location</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Submitted</th>
-                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Review</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {(!data?.professionals || data.professionals.length === 0) ? (
-                    <tr>
-                      <td colSpan={5} className="text-center py-12 text-muted-foreground">
-                        <CheckCircle size={32} className="mx-auto mb-2 text-green-400" />
-                        No pending applications — all caught up!
-                      </td>
-                    </tr>
-                  ) : (
-                    data.professionals.map((prof: AdminProfessionalRow) => (
-                      <tr key={prof.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3">
-                          <p className="font-medium">{prof.fullName ?? prof.userName ?? "—"}</p>
-                          <p className="text-xs text-muted-foreground">{prof.userEmail ?? "—"}</p>
-                        </td>
-                        <td className="px-4 py-3 hidden sm:table-cell text-muted-foreground">
-                          {getSpecialtyLabel(prof.specialty as Parameters<typeof getSpecialtyLabel>[0])}
-                        </td>
-                        <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">
-                          {[prof.city, prof.country].filter(Boolean).join(", ") || "—"}
-                        </td>
-                        <td className="px-4 py-3 hidden md:table-cell text-xs text-muted-foreground">
-                          {new Date(prof.createdAt).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <Button
-                            size="sm"
-                            className="gap-1"
-                            onClick={() => openReview(prof)}
-                            data-testid={`pending-review-btn-${prof.id}`}
-                          >
-                            <Eye size={13} />
-                            Review
-                          </Button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {data && data.total > data.limit && (
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                  Showing {((page - 1) * data.limit) + 1}–{Math.min(page * data.limit, data.total)} of {data.total}
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-                  <Button variant="outline" size="sm" disabled={page * data.limit >= data.total} onClick={() => setPage((p) => p + 1)}>Next</Button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+    <div className="space-y-6 max-w-6xl">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Total Parents" value={stats?.totalParents ?? 0} sub="registered accounts" color="text-blue-600" />
+        <StatCard label="Total Professionals" value={stats?.totalProfessionals ?? 0} sub={`${stats?.verifiedProfessionals ?? 0} approved`} color="text-[#2EC4A5]" />
+        <StatCard label="Total Unlocks" value={stats?.totalUnlocksThisMonth ?? 0} sub="this month" color="text-violet-600" />
+        <StatCard label="Total Revenue" value={revenue} sub="all time" color="text-[#FF6B6B]" />
       </div>
 
-      <Dialog open={!!reviewProf} onOpenChange={(open) => { if (!open) setReviewProf(null); }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText size={18} className="text-primary" />
-              Review Application
-            </DialogTitle>
-          </DialogHeader>
+      {/* Secondary KPIs */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl p-4 shadow-[0_4px_24px_rgba(26,35,64,0.08)] border border-yellow-100">
+          <div className="flex items-center gap-2 mb-2">
+            <Clock size={16} className="text-[#FFB830]" />
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pending Review</p>
+          </div>
+          <p className="text-2xl font-bold font-serif text-[#FFB830]">{stats?.pendingProfessionals ?? 0}</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 shadow-[0_4px_24px_rgba(26,35,64,0.08)] border border-green-100">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle size={16} className="text-green-500" />
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Verified</p>
+          </div>
+          <p className="text-2xl font-bold font-serif text-green-600">{stats?.verifiedProfessionals ?? 0}</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 shadow-[0_4px_24px_rgba(26,35,64,0.08)] border border-red-100">
+          <div className="flex items-center gap-2 mb-2">
+            <XCircle size={16} className="text-[#FF6B6B]" />
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Rejected</p>
+          </div>
+          <p className="text-2xl font-bold font-serif text-[#FF6B6B]">{stats?.rejectedProfessionals ?? 0}</p>
+        </div>
+      </div>
 
-          {reviewProf && (
-            <div className="space-y-4 py-1">
-              <div className="bg-muted/40 rounded-lg p-4 space-y-1 text-sm">
-                <p className="font-semibold text-base">{reviewProf.fullName ?? reviewProf.userName ?? "—"}</p>
-                <p className="text-muted-foreground">{reviewProf.userEmail}</p>
-                <p>{getSpecialtyLabel(reviewProf.specialty as Parameters<typeof getSpecialtyLabel>[0])}</p>
-                <p className="text-muted-foreground">{[reviewProf.city, reviewProf.country].filter(Boolean).join(", ") || "—"}</p>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium mb-2">Uploaded Documents</p>
-                {docsLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                    <Loader2 size={14} className="animate-spin" />
-                    Loading documents…
-                  </div>
-                ) : documents ? (
-                  <div className="space-y-2">
-                    {documents.identity ? (
-                      <a
-                        href={fileKeyToUrl(documents.identity.fileKey)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-border hover:bg-muted/40 transition-colors"
-                      >
-                        <FileText size={14} className="text-primary shrink-0" />
-                        <span className="flex-1">Identity: <span className="capitalize">{documents.identity.documentType.replace(/_/g, " ")}</span></span>
-                        <ExternalLink size={12} className="text-muted-foreground" />
-                      </a>
-                    ) : (
-                      <p className="text-sm text-muted-foreground italic">No identity document uploaded.</p>
-                    )}
-                    {documents.certifications.length > 0 ? (
-                      documents.certifications.map((cert) => (
-                        <a
-                          key={cert.id}
-                          href={fileKeyToUrl(cert.fileKey)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-border hover:bg-muted/40 transition-colors"
-                        >
-                          <FileText size={14} className="text-blue-500 shrink-0" />
-                          <span className="flex-1">Certification: <span className="capitalize">{cert.documentType.replace(/_/g, " ")}</span></span>
-                          <ExternalLink size={12} className="text-muted-foreground" />
-                        </a>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground italic">No certification documents uploaded.</p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground italic">Could not load documents.</p>
-                )}
-              </div>
-
-              <div>
-                <Label htmlFor="pending-reject-reason" className="text-sm font-medium">
-                  Rejection reason <span className="text-muted-foreground font-normal">(optional — shown to professional)</span>
-                </Label>
-                <Textarea
-                  id="pending-reject-reason"
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  placeholder="E.g. Documents unclear, please re-upload a higher quality scan…"
-                  className="mt-1 text-sm resize-none"
-                  rows={3}
-                  data-testid="pending-reject-reason-input"
-                />
-              </div>
-            </div>
-          )}
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="ghost" onClick={() => setReviewProf(null)}>Close</Button>
-            {reviewProf && (
-              <Button
-                variant="outline"
-                className="gap-1 text-red-700 border-red-300 hover:bg-red-50"
-                onClick={() => handleReject(reviewProf.id)}
-                disabled={isRejecting || isApproving}
-                data-testid={`pending-reject-btn-${reviewProf?.id}`}
-              >
-                {isRejecting ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />}
-                Reject
-              </Button>
-            )}
-            {reviewProf && (
-              <Button
-                className="gap-1 bg-green-600 hover:bg-green-700 text-white"
-                onClick={() => handleApprove(reviewProf.id)}
-                disabled={isRejecting || isApproving}
-                data-testid={`pending-approve-btn-${reviewProf?.id}`}
-              >
-                {isApproving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
-                Approve
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+      {/* Chart */}
+      <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)]">
+        <h2 className="font-serif text-lg font-bold text-[#1A2340] mb-1">Monthly New Signups</h2>
+        <p className="text-sm text-gray-500 mb-6">Parents vs Professionals over the last 6 months</p>
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis dataKey="month" tick={{ fontSize: 12, fill: "#6b7280" }} />
+            <YAxis tick={{ fontSize: 12, fill: "#6b7280" }} />
+            <Tooltip
+              contentStyle={{ borderRadius: "12px", border: "1px solid #e5e7eb", boxShadow: "0 4px 24px rgba(26,35,64,0.08)" }}
+            />
+            <Legend wrapperStyle={{ fontSize: "12px" }} />
+            <Bar dataKey="parents" name="Parents" fill="#2EC4A5" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="professionals" name="Professionals" fill="#FF6B6B" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
   );
 }
 
@@ -425,29 +281,12 @@ function ProfessionalsTab() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>("pending");
   const [page, setPage] = useState(1);
-
   const [reviewProf, setReviewProf] = useState<AdminProfessionalRow | null>(null);
   const [documents, setDocuments] = useState<ProfDocuments | null>(null);
   const [docsLoading, setDocsLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
-  const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
-
-  async function handleDeleteUser(userId: number, name: string) {
-    if (!window.confirm(`Permanently delete ${name}'s account and all data? This cannot be undone.`)) return;
-    setDeletingUserId(userId);
-    try {
-      const res = await fetchWithAuth(`/api/admin/users/${userId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed");
-      invalidateQueries();
-      toast({ title: "User deleted", description: `${name}'s account has been permanently removed.` });
-    } catch {
-      toast({ title: "Error", description: "Could not delete user.", variant: "destructive" });
-    } finally {
-      setDeletingUserId(null);
-    }
-  }
 
   const { data, isLoading } = useAdminListProfessionals(
     { status: statusFilter as "pending" | "verified" | "rejected" | "unsubmitted" | undefined, page, limit: 20 },
@@ -456,7 +295,7 @@ function ProfessionalsTab() {
 
   const { mutateAsync: approve } = useAdminApproveProfessional();
 
-  function invalidateQueries() {
+  function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["adminListProfessionals"] });
     queryClient.invalidateQueries({ queryKey: getAdminGetStatsQueryKey() });
   }
@@ -468,27 +307,20 @@ function ProfessionalsTab() {
     setDocsLoading(true);
     try {
       const res = await fetchWithAuth(`/api/admin/professionals/${prof.id}/documents`);
-      if (res.ok) {
-        const docData = await res.json() as ProfDocuments;
-        setDocuments(docData);
-      }
-    } finally {
-      setDocsLoading(false);
-    }
+      if (res.ok) setDocuments(await res.json() as ProfDocuments);
+    } finally { setDocsLoading(false); }
   }
 
   async function handleApprove(id: number) {
     setIsApproving(true);
     try {
       await approve({ id });
-      invalidateQueries();
-      toast({ title: "Approved", description: "Professional is now visible in search results." });
+      invalidate();
+      toast({ title: "Approved ✓", description: "Professional is now visible in search results." });
       setReviewProf(null);
     } catch {
-      toast({ title: "Error", description: "Failed to approve professional.", variant: "destructive" });
-    } finally {
-      setIsApproving(false);
-    }
+      toast({ title: "Error", description: "Failed to approve.", variant: "destructive" });
+    } finally { setIsApproving(false); }
   }
 
   async function handleReject(id: number) {
@@ -500,17 +332,15 @@ function ProfessionalsTab() {
         body: JSON.stringify({ reason: rejectReason.trim() || null }),
       });
       if (!res.ok) throw new Error("Failed");
-      invalidateQueries();
+      invalidate();
       toast({ title: "Rejected", description: "Professional application has been rejected." });
       setReviewProf(null);
     } catch {
-      toast({ title: "Error", description: "Failed to reject professional.", variant: "destructive" });
-    } finally {
-      setIsRejecting(false);
-    }
+      toast({ title: "Error", description: "Failed to reject.", variant: "destructive" });
+    } finally { setIsRejecting(false); }
   }
 
-  const statuses = [
+  const STATUSES = [
     { value: "pending", label: "Pending" },
     { value: "verified", label: "Approved" },
     { value: "rejected", label: "Rejected" },
@@ -518,241 +348,206 @@ function ProfessionalsTab() {
     { value: "", label: "All" },
   ];
 
+  const STATUS_COLORS: Record<string, string> = {
+    pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    verified: "bg-green-50 text-green-700 border-green-200",
+    rejected: "bg-red-50 text-red-700 border-red-200",
+    unsubmitted: "bg-gray-50 text-gray-600 border-gray-200",
+  };
+
   return (
     <>
-      <div className="space-y-4">
+      <div className="space-y-4 max-w-6xl">
         <div className="flex flex-wrap gap-2">
-          {statuses.map((s) => (
-            <Button
+          {STATUSES.map((s) => (
+            <button
               key={s.value}
-              variant={statusFilter === s.value ? "default" : "outline"}
-              size="sm"
               onClick={() => { setStatusFilter(s.value); setPage(1); }}
+              aria-label={`Filter by ${s.label}`}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all focus-visible:ring-2 focus-visible:ring-[#2EC4A5] ${
+                statusFilter === s.value
+                  ? "bg-[#1A2340] text-white border-[#1A2340]"
+                  : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
+              }`}
             >
               {s.label}
-            </Button>
+            </button>
           ))}
         </div>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="animate-spin text-primary" size={28} />
-          </div>
-        ) : (
-          <>
-            <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 border-b border-border">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Professional</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Specialty</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Location</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Joined</th>
-                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
+        <div className="bg-white rounded-xl shadow-[0_4px_24px_rgba(26,35,64,0.08)] overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Professional</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">Specialty</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden md:table-cell">Location</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Status</th>
+                <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
+              ) : !data?.professionals?.length ? (
+                <tr>
+                  <td colSpan={5} className="py-16 text-center">
+                    <svg width="60" height="60" viewBox="0 0 60 60" fill="none" className="mx-auto mb-3 opacity-40">
+                      <circle cx="30" cy="30" r="30" fill="#2EC4A5" fillOpacity="0.15"/>
+                      <circle cx="30" cy="24" r="8" fill="#2EC4A5" fillOpacity="0.6"/>
+                      <ellipse cx="30" cy="42" rx="14" ry="7" fill="#2EC4A5" fillOpacity="0.4"/>
+                    </svg>
+                    <p className="font-semibold text-gray-600 mb-1">No professionals found</p>
+                    <p className="text-sm text-gray-400">Try changing the status filter above.</p>
+                  </td>
+                </tr>
+              ) : (
+                data.professionals.map((prof: AdminProfessionalRow) => (
+                  <tr key={prof.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="font-semibold text-[#1A2340]">{prof.fullName ?? prof.userName ?? "—"}</p>
+                      <p className="text-xs text-gray-400">{prof.userEmail ?? "—"}</p>
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell text-gray-500 text-xs">
+                      {getSpecialtyLabel(prof.specialty as Parameters<typeof getSpecialtyLabel>[0])}
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell text-gray-400 text-xs">
+                      {[prof.city, prof.country].filter(Boolean).join(", ") || "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_COLORS[prof.verificationStatus] ?? STATUS_COLORS.unsubmitted}`}>
+                        {prof.verificationStatus}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center gap-2 justify-end">
+                        <a
+                          href={`/professionals/${prof.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
+                          aria-label="View profile"
+                        >
+                          <ExternalLink size={14} />
+                        </a>
+                        <Button
+                          size="sm"
+                          onClick={() => openReview(prof)}
+                          className="text-xs h-7 bg-[#1A2340] hover:bg-[#2a3660] focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
+                          aria-label={`Review ${prof.fullName ?? prof.userName}`}
+                        >
+                          <Eye size={12} className="mr-1" />
+                          Review
+                        </Button>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {(!data?.professionals || data.professionals.length === 0) ? (
-                    <tr>
-                      <td colSpan={6} className="text-center py-12 text-muted-foreground">
-                        No professionals found.
-                      </td>
-                    </tr>
-                  ) : (
-                    data.professionals.map((prof: AdminProfessionalRow) => (
-                      <tr key={prof.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3">
-                          <p className="font-medium">{prof.fullName ?? prof.userName ?? "—"}</p>
-                          <p className="text-xs text-muted-foreground">{prof.userEmail ?? "—"}</p>
-                        </td>
-                        <td className="px-4 py-3 hidden sm:table-cell">
-                          <span className="text-muted-foreground">{getSpecialtyLabel(prof.specialty as Parameters<typeof getSpecialtyLabel>[0])}</span>
-                        </td>
-                        <td className="px-4 py-3 hidden md:table-cell">
-                          <span className="text-muted-foreground">{[prof.city, prof.country].filter(Boolean).join(", ") || "—"}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <VerificationBadge status={prof.verificationStatus} />
-                        </td>
-                        <td className="px-4 py-3 hidden md:table-cell">
-                          <span className="text-muted-foreground text-xs">
-                            {new Date(prof.createdAt).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1"
-                              onClick={() => openReview(prof)}
-                              data-testid={`review-btn-${prof.id}`}
-                            >
-                              <Eye size={13} />
-                              Review
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => handleDeleteUser(prof.userId, prof.fullName ?? prof.userName ?? "this user")}
-                              disabled={deletingUserId === prof.userId}
-                              data-testid={`delete-user-btn-${prof.id}`}
-                            >
-                              {deletingUserId === prof.userId ? <Loader2 size={13} className="animate-spin" /> : <UserX size={13} />}
-                              Delete
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
-            {data && data.total > data.limit && (
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                  Showing {((page - 1) * data.limit) + 1}–{Math.min(page * data.limit, data.total)} of {data.total}
-                </p>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page * data.limit >= data.total}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
+        {data && data.total > data.limit && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-400">
+              {((page - 1) * data.limit) + 1}–{Math.min(page * data.limit, data.total)} of {data.total}
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)} aria-label="Previous page">Previous</Button>
+              <Button variant="outline" size="sm" disabled={page * data.limit >= data.total} onClick={() => setPage((p) => p + 1)} aria-label="Next page">Next</Button>
+            </div>
+          </div>
         )}
       </div>
 
+      {/* Review modal */}
       <Dialog open={!!reviewProf} onOpenChange={(open) => { if (!open) setReviewProf(null); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg shadow-[0_8px_40px_rgba(26,35,64,0.12)]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText size={18} className="text-primary" />
-              Review Application
-            </DialogTitle>
+            <DialogTitle className="font-serif text-[#1A2340]">Review Application</DialogTitle>
           </DialogHeader>
-
           {reviewProf && (
             <div className="space-y-4 py-1">
-              <div className="bg-muted/40 rounded-lg p-4 space-y-1 text-sm">
-                <p className="font-semibold text-base">{reviewProf.fullName ?? reviewProf.userName ?? "—"}</p>
-                <p className="text-muted-foreground">{reviewProf.userEmail}</p>
-                <p>{getSpecialtyLabel(reviewProf.specialty as Parameters<typeof getSpecialtyLabel>[0])}</p>
-                <p className="text-muted-foreground">{[reviewProf.city, reviewProf.country].filter(Boolean).join(", ") || "—"}</p>
-                <div className="pt-1">
-                  <VerificationBadge status={reviewProf.verificationStatus} />
-                </div>
+              <div className="bg-gray-50 rounded-xl p-4 space-y-1 text-sm">
+                <p className="font-semibold text-[#1A2340]">{reviewProf.fullName ?? reviewProf.userName ?? "—"}</p>
+                <p className="text-gray-500">{reviewProf.userEmail}</p>
+                <p className="text-gray-600">{getSpecialtyLabel(reviewProf.specialty as Parameters<typeof getSpecialtyLabel>[0])}</p>
+                <p className="text-gray-400">{[reviewProf.city, reviewProf.country].filter(Boolean).join(", ") || "—"}</p>
               </div>
-
               <div>
-                <p className="text-sm font-medium mb-2">Uploaded Documents</p>
+                <p className="text-sm font-semibold text-[#1A2340] mb-2">Uploaded Documents</p>
                 {docsLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                  <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
                     <Loader2 size={14} className="animate-spin" />
                     Loading documents…
                   </div>
                 ) : documents ? (
                   <div className="space-y-2">
                     {documents.identity ? (
-                      <a
-                        href={fileKeyToUrl(documents.identity.fileKey)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-border hover:bg-muted/40 transition-colors"
-                        data-testid="identity-doc-link"
+                      <a href={fileKeyToUrl(documents.identity.fileKey)} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
+                        aria-label="View identity document"
                       >
-                        <FileText size={14} className="text-primary shrink-0" />
-                        <span className="flex-1">
-                          Identity: <span className="capitalize">{documents.identity.documentType.replace(/_/g, " ")}</span>
-                        </span>
-                        <ExternalLink size={12} className="text-muted-foreground" />
+                        <FileText size={14} className="text-[#2EC4A5] shrink-0" />
+                        <span className="flex-1">Identity: <span className="capitalize">{documents.identity.documentType.replace(/_/g, " ")}</span></span>
+                        <ExternalLink size={12} className="text-gray-400" />
                       </a>
-                    ) : (
-                      <p className="text-sm text-muted-foreground italic">No identity document uploaded.</p>
-                    )}
-                    {documents.certifications.length > 0 ? (
-                      documents.certifications.map((cert) => (
-                        <a
-                          key={cert.id}
-                          href={fileKeyToUrl(cert.fileKey)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-border hover:bg-muted/40 transition-colors"
-                        >
-                          <FileText size={14} className="text-blue-500 shrink-0" />
-                          <span className="flex-1">
-                            Certification: <span className="capitalize">{cert.documentType.replace(/_/g, " ")}</span>
-                          </span>
-                          <ExternalLink size={12} className="text-muted-foreground" />
-                        </a>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground italic">No certification documents uploaded.</p>
-                    )}
+                    ) : <p className="text-sm text-gray-400 italic">No identity document uploaded.</p>}
+                    {documents.certifications.map((cert) => (
+                      <a key={cert.id} href={fileKeyToUrl(cert.fileKey)} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
+                        aria-label="View certification"
+                      >
+                        <FileText size={14} className="text-blue-400 shrink-0" />
+                        <span className="flex-1">Cert: <span className="capitalize">{cert.documentType.replace(/_/g, " ")}</span></span>
+                        <ExternalLink size={12} className="text-gray-400" />
+                      </a>
+                    ))}
+                    {documents.certifications.length === 0 && <p className="text-sm text-gray-400 italic">No certifications uploaded.</p>}
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground italic">Could not load documents.</p>
-                )}
+                ) : <p className="text-sm text-gray-400 italic">Could not load documents.</p>}
               </div>
-
-              {reviewProf.verificationStatus !== "verified" && (
-                <div>
-                  <Label htmlFor="reject-reason" className="text-sm font-medium">
-                    Rejection reason <span className="text-muted-foreground font-normal">(optional — shown to the professional)</span>
-                  </Label>
-                  <Textarea
-                    id="reject-reason"
-                    value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
-                    placeholder="E.g. Documents unclear, please re-upload a higher quality scan…"
-                    className="mt-1 text-sm resize-none"
-                    rows={3}
-                    data-testid="reject-reason-input"
-                  />
-                </div>
-              )}
+              <div>
+                <Label htmlFor="reject-reason" className="text-sm font-medium text-[#1A2340]">
+                  Rejection reason <span className="text-gray-400 font-normal">(optional)</span>
+                </Label>
+                <Textarea
+                  id="reject-reason"
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="E.g. Documents unclear — please re-upload a higher quality scan."
+                  className="mt-1 text-sm resize-none rounded-xl"
+                  rows={3}
+                  aria-label="Rejection reason"
+                />
+              </div>
             </div>
           )}
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="ghost" onClick={() => setReviewProf(null)}>
-              Close
-            </Button>
-            {reviewProf && reviewProf.verificationStatus !== "rejected" && (
-              <Button
-                variant="outline"
-                className="gap-1 text-red-700 border-red-300 hover:bg-red-50"
-                onClick={() => handleReject(reviewProf.id)}
-                disabled={isRejecting || isApproving}
-                data-testid={`reject-btn-${reviewProf?.id}`}
-              >
-                {isRejecting ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />}
-                Reject
-              </Button>
-            )}
-            {reviewProf && reviewProf.verificationStatus !== "verified" && (
-              <Button
-                className="gap-1 bg-green-600 hover:bg-green-700 text-white"
-                onClick={() => handleApprove(reviewProf.id)}
-                disabled={isRejecting || isApproving}
-                data-testid={`approve-btn-${reviewProf?.id}`}
-              >
-                {isApproving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
-                Approve
-              </Button>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setReviewProf(null)} aria-label="Close dialog">Close</Button>
+            {reviewProf && (
+              <>
+                <Button
+                  variant="outline"
+                  className="gap-1 text-[#FF6B6B] border-[#FF6B6B]/30 hover:bg-[#FF6B6B]/5 focus-visible:ring-2 focus-visible:ring-[#FF6B6B]"
+                  onClick={() => handleReject(reviewProf.id)}
+                  disabled={isRejecting || isApproving}
+                  aria-label="Reject application"
+                >
+                  {isRejecting ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />}
+                  Reject
+                </Button>
+                <Button
+                  className="gap-1 bg-green-600 hover:bg-green-700 focus-visible:ring-2 focus-visible:ring-green-500"
+                  onClick={() => handleApprove(reviewProf.id)}
+                  disabled={isRejecting || isApproving}
+                  aria-label="Approve application"
+                >
+                  {isApproving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+                  Approve
+                </Button>
+              </>
             )}
           </DialogFooter>
         </DialogContent>
@@ -761,132 +556,187 @@ function ProfessionalsTab() {
   );
 }
 
-function VerificationBadge({ status }: { status: string }) {
-  if (status === "verified") {
-    return (
-      <Badge className="bg-green-100 text-green-700 border-green-300 gap-1">
-        <UserCheck size={11} /> Approved
-      </Badge>
-    );
-  }
-  if (status === "pending") {
-    return (
-      <Badge variant="outline" className="gap-1 text-yellow-700 border-yellow-300 bg-yellow-50">
-        <Clock size={11} /> Pending
-      </Badge>
-    );
-  }
-  if (status === "rejected") {
-    return (
-      <Badge variant="outline" className="gap-1 text-red-700 border-red-300 bg-red-50">
-        <UserX size={11} /> Rejected
-      </Badge>
-    );
-  }
+function VerificationsTab() {
+  const [statusFilter, setStatusFilter] = useState("pending");
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["adminVerifications", statusFilter],
+    queryFn: async () => {
+      const params = statusFilter ? `?status=${statusFilter}` : "";
+      const res = await fetchWithAuth(`/api/admin/verifications${params}`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json() as Promise<{ verifications: any[]; total: number }>;
+    },
+  });
+
+  const STATUSES = [
+    { value: "pending", label: "Pending" },
+    { value: "approved", label: "Approved" },
+    { value: "rejected", label: "Rejected" },
+    { value: "", label: "All" },
+  ];
+
+  const STATUS_COLORS: Record<string, string> = {
+    pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    approved: "bg-green-50 text-green-700 border-green-200",
+    rejected: "bg-red-50 text-red-700 border-red-200",
+  };
+
   return (
-    <Badge variant="secondary" className="gap-1">
-      <Clock size={11} /> Unsubmitted
-    </Badge>
+    <div className="space-y-4 max-w-6xl">
+      <p className="text-sm text-gray-500">ID documents submitted by professionals for identity verification.</p>
+      <div className="flex flex-wrap gap-2">
+        {STATUSES.map((s) => (
+          <button
+            key={s.value}
+            onClick={() => setStatusFilter(s.value)}
+            aria-label={`Filter by ${s.label}`}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all focus-visible:ring-2 focus-visible:ring-[#2EC4A5] ${
+              statusFilter === s.value
+                ? "bg-[#1A2340] text-white border-[#1A2340]"
+                : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-xl shadow-[0_4px_24px_rgba(26,35,64,0.08)] overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Professional</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">Document</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Status</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden md:table-cell">Submitted</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} />)
+            ) : !data?.verifications?.length ? (
+              <tr>
+                <td colSpan={5} className="py-16 text-center">
+                  <svg width="60" height="60" viewBox="0 0 60 60" fill="none" className="mx-auto mb-3 opacity-40">
+                    <circle cx="30" cy="30" r="30" fill="#2EC4A5" fillOpacity="0.15"/>
+                    <rect x="17" y="15" width="26" height="30" rx="4" fill="#2EC4A5" fillOpacity="0.4"/>
+                    <path d="M23 27h14M23 33h8" stroke="#2EC4A5" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  <p className="font-semibold text-gray-600 mb-1">No verifications found</p>
+                  <p className="text-sm text-gray-400">No ID documents match this filter.</p>
+                </td>
+              </tr>
+            ) : (
+              data.verifications.map((v: any) => (
+                <tr key={v.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-[#1A2340]">{v.fullName ?? "—"}</p>
+                    <p className="text-xs text-gray-400">{v.email ?? "—"}</p>
+                  </td>
+                  <td className="px-4 py-3 hidden sm:table-cell text-gray-500 text-xs capitalize">
+                    {(v.documentType ?? "—").replace(/_/g, " ")}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_COLORS[v.status] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                      {v.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 hidden md:table-cell text-xs text-gray-400">
+                    {v.submittedAt ? new Date(v.submittedAt).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <a
+                      href={fileKeyToUrl(v.fileKey ?? "")}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-[#2EC4A5] hover:underline focus-visible:ring-2 focus-visible:ring-[#2EC4A5] rounded"
+                      aria-label="View document"
+                    >
+                      <Eye size={13} />
+                      View Doc
+                    </a>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
-function StatsTab() {
-  const { data: stats, isLoading } = useAdminGetStats({
-    query: { queryKey: getAdminGetStatsQueryKey() },
+function ParentsTab() {
+  const [page, setPage] = useState(1);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["adminParents", page],
+    queryFn: async () => {
+      const res = await fetchWithAuth(`/api/admin/parents?page=${page}&limit=20`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json() as Promise<{ parents: any[]; total: number; limit: number }>;
+    },
   });
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="animate-spin text-primary" size={28} />
-      </div>
-    );
-  }
-
-  const platformCards = [
-    { label: "Total Users", value: stats?.totalUsers ?? 0, icon: <Users size={20} className="text-primary" /> },
-    { label: "Professionals", value: stats?.totalProfessionals ?? 0, icon: <UserCheck size={20} className="text-blue-600" /> },
-    { label: "Parents", value: stats?.totalParents ?? 0, icon: <Users size={20} className="text-green-600" /> },
-    { label: "New This Month", value: stats?.newUsersThisMonth ?? 0, icon: <TrendingUp size={20} className="text-emerald-600" /> },
-  ];
-
-  const activityCards = [
-    { label: "Unlocks This Month", value: stats?.totalUnlocksThisMonth ?? 0, icon: <Phone size={20} className="text-accent" /> },
-    { label: "Bookings This Month", value: stats?.totalBookingsThisMonth ?? 0, icon: <TrendingUp size={20} className="text-violet-600" /> },
-    { label: "Total Payments Done", value: stats?.totalPaymentsCompleted ?? 0, icon: <BarChart3 size={20} className="text-indigo-600" /> },
-    {
-      label: "Total Revenue",
-      value: `₹${((stats?.totalRevenueInPaise ?? 0) / 100).toLocaleString("en-IN")}`,
-      icon: <TrendingUp size={20} className="text-green-600" />,
-      isString: true,
-    },
-  ];
-
-  const approvalCards = [
-    { label: "Pending Review", value: stats?.pendingProfessionals ?? 0, icon: <Clock size={20} className="text-yellow-600" /> },
-    { label: "Verified", value: stats?.verifiedProfessionals ?? 0, icon: <UserCheck size={20} className="text-green-600" /> },
-    { label: "Rejected", value: stats?.rejectedProfessionals ?? 0, icon: <XCircle size={20} className="text-red-500" /> },
-  ];
-
-  const specialtyRows = Object.entries(stats?.professionalsBySpecialty ?? {}).sort(([, a], [, b]) => b - a);
-
-  function StatCard({ label, value, icon, isString }: { label: string; value: number | string; icon: React.ReactNode; isString?: boolean }) {
-    return (
-      <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
-        <div className="flex items-center gap-2 mb-2">
-          {icon}
-          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</span>
-        </div>
-        <div className="text-3xl font-bold text-foreground">
-          {isString ? value : (value as number).toLocaleString()}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-8">
-      <div>
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Platform Overview</h3>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {platformCards.map((card) => <StatCard key={card.label} {...card} />)}
-        </div>
-      </div>
+    <div className="space-y-4 max-w-6xl">
+      <p className="text-sm text-gray-500">All parent accounts registered on Includly.</p>
 
-      <div>
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Revenue & Activity</h3>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {activityCards.map((card) => <StatCard key={card.label} {...card} />)}
-        </div>
-      </div>
-
-      <div>
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Verification Pipeline</h3>
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          {approvalCards.map((card) => <StatCard key={card.label} {...card} />)}
-        </div>
-      </div>
-
-      {specialtyRows.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Professionals by Specialty</h3>
-          <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 border-b border-border">
-                <tr>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Specialty</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Count</th>
+      <div className="bg-white rounded-xl shadow-[0_4px_24px_rgba(26,35,64,0.08)] overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Parent</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden md:table-cell">Child Name</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">City</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden md:table-cell">Joined</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="border-b border-gray-50">
+                  {[1,2,3,4].map(j => <td key={j} className="px-4 py-3"><div className="h-4 bg-gray-100 rounded animate-pulse" /></td>)}
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {specialtyRows.map(([specialty, cnt]) => (
-                  <tr key={specialty}>
-                    <td className="px-4 py-2.5">{getSpecialtyLabel(specialty as Parameters<typeof getSpecialtyLabel>[0])}</td>
-                    <td className="px-4 py-2.5 text-right font-semibold">{cnt}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+              ))
+            ) : !data?.parents?.length ? (
+              <tr>
+                <td colSpan={4} className="py-16 text-center">
+                  <svg width="60" height="60" viewBox="0 0 60 60" fill="none" className="mx-auto mb-3 opacity-40">
+                    <circle cx="30" cy="30" r="30" fill="#2EC4A5" fillOpacity="0.15"/>
+                    <circle cx="30" cy="24" r="8" fill="#2EC4A5" fillOpacity="0.6"/>
+                    <ellipse cx="30" cy="42" rx="14" ry="7" fill="#2EC4A5" fillOpacity="0.4"/>
+                  </svg>
+                  <p className="font-semibold text-gray-600">No parents registered yet</p>
+                </td>
+              </tr>
+            ) : (
+              data.parents.map((p: any) => (
+                <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-[#1A2340]">{p.fullName ?? p.name ?? "—"}</p>
+                    <p className="text-xs text-gray-400">{p.email ?? "—"}</p>
+                  </td>
+                  <td className="px-4 py-3 hidden md:table-cell text-gray-500 text-xs">{p.childName ?? "—"}</td>
+                  <td className="px-4 py-3 hidden sm:table-cell text-gray-400 text-xs">{p.city ?? "—"}</td>
+                  <td className="px-4 py-3 hidden md:table-cell text-xs text-gray-400">
+                    {p.createdAt ? new Date(p.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {data && data.total > data.limit && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-400">{((page - 1) * data.limit) + 1}–{Math.min(page * data.limit, data.total)} of {data.total}</p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)} aria-label="Previous page">Previous</Button>
+            <Button variant="outline" size="sm" disabled={page * data.limit >= data.total} onClick={() => setPage((p) => p + 1)} aria-label="Next page">Next</Button>
           </div>
         </div>
       )}
@@ -894,210 +744,104 @@ function StatsTab() {
   );
 }
 
+function PaymentsTab() {
+  const { data: stats, isLoading } = useAdminGetStats();
+
+  const revenue = stats ? (stats.totalRevenueInPaise ?? 0) / 100 : 0;
+
+  return (
+    <div className="space-y-6 max-w-4xl">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard label="Total Payments" value={stats?.totalPaymentsCompleted ?? 0} sub="completed transactions" color="text-[#2EC4A5]" />
+        <StatCard label="Total Revenue" value={`₹${revenue.toLocaleString("en-IN")}`} sub="all time" color="text-[#1A2340]" />
+        <StatCard label="This Month" value={stats?.totalBookingsThisMonth ?? 0} sub="bookings" color="text-violet-600" />
+      </div>
+
+      <div className="bg-white rounded-xl p-8 shadow-[0_4px_24px_rgba(26,35,64,0.08)] text-center">
+        <svg width="64" height="64" viewBox="0 0 64 64" fill="none" className="mx-auto mb-4 opacity-50">
+          <rect width="64" height="64" rx="32" fill="#2EC4A5" fillOpacity="0.1"/>
+          <rect x="14" y="22" width="36" height="24" rx="4" stroke="#2EC4A5" strokeWidth="2.5"/>
+          <path d="M14 30h36" stroke="#2EC4A5" strokeWidth="2.5"/>
+          <path d="M20 38h8" stroke="#2EC4A5" strokeWidth="2" strokeLinecap="round"/>
+        </svg>
+        <p className="font-serif text-lg font-bold text-[#1A2340] mb-2">Detailed payment history</p>
+        <p className="text-sm text-gray-500 max-w-xs mx-auto">
+          Granular payment transaction logs will be shown here. During the free period, all revenue values will be ₹0.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function SettingsTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: settings, isLoading } = useGetAdminSettings({
-    query: { queryKey: getGetAdminSettingsQueryKey() },
-  });
-  const { mutateAsync: updateSettings, isPending: saving } = useUpdateAdminSettings();
-  const { mutateAsync: broadcast, isPending: broadcasting } = useBroadcastNotification();
+  const { data: settings, isLoading } = useGetAdminSettings();
+  const { mutateAsync: updateSettings } = useUpdateAdminSettings();
+  const [contactLimit, setContactLimit] = useState<number | "">("");
+  const [isSaving, setIsSaving] = useState(false);
 
-  const [contactLimit, setContactLimit] = useState<number | null>(null);
-  const [testPushLoading, setTestPushLoading] = useState(false);
-  const [broadcastTitle, setBroadcastTitle] = useState("");
-  const [broadcastBody, setBroadcastBody] = useState("");
-  const [broadcastAudience, setBroadcastAudience] = useState<"all" | "professionals" | "parents">("all");
-
-  async function handleTestPush() {
-    setTestPushLoading(true);
-    try {
-      const res = await fetchWithAuth("/api/admin/notifications/test", { method: "POST" });
-      const data = await res.json() as { sent?: number; total?: number; error?: string };
-      if (!res.ok) {
-        toast({
-          title: "Test failed",
-          description: data.error ?? "Could not send test notification.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Test notification sent",
-          description: `Delivered to ${data.sent} of ${data.total} subscription(s). Check your device.`,
-        });
-      }
-    } catch {
-      toast({ title: "Error", description: "Request failed. Check the server is running.", variant: "destructive" });
-    } finally {
-      setTestPushLoading(false);
-    }
+  // Sync from server on first load
+  if (settings && contactLimit === "") {
+    setContactLimit(settings.contactLimitPerParent ?? 10);
   }
-
-  async function handleBroadcast() {
-    if (!broadcastTitle.trim() || !broadcastBody.trim()) {
-      toast({ title: "Title and message are required", variant: "destructive" });
-      return;
-    }
-    try {
-      const result = await broadcast({ data: { title: broadcastTitle.trim(), body: broadcastBody.trim(), audience: broadcastAudience } });
-      const total = (result as { total?: number }).total;
-      const description = total != null
-        ? `Delivered to ${result.sent} of ${total} subscriber(s).`
-        : result.sent > 0
-          ? `Delivered to ${result.sent} subscriber(s).`
-          : "No subscribers found for this audience.";
-      toast({
-        title: "Notification sent",
-        description,
-      });
-      setBroadcastTitle("");
-      setBroadcastBody("");
-    } catch {
-      toast({ title: "Failed to send", description: "An error occurred while sending the broadcast.", variant: "destructive" });
-    }
-  }
-
-  const currentLimit = contactLimit ?? settings?.contactLimitPerParent ?? 5;
 
   async function handleSave() {
+    setIsSaving(true);
     try {
-      await updateSettings({ data: { contactLimitPerParent: currentLimit } });
+      await updateSettings({
+        data: {
+          contactLimitPerParent: Number(contactLimit) || 10,
+        },
+      });
       queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() });
-      toast({ title: "Settings saved", description: "Contact unlock limit has been updated." });
+      toast({ title: "Settings saved ✓" });
     } catch {
-      toast({ title: "Error", description: "Failed to save settings.", variant: "destructive" });
-    }
+      toast({ title: "Failed to save settings", variant: "destructive" });
+    } finally { setIsSaving(false); }
   }
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="animate-spin text-primary" size={28} />
-      </div>
-    );
+    return <div className="space-y-4">{[1,2,3].map(i => <div key={i} className="h-12 bg-white rounded-xl animate-pulse shadow-sm" />)}</div>;
   }
 
   return (
     <div className="max-w-lg space-y-6">
-      <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-        <h2 className="font-semibold text-foreground mb-1">Contact Unlock Limit</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Maximum number of professional contacts a parent can unlock per month (free plan). Set to 0 for unlimited.
-        </p>
-        <div className="flex items-center gap-3">
-          <input
+      <div className="flex items-start gap-3 p-4 bg-[#FFB830]/10 border border-[#FFB830]/30 rounded-xl">
+        <TrendingUp size={18} className="text-[#FFB830] mt-0.5 shrink-0" />
+        <div>
+          <p className="text-sm font-semibold text-[#1A2340]">Platform is currently free</p>
+          <p className="text-xs text-gray-500 mt-0.5">All contact unlocks are free during the beta period. Paid unlocks via Razorpay will be enabled in a future release.</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-5">
+        <div>
+          <Label htmlFor="contact-limit" className="text-sm font-semibold text-[#1A2340]">
+            Contact Unlocks Per Parent
+          </Label>
+          <p className="text-xs text-gray-400 mb-2">Maximum number of professionals a parent can unlock contact details for.</p>
+          <Input
+            id="contact-limit"
             type="number"
-            min={0}
-            max={100}
-            value={currentLimit}
-            onChange={(e) => setContactLimit(Number(e.target.value))}
-            className="w-24 px-3 py-2 border border-border rounded-lg text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
-            data-testid="contact-limit-input"
+            min={1}
+            max={1000}
+            value={contactLimit}
+            onChange={(e) => setContactLimit(e.target.value === "" ? "" : Number(e.target.value))}
+            className="rounded-lg focus-visible:ring-[#2EC4A5]"
+            aria-label="Contact unlock limit per parent"
           />
-          <span className="text-sm text-muted-foreground">contacts / month</span>
         </div>
-        <Button className="mt-4" onClick={handleSave} disabled={saving} data-testid="save-settings-btn">
-          {saving ? <><Loader2 size={14} className="animate-spin mr-2" />Saving...</> : "Save settings"}
-        </Button>
-      </div>
 
-      <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-        <div className="flex items-center gap-2 mb-1">
-          <Bell size={16} className="text-primary" />
-          <h2 className="font-semibold text-foreground">Push Notification Health</h2>
-        </div>
-        <p className="text-sm text-muted-foreground mb-4">
-          Send a test push notification to your own device to confirm the pipeline is working after deployments or config changes.
-        </p>
         <Button
-          variant="outline"
-          onClick={handleTestPush}
-          disabled={testPushLoading}
-          data-testid="test-push-btn"
+          onClick={handleSave}
+          disabled={isSaving}
+          className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
+          aria-label="Save settings"
         >
-          {testPushLoading ? (
-            <><Loader2 size={14} className="animate-spin mr-2" />Sending…</>
-          ) : (
-            <><Bell size={14} className="mr-2" />Send test push</>
-          )}
+          {isSaving ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
+          Save Settings
         </Button>
-        <p className="text-xs text-muted-foreground mt-3">
-          You must have push notifications enabled in your browser for this to work.
-        </p>
-      </div>
-
-      <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-        <div className="flex items-center gap-2 mb-1">
-          <Bell size={16} className="text-primary" />
-          <h2 className="font-semibold text-foreground">Broadcast Push Notification</h2>
-        </div>
-        <p className="text-sm text-muted-foreground mb-4">
-          Send an announcement to all subscribed users or a specific audience segment.
-        </p>
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="broadcast-title">Title</Label>
-            <Input
-              id="broadcast-title"
-              value={broadcastTitle}
-              onChange={(e) => setBroadcastTitle(e.target.value)}
-              placeholder="Notification title"
-              className="mt-1"
-              data-testid="broadcast-title"
-            />
-          </div>
-          <div>
-            <Label htmlFor="broadcast-body">Message</Label>
-            <Textarea
-              id="broadcast-body"
-              value={broadcastBody}
-              onChange={(e) => setBroadcastBody(e.target.value)}
-              placeholder="Notification message"
-              className="mt-1"
-              rows={3}
-              data-testid="broadcast-body"
-            />
-          </div>
-          <div>
-            <Label>Audience</Label>
-            <div className="flex gap-2 mt-1">
-              {(["all", "professionals", "parents"] as const).map((a) => (
-                <Button
-                  key={a}
-                  size="sm"
-                  variant={broadcastAudience === a ? "default" : "outline"}
-                  onClick={() => setBroadcastAudience(a)}
-                  className="capitalize"
-                  data-testid={`audience-${a}`}
-                >
-                  {a}
-                </Button>
-              ))}
-            </div>
-          </div>
-          <Button
-            onClick={handleBroadcast}
-            disabled={broadcasting || !broadcastTitle.trim() || !broadcastBody.trim()}
-            className="gap-2"
-            data-testid="send-broadcast-btn"
-          >
-            {broadcasting && <Loader2 size={14} className="animate-spin" />}
-            Send notification
-          </Button>
-        </div>
-      </div>
-
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-        <h3 className="font-semibold text-amber-800 mb-2">How to grant admin access</h3>
-        <p className="text-sm text-amber-700 mb-3">
-          To elevate a user account to the <code className="bg-amber-100 px-1 rounded">admin</code> role, run the following SQL against the database:
-        </p>
-        <pre className="bg-amber-100 text-amber-900 text-xs rounded-lg p-3 overflow-x-auto font-mono">
-          {`UPDATE users\n  SET role = 'admin'\n  WHERE email = 'your@email.com';`}
-        </pre>
-        <p className="text-xs text-amber-600 mt-2">
-          Replace <code>your@email.com</code> with the target user's email address. The user must be signed in to see the admin dashboard.
-        </p>
       </div>
     </div>
   );

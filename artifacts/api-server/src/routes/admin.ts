@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, count, gte, and, sum } from "drizzle-orm";
+import { eq, count, gte, and, sum, desc } from "drizzle-orm";
 import { createClerkClient } from "@clerk/express";
 import {
   db,
@@ -272,6 +272,83 @@ router.get("/admin/professionals/:id/documents", ...adminGuard, async (req, res)
       fileKey: c.fileKey,
       uploadedAt: c.uploadedAt.toISOString(),
     })),
+  });
+});
+
+router.get("/admin/verifications", ...adminGuard, async (req, res): Promise<void> => {
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
+  const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10)));
+  const offset = (page - 1) * limit;
+
+  const conditions = status ? [eq(identityVerificationsTable.status, status as "pending" | "approved" | "rejected")] : [];
+
+  const [rows, totalRows] = await Promise.all([
+    db
+      .select({
+        id: identityVerificationsTable.id,
+        professionalId: identityVerificationsTable.professionalId,
+        documentType: identityVerificationsTable.documentType,
+        fileKey: identityVerificationsTable.fileKey,
+        status: identityVerificationsTable.status,
+        submittedAt: identityVerificationsTable.submittedAt,
+        fullName: professionalProfilesTable.fullName,
+        email: usersTable.email,
+      })
+      .from(identityVerificationsTable)
+      .leftJoin(professionalProfilesTable, eq(identityVerificationsTable.professionalId, professionalProfilesTable.id))
+      .leftJoin(usersTable, eq(professionalProfilesTable.userId, usersTable.id))
+      .where(and(...conditions))
+      .orderBy(desc(identityVerificationsTable.submittedAt))
+      .limit(limit)
+      .offset(offset),
+    db
+      .select({ count: count() })
+      .from(identityVerificationsTable)
+      .where(and(...conditions)),
+  ]);
+
+  res.json({
+    verifications: rows.map((r) => ({
+      ...r,
+      submittedAt: r.submittedAt?.toISOString() ?? null,
+    })),
+    total: Number(totalRows[0]?.count ?? 0),
+    page,
+    limit,
+  });
+});
+
+router.get("/admin/parents", ...adminGuard, async (req, res): Promise<void> => {
+  const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
+  const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10)));
+  const offset = (page - 1) * limit;
+
+  const [rows, totalRows] = await Promise.all([
+    db
+      .select({
+        id: usersTable.id,
+        email: usersTable.email,
+        name: usersTable.name,
+        createdAt: usersTable.createdAt,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.role, "parent"))
+      .orderBy(desc(usersTable.createdAt))
+      .limit(limit)
+      .offset(offset),
+    db.select({ count: count() }).from(usersTable).where(eq(usersTable.role, "parent")),
+  ]);
+
+  res.json({
+    parents: rows.map((r) => ({
+      ...r,
+      fullName: r.name,
+      createdAt: r.createdAt?.toISOString() ?? null,
+    })),
+    total: Number(totalRows[0]?.count ?? 0),
+    page,
+    limit,
   });
 });
 

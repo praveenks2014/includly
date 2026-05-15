@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
@@ -67,7 +67,8 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* LIGHT MODE — Teal + Amber palette (Includly) */
+/* LIGHT MODE — Mint/Teal + Coral palette (Includly v2) */
+/* Primary: #2EC4A5  Accent: #FF6B6B  Warning: #FFB830  Navy: #1A2340 */
 :root {
   --button-outline: rgba(0,0,0, .10);
   --badge-outline: rgba(0,0,0, .05);
@@ -75,53 +76,53 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  --background: 168 30% 98%;
-  --foreground: 200 28% 15%;
-  --border: 170 22% 88%;
+  --background: 220 20% 97%;
+  --foreground: 225 42% 14%;
+  --border: 220 15% 88%;
   --card: 0 0% 100%;
-  --card-foreground: 200 28% 15%;
-  --card-border: 170 22% 88%;
-  --sidebar: 168 24% 96%;
-  --sidebar-foreground: 200 28% 15%;
-  --sidebar-border: 170 22% 88%;
-  --sidebar-primary: 175 72% 32%;
+  --card-foreground: 225 42% 14%;
+  --card-border: 220 15% 88%;
+  --sidebar: 225 42% 18%;
+  --sidebar-foreground: 0 0% 100%;
+  --sidebar-border: 225 42% 25%;
+  --sidebar-primary: 170 65% 47%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 170 22% 93%;
-  --sidebar-accent-foreground: 200 28% 15%;
-  --sidebar-ring: 175 72% 32%;
+  --sidebar-accent: 225 42% 26%;
+  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-ring: 170 65% 47%;
   --popover: 0 0% 100%;
-  --popover-foreground: 200 28% 15%;
-  --popover-border: 170 22% 88%;
-  --primary: 175 72% 32%;
+  --popover-foreground: 225 42% 14%;
+  --popover-border: 220 15% 88%;
+  --primary: 170 65% 47%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 172 30% 92%;
-  --secondary-foreground: 175 55% 22%;
-  --muted: 168 24% 95%;
-  --muted-foreground: 200 14% 46%;
-  --accent: 38 90% 50%;
+  --secondary: 170 30% 92%;
+  --secondary-foreground: 170 55% 22%;
+  --muted: 220 15% 94%;
+  --muted-foreground: 220 12% 46%;
+  --accent: 0 100% 71%;
   --accent-foreground: 0 0% 100%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
-  --input: 170 22% 88%;
-  --ring: 175 72% 32%;
-  --chart-1: 175 72% 32%;
-  --chart-2: 38 90% 50%;
-  --chart-3: 200 28% 15%;
-  --chart-4: 43 96% 56%;
-  --chart-5: 0 84% 60%;
+  --input: 220 15% 88%;
+  --ring: 170 65% 47%;
+  --chart-1: 170 65% 47%;
+  --chart-2: 0 100% 71%;
+  --chart-3: 225 42% 18%;
+  --chart-4: 43 100% 59%;
+  --chart-5: 43 70% 45%;
 
-  --app-font-sans: 'Inter', sans-serif;
-  --app-font-serif: 'Lora', Georgia, serif;
+  --app-font-sans: 'DM Sans', system-ui, sans-serif;
+  --app-font-serif: 'Fraunces', Georgia, serif;
   --app-font-mono: Menlo, monospace;
-  --radius: .625rem;
-  --shadow-2xs: 0px 1px 2px 0px hsl(175 72% 32% / 0.06);
-  --shadow-xs: 0px 1px 3px 0px hsl(175 72% 32% / 0.08);
-  --shadow-sm: 0px 2px 4px 0px hsl(175 72% 32% / 0.08), 0px 1px 2px -1px hsl(175 72% 32% / 0.06);
-  --shadow: 0px 4px 8px 0px hsl(175 72% 32% / 0.10), 0px 2px 4px -1px hsl(175 72% 32% / 0.06);
-  --shadow-md: 0px 6px 12px 0px hsl(175 72% 32% / 0.10), 0px 3px 6px -2px hsl(175 72% 32% / 0.06);
-  --shadow-lg: 0px 10px 20px 0px hsl(175 72% 32% / 0.12), 0px 4px 8px -3px hsl(175 72% 32% / 0.08);
-  --shadow-xl: 0px 16px 32px 0px hsl(175 72% 32% / 0.14), 0px 6px 12px -4px hsl(175 72% 32% / 0.08);
-  --shadow-2xl: 0px 24px 48px 0px hsl(175 72% 32% / 0.16);
+  --radius: .75rem;
+  --shadow-2xs: 0px 1px 2px 0px rgba(26,35,64,0.06);
+  --shadow-xs: 0px 1px 3px 0px rgba(26,35,64,0.08);
+  --shadow-sm: 0px 2px 4px 0px rgba(26,35,64,0.08), 0px 1px 2px -1px rgba(26,35,64,0.06);
+  --shadow: 0px 4px 24px 0px rgba(26,35,64,0.08);
+  --shadow-md: 0px 6px 24px 0px rgba(26,35,64,0.09);
+  --shadow-lg: 0px 8px 40px 0px rgba(26,35,64,0.12);
+  --shadow-xl: 0px 16px 48px 0px rgba(26,35,64,0.14);
+  --shadow-2xl: 0px 24px 64px 0px rgba(26,35,64,0.16);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
