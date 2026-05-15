@@ -779,11 +779,19 @@ function SettingsTab() {
   const { data: settings, isLoading } = useGetAdminSettings();
   const { mutateAsync: updateSettings } = useUpdateAdminSettings();
   const [contactLimit, setContactLimit] = useState<number | "">("");
+  const [unlockPrice, setUnlockPrice] = useState<number | "">("");
+  const [commissionPct, setCommissionPct] = useState<number | "">("");
+  const [monetisationEnabled, setMonetisationEnabled] = useState(false);
+  const [showMonetisationModal, setShowMonetisationModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [synced, setSynced] = useState(false);
 
-  // Sync from server on first load
-  if (settings && contactLimit === "") {
-    setContactLimit(settings.contactLimitPerParent ?? 10);
+  if (settings && !synced) {
+    setContactLimit(settings.contactLimitPerParent ?? 5);
+    setUnlockPrice(settings.contactUnlockPriceInr ?? 0);
+    setCommissionPct(settings.platformCommissionPct ?? 0);
+    setMonetisationEnabled(settings.monetisationEnabled ?? false);
+    setSynced(true);
   }
 
   async function handleSave() {
@@ -791,7 +799,10 @@ function SettingsTab() {
     try {
       await updateSettings({
         data: {
-          contactLimitPerParent: Number(contactLimit) || 10,
+          contactLimitPerParent: Number(contactLimit) || 5,
+          contactUnlockPriceInr: Number(unlockPrice) || 0,
+          platformCommissionPct: Number(commissionPct) || 0,
+          monetisationEnabled,
         },
       });
       queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() });
@@ -801,48 +812,155 @@ function SettingsTab() {
     } finally { setIsSaving(false); }
   }
 
+  function handleToggleMonetisation() {
+    if (!monetisationEnabled) {
+      setShowMonetisationModal(true);
+    } else {
+      setMonetisationEnabled(false);
+    }
+  }
+
+  function handleConfirmEnableMonetisation() {
+    setMonetisationEnabled(true);
+    setShowMonetisationModal(false);
+  }
+
   if (isLoading) {
     return <div className="space-y-4">{[1,2,3].map(i => <div key={i} className="h-12 bg-white rounded-xl animate-pulse shadow-sm" />)}</div>;
   }
 
   return (
-    <div className="max-w-lg space-y-6">
-      <div className="flex items-start gap-3 p-4 bg-[#FFB830]/10 border border-[#FFB830]/30 rounded-xl">
-        <TrendingUp size={18} className="text-[#FFB830] mt-0.5 shrink-0" />
-        <div>
-          <p className="text-sm font-semibold text-[#1A2340]">Platform is currently free</p>
-          <p className="text-xs text-gray-500 mt-0.5">All contact unlocks are free during the beta period. Paid unlocks via Razorpay will be enabled in a future release.</p>
+    <>
+      <div className="max-w-lg space-y-6">
+        {monetisationEnabled ? (
+          <div className="flex items-start gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
+            <IndianRupee size={18} className="text-green-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-green-800">Monetisation is active</p>
+              <p className="text-xs text-green-600 mt-0.5">
+                Parents are charged ₹{Number(unlockPrice) || 0} per contact unlock. Platform commission: {Number(commissionPct) || 0}%.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start gap-3 p-4 bg-[#FFB830]/10 border border-[#FFB830]/30 rounded-xl">
+            <TrendingUp size={18} className="text-[#FFB830] mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-[#1A2340]">Platform is currently free</p>
+              <p className="text-xs text-gray-500 mt-0.5">All contact unlocks are free. Enable monetisation below to charge parents per unlock via Razorpay.</p>
+            </div>
+          </div>
+        )}
+
+        <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-5">
+          <div>
+            <Label htmlFor="contact-limit" className="text-sm font-semibold text-[#1A2340]">Contact Unlocks Per Parent</Label>
+            <p className="text-xs text-gray-400 mb-2">Maximum number of professionals a parent can unlock contact details for.</p>
+            <Input
+              id="contact-limit"
+              type="number"
+              min={1}
+              max={1000}
+              value={contactLimit}
+              onChange={(e) => setContactLimit(e.target.value === "" ? "" : Number(e.target.value))}
+              className="rounded-lg focus-visible:ring-[#2EC4A5]"
+              aria-label="Contact unlock limit per parent"
+            />
+          </div>
+
+          <hr className="border-gray-100" />
+
+          <div>
+            <p className="text-sm font-semibold text-[#1A2340] mb-0.5">Monetisation</p>
+            <p className="text-xs text-gray-400 mb-4">Control whether parents are charged for contact unlocks.</p>
+
+            <div className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50 mb-4">
+              <div>
+                <p className="text-sm font-medium text-[#1A2340]">Enable paid contact unlocks</p>
+                <p className="text-xs text-gray-400">Charge parents each time they unlock a professional's contact details.</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleToggleMonetisation}
+                aria-label={monetisationEnabled ? "Disable monetisation" : "Enable monetisation"}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4A5] focus-visible:ring-offset-2 ${monetisationEnabled ? "bg-[#2EC4A5]" : "bg-gray-200"}`}
+              >
+                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${monetisationEnabled ? "translate-x-5" : "translate-x-0"}`} />
+              </button>
+            </div>
+
+            <div className={`space-y-4 transition-opacity duration-200 ${monetisationEnabled ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
+              <div>
+                <Label htmlFor="unlock-price" className="text-sm font-semibold text-[#1A2340]">Contact Unlock Price (₹)</Label>
+                <p className="text-xs text-gray-400 mb-2">Amount charged to parents per contact unlock.</p>
+                <Input
+                  id="unlock-price"
+                  type="number"
+                  min={0}
+                  max={10000}
+                  value={unlockPrice}
+                  onChange={(e) => setUnlockPrice(e.target.value === "" ? "" : Number(e.target.value))}
+                  className="rounded-lg focus-visible:ring-[#2EC4A5]"
+                  aria-label="Contact unlock price in rupees"
+                  disabled={!monetisationEnabled}
+                />
+              </div>
+              <div>
+                <Label htmlFor="commission-pct" className="text-sm font-semibold text-[#1A2340]">Platform Commission (%)</Label>
+                <p className="text-xs text-gray-400 mb-2">Percentage of each unlock payment retained by Includly.</p>
+                <Input
+                  id="commission-pct"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={commissionPct}
+                  onChange={(e) => setCommissionPct(e.target.value === "" ? "" : Number(e.target.value))}
+                  className="rounded-lg focus-visible:ring-[#2EC4A5]"
+                  aria-label="Platform commission percentage"
+                  disabled={!monetisationEnabled}
+                />
+              </div>
+            </div>
+          </div>
+
+          <Button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
+            aria-label="Save settings"
+          >
+            {isSaving ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
+            Save Settings
+          </Button>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-5">
-        <div>
-          <Label htmlFor="contact-limit" className="text-sm font-semibold text-[#1A2340]">
-            Contact Unlocks Per Parent
-          </Label>
-          <p className="text-xs text-gray-400 mb-2">Maximum number of professionals a parent can unlock contact details for.</p>
-          <Input
-            id="contact-limit"
-            type="number"
-            min={1}
-            max={1000}
-            value={contactLimit}
-            onChange={(e) => setContactLimit(e.target.value === "" ? "" : Number(e.target.value))}
-            className="rounded-lg focus-visible:ring-[#2EC4A5]"
-            aria-label="Contact unlock limit per parent"
-          />
-        </div>
-
-        <Button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
-          aria-label="Save settings"
-        >
-          {isSaving ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
-          Save Settings
-        </Button>
-      </div>
-    </div>
+      <Dialog open={showMonetisationModal} onOpenChange={setShowMonetisationModal}>
+        <DialogContent className="max-w-sm shadow-[0_8px_40px_rgba(26,35,64,0.12)]">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-[#1A2340]">Enable Monetisation?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="flex items-start gap-3 p-3 bg-[#FF6B6B]/5 border border-[#FF6B6B]/20 rounded-xl">
+              <IndianRupee size={16} className="text-[#FF6B6B] mt-0.5 shrink-0" />
+              <p className="text-sm text-gray-600">
+                Parents will be charged <strong>₹{Number(unlockPrice) || 0}</strong> per contact unlock via Razorpay. This takes effect immediately on Save.
+              </p>
+            </div>
+            <p className="text-xs text-gray-400">Make sure the unlock price and commission are configured correctly before enabling.</p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setShowMonetisationModal(false)} aria-label="Cancel">Cancel</Button>
+            <Button
+              className="bg-[#2EC4A5] hover:bg-[#26a88d] focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
+              onClick={handleConfirmEnableMonetisation}
+              aria-label="Confirm enable monetisation"
+            >
+              Enable Monetisation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

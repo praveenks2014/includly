@@ -484,14 +484,23 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
             <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${statusColors[profile.verificationStatus] ?? statusColors.unsubmitted}`}>
               {profile.verificationStatus === "verified" ? "✓ Verified" : profile.verificationStatus}
             </span>
-            <a
-              href={`/professionals/${profile.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-[#2EC4A5] hover:underline flex items-center gap-1"
-            >
-              <Eye size={12} /> View public profile
-            </a>
+            {profile.verificationStatus === "verified" ? (
+              <a
+                href={`/professionals/${profile.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-[#2EC4A5] hover:underline flex items-center gap-1"
+              >
+                <Eye size={12} /> View public profile
+              </a>
+            ) : (
+              <span
+                className="text-xs text-gray-400 flex items-center gap-1 cursor-default select-none"
+                title="Your profile will appear in search results once you are verified"
+              >
+                <Eye size={12} /> Visible after verification
+              </span>
+            )}
           </div>
         </div>
         {profile.bio && <p className="text-sm text-gray-600 line-clamp-2">{profile.bio}</p>}
@@ -658,7 +667,13 @@ function AvailabilityTab() {
   }, [existing, loaded]);
 
   function addSlot(day: number) {
-    setSlots((prev) => [...prev, { dayOfWeek: day, startTime: "09:00", endTime: "10:00", slotDurationMinutes: 60, priceInr: 500 }]);
+    setSlots((prev) => {
+      const daySlots = prev.filter((s) => s.dayOfWeek === day);
+      const lastEnd = daySlots.length > 0
+        ? daySlots.reduce((max, s) => (s.endTime > max ? s.endTime : max), "00:00")
+        : "09:00";
+      return [...prev, { dayOfWeek: day, startTime: lastEnd, endTime: calcEndTime(lastEnd, 60), slotDurationMinutes: 60, priceInr: 500 }];
+    });
   }
   function removeSlot(idx: number) {
     setSlots((prev) => prev.filter((_, i) => i !== idx));

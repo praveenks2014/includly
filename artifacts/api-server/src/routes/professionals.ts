@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc, arrayOverlaps, isNull, type SQL } from "drizzle-orm";
-import { db, usersTable, professionalProfilesTable, contactUnlocksTable, specialtyEnum, professionalSubscriptionsTable } from "@workspace/db";
+import { db, usersTable, professionalProfilesTable, contactUnlocksTable, specialtyEnum, professionalSubscriptionsTable, professionalCertificationsTable } from "@workspace/db";
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
 import { notifyParentsOnProfileUpdate } from "../lib/notificationService";
 import {
@@ -480,6 +480,37 @@ router.post("/professionals/me/free-activate", requireAuth, requireRole("profess
     .returning();
 
   res.json({ message: "Profile activated (first month free)", paymentActivated: updated.paymentActivated });
+});
+
+router.get("/professionals/:id/certifications", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(raw, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const [profile] = await db
+    .select({ verificationStatus: professionalProfilesTable.verificationStatus })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, id))
+    .limit(1);
+
+  if (!profile || profile.verificationStatus !== "verified") {
+    res.json([]);
+    return;
+  }
+
+  const certs = await db
+    .select({
+      id: professionalCertificationsTable.id,
+      documentType: professionalCertificationsTable.documentType,
+      uploadedAt: professionalCertificationsTable.uploadedAt,
+    })
+    .from(professionalCertificationsTable)
+    .where(eq(professionalCertificationsTable.professionalId, id));
+
+  res.json(certs.map((c) => ({ ...c, uploadedAt: c.uploadedAt.toISOString() })));
 });
 
 export default router;

@@ -9,5 +9,8 @@
 export interface AdminSettings {
   id: number;
   contactLimitPerParent: number;
+  contactUnlockPriceInr: number;
+  platformCommissionPct: number;
+  monetisationEnabled: boolean;
   updatedAt: Date;
 }

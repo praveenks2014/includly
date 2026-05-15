@@ -591,11 +591,17 @@ export const GetAdminSettingsResponse = zod.object({
  */
 export const UpdateAdminSettingsBody = zod.object({
   contactLimitPerParent: zod.number().optional(),
+  contactUnlockPriceInr: zod.number().optional(),
+  platformCommissionPct: zod.number().optional(),
+  monetisationEnabled: zod.boolean().optional(),
 });
 
 export const UpdateAdminSettingsResponse = zod.object({
   id: zod.number(),
   contactLimitPerParent: zod.number(),
+  contactUnlockPriceInr: zod.number(),
+  platformCommissionPct: zod.number(),
+  monetisationEnabled: zod.boolean(),
   updatedAt: zod.coerce.date(),
 });
 

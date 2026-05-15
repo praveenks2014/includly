@@ -12,7 +12,7 @@ import {
   getGetRatingsForProfessionalQueryKey,
   getGetMyRatingForProfessionalQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { getSpecialtyLabel, SPECIALTY_COLORS } from "@/lib/specialties";
 import { UnlockPaymentModal } from "@/components/UnlockPaymentModal";
@@ -130,6 +130,16 @@ export default function ProfessionalProfilePage() {
   });
   const { mutateAsync: submitRating } = useCreateRating();
 
+  const { data: certsData } = useQuery({
+    queryKey: ["professionalCerts", professionalId],
+    queryFn: async () => {
+      const res = await fetch(`/api/professionals/${professionalId}/certifications`);
+      if (!res.ok) return [];
+      return res.json() as Promise<{ id: number; documentType: string; uploadedAt: string }[]>;
+    },
+    enabled: !!professionalId,
+  });
+
   const isUnlocked = unlockStatus?.isUnlocked ?? false;
   const myRating = myRatingData?.rating ?? null;
   const unlockPrice = 0;
@@ -223,11 +233,11 @@ export default function ProfessionalProfilePage() {
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         {/* Avatar row */}
-        <div className="flex flex-col sm:flex-row sm:items-end gap-4 -mt-14 sm:-mt-16 mb-6">
+        <div className="flex flex-col sm:flex-row gap-4 -mt-14 sm:-mt-16 mb-6">
           <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-[#2EC4A5] border-4 border-white shadow-lg flex items-center justify-center shrink-0">
             <span className="text-white text-2xl sm:text-3xl font-bold font-serif">{initials}</span>
           </div>
-          <div className="pb-1 flex-1">
+          <div className="pb-1 flex-1 sm:pt-16">
             <div className="flex flex-wrap items-center gap-2 mb-1">
               <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#1A2340]">{p.fullName ?? "Professional"}</h1>
               {p.isVerified && p.verificationStatus === "verified" && (
@@ -369,12 +379,29 @@ export default function ProfessionalProfilePage() {
             <section className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)]" aria-label="Certifications">
               <h2 className="font-serif text-lg font-bold text-[#1A2340] mb-3">Credentials</h2>
               {p.verificationStatus === "verified" ? (
-                <div className="flex items-center gap-3 p-3 bg-[#2EC4A5]/5 border border-[#2EC4A5]/20 rounded-xl">
-                  <BadgeCheck size={20} className="text-[#2EC4A5] shrink-0" />
-                  <div>
-                    <p className="text-sm font-semibold text-[#2EC4A5]">Identity Verified by Includly</p>
-                    <p className="text-xs text-gray-400">Certifications and ID documents reviewed by our team.</p>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-3 bg-[#2EC4A5]/5 border border-[#2EC4A5]/20 rounded-xl">
+                    <BadgeCheck size={20} className="text-[#2EC4A5] shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-[#2EC4A5]">Identity Verified by Includly</p>
+                      <p className="text-xs text-gray-400">Certifications and ID documents reviewed by our team.</p>
+                    </div>
                   </div>
+                  {certsData && certsData.length > 0 && (
+                    <div className="space-y-2">
+                      {certsData.map((cert) => (
+                        <div key={cert.id} className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-gray-100 bg-gray-50">
+                          <GraduationCap size={14} className="text-[#2EC4A5] shrink-0" />
+                          <span className="text-sm text-[#1A2340] font-medium capitalize flex-1">
+                            {cert.documentType.replace(/_/g, " ")}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {new Date(cert.uploadedAt).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="text-sm text-gray-400 italic">Credential verification is pending or not yet submitted.</p>

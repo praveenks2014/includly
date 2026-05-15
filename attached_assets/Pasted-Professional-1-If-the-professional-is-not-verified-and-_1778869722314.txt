@@ -1,0 +1,41 @@
+Professional
+1) If the professional is not verified and they try to click the public profile, will be be shown to the parents post verification of completion.
+2) in availability clicking Add slot automatically shows the slot hour which is subsequent after considering the time of each slot.
+3) Clicking view public profile of verified professionals, currently hides half top of the name. Fix that so the entire letters in the names are visible. 
+4) Every certification added by professionals in Certification tabs, can be viewed by the parents who are clicking the professional's profile. 
+5) Admin Dashboard
+Route: /admin — only accessible to praveenece.mit@gmail.com (admin role).
+Layout
+
+Full-width dashboard with left sidebar nav: Overview · Professionals · Verifications · Parents · Payments · Settings
+
+Overview (MIS) Tab
+
+KPI cards: Total Parents · Total Professionals (pending/approved/rejected breakdown) · Total Unlocks · Total Revenue (₹0 during free period) · Monthly Revenue
+Simple bar chart (use recharts) showing monthly new signups (parents vs professionals) for the last 6 months.
+
+Professionals Tab
+
+Data table with columns: Photo · Name · Specialties · City · Status · Unlocks · Submitted At · Actions
+Filters: Status (All / Pending / Approved / Rejected) · Specialty · City · Search by name
+Actions per row:
+
+Approve (green button) — sets verification_status = 'approved'
+Reject (red button) — opens a modal to enter rejection reason
+View Profile → opens /professionals/:id in new tab
+View Certifications → opens uploaded cert files in a modal lightbox
+
+
+
+Verifications Tab (ID documents)
+
+Same table pattern but for identity_verifications.
+Actions: Approve / Reject with admin notes.
+"View Document" → shows the uploaded image/PDF in a modal.
+
+Settings Tab
+
+Contact Unlock Price: number input (INR). Default 0. Save button.
+Platform Commission %: number input. Default 0. Save button.
+Warning banner: "Setting price to 0 means all contact unlocks are free. Monetisation is currently DISABLED."
+Toggle: "Enable Monetisation" (off by default). When toggled ON, a confirmation modal shows: "This will charge parents ₹[price] per unlock. Are you sure?" Confirming saves and activates.

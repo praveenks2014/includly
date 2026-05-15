@@ -8,4 +8,7 @@
 
 export interface UpdateAdminSettingsBody {
   contactLimitPerParent?: number;
+  contactUnlockPriceInr?: number;
+  platformCommissionPct?: number;
+  monetisationEnabled?: boolean;
 }

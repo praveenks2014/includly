@@ -636,11 +636,17 @@ export interface AdminStats {
 export interface AdminSettings {
   id: number;
   contactLimitPerParent: number;
+  contactUnlockPriceInr: number;
+  platformCommissionPct: number;
+  monetisationEnabled: boolean;
   updatedAt: string;
 }
 
 export interface UpdateAdminSettingsBody {
   contactLimitPerParent?: number;
+  contactUnlockPriceInr?: number;
+  platformCommissionPct?: number;
+  monetisationEnabled?: boolean;
 }
 
 export interface VapidPublicKeyResponse {
