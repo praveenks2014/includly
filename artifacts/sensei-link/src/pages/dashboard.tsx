@@ -1,3 +1,4 @@
+import ParentDashboardNew from "./parent-dashboard";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -83,6 +84,11 @@ export default function DashboardPage() {
     );
   }
 
+  // Parent gets its own full-screen sidebar layout
+  if (role === "parent") {
+    return <ParentDashboardNew />;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
@@ -97,15 +103,6 @@ export default function DashboardPage() {
 
         <NotificationBanner />
 
-        {role === "parent" && (
-          <ParentDashboard
-            data={parentDash}
-            isLoading={parentLoading}
-            subscription={subscription}
-            paymentHistory={paymentHistory ?? []}
-            contactUsage={contactUsage}
-          />
-        )}
         {role === "professional" && (
           <ProfessionalDashboard data={proDash} isLoading={proLoading} />
         )}

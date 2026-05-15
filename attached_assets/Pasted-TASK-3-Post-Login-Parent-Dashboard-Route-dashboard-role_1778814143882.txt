@@ -1,0 +1,51 @@
+TASK 3 — Post-Login Parent Dashboard
+Route: /dashboard (role = parent). Replace the current cluttered layout with this structure.
+Layout
+
+Left Sidebar (240px, fixed, collapsible on mobile to a bottom tab bar):
+
+Avatar with initials + name + city at top.
+Nav items with Tabler icons: Home · Find Professionals · My Bookings · My Unlocks · Notifications · Resources · Account Settings
+Bottom of sidebar: "Need Help?" link + version.
+
+
+Main Content Area (right of sidebar): scrollable, max-width 860px, centred with padding.
+
+Home Tab (default after login)
+
+Personalised greeting: "Good morning, [Name]! Here's what's happening for [child's name]." (Use time-of-day greeting.)
+Quick Stats Row (3 cards): Professionals Unlocked · Sessions Booked · Upcoming Sessions
+Smart Recommendations Section: "Professionals near you matching [child's needs]" — pulls from DB filtered by parent's city and child's need tags. Shows 4 cards in a 2×2 grid. Each card: photo, name, specialty tags, city, rating, session fee badge (or "Free Intro"), "View Profile" button.
+Upcoming Sessions Widget: Next 2 sessions with date/time, professional name, session mode (Online/Offline), "Join / Get Directions" button.
+Recent Activity Feed: Last 5 activities (unlocked a profile, left a review, booked a session) with timestamps.
+Resource Highlight: 1 featured article/resource card from the Resources section.
+
+Find Professionals Tab
+
+Full search UI with all filters (specialty, city, age group, availability, fee range slider).
+Results grid (2 columns desktop, 1 column mobile).
+Each professional card:
+
+Profile photo (or initials avatar if none)
+Name, specialty tags (pill chips)
+City + session mode badge
+Rating (stars + count)
+Session fee (or "Free to contact" if fee = 0)
+"View Profile" button (always accessible) + "Unlock Contact" button (if not unlocked; shows ₹99 or ₹0 based on admin_settings)
+
+
+Clicking "View Profile" → /professionals/:id full profile page.
+
+My Unlocks Tab
+
+Grid of unlocked professionals with their contact info visible (phone + email).
+Each card also shows: "Leave a Review" button (if not yet reviewed), "Book a Session" button.
+
+My Bookings Tab
+
+Upcoming (sorted soonest first) and Past bookings in tabs.
+Each booking row: date/time, professional name, specialty, status badge (Confirmed / Pending / Completed), session notes.
+
+Notifications Tab
+
+List of all notifications (new from top). Read/unread state. "Mark all read" button
