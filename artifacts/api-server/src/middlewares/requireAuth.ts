@@ -147,12 +147,23 @@ export const requireAuth = async (
   }
 
   const adminEmail = process.env["ADMIN_EMAIL"] ?? "praveenece.mit@gmail.com";
-  const adminClerkId = process.env["ADMIN_CLERK_ID"];
+  // ADMIN_CLERK_ID: single ID (legacy). ADMIN_CLERK_IDS: comma-separated list.
+  const adminClerkIdSet = new Set(
+    [
+      process.env["ADMIN_CLERK_ID"],
+      ...(process.env["ADMIN_CLERK_IDS"] ?? "").split(","),
+    ]
+      .map((s) => s?.trim())
+      .filter(Boolean) as string[],
+  );
 
-  // On a brand-new user insert, fetch their primary email from Clerk (once per
-  // user) so we can store it and use it for admin self-healing below.
+  // Fetch email from Clerk for any user whose email is not yet stored AND who
+  // is not already admin. This covers both brand-new inserts and existing rows
+  // that were created before email-sync was added — critical for the admin
+  // account when Clerk creates a new ID (e.g. switching between Google OAuth
+  // and email/password sign-in before accounts are linked).
   let resolvedEmail = user.email ?? null;
-  if (inserted[0] && !resolvedEmail) {
+  if (!resolvedEmail && user.role !== "admin") {
     const clerkSecret = process.env["CLERK_SECRET_KEY"];
     if (clerkSecret) {
       try {
@@ -172,7 +183,7 @@ export const requireAuth = async (
           }
         }
       } catch {
-        // Non-fatal — email sync is best-effort
+        // Non-fatal — email sync is best-effort; will retry on the next request.
       }
     }
   }
@@ -180,8 +191,8 @@ export const requireAuth = async (
   // Self-heal: ensure the admin account always has role=admin regardless of
   // how they log in (email+password or Google OAuth) and in both dev/prod.
   const isAdmin =
-    (adminClerkId && clerkId === adminClerkId) ||
-    (resolvedEmail && resolvedEmail === adminEmail);
+    adminClerkIdSet.has(clerkId) ||
+    (resolvedEmail != null && resolvedEmail === adminEmail);
 
   if (isAdmin && user.role !== "admin") {
     const [fixed] = await db

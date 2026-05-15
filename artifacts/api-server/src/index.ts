@@ -20,28 +20,41 @@ if (Number.isNaN(port) || port <= 0) {
 /**
  * Seed the admin account on every boot.
  *
- * Uses ADMIN_CLERK_ID (fastest, no Clerk API call) if set.
- * Falls back to looking up the Clerk user by ADMIN_EMAIL via the Clerk API.
- * Silently skips if neither can be resolved — the requireAuth middleware
- * provides an additional self-healing layer on every authenticated request.
+ * Resolves ALL Clerk user IDs that match ADMIN_EMAIL (Google OAuth and
+ * email/password may produce separate Clerk accounts for the same address),
+ * then promotes every matching DB row to role=admin.
+ *
+ * Priority order for discovering clerkIds:
+ *  1. ADMIN_CLERK_IDS env var (comma-separated list) — instant, no API call.
+ *  2. ADMIN_CLERK_ID env var (single ID, legacy).
+ *  3. Clerk API lookup by ADMIN_EMAIL — catches any new accounts automatically.
  */
 async function seedAdmin(): Promise<void> {
   const adminEmail = process.env["ADMIN_EMAIL"] ?? "praveenece.mit@gmail.com";
-  const adminClerkId = process.env["ADMIN_CLERK_ID"];
   const clerkSecret = process.env["CLERK_SECRET_KEY"];
 
-  let clerkId = adminClerkId ?? null;
+  // Collect all known admin Clerk IDs from env vars first.
+  const clerkIds = new Set<string>(
+    [
+      process.env["ADMIN_CLERK_ID"],
+      ...(process.env["ADMIN_CLERK_IDS"] ?? "").split(","),
+    ]
+      .map((s) => s?.trim())
+      .filter(Boolean) as string[],
+  );
 
-  // If ADMIN_CLERK_ID isn't set, resolve via Clerk API
-  if (!clerkId && clerkSecret) {
+  // Also fetch ALL Clerk users with the admin email — handles the case where
+  // Google OAuth creates a second account separate from email/password.
+  if (clerkSecret) {
     try {
       const res = await fetch(
-        `https://api.clerk.com/v1/users?email_address=${encodeURIComponent(adminEmail)}&limit=1`,
+        `https://api.clerk.com/v1/users?email_address=${encodeURIComponent(adminEmail)}&limit=10`,
         { headers: { Authorization: `Bearer ${clerkSecret}` } },
       );
       if (res.ok) {
         const users = (await res.json()) as Array<{ id: string }>;
-        if (users.length) clerkId = users[0].id;
+        for (const u of users) clerkIds.add(u.id);
+        logger.info({ found: users.length }, "Admin seed: Clerk lookup by email");
       } else {
         logger.warn({ status: res.status }, "Admin seed: Clerk lookup failed");
       }
@@ -50,31 +63,46 @@ async function seedAdmin(): Promise<void> {
     }
   }
 
-  if (!clerkId) {
-    logger.warn("Admin seed: no ADMIN_CLERK_ID and Clerk lookup unavailable — skipping");
+  if (!clerkIds.size) {
+    logger.warn("Admin seed: no admin Clerk IDs resolved — skipping");
     return;
   }
 
   try {
-    // Update both possible rows: by clerk_id AND by admin email (handles stale rows)
-    const rows = await db
-      .select({ id: usersTable.id, clerkId: usersTable.clerkId, role: usersTable.role })
-      .from(usersTable)
-      .where(or(eq(usersTable.clerkId, clerkId), eq(usersTable.email, adminEmail)));
+    // Collect all DB rows that belong to the admin — either by a known clerkId
+    // or by the admin email. Deduplicate by row id so we update each row once.
+    const seenIds = new Set<number>();
+    let insertedAny = false;
 
-    for (const row of rows) {
-      const updates: Record<string, unknown> = { role: "admin" };
-      if (row.clerkId !== clerkId) updates.clerkId = clerkId;
-      await db.update(usersTable).set(updates).where(eq(usersTable.id, row.id));
-      logger.info({ id: row.id, clerkId, wasRole: row.role }, "Admin seed: row updated → role=admin");
-    }
+    for (const clerkId of clerkIds) {
+      const rows = await db
+        .select({ id: usersTable.id, clerkId: usersTable.clerkId, role: usersTable.role })
+        .from(usersTable)
+        .where(or(eq(usersTable.clerkId, clerkId), eq(usersTable.email, adminEmail)));
 
-    if (!rows.length) {
-      // No row at all — insert one
-      await db.insert(usersTable)
-        .values({ clerkId, role: "admin", email: adminEmail })
-        .onConflictDoNothing();
-      logger.info({ clerkId }, "Admin seed: inserted new admin row");
+      if (!rows.length && !insertedAny) {
+        // No row at all for this clerkId — insert one.
+        await db
+          .insert(usersTable)
+          .values({ clerkId, role: "admin", email: adminEmail })
+          .onConflictDoNothing();
+        insertedAny = true;
+        logger.info({ clerkId }, "Admin seed: inserted new admin row");
+        continue;
+      }
+
+      for (const row of rows) {
+        if (seenIds.has(row.id)) continue;
+        seenIds.add(row.id);
+        // Only update role and email — never overwrite an existing valid clerkId.
+        // The admin may have multiple Clerk accounts (Google + email/password);
+        // each row keeps its own clerkId.
+        await db
+          .update(usersTable)
+          .set({ role: "admin", email: adminEmail })
+          .where(eq(usersTable.id, row.id));
+        logger.info({ id: row.id, clerkId: row.clerkId, wasRole: row.role }, "Admin seed: row updated → role=admin");
+      }
     }
   } catch (err) {
     logger.warn({ err }, "Admin seed: DB update failed");
