@@ -1,0 +1,59 @@
+TASK 1 — Landing Page (public, no login required)
+Redesign the landing page at / to be warm, inclusive, and conversion-focused. The tone should feel like a trusted community, not a cold marketplace.
+Hero Section
+
+Full-width hero with a soft gradient background (warm mint-to-ivory, no harsh colours).
+Headline: "Every child deserves the right support" (large serif font, ~3.2rem).
+Subheadline: "Includly connects families across India with verified shadow teachers, occupational therapists, speech therapists, psychologists and therapy centres."
+Two prominent CTA buttons side by side:
+
+Primary (mint/teal): "Find Support for My Child" → opens sign-up modal with role pre-selected as 'parent'
+Secondary (outlined navy): "List Your Services" → opens sign-up modal with role pre-selected as 'professional'
+
+
+Trust bar beneath the buttons showing animated counters: "2,400+ Professionals · 380+ Therapy Centres · 12,000+ Children Supported · Verified & Safe"
+Hero background: a warm illustrated SVG pattern (soft abstract shapes, not stock photography).
+
+Sticky Navigation Bar
+
+Logo: "Includly" with a teal accent dot.
+Nav links: How It Works · Find Professionals · Find Centres · Resources · About
+Right side: "Log In" (ghost button) and "Get Started" (filled teal button).
+Nav becomes solid white with shadow on scroll (use IntersectionObserver or scroll event).
+On mobile: hamburger menu with a full-screen slide-in drawer.
+
+Search Bar (below hero, always visible)
+
+Filters: Specialty (dropdown), City (text + autocomplete), Child's Age Group (dropdown), Availability (Online / Offline / Both).
+"Search" button → navigates to /professionals with query params pre-filled.
+Quick-select chips below the search box: "Shadow Teacher · Speech Therapy · Occupational Therapy · ABA Therapy · Sensory Integration · Near Me"
+
+How It Works Section
+
+Three-column layout with large step numbers (01, 02, 03, 04).
+Tab switcher: "For Parents" / "For Professionals" / "For Therapy Centres" — switching re-renders the steps.
+Steps for Parents: Create Profile → Search & Filter → Book a Free Intro Call → Track Progress.
+Steps for Professionals: Sign Up → Build Profile → Get Verified → Go Live & Earn.
+Each step has an icon (Tabler outline), a short title, and 1–2 sentences of copy.
+
+Professional Category Grid
+
+Six cards in a 3×2 grid (2×2 on mobile): Shadow Teacher, Occupational Therapist, Speech Therapist, Child Psychologist, Special Educator, Therapy Centre.
+Each card: emoji/icon, title, short description, count of professionals listed, "Browse →" link.
+Cards have a hover lift effect (translateY -4px, subtle shadow).
+
+Social Proof / Testimonials
+
+3 testimonials in a horizontal scroll on mobile, 3-column grid on desktop.
+Each: star rating, quote, parent/professional name, city, avatar initials circle.
+One testimonial from a parent, one from a professional, one from a therapy centre director.
+
+Free-Until-You-Grow Banner
+
+A prominent teal/mint banner: "Includly is completely free for families. Professionals list for free during our launch period."
+Small print: "Monetisation will be enabled by admin when the platform is ready — you'll be notified."
+
+Footer
+
+4-column: Brand + tagline | For Parents | For Professionals | Company
+Links, social icons, copyright, privacy policy, terms.
