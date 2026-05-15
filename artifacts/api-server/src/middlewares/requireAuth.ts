@@ -137,7 +137,7 @@ export const requireAuth = async (
     .onConflictDoNothing()
     .returning();
 
-  const user =
+  let user =
     inserted[0] ??
     (await db.select().from(usersTable).where(eq(usersTable.clerkId, clerkId)))[0];
 
@@ -146,20 +146,51 @@ export const requireAuth = async (
     return;
   }
 
-  // If ADMIN_CLERK_ID is set and this user is the designated admin, ensure the
-  // DB row always reflects role=admin — this self-heals without any startup race.
+  const adminEmail = process.env["ADMIN_EMAIL"] ?? "praveenece.mit@gmail.com";
   const adminClerkId = process.env["ADMIN_CLERK_ID"];
-  if (adminClerkId && clerkId === adminClerkId && user.role !== "admin") {
+
+  // On a brand-new user insert, fetch their primary email from Clerk (once per
+  // user) so we can store it and use it for admin self-healing below.
+  let resolvedEmail = user.email ?? null;
+  if (inserted[0] && !resolvedEmail) {
+    const clerkSecret = process.env["CLERK_SECRET_KEY"];
+    if (clerkSecret) {
+      try {
+        const clerkRes = await fetch(`https://api.clerk.com/v1/users/${clerkId}`, {
+          headers: { Authorization: `Bearer ${clerkSecret}` },
+        });
+        if (clerkRes.ok) {
+          const cu = await clerkRes.json() as {
+            email_addresses?: { email_address: string; verification?: { status: string } }[];
+          };
+          const primary =
+            cu.email_addresses?.find((e) => e.verification?.status === "verified")?.email_address
+            ?? cu.email_addresses?.[0]?.email_address;
+          if (primary) {
+            resolvedEmail = primary;
+            await db.update(usersTable).set({ email: primary }).where(eq(usersTable.id, user.id));
+          }
+        }
+      } catch {
+        // Non-fatal — email sync is best-effort
+      }
+    }
+  }
+
+  // Self-heal: ensure the admin account always has role=admin regardless of
+  // how they log in (email+password or Google OAuth) and in both dev/prod.
+  const isAdmin =
+    (adminClerkId && clerkId === adminClerkId) ||
+    (resolvedEmail && resolvedEmail === adminEmail);
+
+  if (isAdmin && user.role !== "admin") {
     const [fixed] = await db
       .update(usersTable)
       .set({ role: "admin" })
       .where(eq(usersTable.id, user.id))
       .returning();
     if (fixed) {
-      req.userId = fixed.id;
-      req.userRole = "admin";
-      next();
-      return;
+      user = fixed;
     }
   }
 
