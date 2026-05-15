@@ -1,4 +1,5 @@
 import ParentDashboardNew from "./parent-dashboard";
+import ProfessionalDashboardNew from "./professional-dashboard";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -87,6 +88,11 @@ export default function DashboardPage() {
   // Parent gets its own full-screen sidebar layout
   if (role === "parent") {
     return <ParentDashboardNew />;
+  }
+
+  // Professional gets the new sidebar dashboard
+  if (role === "professional") {
+    return <ProfessionalDashboardNew />;
   }
 
   return (
