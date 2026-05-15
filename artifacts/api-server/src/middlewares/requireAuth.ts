@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet, jwtVerify, decodeJwt } from "jose";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
@@ -16,30 +16,56 @@ declare global {
 }
 
 /**
- * Derive the Clerk FAPI base URL from the publishable key.
+ * Derive the Clerk FAPI host from a publishable key.
  * Format: pk_live_<base64> or pk_test_<base64>
- * The base64 decodes to "<fapi-host>$"
+ * The base64 part decodes to "<fapi-host>$"
  */
-function getFapiUrl(): string {
-  const pk =
-    process.env.VITE_CLERK_PK ?? process.env.CLERK_PUBLISHABLE_KEY ?? "";
+function fapiHostFromKey(pk: string): string | null {
   const base64Part = pk.replace(/^pk_(live|test)_/, "");
   try {
     const decoded = Buffer.from(base64Part, "base64").toString("utf8");
     const host = decoded.replace(/\$+$/, "");
-    if (host) return `https://${host}`;
+    return host || null;
   } catch {
-    // fall through
+    return null;
   }
-  return "https://clerk.includly.in";
 }
 
-const fapiUrl = getFapiUrl();
-const jwksUrl = `${fapiUrl}/.well-known/jwks.json`;
+/**
+ * Build the set of trusted Clerk issuers and their pre-cached JWKS instances.
+ *
+ * We always trust:
+ *  1. The production/live issuer derived from CLERK_PUBLISHABLE_KEY / VITE_CLERK_PUBLISHABLE_KEY
+ *  2. The development issuer derived from the hardcoded DEV_CLERK_KEY used by App.tsx
+ *     when import.meta.env.DEV === true (pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA
+ *     → choice-lion-57.clerk.accounts.dev)
+ *
+ * Using a whitelist means we never blindly trust an issuer from the JWT payload.
+ */
+function buildTrustedJwksSets(): Map<string, ReturnType<typeof createRemoteJWKSet>> {
+  const map = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
-console.log(`[requireAuth] Using JWKS URL: ${jwksUrl}`);
+  const keySources = [
+    process.env.VITE_CLERK_PUBLISHABLE_KEY,
+    process.env.CLERK_PUBLISHABLE_KEY,
+    // DEV key hardcoded in App.tsx (choice-lion-57.clerk.accounts.dev)
+    "pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA",
+  ].filter(Boolean) as string[];
 
-const JWKS = createRemoteJWKSet(new URL(jwksUrl));
+  for (const pk of keySources) {
+    const host = fapiHostFromKey(pk);
+    if (!host) continue;
+    const issuer = `https://${host}`;
+    if (map.has(issuer)) continue;
+    const jwksUrl = `${issuer}/.well-known/jwks.json`;
+    console.log(`[requireAuth] Trusting Clerk issuer: ${issuer}`);
+    map.set(issuer, createRemoteJWKSet(new URL(jwksUrl)));
+  }
+
+  return map;
+}
+
+const TRUSTED_JWKS = buildTrustedJwksSets();
 
 /**
  * Extract the Bearer token from the Authorization header.
@@ -52,12 +78,28 @@ function extractToken(req: Request): string | null {
 }
 
 /**
- * Verify a Clerk JWT using the JWKS endpoint. Returns the Clerk user ID
- * (the `sub` claim) or null if verification fails.
+ * Verify a Clerk JWT. Reads the `iss` claim to select the right JWKS from
+ * the whitelist of trusted issuers, then verifies the signature.
+ * Returns the Clerk user ID (the `sub` claim) or null on failure.
  */
 async function verifyClerkToken(token: string): Promise<string | null> {
   try {
-    const { payload } = await jwtVerify(token, JWKS);
+    // Decode without verification to read the issuer claim
+    const unverified = decodeJwt(token);
+    const iss = typeof unverified.iss === "string" ? unverified.iss : null;
+
+    if (!iss) {
+      console.error("[requireAuth] JWT has no iss claim");
+      return null;
+    }
+
+    const jwks = TRUSTED_JWKS.get(iss);
+    if (!jwks) {
+      console.error(`[requireAuth] Untrusted JWT issuer: ${iss}`);
+      return null;
+    }
+
+    const { payload } = await jwtVerify(token, jwks);
     return payload.sub ?? null;
   } catch (err) {
     console.error("[requireAuth] JWT verification failed:", (err as Error).message);

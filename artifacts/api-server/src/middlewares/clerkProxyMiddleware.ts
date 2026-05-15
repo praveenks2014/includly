@@ -27,7 +27,11 @@ function fapiFromKey(pk: string): string {
 
 const CLERK_FAPI =
   process.env.CLERK_FAPI_URL ||
-  (process.env.VITE_CLERK_PK ? fapiFromKey(process.env.VITE_CLERK_PK) : "https://clerk.includly.in");
+  (process.env.VITE_CLERK_PUBLISHABLE_KEY
+    ? fapiFromKey(process.env.VITE_CLERK_PUBLISHABLE_KEY)
+    : process.env.CLERK_PUBLISHABLE_KEY
+    ? fapiFromKey(process.env.CLERK_PUBLISHABLE_KEY)
+    : "https://clerk.includly.in");
 // npm.clerk.dev is not resolvable from Replit's production servers (DNS blocked).
 // clerk.includly.in also serves npm assets and is reachable.
 const CLERK_NPM_CDN = CLERK_FAPI;
