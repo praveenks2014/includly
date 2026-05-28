@@ -1,0 +1,60 @@
+CONTEXT: This is Includly, a marketplace where parents of special-needs kids book
+sessions with special educators, shadow teachers, and therapy centres. A basic
+flow already exists: specialists create slots, parents book and pay. I now want to
+build the experience AFTER a slot is booked, with anti-leakage built in.
+
+SCOPE — build ONLY the following:
+
+1. CHILD PROFILE (the system of record)
+   - A parent can create one or more child profiles (name, age, needs/diagnosis
+     tags, notes). Every booking is attached to a child profile.
+   - All session history, notes, and progress for that child are visible here.
+
+2. BOOKING CONFIRMATION + SESSION LIFECYCLE
+   States: pending_payment -> confirmed -> completed -> (cancelled / no_show).
+   - On confirmation: show a confirmation screen, send an in-app + email
+     confirmation, and generate an "Add to calendar" (.ics) link.
+   - Session detail page showing date/time, specialist, child, location/online
+     link, and a status badge.
+
+3. PRE-SESSION INTAKE
+   - Parent fills a short intake form (goals, concerns) before the first session
+     with a given specialist. Specialist can view it on their session page.
+
+4. IN-APP MESSAGING (thread per booking/child)
+   - Parent <-> specialist chat tied to a booking. No phone/email shown in the UI
+     before a booking is confirmed.
+
+5. SESSION NOTES + PROGRESS (specialist side)
+   - After a session, the specialist marks it completed and adds private notes +
+     a parent-visible summary and simple progress markers.
+   - Parent sees the summary and a progress timeline on the child profile.
+
+6. POST-SESSION + REBOOKING
+   - After completion, parent is prompted to rate the session and to "Book next
+     session" or "Buy a package" (package logic is built in Phase 2 — for now just
+     a placeholder button + a rebooking flow that pre-fills the same specialist).
+
+7. ESCROW-STYLE PAYMENT HOLD
+   - When a parent pays, mark funds as HELD. Release to the specialist's ledger
+     only when the session is marked completed (or auto-release N days after the
+     session). On cancellation per policy, refund to parent wallet.
+   - Build this as a simple internal ledger now (transactions table with status:
+     held / released / refunded). Do NOT integrate a new payment processor —
+     reuse the existing payment integration.
+
+DATA MODEL (add tables, don't break existing ones):
+children, bookings (extend if it exists), session_notes, intake_forms,
+messages, transactions/ledger.
+
+ACCEPTANCE: I can book -> see confirmation + calendar link -> message the
+specialist -> specialist completes the session and adds a note -> I see the
+progress on the child profile -> funds move from held to released.
+
+GUARDRAILS (important):
+- Do NOT modify Clerk auth, login, OAuth, or any pk_/sk_ keys or Replit Secrets.
+- Do NOT change environment variables or proxy settings.
+- Do NOT refactor or "clean up" files outside the scope above.
+- Reuse the existing payment integration; do not add a new one.
+- Before deleting or renaming any existing file or DB column, stop and ask me.
+- Show me the list of files you'll change before you start.
