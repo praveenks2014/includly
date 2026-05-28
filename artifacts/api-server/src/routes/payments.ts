@@ -896,13 +896,14 @@ export async function activatePayment(
       }
       // If expiresAt IS NULL (permanent unlock from plan_b), no update needed — it already grants access
     } else {
-      // First-time unlock: insert new 30-day unlock
+      // First-time unlock: insert new 30-day unlock (chatAccessOnly=true — no raw contact revealed)
       const expiresAt = new Date(now);
       expiresAt.setDate(expiresAt.getDate() + 30);
       await db.insert(contactUnlocksTable).values({
         parentId: userId,
         professionalId,
         expiresAt,
+        chatAccessOnly: true,
       });
 
       const [prof] = await db
@@ -943,8 +944,8 @@ export async function activatePayment(
       }
       // If expiresAt IS NULL, unlock is already permanent — no action needed
     } else {
-      // First-time unlock: insert permanent record
-      await db.insert(contactUnlocksTable).values({ parentId: userId, professionalId });
+      // First-time unlock: insert permanent record (chatAccessOnly=true — no raw contact revealed)
+      await db.insert(contactUnlocksTable).values({ parentId: userId, professionalId, chatAccessOnly: true });
       if (prof) void notifyProfessionalOnUnlock(prof.userId).catch(() => {});
     }
     return { isSubscriptionActive: false, unlockedProfessionalId: professionalId };

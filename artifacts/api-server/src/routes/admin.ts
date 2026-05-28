@@ -10,6 +10,7 @@ import {
   identityVerificationsTable,
   professionalCertificationsTable,
   paymentsTable,
+  commissionRatesTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import {
@@ -350,6 +351,48 @@ router.get("/admin/parents", ...adminGuard, async (req, res): Promise<void> => {
     page,
     limit,
   });
+});
+
+router.get("/admin/commission-rates", ...adminGuard, async (req, res): Promise<void> => {
+  const rows = await db.select().from(commissionRatesTable).orderBy(commissionRatesTable.bookingType);
+  res.json(rows);
+});
+
+router.patch("/admin/commission-rates/:bookingType", ...adminGuard, async (req, res): Promise<void> => {
+  const bookingType = req.params["bookingType"] as string;
+  const { ratePct, notes, isActive } = req.body ?? {};
+
+  if (typeof ratePct !== "number" || ratePct < 0 || ratePct > 100) {
+    res.status(400).json({ error: "ratePct must be 0–100" });
+    return;
+  }
+
+  const [existing] = await db
+    .select({ id: commissionRatesTable.id })
+    .from(commissionRatesTable)
+    .where(eq(commissionRatesTable.bookingType, bookingType))
+    .limit(1);
+
+  let updated;
+  if (existing) {
+    [updated] = await db
+      .update(commissionRatesTable)
+      .set({
+        ratePct,
+        ...(typeof notes === "string" ? { notes } : {}),
+        ...(typeof isActive === "boolean" ? { isActive } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(commissionRatesTable.bookingType, bookingType))
+      .returning();
+  } else {
+    [updated] = await db
+      .insert(commissionRatesTable)
+      .values({ bookingType, ratePct, notes: notes ?? null, isActive: isActive ?? true })
+      .returning();
+  }
+
+  res.json(updated);
 });
 
 export default router;

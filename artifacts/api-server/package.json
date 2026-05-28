@@ -27,7 +27,8 @@
     "pino-http": "^10",
     "razorpay": "^2.9.6",
     "stripe": "^22.0.0",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

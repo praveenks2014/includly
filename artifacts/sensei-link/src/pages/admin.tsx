@@ -12,7 +12,11 @@ import {
   getAdminListProfessionalsQueryKey,
   getAdminGetStatsQueryKey,
   getGetAdminSettingsQueryKey,
+  useGetCommissionRates,
+  useUpdateCommissionRate,
+  getCommissionRatesQueryKey,
   type AdminProfessionalRow,
+  type CommissionRateResponseType,
 } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -34,7 +38,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 
-type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "payments" | "settings";
+type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "payments" | "settings" | "commissions";
 
 interface ProfDocuments {
   identity: { id: number; documentType: string; fileKey: string; status: string; submittedAt: string } | null;
@@ -62,6 +66,105 @@ function SkeletonRow() {
         <td key={i} className="px-4 py-3"><div className="h-4 bg-gray-100 rounded animate-pulse" /></td>
       ))}
     </tr>
+  );
+}
+
+function CommissionRatesTab() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data: rates, isLoading } = useGetCommissionRates();
+  const { mutateAsync: updateRate, isPending } = useUpdateCommissionRate({
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: getCommissionRatesQueryKey() });
+      toast({ title: "Commission rate updated ✓" });
+    },
+    onError: () => toast({ title: "Failed to update rate", variant: "destructive" }),
+  });
+  const [editing, setEditing] = useState<{ bookingType: string; ratePct: number; notes: string } | null>(null);
+
+  if (isLoading) {
+    return <div className="space-y-3">{[1,2,3,4].map(i => <div key={i} className="h-14 bg-white rounded-xl animate-pulse" />)}</div>;
+  }
+
+  const typeLabel: Record<string, string> = {
+    session: "Single Session",
+    package: "Session Pass / Package",
+    subscription: "Monthly Subscription",
+    engagement: "Shadow Teacher Engagement",
+  };
+
+  return (
+    <div className="max-w-lg space-y-6">
+      <div>
+        <h2 className="text-lg font-serif font-bold text-[#1A2340]">Commission Rates</h2>
+        <p className="text-xs text-gray-400 mt-1">Percentage Includly retains from each payment type. Lower rates apply to longer-term commitments.</p>
+      </div>
+      <div className="space-y-3">
+        {(rates ?? []).map((rate: CommissionRateResponseType) => (
+          <div key={rate.bookingType} className="bg-white rounded-xl p-5 shadow-[0_4px_24px_rgba(26,35,64,0.08)] border border-gray-100">
+            {editing?.bookingType === rate.bookingType ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="text-sm font-semibold text-[#1A2340] flex-1">{typeLabel[rate.bookingType] ?? rate.bookingType}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">Commission %</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={editing!.ratePct}
+                    onChange={(e) => setEditing({ ...editing!, ratePct: Number(e.target.value) })}
+                    className="mt-1 rounded-lg focus-visible:ring-[#2EC4A5] w-28"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">Notes (optional)</Label>
+                  <Input
+                    value={editing!.notes}
+                    onChange={(e) => setEditing({ ...editing!, notes: e.target.value })}
+                    placeholder="Add a note..."
+                    className="mt-1 rounded-lg focus-visible:ring-[#2EC4A5]"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    disabled={isPending}
+                    className="bg-[#2EC4A5] hover:bg-[#26a88d] focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
+                    onClick={async () => {
+                      await updateRate({ bookingType: editing!.bookingType, ratePct: editing!.ratePct, notes: editing!.notes });
+                      setEditing(null);
+                    }}
+                  >
+                    {isPending ? <Loader2 size={13} className="animate-spin mr-1" /> : null} Save
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-[#1A2340]">{typeLabel[rate.bookingType] ?? rate.bookingType}</p>
+                  {rate.notes && <p className="text-xs text-gray-400 mt-0.5">{rate.notes}</p>}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl font-bold font-serif text-[#2EC4A5]">{rate.ratePct}%</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs border-gray-200"
+                    onClick={() => setEditing({ bookingType: rate.bookingType, ratePct: rate.ratePct, notes: rate.notes ?? "" })}
+                  >
+                    Edit
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -105,6 +208,7 @@ export default function AdminPage() {
     { id: "parents", label: "Parents", icon: <Users size={18} /> },
     { id: "payments", label: "Payments", icon: <CreditCard size={18} /> },
     { id: "settings", label: "Settings", icon: <Settings size={18} /> },
+    { id: "commissions", label: "Commission Rates", icon: <IndianRupee size={18} /> },
   ];
 
   return (
@@ -184,6 +288,7 @@ export default function AdminPage() {
           {activeTab === "parents" && <ParentsTab />}
           {activeTab === "payments" && <PaymentsTab />}
           {activeTab === "settings" && <SettingsTab />}
+          {activeTab === "commissions" && <CommissionRatesTab />}
         </div>
       </div>
     </div>

@@ -39,6 +39,7 @@ export const sessionBookingsTable = pgTable("session_bookings", {
   status: sessionStatusEnum("status").notNull().default("pending_payment"),
   providerOrderId: text("provider_order_id"),
   providerPaymentId: text("provider_payment_id"),
+  childId: integer("child_id"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

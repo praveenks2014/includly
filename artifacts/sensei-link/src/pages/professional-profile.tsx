@@ -21,7 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   BadgeCheck, MapPin, Phone, Mail, Lock, ArrowLeft,
   Loader2, Star, IndianRupee, Pencil, Clock, Home,
-  Navigation, Video, Copy, CheckCircle2, Globe, GraduationCap,
+  Navigation, Video, Copy, CheckCircle2, Globe, GraduationCap, MessageSquare,
 } from "lucide-react";
 
 function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -141,6 +141,7 @@ export default function ProfessionalProfilePage() {
   });
 
   const isUnlocked = unlockStatus?.isUnlocked ?? false;
+  const chatAccessOnly = (unlockStatus as any)?.chatAccessOnly ?? false;
   const myRating = myRatingData?.rating ?? null;
   const unlockPrice = 0;
   const isFree = true;
@@ -519,6 +520,7 @@ export default function ProfessionalProfilePage() {
                 p={p}
                 isSignedIn={!!isSignedIn}
                 isUnlocked={isUnlocked}
+                chatAccessOnly={chatAccessOnly}
                 isFree={isFree}
                 unlockPrice={unlockPrice}
                 firstName={firstName}
@@ -535,6 +537,7 @@ export default function ProfessionalProfilePage() {
           p={p}
           isSignedIn={!!isSignedIn}
           isUnlocked={isUnlocked}
+          chatAccessOnly={chatAccessOnly}
           isFree={isFree}
           unlockPrice={unlockPrice}
           firstName={firstName}
@@ -558,16 +561,38 @@ interface ActionProps {
   p: any;
   isSignedIn: boolean;
   isUnlocked: boolean;
+  chatAccessOnly: boolean;
   isFree: boolean;
   unlockPrice: number;
   firstName: string;
   onUnlock: () => void;
 }
 
-function ActionCard({ p, isSignedIn, isUnlocked, isFree, unlockPrice, firstName, onUnlock }: ActionProps) {
+function ActionCard({ p, isSignedIn, isUnlocked, chatAccessOnly, isFree, unlockPrice, firstName, onUnlock }: ActionProps) {
   return (
     <div className="bg-white rounded-xl shadow-[0_8px_40px_rgba(26,35,64,0.12)] border border-gray-100 overflow-hidden">
-      {isUnlocked ? (
+      {isUnlocked && chatAccessOnly ? (
+        <div className="p-5 space-y-3">
+          <div className="flex items-center gap-2 mb-3">
+            <BadgeCheck size={18} className="text-[#2EC4A5]" />
+            <p className="text-sm font-semibold text-[#2EC4A5]">Connected</p>
+          </div>
+          <div className="p-3 bg-[#2EC4A5]/5 border border-[#2EC4A5]/20 rounded-xl">
+            <p className="text-xs text-gray-600 leading-relaxed">
+              You can chat with {firstName} and book sessions directly through Includly. Contact details are kept private until you meet in person.
+            </p>
+          </div>
+          <a
+            href={`#booking`}
+            onClick={(e) => { e.preventDefault(); document.getElementById("booking-widget")?.scrollIntoView({ behavior: "smooth" }); }}
+            className="block w-full"
+          >
+            <Button className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white font-semibold rounded-xl mt-1" data-testid="book-session-btn">
+              <MessageSquare size={14} className="mr-2" /> Book a Session
+            </Button>
+          </a>
+        </div>
+      ) : isUnlocked ? (
         <div className="p-5 space-y-3">
           <div className="flex items-center gap-2 mb-4">
             <BadgeCheck size={18} className="text-[#2EC4A5]" />
@@ -613,22 +638,22 @@ function ActionCard({ p, isSignedIn, isUnlocked, isFree, unlockPrice, firstName,
             data-testid="unlock-contact-btn"
           >
             <Lock size={14} className="mr-2" />
-            {isFree ? `Contact ${firstName} for Free` : `Unlock Contact · ₹${unlockPrice}`}
+            {isFree ? `Connect with ${firstName} for Free` : `Connect · ₹${unlockPrice}`}
           </Button>
         </div>
       ) : (
         <div className="p-5 text-center">
           <div className="w-10 h-10 rounded-full bg-[#2EC4A5]/10 flex items-center justify-center mx-auto mb-3">
-            <Lock size={18} className="text-[#2EC4A5]" />
+            <MessageSquare size={18} className="text-[#2EC4A5]" />
           </div>
-          <p className="text-sm font-semibold text-[#1A2340] mb-1">Sign in to contact {firstName}</p>
-          <p className="text-xs text-gray-400 mb-4">Create a free account to view contact details.</p>
+          <p className="text-sm font-semibold text-[#1A2340] mb-1">Sign in to connect with {firstName}</p>
+          <p className="text-xs text-gray-400 mb-4">Create a free account to chat and book sessions.</p>
           <Button
             onClick={onUnlock}
             className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
-            aria-label="Sign in to contact professional"
+            aria-label="Sign in to connect with professional"
           >
-            Sign In to Contact
+            Sign In to Connect
           </Button>
         </div>
       )}
@@ -652,7 +677,20 @@ function ActionCard({ p, isSignedIn, isUnlocked, isFree, unlockPrice, firstName,
   );
 }
 
-function MobileActionBar({ p, isSignedIn, isUnlocked, isFree, unlockPrice, firstName, onUnlock }: ActionProps) {
+function MobileActionBar({ p, isSignedIn, isUnlocked, chatAccessOnly, isFree, unlockPrice, firstName, onUnlock }: ActionProps) {
+  if (isUnlocked && chatAccessOnly) {
+    return (
+      <Button
+        onClick={() => document.getElementById("booking-widget")?.scrollIntoView({ behavior: "smooth" })}
+        className="w-full h-12 bg-[#2EC4A5] hover:bg-[#26a88d] text-white font-semibold rounded-xl text-base focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
+        aria-label="Book a session"
+        data-testid="book-session-btn"
+      >
+        <MessageSquare size={16} className="mr-2" />
+        Book a Session with {firstName}
+      </Button>
+    );
+  }
   if (isUnlocked) {
     return (
       <div className="flex gap-3">
@@ -681,13 +719,13 @@ function MobileActionBar({ p, isSignedIn, isUnlocked, isFree, unlockPrice, first
     <Button
       onClick={onUnlock}
       className="w-full h-12 bg-[#2EC4A5] hover:bg-[#26a88d] text-white font-semibold rounded-xl text-base focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
-      aria-label={isSignedIn ? (isFree ? `Contact ${firstName} for Free` : `Unlock Contact · ₹${unlockPrice}`) : "Sign In to Contact"}
+      aria-label={isSignedIn ? (isFree ? `Connect with ${firstName} for Free` : `Connect · ₹${unlockPrice}`) : "Sign In to Connect"}
       data-testid="unlock-contact-btn"
     >
-      <Lock size={16} className="mr-2" />
+      <MessageSquare size={16} className="mr-2" />
       {isSignedIn
-        ? (isFree ? `Contact ${firstName} for Free` : `Unlock Contact · ₹${unlockPrice}`)
-        : "Sign In to Contact"}
+        ? (isFree ? `Connect with ${firstName} for Free` : `Connect · ₹${unlockPrice}`)
+        : "Sign In to Connect"}
     </Button>
   );
 }

@@ -125,12 +125,11 @@ router.get("/unlocks/check/:professionalId", requireAuth, requireRole("parent", 
       ),
     );
 
-  res.json(
-    CheckUnlockStatusResponse.parse({
-      isUnlocked: !!unlock,
-      unlockedAt: unlock?.unlockedAt?.toISOString() ?? null,
-    }),
-  );
+  res.json({
+    isUnlocked: !!unlock,
+    unlockedAt: unlock?.unlockedAt?.toISOString() ?? null,
+    chatAccessOnly: unlock?.chatAccessOnly ?? false,
+  });
 });
 
 router.get("/unlocks", requireAuth, requireRole("parent", "admin"), async (req, res): Promise<void> => {
@@ -140,6 +139,7 @@ router.get("/unlocks", requireAuth, requireRole("parent", "admin"), async (req, 
       parentId: contactUnlocksTable.parentId,
       professionalId: contactUnlocksTable.professionalId,
       unlockedAt: contactUnlocksTable.unlockedAt,
+      chatAccessOnly: contactUnlocksTable.chatAccessOnly,
       professional: professionalProfilesTable,
     })
     .from(contactUnlocksTable)
@@ -151,11 +151,14 @@ router.get("/unlocks", requireAuth, requireRole("parent", "admin"), async (req, 
 
   const result = unlocks.map((u) => {
     const p = u.professional;
+    // Legacy unlocks (chatAccessOnly=false) may still show raw contact; new Connect model never reveals it
+    const showContact = !u.chatAccessOnly;
     return {
       id: u.id,
       parentId: u.parentId,
       professionalId: u.professionalId,
       unlockedAt: u.unlockedAt,
+      chatAccessOnly: u.chatAccessOnly,
       professional: p
         ? {
             id: p.id,
@@ -176,8 +179,9 @@ router.get("/unlocks", requireAuth, requireRole("parent", "admin"), async (req, 
             phoneBlurred: blurContact(p.phone),
             emailBlurred: blurContact(p.email),
             isUnlocked: true,
-            phone: p.phone,
-            email: p.email,
+            chatAccessOnly: u.chatAccessOnly,
+            phone: showContact ? p.phone : null,
+            email: showContact ? p.email : null,
             paymentActivated: p.paymentActivated,
           }
         : null,

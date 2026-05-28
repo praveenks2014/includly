@@ -12,6 +12,7 @@ import {
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { sendPushNotification } from "../lib/notificationService";
+import { createLedgerHeld, releaseWithCommission, refundToWallet, findLedgerByBooking } from "../lib/ledger";
 import {
   SetAvailabilityBody,
   BookSessionBody,
@@ -189,7 +190,7 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
     return;
   }
 
-  const { professionalId, bookedDate, startTime, endTime, durationMinutes, amountInr, notes } = parsed.data;
+  const { professionalId, bookedDate, startTime, endTime, durationMinutes, amountInr, notes, childId } = { childId: undefined as number | undefined, ...parsed.data };
 
   const [existing] = await db
     .select({ id: sessionBookingsTable.id })
@@ -250,6 +251,7 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
             amountInr: 0,
             commissionInr: 0,
             notes: notes ?? null,
+            childId: childId ?? null,
             status: "confirmed",
           })
           .returning();
@@ -298,6 +300,7 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
       amountInr,
       commissionInr,
       notes: notes ?? null,
+      childId: childId ?? null,
       providerOrderId: order.id as string,
     })
     .returning();
@@ -365,6 +368,24 @@ router.post("/sessions/verify-payment", requireAuth, async (req: Request, res: R
     })
     .where(eq(sessionBookingsTable.id, sessionId))
     .returning();
+
+  // Create ledger entry: funds held until specialist marks session complete
+  void (async () => {
+    try {
+      const [prof] = await db
+        .select({ userId: professionalProfilesTable.userId })
+        .from(professionalProfilesTable)
+        .where(eq(professionalProfilesTable.id, confirmed!.professionalId))
+        .limit(1);
+      await createLedgerHeld({
+        bookingId: confirmed!.id,
+        parentId: confirmed!.parentId,
+        professionalUserId: prof?.userId ?? null,
+        amountInr: confirmed!.amountInr,
+        bookingType: "session",
+      });
+    } catch { /* ledger failure must never affect the payment response */ }
+  })();
 
   res.json(confirmed);
 });
@@ -511,6 +532,23 @@ router.patch("/sessions/:id/status", requireAuth, requireRole("professional", "a
     .set({ status: parsed.data.status as typeof booking.status, updatedAt: new Date() })
     .where(eq(sessionBookingsTable.id, sessionId))
     .returning();
+
+  // Ledger: release on completion, refund to wallet on cancellation
+  void (async () => {
+    try {
+      const ledgerEntry = await findLedgerByBooking(sessionId);
+      if (ledgerEntry) {
+        if (parsed.data.status === "completed") {
+          await releaseWithCommission(ledgerEntry.id);
+        } else if (
+          parsed.data.status === "cancelled_by_professional" ||
+          parsed.data.status === "no_show"
+        ) {
+          await refundToWallet(ledgerEntry.id, `Session ${parsed.data.status.replace(/_/g, " ")} — refunded to wallet`);
+        }
+      }
+    } catch { /* ledger ops must not break the status update response */ }
+  })();
 
   res.json(updated);
 });

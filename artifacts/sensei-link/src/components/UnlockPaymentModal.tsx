@@ -130,11 +130,11 @@ export function UnlockPaymentModal({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-serif">Unlock contact details</DialogTitle>
+          <DialogTitle className="font-serif">
+            Connect with {professionalName ?? "this specialist"}
+          </DialogTitle>
           <DialogDescription>
-            {professionalName
-              ? `Choose how you'd like to access ${professionalName}'s contact information.`
-              : "Choose a plan to reveal contact details."}
+            Chat and book sessions directly through Includly — contact details stay private until you meet in person.
           </DialogDescription>
         </DialogHeader>
 
@@ -150,8 +150,8 @@ export function UnlockPaymentModal({
                 <PlanOption
                   title={plans.planA.name}
                   price={`${formatRupees(plans.planA.amountPaise)} / 30 days`}
-                  description={`Unlock ${professionalName ? `${professionalName.split(" ")[0]}'s` : "this teacher's"} contact for 30 days (up to 5 contacts)`}
-                  features={["30-day access to this teacher", "Up to 5 teacher contacts", "Renew anytime"]}
+                  description={`Chat + book sessions with ${professionalName ? `${professionalName.split(" ")[0]}` : "this specialist"} for 30 days (up to 5 specialists)`}
+                  features={["30-day chat & booking access", "Up to 5 specialist connects", "Contact details private throughout"]}
                   badge={preferSubscription ? "Recommended" : "Best value"}
                   highlight
                   activePlanId={activePlan}
@@ -172,9 +172,9 @@ export function UnlockPaymentModal({
                 <PlanOption
                   title={plans.planB.name}
                   price={formatRupees(plans.planB.amountPaise)}
-                  description="Single permanent contact unlock — pay as you go"
-                  features={["Permanent unlock", "Just this specialist", "Instant access"]}
-                  badge="Pay per contact"
+                  description="Permanent chat + booking access for this specialist — pay as you go"
+                  features={["Permanent access", "Just this specialist", "Instant connect"]}
+                  badge="Pay per specialist"
                   activePlanId={activePlan}
                   planId="plan_b_per_contact"
                   onRazorpay={() => handleRazorpayPlan("plan_b_per_contact")}

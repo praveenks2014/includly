@@ -13,8 +13,12 @@ import storageRouter from "./storage";
 import verificationsRouter from "./verifications";
 import accountRouter from "./account";
 import sessionsRouter from "./sessions";
-const router: IRouter = Router();
+import childrenRouter from "./children";
+import connectRouter from "./connect";
+import engagementsRouter from "./engagements";
+import walletRouter from "./wallet";
 
+const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(usersRouter);
@@ -30,5 +34,9 @@ router.use(storageRouter);
 router.use(verificationsRouter);
 router.use(accountRouter);
 router.use(sessionsRouter);
+router.use(childrenRouter);
+router.use(connectRouter);
+router.use(engagementsRouter);
+router.use(walletRouter);
 
 export default router;

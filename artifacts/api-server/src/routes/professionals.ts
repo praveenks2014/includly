@@ -281,6 +281,7 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
     .offset(offsetNum);
 
   const unlockSet = new Set<number>();
+  const chatAccessOnlySet = new Set<number>();
   if (req.userId) {
     const unlocks = await db
       .select()
@@ -291,11 +292,15 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
           or(isNull(contactUnlocksTable.expiresAt), gt(contactUnlocksTable.expiresAt, new Date())),
         ),
       );
-    unlocks.forEach((u) => unlockSet.add(u.professionalId));
+    unlocks.forEach((u) => {
+      unlockSet.add(u.professionalId);
+      if (u.chatAccessOnly) chatAccessOnlySet.add(u.professionalId);
+    });
   }
 
   const results = paginated.map((p) => {
     const isUnlocked = unlockSet.has(p.id);
+    const isChatOnly = chatAccessOnlySet.has(p.id);
     return {
       id: p.id,
       userId: p.userId,
@@ -318,8 +323,9 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       phoneBlurred: blurContact(p.phone),
       emailBlurred: blurContact(p.email),
       isUnlocked,
-      phone: isUnlocked ? p.phone : null,
-      email: isUnlocked ? p.email : null,
+      chatAccessOnly: isChatOnly,
+      phone: (isUnlocked && !isChatOnly) ? p.phone : null,
+      email: (isUnlocked && !isChatOnly) ? p.email : null,
       distanceKm: p.distanceKm ?? null,
       pricingMinINR: p.pricingMinINR ?? null,
       pricingMaxINR: p.pricingMaxINR ?? null,
@@ -372,6 +378,7 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
   }
 
   let isUnlocked = false;
+  let isChatAccessOnly = false;
   if (req.userId) {
     const [unlock] = await db
       .select()
@@ -384,6 +391,7 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
         ),
       );
     isUnlocked = !!unlock;
+    isChatAccessOnly = unlock?.chatAccessOnly ?? false;
   }
 
   // Compute isPremium from active subscription — prevents permanent boost after expiry/cancel
@@ -406,8 +414,9 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
     phoneBlurred: blurContact(profile.phone),
     emailBlurred: blurContact(profile.email),
     isUnlocked,
-    phone: isUnlocked ? profile.phone : null,
-    email: isUnlocked ? profile.email : null,
+    chatAccessOnly: isChatAccessOnly,
+    phone: (isUnlocked && !isChatAccessOnly) ? profile.phone : null,
+    email: (isUnlocked && !isChatAccessOnly) ? profile.email : null,
     pricingMinINR: profile.pricingMinINR ?? null,
     pricingMaxINR: profile.pricingMaxINR ?? null,
     paymentActivated: profile.paymentActivated,

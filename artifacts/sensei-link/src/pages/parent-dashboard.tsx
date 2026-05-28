@@ -9,6 +9,7 @@ import {
   useGetMyUnlocks,
   useSearchProfessionals,
   useCreateRating,
+  useGetWalletBalance,
   getGetMeQueryKey,
 } from "@workspace/api-client-react";
 import type { ProfessionalSearchResult, SessionBookingWithDetails, ContactUnlock } from "@workspace/api-client-react";
@@ -23,7 +24,7 @@ import {
   Home, Search, CalendarCheck, Unlock, Bell, BookOpen, Settings,
   Star, MapPin, Loader2, ChevronDown, CheckCircle2,
   Clock, Video, Navigation, User, ArrowRight, HelpCircle,
-  Phone, Mail, MessageSquarePlus, Check, X, Filter,
+  Phone, Mail, MessageSquarePlus, Check, X, Filter, Wallet,
 } from "lucide-react";
 
 type Tab = "home" | "find" | "bookings" | "unlocks" | "notifications";
@@ -254,6 +255,7 @@ function ReviewModal({ professionalId, onClose }: { professionalId: number; onCl
 function HomeTab({ parentName, city }: { parentName: string; city?: string | null }) {
   const { data: dashData } = useGetParentDashboard();
   const { data: sessions } = useGetMySessions();
+  const { data: walletData } = useGetWalletBalance();
 
   const { data: recsData } = useSearchProfessionals(
     { city: city ?? undefined, limit: 4 } as Parameters<typeof useSearchProfessionals>[0],
@@ -293,10 +295,26 @@ function HomeTab({ parentName, city }: { parentName: string; city?: string | nul
         <p className="text-gray-500 text-sm mt-1">Here's what's happening on your Includly dashboard.</p>
       </div>
 
+      {/* Wallet widget */}
+      {walletData !== undefined && (
+        <div className="bg-gradient-to-r from-[#1A2340] to-[#2a3660] rounded-2xl p-5 text-white shadow-[0_4px_24px_rgba(26,35,64,0.2)]">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-white/60 font-medium uppercase tracking-widest mb-1">Includly Wallet</p>
+              <p className="text-3xl font-bold font-serif">₹{walletData.balanceInr}</p>
+              <p className="text-xs text-white/50 mt-1">Available balance</p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
+              <Wallet size={22} className="text-[#2EC4A5]" />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Quick stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Professionals Unlocked", value: dashData?.totalUnlocks ?? 0, icon: <Unlock size={16} className="text-teal-600" />, bg: "bg-teal-50" },
+          { label: "Professionals Connected", value: dashData?.totalUnlocks ?? 0, icon: <Unlock size={16} className="text-teal-600" />, bg: "bg-teal-50" },
           { label: "Sessions Booked", value: (sessions ?? []).length, icon: <CalendarCheck size={16} className="text-violet-600" />, bg: "bg-violet-50" },
           { label: "Upcoming Sessions", value: upcoming.length, icon: <Clock size={16} className="text-orange-500" />, bg: "bg-orange-50" },
         ].map((stat) => (
