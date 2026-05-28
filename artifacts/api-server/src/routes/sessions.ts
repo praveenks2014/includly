@@ -9,10 +9,12 @@ import {
   bookingMessagesTable,
   professionalProfilesTable,
   usersTable,
+  sessionNotesTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { sendPushNotification } from "../lib/notificationService";
 import { createLedgerHeld, releaseWithCommission, refundToWallet, findLedgerByBooking } from "../lib/ledger";
+import { convertReferralIfNeeded } from "./referrals";
 import {
   SetAvailabilityBody,
   BookSessionBody,
@@ -387,6 +389,9 @@ router.post("/sessions/verify-payment", requireAuth, async (req: Request, res: R
     } catch { /* ledger failure must never affect the payment response */ }
   })();
 
+  // Convert referral on first booking (fire-and-forget, never blocks response)
+  void convertReferralIfNeeded(confirmed!.parentId);
+
   res.json(confirmed);
 });
 
@@ -697,6 +702,30 @@ router.post("/sessions/:bookingId/messages", requireAuth, async (req: Request, r
       }
     })();
   }
+});
+
+// GET /sessions/progress — parent's session-notes timeline for habit loop
+router.get("/sessions/progress", requireAuth, requireRole("parent", "admin"), async (req: Request, res: Response): Promise<void> => {
+  const parentId = req.userId!;
+
+  const notes = await db
+    .select({
+      bookingId: sessionNotesTable.bookingId,
+      parentSummary: sessionNotesTable.parentSummary,
+      progressMarkers: sessionNotesTable.progressMarkers,
+      noteCreatedAt: sessionNotesTable.createdAt,
+      bookedDate: sessionBookingsTable.bookedDate,
+      professionalName: usersTable.fullName,
+    })
+    .from(sessionNotesTable)
+    .innerJoin(sessionBookingsTable, eq(sessionNotesTable.bookingId, sessionBookingsTable.id))
+    .innerJoin(professionalProfilesTable, eq(sessionBookingsTable.professionalId, professionalProfilesTable.id))
+    .innerJoin(usersTable, eq(professionalProfilesTable.userId, usersTable.id))
+    .where(eq(sessionBookingsTable.parentId, parentId))
+    .orderBy(desc(sessionNotesTable.createdAt))
+    .limit(20);
+
+  res.json(notes);
 });
 
 export default router;

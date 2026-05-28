@@ -18,6 +18,9 @@ export const notificationPreferencesTable = pgTable("notification_preferences", 
   onUnlock: boolean("on_unlock").notNull().default(true),
   onReview: boolean("on_review").notNull().default(true),
   onProfileUpdate: boolean("on_profile_update").notNull().default(true),
+  onSessionReminder: boolean("on_session_reminder").notNull().default(true),
+  onLowCredits: boolean("on_low_credits").notNull().default(true),
+  onCommunityReply: boolean("on_community_reply").notNull().default(true),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

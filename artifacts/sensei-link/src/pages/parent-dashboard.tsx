@@ -25,9 +25,27 @@ import {
   Star, MapPin, Loader2, ChevronDown, CheckCircle2,
   Clock, Video, Navigation, User, ArrowRight, HelpCircle,
   Phone, Mail, MessageSquarePlus, Check, X, Filter, Wallet,
+  TrendingUp, Gift, Copy, Sparkles,
 } from "lucide-react";
 
 type Tab = "home" | "find" | "bookings" | "unlocks" | "notifications";
+
+interface ProgressNote {
+  bookingId: number;
+  parentSummary: string | null;
+  progressMarkers: string | null;
+  noteCreatedAt: string;
+  bookedDate: string;
+  professionalName: string | null;
+}
+
+interface ReferralStats {
+  code: string;
+  shareUrl: string;
+  totalReferrals: number;
+  convertedReferrals: number;
+  totalEarnedInr: number;
+}
 
 interface Notification {
   id: number;
@@ -249,6 +267,183 @@ function ReviewModal({ professionalId, onClose }: { professionalId: number; onCl
   );
 }
 
+// ── Progress timeline ───────────────────────────────────────────────────────────
+function ProgressTimeline() {
+  const { data: notes, isLoading } = useQuery<ProgressNote[]>({
+    queryKey: ["sessions-progress"],
+    queryFn: () => fetchWithAuth("/sessions/progress"),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-6">
+        <Loader2 size={18} className="animate-spin text-teal-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+          <TrendingUp size={16} className="text-teal-600" />
+          Your Child's Progress
+        </h2>
+        {notes && notes.length > 0 && (
+          <span className="text-xs text-gray-400">{notes.length} update{notes.length !== 1 ? "s" : ""}</span>
+        )}
+      </div>
+
+      {!notes || notes.length === 0 ? (
+        <div className="bg-white border border-dashed border-teal-200 rounded-2xl p-6 text-center">
+          <Sparkles size={28} className="mx-auto mb-2 text-teal-300" />
+          <p className="text-sm font-medium text-gray-600">Progress notes will appear here</p>
+          <p className="text-xs text-gray-400 mt-1">After each session, your specialist leaves a note on your child's progress.</p>
+          <Link href="/search">
+            <Button variant="outline" size="sm" className="mt-3 text-teal-600 border-teal-200 hover:bg-teal-50 gap-1 text-xs">
+              Book a session <ArrowRight size={12} />
+            </Button>
+          </Link>
+        </div>
+      ) : (
+        <div className="relative">
+          <div className="absolute left-[19px] top-0 bottom-0 w-px bg-teal-100" aria-hidden />
+          <div className="space-y-3">
+            {notes.slice(0, 5).map((note) => (
+              <div key={note.bookingId} className="flex gap-4">
+                <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center shrink-0 z-10 border-2 border-white shadow-sm">
+                  <TrendingUp size={14} className="text-teal-600" />
+                </div>
+                <div className="flex-1 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <p className="text-xs font-medium text-teal-700">{note.professionalName ?? "Your specialist"}</p>
+                    <time className="text-xs text-gray-400 shrink-0">
+                      {new Date(note.noteCreatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                    </time>
+                  </div>
+                  {note.parentSummary && (
+                    <p className="text-sm text-gray-700 leading-relaxed">{note.parentSummary}</p>
+                  )}
+                  {note.progressMarkers && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {note.progressMarkers.split(",").filter(Boolean).map((m) => (
+                        <span key={m.trim()} className="text-[11px] bg-teal-50 text-teal-700 border border-teal-100 rounded-full px-2 py-0.5">
+                          {m.trim()}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Referral card ───────────────────────────────────────────────────────────────
+function ReferralCard() {
+  const { toast } = useToast();
+  const [claimCode, setClaimCode] = useState("");
+  const [claiming, setClaiming] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const { data, refetch } = useQuery<ReferralStats>({
+    queryKey: ["referral-my-code"],
+    queryFn: () => fetchWithAuth("/referrals/my-code"),
+  });
+
+  function copyCode() {
+    if (!data?.code) return;
+    navigator.clipboard.writeText(data.shareUrl).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function claimReferral() {
+    if (!claimCode.trim()) return;
+    setClaiming(true);
+    try {
+      await fetchWithAuth("/referrals/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: claimCode.trim().toUpperCase() }),
+      });
+      toast({ title: "Code claimed! You'll earn ₹100 on your first session." });
+      setClaimCode("");
+      void refetch();
+    } catch {
+      toast({ title: "Could not claim code — check it and try again.", variant: "destructive" });
+    } finally {
+      setClaiming(false);
+    }
+  }
+
+  return (
+    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-teal-200 rounded-2xl p-5">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-teal-100 flex items-center justify-center shrink-0">
+          <Gift size={18} className="text-teal-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-gray-900 text-sm">Refer a friend, earn ₹100</p>
+          <p className="text-xs text-gray-500 mt-0.5">Both you and your friend get ₹100 wallet credit when they book their first session.</p>
+        </div>
+      </div>
+
+      {data && (
+        <>
+          <div className="mt-4 flex items-center gap-2">
+            <div className="flex-1 bg-white border border-teal-200 rounded-xl px-3 py-2 flex items-center justify-between">
+              <span className="font-mono font-bold text-teal-700 tracking-widest text-sm">{data.code}</span>
+              <button
+                onClick={copyCode}
+                className="text-teal-500 hover:text-teal-700 transition-colors"
+                title="Copy share link"
+              >
+                {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+              </button>
+            </div>
+          </div>
+
+          {(data.convertedReferrals > 0 || data.totalEarnedInr > 0) && (
+            <div className="mt-3 flex gap-4 text-center">
+              <div className="flex-1 bg-white rounded-xl border border-teal-100 py-2">
+                <p className="text-lg font-bold text-teal-700">{data.convertedReferrals}</p>
+                <p className="text-[10px] text-gray-500">Friends joined</p>
+              </div>
+              <div className="flex-1 bg-white rounded-xl border border-teal-100 py-2">
+                <p className="text-lg font-bold text-teal-700">₹{data.totalEarnedInr}</p>
+                <p className="text-[10px] text-gray-500">Earned</p>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-3 flex gap-2">
+            <Input
+              value={claimCode}
+              onChange={(e) => setClaimCode(e.target.value.toUpperCase())}
+              placeholder="Have a friend's code? Enter it"
+              className="h-9 text-sm border-teal-200 bg-white"
+              maxLength={10}
+            />
+            <Button
+              size="sm"
+              className="h-9 bg-teal-600 hover:bg-teal-700 text-white shrink-0"
+              onClick={claimReferral}
+              disabled={claiming || !claimCode.trim()}
+            >
+              {claiming ? <Loader2 size={14} className="animate-spin" /> : "Claim"}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: HOME
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -311,6 +506,9 @@ function HomeTab({ parentName, city }: { parentName: string; city?: string | nul
         </div>
       )}
 
+      {/* Referral card */}
+      <ReferralCard />
+
       {/* Quick stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
@@ -367,6 +565,9 @@ function HomeTab({ parentName, city }: { parentName: string; city?: string | nul
           </div>
         )}
       </div>
+
+      {/* Progress timeline — habit loop anchor */}
+      <ProgressTimeline />
 
       {/* Recent activity */}
       {activity.length > 0 && (

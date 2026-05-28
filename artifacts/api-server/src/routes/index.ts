@@ -20,6 +20,7 @@ import walletRouter from "./wallet";
 import assessmentsRouter from "./assessments";
 import communityRouter from "./community";
 import resourcesRouter from "./resources";
+import referralsRouter from "./referrals";
 
 const router: IRouter = Router();
 
@@ -44,5 +45,6 @@ router.use(walletRouter);
 router.use(assessmentsRouter);
 router.use(communityRouter);
 router.use(resourcesRouter);
+router.use(referralsRouter);
 
 export default router;

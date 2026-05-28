@@ -80,6 +80,19 @@ export async function notifyProfessionalOnReview(professionalUserId: number): Pr
   });
 }
 
+export async function notifyCommunityReply(postAuthorUserId: number, professionalName?: string | null): Promise<void> {
+  const prefs = await getUserPreferences(postAuthorUserId);
+  if (prefs && prefs.onCommunityReply === false) return;
+
+  await sendPushNotification(postAuthorUserId, {
+    title: "💬 New answer on your question",
+    body: professionalName
+      ? `${professionalName} answered your community question.`
+      : "A specialist answered your community question.",
+    url: "/forum",
+  });
+}
+
 export async function notifyParentsOnProfileUpdate(parentUserIds: number[]): Promise<void> {
   await Promise.allSettled(
     parentUserIds.map(async (parentId) => {

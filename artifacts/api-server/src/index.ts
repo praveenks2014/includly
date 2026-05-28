@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { db, usersTable } from "@workspace/db";
 import { eq, or } from "drizzle-orm";
+import { initNudgeScheduler } from "./lib/nudgeScheduler";
 
 const rawPort = process.env["PORT"];
 
@@ -121,4 +122,5 @@ app.listen(port, (err) => {
   logger.info({ vapidConfigured }, "Push notification VAPID config status");
 
   seedAdmin().catch((e) => logger.warn({ e }, "Admin seed failed"));
+  initNudgeScheduler();
 });

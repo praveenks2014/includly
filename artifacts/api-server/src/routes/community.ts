@@ -11,6 +11,7 @@ import {
   usersTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
+import { notifyCommunityReply } from "../lib/notificationService";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -332,7 +333,7 @@ router.post(
     if (prof.length === 0) { res.status(403).json({ error: "Professional profile not found" }); return; }
 
     const post = await db
-      .select({ id: communityPostsTable.id })
+      .select({ id: communityPostsTable.id, authorUserId: communityPostsTable.authorUserId })
       .from(communityPostsTable)
       .where(and(eq(communityPostsTable.id, postId), eq(communityPostsTable.isHidden, false)))
       .limit(1);
@@ -347,6 +348,17 @@ router.post(
       .update(communityPostsTable)
       .set({ answerCount: sql`${communityPostsTable.answerCount} + 1` })
       .where(eq(communityPostsTable.id, postId));
+
+    // Notify the question author (fire-and-forget)
+    const [profUser] = await db
+      .select({ fullName: usersTable.fullName })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .limit(1);
+
+    if (post[0].authorUserId !== userId) {
+      void notifyCommunityReply(post[0].authorUserId, profUser?.fullName).catch(() => {});
+    }
 
     res.status(201).json({ ...answer, professional: prof[0] });
   },
