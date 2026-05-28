@@ -6,3 +6,5 @@ export * from "./phase3-hooks";
 export * from "./phase3-types";
 export * from "./assessment-hooks";
 export * from "./assessment-types";
+export * from "./community-hooks";
+export * from "./community-types";

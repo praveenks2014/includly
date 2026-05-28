@@ -15,8 +15,14 @@ import {
   useGetCommissionRates,
   useUpdateCommissionRate,
   getCommissionRatesQueryKey,
+  useGetCommunityAdminReports,
+  useResolveReport,
+  useSetPostVisibility,
+  useSetAnswerVisibility,
+  getCommunityAdminReportsQueryKey,
   type AdminProfessionalRow,
   type CommissionRateResponseType,
+  type CommunityReportAdminItem,
 } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -32,13 +38,13 @@ import {
 import {
   Loader2, Users, BarChart3, Settings, CheckCircle, XCircle, Clock,
   ShieldAlert, UserCheck, TrendingUp, FileText, Eye, ExternalLink, Bell,
-  IndianRupee, CreditCard, Menu, X, UserX, Shield, ChevronRight,
+  IndianRupee, CreditCard, Menu, X, UserX, Shield, ChevronRight, Flag,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 
-type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "payments" | "settings" | "commissions";
+type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "payments" | "settings" | "commissions" | "moderation";
 
 interface ProfDocuments {
   identity: { id: number; documentType: string; fileKey: string; status: string; submittedAt: string } | null;
@@ -168,6 +174,165 @@ function CommissionRatesTab() {
   );
 }
 
+function ModerationTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState<"pending" | "resolved" | "dismissed">("pending");
+
+  const { data: reports = [], isLoading } = useGetCommunityAdminReports(statusFilter);
+  const { mutateAsync: resolveReport, isPending: resolving } = useResolveReport();
+  const { mutateAsync: setPostVis } = useSetPostVisibility();
+  const { mutateAsync: setAnswerVis } = useSetAnswerVisibility();
+
+  async function handleResolve(id: number, action: "resolve" | "dismiss") {
+    try {
+      await resolveReport({ id, action });
+      queryClient.invalidateQueries({ queryKey: getCommunityAdminReportsQueryKey(statusFilter) });
+      toast({ title: "Report updated ✓" });
+    } catch {
+      toast({ title: "Failed to update report", variant: "destructive" });
+    }
+  }
+
+  async function handleHideContent(targetType: "post" | "answer", targetId: number) {
+    try {
+      if (targetType === "post") await setPostVis({ id: targetId, hidden: true });
+      else await setAnswerVis({ id: targetId, hidden: true });
+      toast({ title: "Content hidden ✓" });
+    } catch {
+      toast({ title: "Failed to hide content", variant: "destructive" });
+    }
+  }
+
+  const FILTERS: { id: "pending" | "resolved" | "dismissed"; label: string }[] = [
+    { id: "pending", label: "Pending" },
+    { id: "resolved", label: "Resolved" },
+    { id: "dismissed", label: "Dismissed" },
+  ];
+
+  const statusColor = {
+    pending:   "bg-yellow-50 text-yellow-700 border-yellow-200",
+    resolved:  "bg-green-50  text-green-700  border-green-200",
+    dismissed: "bg-gray-50   text-gray-600   border-gray-200",
+  };
+
+  return (
+    <div className="max-w-4xl space-y-6">
+      <div>
+        <h2 className="text-lg font-serif font-bold text-[#1A2340]">Community Moderation</h2>
+        <p className="text-xs text-gray-400 mt-1">Review flagged posts and answers from the community Q&A.</p>
+      </div>
+
+      {/* Status filter */}
+      <div className="flex gap-2">
+        {FILTERS.map((f) => (
+          <button
+            key={f.id}
+            onClick={() => setStatusFilter(f.id)}
+            className={`px-4 py-1.5 rounded-full text-xs font-medium border transition-all focus-visible:ring-2 focus-visible:ring-[#2EC4A5] ${
+              statusFilter === f.id
+                ? "bg-[#2EC4A5] text-white border-[#2EC4A5]"
+                : "bg-white text-gray-600 border-gray-200 hover:border-[#2EC4A5]/40"
+            }`}
+            aria-label={`Show ${f.label} reports`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1,2,3].map((i) => (
+            <div key={i} className="h-24 bg-white rounded-xl animate-pulse border border-gray-100" />
+          ))}
+        </div>
+      ) : reports.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-100 p-10 text-center shadow-[0_4px_24px_rgba(26,35,64,0.08)]">
+          <Flag size={28} className="text-gray-300 mx-auto mb-3" />
+          <p className="font-semibold text-[#1A2340] text-sm">No {statusFilter} reports</p>
+          <p className="text-xs text-gray-400 mt-1">Community is clear.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {(reports as CommunityReportAdminItem[]).map((report) => (
+            <div
+              key={report.id}
+              className="bg-white rounded-xl border border-gray-100 p-5 shadow-[0_4px_24px_rgba(26,35,64,0.08)]"
+            >
+              <div className="flex items-start justify-between gap-4 mb-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border ${statusColor[report.status]}`}>
+                    {report.status}
+                  </span>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    {report.targetType === "post" ? "Question" : "Answer"}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    Reported by {report.reporter.fullName ?? "User #{report.reporter.id}"} ·{" "}
+                    {new Date(report.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                <p className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">Content</p>
+                <p className="text-sm text-[#1A2340] line-clamp-2">{report.targetPreview}</p>
+              </div>
+
+              <div className="bg-[#FF6B6B]/5 border border-[#FF6B6B]/20 rounded-lg p-3 mb-4">
+                <p className="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">Reason</p>
+                <p className="text-sm text-gray-700">{report.reason}</p>
+              </div>
+
+              {report.status === "pending" && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    size="sm"
+                    disabled={resolving}
+                    className="bg-[#FF6B6B] hover:bg-[#ff5252] text-white border-0 text-xs gap-1"
+                    onClick={() => handleResolve(report.id, "resolve")}
+                    aria-label="Resolve report and hide content"
+                  >
+                    <CheckCircle size={12} />
+                    Resolve &amp; Hide
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={resolving}
+                    className="text-xs border-gray-200"
+                    onClick={() => handleResolve(report.id, "dismiss")}
+                    aria-label="Dismiss report"
+                  >
+                    Dismiss
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={resolving}
+                    className="text-xs text-gray-500"
+                    onClick={() => handleHideContent(report.targetType, report.targetId)}
+                    aria-label="Hide content only"
+                  >
+                    Hide Content Only
+                  </Button>
+                </div>
+              )}
+
+              {report.status !== "pending" && report.reviewedAt && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Reviewed {new Date(report.reviewedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const [, setLocation] = useLocation();
   const { isLoaded } = useUser();
@@ -207,6 +372,7 @@ export default function AdminPage() {
     { id: "verifications", label: "Verifications", icon: <Shield size={18} /> },
     { id: "parents", label: "Parents", icon: <Users size={18} /> },
     { id: "payments", label: "Payments", icon: <CreditCard size={18} /> },
+    { id: "moderation", label: "Moderation", icon: <Flag size={18} /> },
     { id: "settings", label: "Settings", icon: <Settings size={18} /> },
     { id: "commissions", label: "Commission Rates", icon: <IndianRupee size={18} /> },
   ];
@@ -287,6 +453,7 @@ export default function AdminPage() {
           {activeTab === "verifications" && <VerificationsTab />}
           {activeTab === "parents" && <ParentsTab />}
           {activeTab === "payments" && <PaymentsTab />}
+          {activeTab === "moderation" && <ModerationTab />}
           {activeTab === "settings" && <SettingsTab />}
           {activeTab === "commissions" && <CommissionRatesTab />}
         </div>

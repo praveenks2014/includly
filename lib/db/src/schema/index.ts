@@ -20,3 +20,5 @@ export * from "./engagementLogs";
 export * from "./wallet";
 export * from "./commissionRates";
 export * from "./assessments";
+export * from "./community";
+export * from "./resources";
