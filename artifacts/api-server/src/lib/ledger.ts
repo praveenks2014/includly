@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { db, paymentLedgerTable, commissionRatesTable, usersTable, walletTransactionsTable } from "@workspace/db";
 
-export type LedgerBookingType = "session" | "package" | "subscription" | "engagement";
+export type LedgerBookingType = "session" | "package" | "subscription" | "engagement" | "assessment";
 
 async function getCommissionRate(bookingType: LedgerBookingType): Promise<number> {
   const defaultRates: Record<LedgerBookingType, number> = {
@@ -9,6 +9,7 @@ async function getCommissionRate(bookingType: LedgerBookingType): Promise<number
     package: 7,
     subscription: 5,
     engagement: 5,
+    assessment: 10,
   };
   try {
     const [row] = await db

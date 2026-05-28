@@ -17,6 +17,7 @@ import childrenRouter from "./children";
 import connectRouter from "./connect";
 import engagementsRouter from "./engagements";
 import walletRouter from "./wallet";
+import assessmentsRouter from "./assessments";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(childrenRouter);
 router.use(connectRouter);
 router.use(engagementsRouter);
 router.use(walletRouter);
+router.use(assessmentsRouter);
 
 export default router;

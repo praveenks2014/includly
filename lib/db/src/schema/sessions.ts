@@ -41,6 +41,8 @@ export const sessionBookingsTable = pgTable("session_bookings", {
   providerPaymentId: text("provider_payment_id"),
   childId: integer("child_id"),
   notes: text("notes"),
+  bookingType: text("booking_type").notNull().default("session"),
+  assessmentOfferingId: integer("assessment_offering_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

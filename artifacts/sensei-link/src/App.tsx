@@ -30,6 +30,8 @@ import ChooseRolePage from "@/pages/choose-role";
 import ResourcesPage from "@/pages/resources";
 import ForumPage from "@/pages/forum";
 import EngagementsPage from "@/pages/engagements";
+import AssessmentsPage from "@/pages/assessments";
+import AssessmentOfferingsPage from "@/pages/assessment-offerings";
 
 // Production: use the live key (only works on includly.in and subdomains).
 // Development (Replit workspace preview): use a test-instance key so Clerk
@@ -164,6 +166,12 @@ function Router() {
         <Route path="/forum" component={ForumPage} />
         <Route path="/engagements">
           <RequireAuth><EngagementsPage /></RequireAuth>
+        </Route>
+        <Route path="/assessments">
+          <RequireAuth><AssessmentsPage /></RequireAuth>
+        </Route>
+        <Route path="/assessment-offerings">
+          <RequireAuth><AssessmentOfferingsPage /></RequireAuth>
         </Route>
         <Route path="/privacy" component={PrivacyPage} />
         <Route path="/terms" component={TermsPage} />

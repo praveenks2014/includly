@@ -17,12 +17,17 @@ import { Button } from "@/components/ui/button";
 import { getSpecialtyLabel, SPECIALTY_COLORS } from "@/lib/specialties";
 import { UnlockPaymentModal } from "@/components/UnlockPaymentModal";
 import { BookingWidget } from "@/components/BookingWidget";
+import { AssessmentBookingModal } from "@/components/AssessmentBookingModal";
 import { useToast } from "@/hooks/use-toast";
 import {
   BadgeCheck, MapPin, Phone, Mail, Lock, ArrowLeft,
   Loader2, Star, IndianRupee, Pencil, Clock, Home,
-  Navigation, Video, Copy, CheckCircle2, Globe, GraduationCap, MessageSquare,
+  Navigation, Video, Copy, CheckCircle2, Globe, GraduationCap, MessageSquare, ClipboardList,
 } from "lucide-react";
+import {
+  useGetAssessmentOfferings,
+  type AssessmentOfferingType,
+} from "@workspace/api-client-react";
 
 function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const [hovered, setHovered] = useState(0);
@@ -99,6 +104,68 @@ function ProfileSkeleton() {
   );
 }
 
+// ── Assessment offerings section ──────────────────────────────────────────────
+function AssessmentOfferingsSection({
+  professionalId, professionalName, isSignedIn, onBook,
+}: {
+  professionalId: number;
+  professionalName: string | null | undefined;
+  isSignedIn: boolean;
+  onBook: () => void;
+}) {
+  const { data: offerings = [], isLoading } = useGetAssessmentOfferings(professionalId);
+  if (isLoading || offerings.length === 0) return null;
+  return (
+    <section
+      className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)]"
+      aria-label="Assessment Offerings"
+    >
+      <div className="flex items-center gap-2 mb-4">
+        <ClipboardList size={18} className="text-[#2EC4A5]" />
+        <h2 className="font-serif text-lg font-bold text-[#1A2340]">Assessments Offered</h2>
+      </div>
+      <div className="space-y-3">
+        {offerings.map((o: AssessmentOfferingType) => (
+          <div
+            key={o.id}
+            className="flex items-start justify-between gap-3 p-3 rounded-xl border border-gray-100 hover:border-[#2EC4A5]/30 hover:bg-[#2EC4A5]/5 transition-all"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-[#1A2340] text-sm">{o.title}</p>
+              <p className="text-xs text-[#2EC4A5] font-medium">{o.assessmentType}</p>
+              {o.description && (
+                <p className="text-xs text-gray-500 mt-1 line-clamp-2">{o.description}</p>
+              )}
+              <div className="flex items-center gap-3 mt-1.5">
+                <span className="text-xs text-gray-400 flex items-center gap-1">
+                  <Clock size={10} /> {o.durationMinutes} min
+                </span>
+                {o.whatIsIncluded && (
+                  <span className="text-xs text-gray-400 truncate max-w-[160px]">{o.whatIsIncluded}</span>
+                )}
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="font-bold text-[#1A2340] text-sm">₹{o.priceInr.toLocaleString("en-IN")}</p>
+              {isSignedIn && (
+                <button
+                  onClick={onBook}
+                  className="mt-1.5 text-xs bg-[#2EC4A5] hover:bg-[#25a98d] text-white px-3 py-1 rounded-full transition-colors font-semibold"
+                >
+                  Book
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      {!isSignedIn && (
+        <p className="text-xs text-gray-400 mt-3 text-center">Sign in to book an assessment.</p>
+      )}
+    </section>
+  );
+}
+
 export default function ProfessionalProfilePage() {
   const { id } = useParams<{ id: string }>();
   const professionalId = Number(id);
@@ -107,6 +174,7 @@ export default function ProfessionalProfilePage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [showPayModal, setShowPayModal] = useState(false);
+  const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [reviewScore, setReviewScore] = useState(0);
   const [reviewComment, setReviewComment] = useState("");
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
@@ -511,6 +579,14 @@ export default function ProfessionalProfilePage() {
                 offersHomeVisits={p.offersHomeVisits}
               />
             )}
+
+            {/* Assessment offerings */}
+            <AssessmentOfferingsSection
+              professionalId={professionalId}
+              professionalName={p.fullName}
+              isSignedIn={!!isSignedIn}
+              onBook={() => setShowAssessmentModal(true)}
+            />
           </div>
 
           {/* Right column: sticky action card (desktop) */}
@@ -552,6 +628,13 @@ export default function ProfessionalProfilePage() {
         professionalName={p.fullName ?? undefined}
         specialty={p.specialty}
         onUnlockSuccess={handleUnlockSuccess}
+      />
+
+      <AssessmentBookingModal
+        open={showAssessmentModal}
+        onClose={() => setShowAssessmentModal(false)}
+        professionalId={professionalId}
+        professionalName={p.fullName ?? null}
       />
     </div>
   );

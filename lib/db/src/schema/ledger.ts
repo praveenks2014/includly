@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 import { usersTable } from "./users";
 
 export const ledgerStatusEnum = pgEnum("ledger_status", ["held", "released", "refunded"]);
-export const ledgerBookingTypeEnum = pgEnum("ledger_booking_type", ["session", "package", "subscription", "engagement"]);
+export const ledgerBookingTypeEnum = pgEnum("ledger_booking_type", ["session", "package", "subscription", "engagement", "assessment"]);
 
 export const paymentLedgerTable = pgTable("payment_ledger", {
   id: serial("id").primaryKey(),

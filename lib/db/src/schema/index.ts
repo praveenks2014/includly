@@ -19,3 +19,4 @@ export * from "./engagements";
 export * from "./engagementLogs";
 export * from "./wallet";
 export * from "./commissionRates";
+export * from "./assessments";
