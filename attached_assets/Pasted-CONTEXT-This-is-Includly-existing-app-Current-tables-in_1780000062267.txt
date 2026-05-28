@@ -1,0 +1,55 @@
+CONTEXT: This is Includly (existing app). Current tables include: users,
+professional_profiles, session_bookings, booking_messages, payments, subscriptions,
+contact_unlocks, ratings, payment_ledger, children, session_notes, intake_forms,
+admin_settings. I want to reduce off-platform revenue leakage and harden
+monetization WITHOUT rebuilding existing features.
+
+SCOPE — build ONLY:
+
+1. RETIRE RAW CONTACT-UNLOCK; REPLACE WITH "CONNECT + BOOK"
+   - Remove the flow that reveals a specialist's raw phone/email on unlock.
+   - Replace with a "Connect" action that opens an in-app chat thread with the
+     specialist and surfaces the BookingWidget. Keep contact masked.
+   - Migrate existing contact_unlocks: anyone who already paid keeps chat+booking
+     access; do not break their access.
+   - (Optional, behind a flag) masked-calling placeholder — leave a hook, don't
+     integrate a telephony provider now.
+
+2. SHADOW-TEACHER ENGAGEMENT MODEL (new service type)
+   - A shadow-teacher engagement = an ongoing monthly arrangement, not a single
+     session: start date, hours/week, monthly fee, child profile.
+   - Payment runs monthly through the existing ledger (held → released).
+   - Attendance/log per week visible to the parent (reuse session_notes pattern).
+   - Platform takes a recurring commission per monthly cycle.
+
+3. PARENT WALLET (generalize beyond session credits)
+   - Add a wallet (balance + transaction history) per parent.
+   - Refunds from payment_ledger go to wallet (not just card reversal).
+   - Wallet balance is usable for any booking. Keep existing specialty session
+     credits working alongside it.
+
+4. TIERED COMMISSION ENGINE
+   - Replace the single platform-commission % in admin_settings with a config
+     table of rates:
+       * single session  = highest %
+       * package / credits booking = lower %
+       * subscription / monthly engagement = lowest %
+       * (later) paid-tier specialists = reduced %
+   - Apply the correct rate when funds are RELEASED in payment_ledger.
+   - Admin Settings UI lets me edit each rate.
+
+ACCEPTANCE:
+- No screen anywhere reveals a raw phone/email before/instead of booking.
+- A parent can start a monthly shadow-teacher engagement and it bills + logs
+  monthly through the ledger.
+- A cancellation refunds to wallet; wallet pays for a later booking.
+- Commission differs correctly by booking type in the admin revenue view.
+
+GUARDRAILS (critical):
+- Do NOT modify Clerk auth, OAuth, login, pk_/sk_ keys, or Replit Secrets.
+- Do NOT change environment variables or proxy settings.
+- Do NOT touch the admin self-heal logic (praveenece.mit@gmail.com auto-admin) or
+  the requireAuth middleware.
+- Do NOT alter the atomic session-credit deduction transaction.
+- Extend existing tables; before deleting/renaming any table or column, STOP and
+  ask me. Show me the list of files you'll change before starting.
