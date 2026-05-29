@@ -26,8 +26,8 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { SPECIALTY_OPTIONS, SPECIALTY_ICONS, SPECIALTY_ICON_COLORS } from "@/lib/specialties";
-import { Loader2, CheckCircle2, IndianRupee } from "lucide-react";
+import { SPECIALTY_OPTIONS, SPECIALTY_ICONS, SPECIALTY_ICON_COLORS, COACHING_SUB_TYPE_OPTIONS, COACHING_SUB_TYPE_ICONS } from "@/lib/specialties";
+import { Loader2, CheckCircle2, IndianRupee, Heart } from "lucide-react";
 import { LocationPicker, type PickedLocation } from "@/components/LocationPicker";
 
 const TRAVEL_RADIUS_OPTIONS = [5, 10, 25, 50];
@@ -73,6 +73,8 @@ export default function OnboardPage() {
     centreRegistrationNo: "",
     numTherapists: "",
     specializationTags: (existingProfile?.specializationTags ?? []) as string[],
+    coachingSubType: (existingProfile as { coachingSubType?: string } | undefined)?.coachingSubType ?? "",
+    inclusiveExperience: (existingProfile as { inclusiveExperience?: boolean } | undefined)?.inclusiveExperience ?? false,
   });
 
   const { data: me, isError: meError } = useGetMe();
@@ -188,6 +190,8 @@ export default function OnboardPage() {
       pricingMaxINR: form.pricingMaxINR ? Number(form.pricingMaxINR) : undefined,
       upiId: form.upiId.trim() || undefined,
       specializationTags: form.specializationTags.length > 0 ? form.specializationTags : undefined,
+      coachingSubType: isCoach && form.coachingSubType ? form.coachingSubType : undefined,
+      inclusiveExperience: form.inclusiveExperience || undefined,
     };
 
     setIsSubmitting(true);
@@ -223,6 +227,7 @@ export default function OnboardPage() {
   }
 
   const isTherapyCentre = form.specialty === "therapy_centre";
+  const isCoach = form.specialty === "coaching";
   const isGeoFencedSpecialty = ["shadow_teacher", "special_tutor"].includes(form.specialty);
 
   return (
@@ -287,6 +292,36 @@ export default function OnboardPage() {
                   })}
                 </div>
               </div>
+
+              {isCoach && (
+                <div>
+                  <Label className="mb-2 block">Coaching discipline</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {COACHING_SUB_TYPE_OPTIONS.map((opt) => {
+                      const Icon = COACHING_SUB_TYPE_ICONS[opt.value] ?? CheckCircle2;
+                      const selected = form.coachingSubType === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => set("coachingSubType", opt.value)}
+                          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium text-left transition-all ${
+                            selected
+                              ? "border-primary bg-primary/10 text-primary shadow-sm"
+                              : "border-border bg-background text-foreground hover:border-primary/50"
+                          }`}
+                        >
+                          <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${selected ? "text-primary bg-primary/10" : "text-orange-600 bg-orange-50"}`}>
+                            <Icon size={15} />
+                          </span>
+                          <span className="leading-tight">{opt.label}</span>
+                          {selected && <CheckCircle2 size={14} className="ml-auto text-primary shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {form.specialty && form.specialty !== "therapy_centre" && (
                 <div>
@@ -467,6 +502,23 @@ export default function OnboardPage() {
                     Registration number will be shown on your centre's profile page to build parent trust.
                   </p>
                 </>
+              )}
+
+              {isCoach && (
+                <div className="flex items-center justify-between py-2 border border-green-200 bg-green-50 rounded-xl px-3">
+                  <div>
+                    <Label className="flex items-center gap-1.5">
+                      <Heart size={14} className="text-green-600" />
+                      Inclusive / special-needs experience
+                    </Label>
+                    <p className="text-xs text-muted-foreground">I have experience coaching children with special needs. Parents can filter by this.</p>
+                  </div>
+                  <Switch
+                    checked={form.inclusiveExperience}
+                    onCheckedChange={(v) => set("inclusiveExperience", v)}
+                    data-testid="switch-inclusive-experience"
+                  />
+                </div>
               )}
 
               {!isTherapyCentre && (

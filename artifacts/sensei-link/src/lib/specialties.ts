@@ -7,6 +7,13 @@ import {
   Baby,
   Activity,
   Building2,
+  Waves,
+  Music,
+  Dumbbell,
+  Trophy,
+  Mic2,
+  Palette,
+  Flame,
   type LucideIcon,
 } from "lucide-react";
 
@@ -19,6 +26,7 @@ export const SPECIALTY_LABELS: Record<string, string> = {
   developmental_pediatrician: "Developmental Pediatrician",
   neurologist: "Neurologist",
   therapy_centre: "Therapy Centre",
+  coaching: "Inclusive Coach",
 };
 
 export const SPECIALTY_OPTIONS = Object.entries(SPECIALTY_LABELS).map(
@@ -38,6 +46,7 @@ export const SPECIALTY_COLORS: Record<string, string> = {
   developmental_pediatrician: "bg-emerald-100 text-emerald-800",
   neurologist: "bg-purple-100 text-purple-800",
   therapy_centre: "bg-rose-100 text-rose-800",
+  coaching: "bg-orange-100 text-orange-800",
 };
 
 export const SPECIALTY_ICON_COLORS: Record<string, string> = {
@@ -49,6 +58,7 @@ export const SPECIALTY_ICON_COLORS: Record<string, string> = {
   developmental_pediatrician: "text-emerald-600 bg-emerald-50",
   neurologist: "text-purple-600 bg-purple-50",
   therapy_centre: "text-rose-600 bg-rose-50",
+  coaching: "text-orange-600 bg-orange-50",
 };
 
 export const SPECIALTY_ICONS: Record<string, LucideIcon> = {
@@ -60,6 +70,7 @@ export const SPECIALTY_ICONS: Record<string, LucideIcon> = {
   developmental_pediatrician: Baby,
   neurologist: Activity,
   therapy_centre: Building2,
+  coaching: Trophy,
 };
 
 export const SPECIALTY_IN_PERSON_ONLY: Record<string, boolean> = {
@@ -72,4 +83,38 @@ export function getSpecialtyIcon(specialty: string): LucideIcon {
 
 export function isInPersonOnly(specialty: string): boolean {
   return SPECIALTY_IN_PERSON_ONLY[specialty] === true;
+}
+
+export const COACHING_SUB_TYPE_LABELS: Record<string, string> = {
+  swimming: "Swimming",
+  dance: "Dance",
+  music: "Music",
+  sports: "Sports",
+  singing: "Singing",
+  fitness: "Fitness",
+  art: "Art",
+  yoga: "Yoga",
+};
+
+export const COACHING_SUB_TYPE_OPTIONS = Object.entries(COACHING_SUB_TYPE_LABELS).map(
+  ([value, label]) => ({ value, label })
+);
+
+export const COACHING_SUB_TYPE_ICONS: Record<string, LucideIcon> = {
+  swimming: Waves,
+  dance: Flame,
+  music: Music,
+  sports: Trophy,
+  singing: Mic2,
+  fitness: Dumbbell,
+  art: Palette,
+  yoga: Activity,
+};
+
+export function getCoachingSubTypeLabel(subType: string): string {
+  return COACHING_SUB_TYPE_LABELS[subType] ?? subType;
+}
+
+export function getCoachingSubTypeIcon(subType: string): LucideIcon {
+  return COACHING_SUB_TYPE_ICONS[subType] ?? Trophy;
 }

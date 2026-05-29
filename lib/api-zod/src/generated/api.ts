@@ -146,6 +146,7 @@ export const GetMyProfessionalProfileResponse = zod.object({
     "developmental_pediatrician",
     "neurologist",
     "therapy_centre",
+    "coaching",
   ]),
   bio: zod.string().nullish(),
   yearsExperience: zod.number(),
@@ -187,6 +188,10 @@ export const GetMyProfessionalProfileResponse = zod.object({
     .nullish()
     .describe("UPI ID — returned only in private (own profile) response"),
   paymentActivated: zod.boolean(),
+  coachingSubType: zod
+    .enum(["swimming", "dance", "music", "sports", "singing", "fitness", "art", "yoga"])
+    .nullish(),
+  inclusiveExperience: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
 
@@ -204,6 +209,7 @@ export const CreateProfessionalProfileBody = zod.object({
     "developmental_pediatrician",
     "neurologist",
     "therapy_centre",
+    "coaching",
   ]),
   bio: zod.string().optional(),
   yearsExperience: zod.number(),
@@ -240,6 +246,11 @@ export const CreateProfessionalProfileBody = zod.object({
     .describe(
       "UPI ID for receiving session payments (never exposed to parents\/clients)",
     ),
+  coachingSubType: zod
+    .enum(["swimming", "dance", "music", "sports", "singing", "fitness", "art", "yoga"])
+    .optional(),
+  inclusiveExperience: zod.boolean().optional(),
+  specializationTags: zod.array(zod.string()).optional(),
 });
 
 /**
@@ -294,6 +305,11 @@ export const UpdateProfessionalProfileBody = zod.object({
     .describe(
       "UPI ID for receiving session payments (never exposed to parents\/clients)",
     ),
+  coachingSubType: zod
+    .enum(["swimming", "dance", "music", "sports", "singing", "fitness", "art", "yoga"])
+    .optional(),
+  inclusiveExperience: zod.boolean().optional(),
+  specializationTags: zod.array(zod.string()).optional(),
 });
 
 export const UpdateProfessionalProfileResponse = zod.object({
@@ -309,6 +325,7 @@ export const UpdateProfessionalProfileResponse = zod.object({
     "developmental_pediatrician",
     "neurologist",
     "therapy_centre",
+    "coaching",
   ]),
   bio: zod.string().nullish(),
   yearsExperience: zod.number(),
@@ -441,6 +458,12 @@ export const SearchProfessionalsQueryParams = zod.object({
     .number()
     .optional()
     .describe("Filter by maximum session price in INR"),
+  tags: zod.coerce.string().optional().describe("Comma-separated specialization tags"),
+  verifiedOnly: zod.coerce.boolean().optional(),
+  coachingSubType: zod
+    .enum(["swimming", "dance", "music", "sports", "singing", "fitness", "art", "yoga"])
+    .optional(),
+  inclusiveExperience: zod.coerce.boolean().optional(),
   page: zod.coerce.number().default(searchProfessionalsQueryPageDefault),
   limit: zod.coerce.number().default(searchProfessionalsQueryLimitDefault),
 });
@@ -485,6 +508,11 @@ export const SearchProfessionalsResponse = zod.object({
       pricingMinINR: zod.number().nullish(),
       pricingMaxINR: zod.number().nullish(),
       paymentActivated: zod.boolean(),
+      isPremium: zod.boolean().optional(),
+      specializationTags: zod.array(zod.string()).optional(),
+      chatAccessOnly: zod.boolean().optional(),
+      coachingSubType: zod.string().nullish(),
+      inclusiveExperience: zod.boolean().optional(),
     }),
   ),
   total: zod.number(),
@@ -1131,6 +1159,7 @@ export const AdminApproveProfessionalResponse = zod.object({
     "developmental_pediatrician",
     "neurologist",
     "therapy_centre",
+    "coaching",
   ]),
   bio: zod.string().nullish(),
   yearsExperience: zod.number(),
@@ -1195,6 +1224,7 @@ export const AdminRejectProfessionalResponse = zod.object({
     "developmental_pediatrician",
     "neurologist",
     "therapy_centre",
+    "coaching",
   ]),
   bio: zod.string().nullish(),
   yearsExperience: zod.number(),

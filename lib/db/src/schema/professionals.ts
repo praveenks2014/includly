@@ -12,6 +12,18 @@ export const specialtyEnum = pgEnum("specialty", [
   "developmental_pediatrician",
   "neurologist",
   "therapy_centre",
+  "coaching",
+]);
+
+export const coachingSubTypeEnum = pgEnum("coaching_sub_type", [
+  "swimming",
+  "dance",
+  "music",
+  "sports",
+  "singing",
+  "fitness",
+  "art",
+  "yoga",
 ]);
 
 export const verificationStatusEnum = pgEnum("verification_status", [
@@ -53,6 +65,8 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   displayArea: text("display_area"),
   clinicAddress: text("clinic_address"),
   offersHomeVisits: boolean("offers_home_visits").notNull().default(false),
+  coachingSubType: coachingSubTypeEnum("coaching_sub_type"),
+  inclusiveExperience: boolean("inclusive_experience").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

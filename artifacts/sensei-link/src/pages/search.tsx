@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Search, SlidersHorizontal, X, Map, List, Navigation2, MapPin, Info } from "lucide-react";
-import { SPECIALTY_OPTIONS, SPECIALTY_ICONS, SPECIALTY_ICON_COLORS, SPECIALTY_LABELS, isInPersonOnly } from "@/lib/specialties";
+import { SPECIALTY_OPTIONS, SPECIALTY_ICONS, SPECIALTY_ICON_COLORS, SPECIALTY_LABELS, isInPersonOnly, COACHING_SUB_TYPE_OPTIONS } from "@/lib/specialties";
 import { UnlockPaymentModal } from "@/components/UnlockPaymentModal";
 import { PlacesAutocomplete, type PlaceResult } from "@/components/PlacesAutocomplete";
 import { ProfessionalsMap } from "@/components/ProfessionalsMap";
@@ -87,6 +87,8 @@ export default function SearchPage() {
   const [geoLocating, setGeoLocating] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [coachingSubType, setCoachingSubType] = useState("");
+  const [inclusiveExperience, setInclusiveExperience] = useState(false);
 
   const searchParams = {
     ...(specialty ? { specialty: specialty as SearchProfessionalsSpecialty } : {}),
@@ -99,6 +101,8 @@ export default function SearchPage() {
       : {}),
     ...(selectedTags.length > 0 ? { tags: selectedTags.join(",") } : {}),
     ...(verifiedOnly ? { verifiedOnly: true } : {}),
+    ...(coachingSubType ? { coachingSubType } : {}),
+    ...(inclusiveExperience ? { inclusiveExperience: true } : {}),
     limit: 40,
   };
 
@@ -152,9 +156,11 @@ export default function SearchPage() {
     setGeoLocation(null);
     setSelectedTags([]);
     setVerifiedOnly(false);
+    setCoachingSubType("");
+    setInclusiveExperience(false);
   }
 
-  const hasFilters = specialty || city || minExperience || willingToTravel || budgetMaxINR || geoMode || selectedTags.length > 0 || verifiedOnly;
+  const hasFilters = specialty || city || minExperience || willingToTravel || budgetMaxINR || geoMode || selectedTags.length > 0 || verifiedOnly || coachingSubType || inclusiveExperience;
   const professionals = data?.professionals ?? [];
 
   return (
@@ -363,6 +369,44 @@ export default function SearchPage() {
                   <span className="text-sm text-muted-foreground">{verifiedOnly ? "Verified only" : "All"}</span>
                 </div>
               </div>
+
+              {specialty === "coaching" && (
+                <div className="w-full flex flex-col gap-1.5">
+                  <Label>Coaching discipline <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {COACHING_SUB_TYPE_OPTIONS.map((opt) => {
+                      const active = coachingSubType === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setCoachingSubType(active ? "" : opt.value)}
+                          className={`px-3 py-1 rounded-full text-sm border transition-colors ${active ? "bg-orange-500 text-white border-orange-500" : "bg-background border-border text-foreground hover:border-orange-400"}`}
+                          data-testid={`coaching-subtype-${opt.value}`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {(specialty === "coaching" || !specialty) && (
+                <div className="flex flex-col gap-1.5">
+                  <Label>Inclusive experience</Label>
+                  <div className="flex items-center gap-2 h-9">
+                    <Switch
+                      checked={inclusiveExperience}
+                      onCheckedChange={setInclusiveExperience}
+                      data-testid="inclusive-experience-toggle"
+                    />
+                    <span className="text-sm text-muted-foreground">
+                      {inclusiveExperience ? "Special-needs experience only" : "Any"}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div className="w-full flex flex-col gap-1.5">
                 <Label>Specialization <span className="text-muted-foreground text-xs">(filter by need)</span></Label>

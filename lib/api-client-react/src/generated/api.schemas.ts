@@ -283,6 +283,7 @@ export const CreateProfessionalProfileBodySpecialty = {
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
   therapy_centre: "therapy_centre",
+  coaching: "coaching",
 } as const;
 
 export interface CreateProfessionalProfileBody {
@@ -309,6 +310,11 @@ export interface CreateProfessionalProfileBody {
   offersHomeVisits?: boolean;
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
   upiId?: string;
+  /** Coaching discipline sub-type (only for specialty=coaching) */
+  coachingSubType?: string;
+  /** Has experience coaching children with special needs */
+  inclusiveExperience?: boolean;
+  specializationTags?: string[];
 }
 
 export type UpdateProfessionalProfileBodySpecialty =
@@ -323,6 +329,7 @@ export const UpdateProfessionalProfileBodySpecialty = {
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
   therapy_centre: "therapy_centre",
+  coaching: "coaching",
 } as const;
 
 export interface UpdateProfessionalProfileBody {
@@ -349,6 +356,11 @@ export interface UpdateProfessionalProfileBody {
   offersHomeVisits?: boolean;
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
   upiId?: string;
+  /** Coaching discipline sub-type (only for specialty=coaching) */
+  coachingSubType?: string;
+  /** Has experience coaching children with special needs */
+  inclusiveExperience?: boolean;
+  specializationTags?: string[];
 }
 
 export interface Rating {
@@ -964,6 +976,13 @@ export type SearchProfessionalsParams = {
    * Filter by maximum session price in INR
    */
   budgetMaxINR?: number;
+  /** Comma-separated specialization tags */
+  tags?: string;
+  verifiedOnly?: boolean;
+  /** Coaching sub-type filter (only relevant when specialty=coaching) */
+  coachingSubType?: string;
+  /** Filter to coaches with inclusive/special-needs experience */
+  inclusiveExperience?: boolean;
   page?: number;
   limit?: number;
 };
@@ -980,6 +999,7 @@ export const SearchProfessionalsSpecialty = {
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
   therapy_centre: "therapy_centre",
+  coaching: "coaching",
 } as const;
 
 export type StripeWebhookBody = { [key: string]: unknown };

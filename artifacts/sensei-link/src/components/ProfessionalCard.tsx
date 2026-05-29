@@ -1,10 +1,9 @@
 import { Link } from "wouter";
-import { BadgeCheck, Clock, MapPin, Star, Navigation, IndianRupee, Home } from "lucide-react";
+import { BadgeCheck, Clock, MapPin, Star, Navigation, IndianRupee, Home, Heart } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getSpecialtyLabel, SPECIALTY_COLORS, getSpecialtyIcon, isInPersonOnly } from "@/lib/specialties";
+import { getSpecialtyLabel, SPECIALTY_COLORS, getSpecialtyIcon, isInPersonOnly, getCoachingSubTypeLabel, getCoachingSubTypeIcon } from "@/lib/specialties";
 
 interface Professional {
   id: number;
@@ -32,6 +31,8 @@ interface Professional {
   paymentActivated?: boolean;
   isPremium?: boolean;
   specializationTags?: string[] | null;
+  coachingSubType?: string | null;
+  inclusiveExperience?: boolean;
 }
 
 interface ProfessionalCardProps {
@@ -47,6 +48,8 @@ export function ProfessionalCard({ professional: p, onUnlock, unlocking, distanc
   const email = p.isUnlocked ? p.email : p.emailBlurred;
   const SpecialtyIcon = getSpecialtyIcon(p.specialty);
   const inPersonOnly = isInPersonOnly(p.specialty);
+  const isCoach = p.specialty === "coaching";
+  const CoachSubIcon = p.coachingSubType ? getCoachingSubTypeIcon(p.coachingSubType) : null;
 
   return (
     <Card className="hover:shadow-md transition-shadow duration-200 border-border">
@@ -74,15 +77,25 @@ export function ProfessionalCard({ professional: p, onUnlock, unlocking, distanc
                 </span>
               )}
             </div>
-            <span className={`inline-flex items-center gap-1 mt-1 text-xs font-medium px-2.5 py-0.5 rounded-full ${specialtyColor}`}>
-              <SpecialtyIcon size={11} />
-              {getSpecialtyLabel(p.specialty)}
-              {inPersonOnly && (
-                <span className="ml-0.5 flex items-center gap-0.5 text-rose-700 font-semibold">
-                  · <MapPin size={9} /> In-Person Visit Only
+            <div className="flex flex-wrap gap-1 mt-1">
+              <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full ${specialtyColor}`}>
+                <SpecialtyIcon size={11} />
+                {isCoach && p.coachingSubType
+                  ? `${getCoachingSubTypeLabel(p.coachingSubType)} Coach`
+                  : getSpecialtyLabel(p.specialty)}
+                {inPersonOnly && (
+                  <span className="ml-0.5 flex items-center gap-0.5 text-rose-700 font-semibold">
+                    · <MapPin size={9} /> In-Person Visit Only
+                  </span>
+                )}
+              </span>
+              {isCoach && p.inclusiveExperience && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full bg-green-100 text-green-800">
+                  <Heart size={10} />
+                  Inclusive
                 </span>
               )}
-            </span>
+            </div>
           </div>
           {p.averageRating ? (
             <div className="flex items-center gap-1 shrink-0">

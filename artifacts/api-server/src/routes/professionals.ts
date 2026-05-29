@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc, arrayOverlaps, isNull, type SQL } from "drizzle-orm";
-import { db, usersTable, professionalProfilesTable, contactUnlocksTable, specialtyEnum, professionalSubscriptionsTable, professionalCertificationsTable } from "@workspace/db";
+import { db, usersTable, professionalProfilesTable, contactUnlocksTable, specialtyEnum, coachingSubTypeEnum, professionalSubscriptionsTable, professionalCertificationsTable } from "@workspace/db";
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
 import { notifyParentsOnProfileUpdate } from "../lib/notificationService";
 import {
@@ -15,6 +15,7 @@ import {
 } from "@workspace/api-zod";
 
 type SpecialtyValue = (typeof specialtyEnum.enumValues)[number];
+type CoachingSubTypeValue = (typeof coachingSubTypeEnum.enumValues)[number];
 
 const router: IRouter = Router();
 
@@ -53,10 +54,10 @@ router.post("/professionals/me", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
-  // Enforce that only hands-on specialties may enable home visits (same allowlist as PATCH)
-  const HOME_VISIT_SPECIALTIES = ["shadow_teacher", "special_tutor", "occupational_therapy", "speech_therapy"];
+  // Enforce that only hands-on specialties may enable home visits
+  const HOME_VISIT_SPECIALTIES = ["shadow_teacher", "special_tutor", "occupational_therapy", "speech_therapy", "coaching"];
   if (parsed.data.offersHomeVisits === true && !HOME_VISIT_SPECIALTIES.includes(parsed.data.specialty)) {
-    res.status(400).json({ error: "Home visits are only available for Shadow Teachers, Special Educators, Occupational Therapists, and Speech Therapists." });
+    res.status(400).json({ error: "Home visits are only available for Shadow Teachers, Special Educators, Occupational Therapists, Speech Therapists, and Coaches." });
     return;
   }
 
@@ -96,7 +97,7 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
   }
 
   // Enforce home-visit specialty invariant
-  const HOME_VISIT_SPECIALTIES = ["shadow_teacher", "special_tutor", "occupational_therapy", "speech_therapy"];
+  const HOME_VISIT_SPECIALTIES = ["shadow_teacher", "special_tutor", "occupational_therapy", "speech_therapy", "coaching"];
   const [existing] = await db
     .select({ specialty: professionalProfilesTable.specialty, offersHomeVisits: professionalProfilesTable.offersHomeVisits })
     .from(professionalProfilesTable)
@@ -106,7 +107,7 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
     // Reject explicit attempt to enable home visits on ineligible specialty
     const effectiveSpecialty = parsed.data.specialty ?? existing?.specialty;
     if (!effectiveSpecialty || !HOME_VISIT_SPECIALTIES.includes(effectiveSpecialty)) {
-      res.status(400).json({ error: "Home visits are only available for Shadow Teachers, Special Educators, Occupational Therapists, and Speech Therapists." });
+      res.status(400).json({ error: "Home visits are only available for Shadow Teachers, Special Educators, Occupational Therapists, Speech Therapists, and Coaches." });
       return;
     }
   }
@@ -153,7 +154,7 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
     return;
   }
 
-  const { specialty, city, minExperience, minRating, willingToTravel, lat, lng, radiusKm, budgetMaxINR, tags, verifiedOnly, page, limit } = parsed.data;
+  const { specialty, city, minExperience, minRating, willingToTravel, lat, lng, radiusKm, budgetMaxINR, tags, verifiedOnly, coachingSubType, inclusiveExperience, page, limit } = parsed.data;
 
   const pageNum = page ?? 1;
   const limitNum = limit ?? 20;
@@ -177,6 +178,14 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
 
   if (specialty) {
     conditions.push(eq(professionalProfilesTable.specialty, specialty as SpecialtyValue));
+  }
+
+  if (coachingSubType) {
+    conditions.push(eq(professionalProfilesTable.coachingSubType, coachingSubType as CoachingSubTypeValue));
+  }
+
+  if (inclusiveExperience) {
+    conditions.push(eq(professionalProfilesTable.inclusiveExperience, true));
   }
 
   if (city) {
@@ -272,6 +281,8 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       paymentActivated: professionalProfilesTable.paymentActivated,
       isPremium: isPremiumLive,
       specializationTags: professionalProfilesTable.specializationTags,
+      coachingSubType: professionalProfilesTable.coachingSubType,
+      inclusiveExperience: professionalProfilesTable.inclusiveExperience,
       distanceKm: distanceSql,
     })
     .from(professionalProfilesTable)
@@ -332,6 +343,8 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       paymentActivated: p.paymentActivated,
       isPremium: p.isPremium,
       specializationTags: p.specializationTags ?? [],
+      coachingSubType: p.coachingSubType ?? null,
+      inclusiveExperience: p.inclusiveExperience,
     };
   });
 
