@@ -5,7 +5,7 @@ import App from "./App";
 import "./index.css";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
-setBaseUrl(`${window.location.origin}${basePath}/api`);
+setBaseUrl(`${window.location.origin}${basePath}`);
 
 // Register the Clerk token getter BEFORE React mounts so there is no race
 // condition between React Query's first fetch and ClerkAuthBridge's useEffect.
