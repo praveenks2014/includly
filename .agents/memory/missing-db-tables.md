@@ -15,3 +15,6 @@ When a route fails with `Failed query: select ... from "table_name"`, the table 
 Write `CREATE TABLE IF NOT EXISTS` + `DO $$ BEGIN CREATE TYPE ... EXCEPTION WHEN duplicate_object THEN NULL; END $$` statements matching the Drizzle schema. Run as a psql heredoc. Seed lookup tables (like commission_rates) in the same script with `INSERT ... ON CONFLICT DO NOTHING`.
 
 **Why:** Drizzle migrations in this project were not applied after schema additions — the DB was created once with an older snapshot and never resynced. Will recur as new features add tables.
+
+## fetchWithAuth pattern (parent-dashboard)
+`fetchWithAuth` returns a raw `Promise<Response>`, NOT parsed JSON. Always chain `.then(r => r.json())` for GET queries. Also, all paths must include the `/api/` prefix — bare paths like `/sessions/progress` will 404.

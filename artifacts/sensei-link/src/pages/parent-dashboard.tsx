@@ -271,7 +271,7 @@ function ReviewModal({ professionalId, onClose }: { professionalId: number; onCl
 function ProgressTimeline() {
   const { data: notes, isLoading } = useQuery<ProgressNote[]>({
     queryKey: ["sessions-progress"],
-    queryFn: () => fetchWithAuth("/sessions/progress"),
+    queryFn: () => fetchWithAuth("/api/sessions/progress").then((r) => r.json()),
   });
 
   if (isLoading) {
@@ -352,7 +352,7 @@ function ReferralCard() {
 
   const { data, refetch } = useQuery<ReferralStats>({
     queryKey: ["referral-my-code"],
-    queryFn: () => fetchWithAuth("/referrals/my-code"),
+    queryFn: () => fetchWithAuth("/api/referrals/my-code").then((r) => r.json()),
   });
 
   function copyCode() {
@@ -366,7 +366,7 @@ function ReferralCard() {
     if (!claimCode.trim()) return;
     setClaiming(true);
     try {
-      await fetchWithAuth("/referrals/claim", {
+      await fetchWithAuth("/api/referrals/claim", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: claimCode.trim().toUpperCase() }),
