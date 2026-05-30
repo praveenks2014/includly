@@ -36,7 +36,7 @@ export function useGetResources(
 ) {
   return useQuery<ResourceItem[], unknown, ResourceItem[], readonly unknown[]>({
     queryKey: getResourcesQueryKey(category),
-    queryFn: () => customFetch<ResourceItem[]>(`/resources${category && category !== "all" ? `?category=${category}` : ""}`),
+    queryFn: () => customFetch<ResourceItem[]>(`/api/resources${category && category !== "all" ? `?category=${category}` : ""}`),
     ...options,
   });
 }
@@ -46,7 +46,7 @@ export function useGetPlusStatus(
 ) {
   return useQuery<PlusStatusResponse, unknown, PlusStatusResponse, readonly unknown[]>({
     queryKey: getPlusStatusQueryKey(),
-    queryFn: () => customFetch<PlusStatusResponse>("/resources/plus-status"),
+    queryFn: () => customFetch<PlusStatusResponse>("/api/resources/plus-status"),
     ...options,
   });
 }
@@ -79,7 +79,7 @@ export function useGetCommunityPostDetail(
 ) {
   return useQuery<CommunityPostDetail, unknown, CommunityPostDetail, readonly unknown[]>({
     queryKey: getCommunityPostDetailQueryKey(id),
-    queryFn: () => customFetch<CommunityPostDetail>(`/community/posts/${id}`),
+    queryFn: () => customFetch<CommunityPostDetail>(`/api/community/posts/${id}`),
     enabled: id > 0,
     ...options,
   });
@@ -89,7 +89,7 @@ export function useCreatePost() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: CreatePostBody) =>
-      customFetch<{ id: number }>("/community/posts", { method: "POST", body: JSON.stringify(body) }),
+      customFetch<{ id: number }>("/api/community/posts", { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["community", "posts"] });
     },
@@ -100,7 +100,7 @@ export function useUpvotePost() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (postId: number) =>
-      customFetch<{ voted: boolean }>(`/community/posts/${postId}/upvote`, { method: "POST" }),
+      customFetch<{ voted: boolean }>(`/api/community/posts/${postId}/upvote`, { method: "POST" }),
     onSuccess: (_data, postId) => {
       qc.invalidateQueries({ queryKey: ["community", "posts"] });
       qc.invalidateQueries({ queryKey: getCommunityPostDetailQueryKey(postId) });
@@ -112,7 +112,7 @@ export function useCreateAnswer() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ postId, body }: { postId: number; body: CreateAnswerBody }) =>
-      customFetch<{ id: number }>(`/community/posts/${postId}/answers`, {
+      customFetch<{ id: number }>(`/api/community/posts/${postId}/answers`, {
         method: "POST",
         body: JSON.stringify(body),
       }),
@@ -127,7 +127,7 @@ export function useUpvoteAnswer() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ answerId, postId }: { answerId: number; postId: number }) =>
-      customFetch<{ voted: boolean }>(`/community/answers/${answerId}/upvote`, { method: "POST" }),
+      customFetch<{ voted: boolean }>(`/api/community/answers/${answerId}/upvote`, { method: "POST" }),
     onSuccess: (_data, { postId }) => {
       qc.invalidateQueries({ queryKey: getCommunityPostDetailQueryKey(postId) });
     },
@@ -137,7 +137,7 @@ export function useUpvoteAnswer() {
 export function useReportPost() {
   return useMutation({
     mutationFn: ({ postId, body }: { postId: number; body: ReportBody }) =>
-      customFetch<{ ok: boolean }>(`/community/posts/${postId}/report`, {
+      customFetch<{ ok: boolean }>(`/api/community/posts/${postId}/report`, {
         method: "POST",
         body: JSON.stringify(body),
       }),
@@ -147,7 +147,7 @@ export function useReportPost() {
 export function useReportAnswer() {
   return useMutation({
     mutationFn: ({ answerId, body }: { answerId: number; body: ReportBody }) =>
-      customFetch<{ ok: boolean }>(`/community/answers/${answerId}/report`, {
+      customFetch<{ ok: boolean }>(`/api/community/answers/${answerId}/report`, {
         method: "POST",
         body: JSON.stringify(body),
       }),
@@ -163,7 +163,7 @@ export function useGetCommunityAdminReports(
   return useQuery<CommunityReportAdminItem[], unknown, CommunityReportAdminItem[], readonly unknown[]>({
     queryKey: getCommunityAdminReportsQueryKey(status),
     queryFn: () =>
-      customFetch<CommunityReportAdminItem[]>(`/community/admin/reports${status ? `?status=${status}` : ""}`),
+      customFetch<CommunityReportAdminItem[]>(`/api/community/admin/reports${status ? `?status=${status}` : ""}`),
     ...options,
   });
 }
@@ -172,7 +172,7 @@ export function useResolveReport() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, action }: { id: number; action: "resolve" | "dismiss" }) =>
-      customFetch<{ ok: boolean }>(`/community/admin/reports/${id}`, {
+      customFetch<{ ok: boolean }>(`/api/community/admin/reports/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ action }),
       }),
@@ -186,7 +186,7 @@ export function useSetPostVisibility() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, hidden }: { id: number; hidden: boolean }) =>
-      customFetch<{ ok: boolean }>(`/community/admin/posts/${id}/visibility`, {
+      customFetch<{ ok: boolean }>(`/api/community/admin/posts/${id}/visibility`, {
         method: "PATCH",
         body: JSON.stringify({ hidden }),
       }),
@@ -200,7 +200,7 @@ export function useSetAnswerVisibility() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, hidden }: { id: number; hidden: boolean }) =>
-      customFetch<{ ok: boolean }>(`/community/admin/answers/${id}/visibility`, {
+      customFetch<{ ok: boolean }>(`/api/community/admin/answers/${id}/visibility`, {
         method: "PATCH",
         body: JSON.stringify({ hidden }),
       }),

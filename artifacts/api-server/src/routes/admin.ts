@@ -330,7 +330,7 @@ router.get("/admin/parents", ...adminGuard, async (req, res): Promise<void> => {
       .select({
         id: usersTable.id,
         email: usersTable.email,
-        name: usersTable.name,
+        name: usersTable.fullName,
         createdAt: usersTable.createdAt,
       })
       .from(usersTable)

@@ -19,7 +19,7 @@ export function useGetAssessmentOfferings(
 ) {
   return useQuery<AssessmentOfferingType[]>({
     queryKey: getAssessmentOfferingsQueryKey(professionalId),
-    queryFn: () => customFetch<AssessmentOfferingType[]>(`/professionals/${professionalId}/assessments`),
+    queryFn: () => customFetch<AssessmentOfferingType[]>(`/api/professionals/${professionalId}/assessments`),
     enabled: !!professionalId,
     ...options?.query,
   });
@@ -32,7 +32,7 @@ export function useGetMyAssessmentOfferings(
 ) {
   return useQuery<AssessmentOfferingType[]>({
     queryKey: getMyAssessmentOfferingsQueryKey(),
-    queryFn: () => customFetch<AssessmentOfferingType[]>("/assessments/offerings/mine"),
+    queryFn: () => customFetch<AssessmentOfferingType[]>("/api/assessments/offerings/mine"),
     ...options?.query,
   });
 }
@@ -51,7 +51,7 @@ export function useCreateAssessmentOffering(
 ) {
   return useMutation<AssessmentOfferingType, Error, CreateOfferingVars>({
     mutationFn: (data) =>
-      customFetch<AssessmentOfferingType>("/assessments/offerings", {
+      customFetch<AssessmentOfferingType>("/api/assessments/offerings", {
         method: "POST",
         body: JSON.stringify(data),
         headers: { "Content-Type": "application/json" },
@@ -78,7 +78,7 @@ export function useUpdateAssessmentOffering(
 ) {
   return useMutation<AssessmentOfferingType, Error, UpdateOfferingVars>({
     mutationFn: ({ id, data }) =>
-      customFetch<AssessmentOfferingType>(`/assessments/offerings/${id}`, {
+      customFetch<AssessmentOfferingType>(`/api/assessments/offerings/${id}`, {
         method: "PATCH",
         body: JSON.stringify(data),
         headers: { "Content-Type": "application/json" },
@@ -92,7 +92,7 @@ export function useDeleteAssessmentOffering(
 ) {
   return useMutation<{ success: boolean }, Error, number>({
     mutationFn: (id) =>
-      customFetch<{ success: boolean }>(`/assessments/offerings/${id}`, { method: "DELETE" }),
+      customFetch<{ success: boolean }>(`/api/assessments/offerings/${id}`, { method: "DELETE" }),
     ...options,
   });
 }
@@ -106,7 +106,7 @@ export function useGetMyAssessments(
 ) {
   return useQuery<AssessmentBookingType[]>({
     queryKey: getMyAssessmentsQueryKey(),
-    queryFn: () => customFetch<AssessmentBookingType[]>("/assessments"),
+    queryFn: () => customFetch<AssessmentBookingType[]>("/api/assessments"),
     ...options?.query,
   });
 }
@@ -136,7 +136,7 @@ export function useBookAssessment(
 ) {
   return useMutation<BookAssessmentResult, Error, BookAssessmentVars>({
     mutationFn: (data) =>
-      customFetch<BookAssessmentResult>("/assessments/book", {
+      customFetch<BookAssessmentResult>("/api/assessments/book", {
         method: "POST",
         body: JSON.stringify(data),
         headers: { "Content-Type": "application/json" },
@@ -157,7 +157,7 @@ export function useVerifyAssessmentPayment(
 ) {
   return useMutation<{ success: boolean; assessmentId: number }, Error, VerifyPaymentVars>({
     mutationFn: (data) =>
-      customFetch<{ success: boolean; assessmentId: number }>("/assessments/verify-payment", {
+      customFetch<{ success: boolean; assessmentId: number }>("/api/assessments/verify-payment", {
         method: "POST",
         body: JSON.stringify(data),
         headers: { "Content-Type": "application/json" },
@@ -176,7 +176,7 @@ export function useUpdateAssessmentStatus(
 ) {
   return useMutation<AssessmentBookingType, Error, UpdateStatusVars>({
     mutationFn: ({ bookingId, status }) =>
-      customFetch<AssessmentBookingType>(`/assessments/${bookingId}/status`, {
+      customFetch<AssessmentBookingType>(`/api/assessments/${bookingId}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
         headers: { "Content-Type": "application/json" },
@@ -204,7 +204,7 @@ export function useSubmitAssessmentReport(
 ) {
   return useMutation<AssessmentReportType, Error, SubmitReportVars>({
     mutationFn: ({ bookingId, ...data }) =>
-      customFetch<AssessmentReportType>(`/assessments/${bookingId}/report`, {
+      customFetch<AssessmentReportType>(`/api/assessments/${bookingId}/report`, {
         method: "POST",
         body: JSON.stringify(data),
         headers: { "Content-Type": "application/json" },
@@ -220,7 +220,7 @@ export function useUpdateAssessmentReport(
 ) {
   return useMutation<AssessmentReportType, Error, UpdateReportVars>({
     mutationFn: ({ bookingId, ...data }) =>
-      customFetch<AssessmentReportType>(`/assessments/${bookingId}/report`, {
+      customFetch<AssessmentReportType>(`/api/assessments/${bookingId}/report`, {
         method: "PATCH",
         body: JSON.stringify(data),
         headers: { "Content-Type": "application/json" },
@@ -238,7 +238,7 @@ export function useGetChildReports(
 ) {
   return useQuery<AssessmentReportType[]>({
     queryKey: getChildReportsQueryKey(childId),
-    queryFn: () => customFetch<AssessmentReportType[]>(`/children/${childId}/reports`),
+    queryFn: () => customFetch<AssessmentReportType[]>(`/api/children/${childId}/reports`),
     enabled: !!childId,
     ...options?.query,
   });
@@ -253,7 +253,7 @@ export function useGetAssessmentMatches(
 ) {
   return useQuery<AssessmentMatchType[]>({
     queryKey: getAssessmentMatchesQueryKey(childId),
-    queryFn: () => customFetch<AssessmentMatchType[]>(`/assessments/matches/${childId}`),
+    queryFn: () => customFetch<AssessmentMatchType[]>(`/api/assessments/matches/${childId}`),
     enabled: !!childId,
     ...options?.query,
   });

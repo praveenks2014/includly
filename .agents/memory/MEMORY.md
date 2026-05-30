@@ -1,0 +1,1 @@
+- [Missing DB tables pattern](missing-db-tables.md) — Drizzle schema and actual DB can diverge; use psql \dt vs grep pgTable to diff, then run raw SQL (drizzle-kit push is interactive and blocks in scripts).
