@@ -44,6 +44,9 @@ export const sessionBookingsTable = pgTable("session_bookings", {
   bookingType: text("booking_type").notNull().default("session"),
   assessmentOfferingId: integer("assessment_offering_id"),
   reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
+  startOtp: text("start_otp"),
+  endOtp: text("end_otp"),
+  startedAt: timestamp("started_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

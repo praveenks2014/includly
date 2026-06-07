@@ -1,1 +1,2 @@
 - [Missing DB tables pattern](missing-db-tables.md) — Drizzle schema and actual DB can diverge; use psql \dt vs grep pgTable to diff, then run raw SQL (drizzle-kit push is interactive and blocks in scripts).
+- [Includly project overview](includly-overview.md) — Indian special-needs marketplace; key architectural decisions and gotchas.

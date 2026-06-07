@@ -62,6 +62,23 @@ function buildTrustedJwksSets(): Map<string, ReturnType<typeof createRemoteJWKSe
     map.set(issuer, createRemoteJWKSet(new URL(jwksUrl)));
   }
 
+  // Always explicitly trust the production custom domain.
+  // When Clerk uses a custom domain (clerk.includly.in) the JWT iss claim is
+  // the custom domain, NOT the original clerk.accounts.dev host that the
+  // publishable key encodes — so we must add it directly.
+  const explicitHosts = [
+    process.env.CLERK_JWT_ISSUER,  // override via env if needed
+    "clerk.includly.in",           // Includly production custom domain
+  ].filter(Boolean) as string[];
+
+  for (const host of explicitHosts) {
+    const issuer = host.startsWith("https://") ? host : `https://${host}`;
+    if (map.has(issuer)) continue;
+    const jwksUrl = `${issuer}/.well-known/jwks.json`;
+    console.log(`[requireAuth] Trusting Clerk issuer (explicit): ${issuer}`);
+    map.set(issuer, createRemoteJWKSet(new URL(jwksUrl)));
+  }
+
   return map;
 }
 

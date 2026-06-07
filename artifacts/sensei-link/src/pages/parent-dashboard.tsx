@@ -206,14 +206,37 @@ function SessionCard({ s, compact = false }: { s: SessionBookingWithDetails; com
         </span>
       </div>
       {!isPast && s.status === "confirmed" && (
-        <div className="mt-3 flex gap-2">
-          <Button size="sm" variant="outline" className="gap-1 text-xs border-gray-200">
-            <Video size={12} /> Join online
-          </Button>
-          {s.professionalCity && (
-            <Button size="sm" variant="ghost" className="gap-1 text-xs text-gray-600">
-              <Navigation size={12} /> Get directions
+        <div className="mt-3 space-y-3">
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="gap-1 text-xs border-gray-200">
+              <Video size={12} /> Join online
             </Button>
+            {s.professionalCity && (
+              <Button size="sm" variant="ghost" className="gap-1 text-xs text-gray-600">
+                <Navigation size={12} /> Get directions
+              </Button>
+            )}
+          </div>
+          {/* OTP codes — parent shows these to the specialist */}
+          {((s as any).startOtp || (s as any).endOtp) && (
+            <div className="bg-teal-50 border border-teal-100 rounded-xl p-3 space-y-2">
+              <p className="text-[11px] font-semibold text-teal-700 uppercase tracking-wide">Session Codes — show to your specialist</p>
+              <div className="grid grid-cols-2 gap-2">
+                {(s as any).startOtp && (
+                  <div className="bg-white rounded-lg p-2.5 border border-teal-100 text-center">
+                    <p className="text-[10px] text-teal-500 font-medium mb-0.5">START CODE</p>
+                    <p className="text-xl font-bold tracking-widest text-[#1A2340] font-mono">{(s as any).startOtp}</p>
+                  </div>
+                )}
+                {(s as any).endOtp && (
+                  <div className="bg-white rounded-lg p-2.5 border border-teal-100 text-center">
+                    <p className="text-[10px] text-teal-500 font-medium mb-0.5">FINISH CODE</p>
+                    <p className="text-xl font-bold tracking-widest text-[#1A2340] font-mono">{(s as any).endOtp}</p>
+                  </div>
+                )}
+              </div>
+              <p className="text-[10px] text-teal-500">Give the start code when session begins. Give the finish code when it ends.</p>
+            </div>
           )}
         </div>
       )}
@@ -719,10 +742,114 @@ function FindTab() {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: MY UNLOCKS
+// ─── Chat modal (parent → professional) ────────────────────────────────────────
+interface ChatMsg { id: number; threadId: number; senderId: number; senderName: string | null; body: string; createdAt: string; }
+
+function ChatModal({ professionalId, professionalName, onClose }: { professionalId: number; professionalName: string; onClose: () => void }) {
+  const { toast } = useToast();
+  const { data: me } = useGetMe();
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [threadId, setThreadId] = useState<number | null>(null);
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchWithAuth(`/api/connect/${professionalId}/thread`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.thread?.id) setThreadId(data.thread.id);
+        if (Array.isArray(data.messages)) setMessages(data.messages);
+      })
+      .catch(() => toast({ title: "Could not load messages", variant: "destructive" }))
+      .finally(() => setLoading(false));
+  }, [professionalId]);
+
+  async function send() {
+    if (!body.trim() || !threadId) return;
+    setSending(true);
+    try {
+      const res = await fetchWithAuth(`/api/connect/thread/${threadId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: body.trim() }),
+      });
+      const msg = await res.json();
+      if (!res.ok) { toast({ title: msg.error ?? "Could not send", variant: "destructive" }); return; }
+      setMessages((prev) => [...prev, msg]);
+      setBody("");
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40" onClick={onClose}>
+      <div className="bg-white w-full sm:max-w-md sm:rounded-2xl shadow-2xl flex flex-col" style={{ height: "clamp(400px, 80vh, 600px)" }} onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <div>
+            <p className="font-semibold text-[#1A2340] text-sm">{professionalName}</p>
+            <p className="text-xs text-gray-400">Connect message</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+            <X size={18} className="text-gray-500" />
+          </button>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+          {loading && <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-teal-500" /></div>}
+          {!loading && messages.length === 0 && (
+            <div className="text-center py-8 text-gray-400">
+              <MessageSquarePlus size={28} className="mx-auto mb-2 text-gray-300" />
+              <p className="text-sm">Start the conversation!</p>
+            </div>
+          )}
+          {messages.map((msg) => {
+            const meId = (me as any)?.id;
+            const isMe = meId && msg.senderId === meId;
+            return (
+              <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-sm ${isMe ? "bg-teal-500 text-white rounded-br-sm" : "bg-white border border-gray-100 text-gray-800 rounded-bl-sm shadow-sm"}`}>
+                  {!isMe && <p className="text-[10px] font-semibold mb-0.5 opacity-60">{msg.senderName ?? professionalName}</p>}
+                  <p>{msg.body}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Input */}
+        <div className="flex gap-2 p-3 border-t border-gray-100">
+          <input
+            type="text"
+            placeholder="Type a message…"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+            className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+          />
+          <button
+            onClick={send}
+            disabled={sending || !body.trim()}
+            className="bg-teal-500 hover:bg-teal-600 disabled:opacity-50 text-white rounded-xl px-3.5 flex items-center justify-center transition-colors"
+          >
+            {sending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 function UnlocksTab() {
   const { data: unlocks, isLoading } = useGetMyUnlocks();
   const [reviewingId, setReviewingId] = useState<number | null>(null);
+  const [chatProfessional, setChatProfessional] = useState<{ id: number; name: string } | null>(null);
 
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-teal-600" /></div>;
 
@@ -742,20 +869,34 @@ function UnlocksTab() {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-4">
           {unlocks.map((unlock: ContactUnlock) => unlock.professional ? (
-            <ProfCard
-              key={unlock.id}
-              p={unlock.professional}
-              showContact
-              onReview={() => setReviewingId(unlock.professionalId)}
-            />
+            <div key={unlock.id} className="space-y-2">
+              <ProfCard
+                p={unlock.professional}
+                showContact
+                onReview={() => setReviewingId(unlock.professionalId)}
+              />
+              <button
+                onClick={() => setChatProfessional({ id: unlock.professionalId, name: unlock.professional?.fullName ?? "Professional" })}
+                className="flex items-center gap-2 text-sm font-medium text-teal-600 hover:text-teal-700 bg-teal-50 hover:bg-teal-100 px-4 py-2 rounded-xl transition-colors w-full justify-center border border-teal-100"
+              >
+                <MessageSquarePlus size={15} /> Message {unlock.professional?.fullName?.split(" ")[0] ?? "Professional"}
+              </button>
+            </div>
           ) : null)}
         </div>
       )}
 
       {reviewingId && (
         <ReviewModal professionalId={reviewingId} onClose={() => setReviewingId(null)} />
+      )}
+      {chatProfessional && (
+        <ChatModal
+          professionalId={chatProfessional.id}
+          professionalName={chatProfessional.name}
+          onClose={() => setChatProfessional(null)}
+        />
       )}
     </div>
   );

@@ -150,7 +150,7 @@ router.post(
 );
 
 async function getProfessionalParentId(profId: number, fallback: number): Promise<number | null> {
-  return null;
+  return null; // not used — professional sends via thread-based routes below
 }
 
 router.get(
@@ -179,6 +179,114 @@ router.get(
       .orderBy(desc(connectThreadsTable.createdAt));
 
     res.json(threads);
+  },
+);
+
+// GET /connect/thread/:threadId/messages — fetch messages for a thread (both parties)
+router.get(
+  "/connect/thread/:threadId/messages",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const threadId = parseInt(req.params["threadId"] as string, 10);
+    if (isNaN(threadId)) { res.status(400).json({ error: "Invalid thread id" }); return; }
+
+    const [thread] = await db
+      .select()
+      .from(connectThreadsTable)
+      .where(eq(connectThreadsTable.id, threadId))
+      .limit(1);
+
+    if (!thread) { res.status(404).json({ error: "Thread not found" }); return; }
+
+    // Check access: parent is a direct participant; professional must own the thread
+    const userId = req.userId!;
+    const role = req.userRole!;
+    let hasAccess = role === "admin" || thread.parentId === userId;
+
+    if (!hasAccess) {
+      const [prof] = await db
+        .select({ id: professionalProfilesTable.id })
+        .from(professionalProfilesTable)
+        .where(eq(professionalProfilesTable.userId, userId))
+        .limit(1);
+      hasAccess = !!prof && prof.id === thread.professionalId;
+    }
+
+    if (!hasAccess) { res.status(403).json({ error: "Access denied" }); return; }
+
+    const messages = await db
+      .select({
+        id: connectMessagesTable.id,
+        threadId: connectMessagesTable.threadId,
+        senderId: connectMessagesTable.senderId,
+        senderName: usersTable.fullName,
+        body: connectMessagesTable.body,
+        createdAt: connectMessagesTable.createdAt,
+      })
+      .from(connectMessagesTable)
+      .leftJoin(usersTable, eq(connectMessagesTable.senderId, usersTable.id))
+      .where(eq(connectMessagesTable.threadId, threadId))
+      .orderBy(desc(connectMessagesTable.id))
+      .limit(100);
+
+    res.json({ messages: [...messages].reverse() });
+  },
+);
+
+// POST /connect/thread/:threadId/messages — send a message to an existing thread (both parties)
+router.post(
+  "/connect/thread/:threadId/messages",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const threadId = parseInt(req.params["threadId"] as string, 10);
+    if (isNaN(threadId)) { res.status(400).json({ error: "Invalid thread id" }); return; }
+
+    const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
+    if (!body || body.length === 0) { res.status(400).json({ error: "Message body is required" }); return; }
+    if (body.length > 2000) { res.status(400).json({ error: "Message too long" }); return; }
+
+    const [thread] = await db
+      .select()
+      .from(connectThreadsTable)
+      .where(eq(connectThreadsTable.id, threadId))
+      .limit(1);
+
+    if (!thread) { res.status(404).json({ error: "Thread not found" }); return; }
+
+    const userId = req.userId!;
+    const role = req.userRole!;
+    let hasAccess = role === "admin" || thread.parentId === userId;
+
+    if (!hasAccess) {
+      const [prof] = await db
+        .select({ id: professionalProfilesTable.id })
+        .from(professionalProfilesTable)
+        .where(eq(professionalProfilesTable.userId, userId))
+        .limit(1);
+      hasAccess = !!prof && prof.id === thread.professionalId;
+    }
+
+    if (!hasAccess) { res.status(403).json({ error: "Access denied" }); return; }
+
+    const [message] = await db
+      .insert(connectMessagesTable)
+      .values({ threadId, senderId: userId, body })
+      .returning();
+
+    const [withSender] = await db
+      .select({
+        id: connectMessagesTable.id,
+        threadId: connectMessagesTable.threadId,
+        senderId: connectMessagesTable.senderId,
+        senderName: usersTable.fullName,
+        body: connectMessagesTable.body,
+        createdAt: connectMessagesTable.createdAt,
+      })
+      .from(connectMessagesTable)
+      .leftJoin(usersTable, eq(connectMessagesTable.senderId, usersTable.id))
+      .where(eq(connectMessagesTable.id, message!.id));
+
+    res.status(201).json(withSender);
   },
 );
 

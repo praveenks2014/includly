@@ -31,6 +31,10 @@ function getRazorpay() {
   return new Razorpay({ key_id: keyId, key_secret: keySecret });
 }
 
+function generateOtp(): string {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
 function getSessionCommission(specialty: string): number {
   if (specialty === "therapy_centre") return 149;
   if (specialty === "psychiatrist" || specialty === "neurologist") return 99;
@@ -255,6 +259,8 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
             notes: notes ?? null,
             childId: childId ?? null,
             status: "confirmed",
+            startOtp: generateOtp(),
+            endOtp: generateOtp(),
           })
           .returning();
 
@@ -366,6 +372,8 @@ router.post("/sessions/verify-payment", requireAuth, async (req: Request, res: R
     .set({
       status: "confirmed",
       providerPaymentId: razorpayPaymentId,
+      startOtp: generateOtp(),
+      endOtp: generateOtp(),
       updatedAt: new Date(),
     })
     .where(eq(sessionBookingsTable.id, sessionId))
@@ -432,6 +440,7 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         status: sessionBookingsTable.status,
         notes: sessionBookingsTable.notes,
         createdAt: sessionBookingsTable.createdAt,
+        startedAt: sessionBookingsTable.startedAt,
         parentName: usersTable.fullName,
         parentLocation: usersTable.location,
         parentSharesLocation: usersTable.shareHomeLocation,
@@ -468,6 +477,8 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         status: sessionBookingsTable.status,
         notes: sessionBookingsTable.notes,
         createdAt: sessionBookingsTable.createdAt,
+        startOtp: sessionBookingsTable.startOtp,
+        endOtp: sessionBookingsTable.endOtp,
         professionalName: professionalProfilesTable.fullName,
         professionalSpecialty: professionalProfilesTable.specialty,
         professionalCity: professionalProfilesTable.city,
@@ -726,6 +737,98 @@ router.get("/sessions/progress", requireAuth, requireRole("parent", "admin"), as
     .limit(20);
 
   res.json(notes);
+});
+
+// POST /sessions/:bookingId/verify-start-otp — specialist submits the start OTP shown by parent
+router.post("/sessions/:bookingId/verify-start-otp", requireAuth, requireRole("professional", "admin"), async (req: Request, res: Response): Promise<void> => {
+  const bookingId = parseInt(req.params["bookingId"] as string, 10);
+  if (isNaN(bookingId)) { res.status(400).json({ error: "Invalid booking id" }); return; }
+
+  const otp = typeof req.body?.otp === "string" ? req.body.otp.trim() : "";
+  if (!otp) { res.status(400).json({ error: "OTP is required" }); return; }
+
+  const [prof] = await db.select({ id: professionalProfilesTable.id })
+    .from(professionalProfilesTable).where(eq(professionalProfilesTable.userId, req.userId!)).limit(1);
+
+  const [booking] = await db.select().from(sessionBookingsTable).where(eq(sessionBookingsTable.id, bookingId)).limit(1);
+  if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+  const isAdmin = req.userRole === "admin";
+  if (!isAdmin && (!prof || prof.id !== booking.professionalId)) {
+    res.status(403).json({ error: "Not your booking" }); return;
+  }
+  if (booking.status !== "confirmed") {
+    res.status(400).json({ error: "Booking is not in confirmed status" }); return;
+  }
+  if (booking.startedAt) {
+    res.status(400).json({ error: "Session already started" }); return;
+  }
+  if (booking.startOtp !== otp) {
+    res.status(400).json({ error: "Incorrect start OTP — ask the parent for the 6-digit code shown in their app" }); return;
+  }
+
+  const [updated] = await db.update(sessionBookingsTable)
+    .set({ startedAt: new Date(), updatedAt: new Date() })
+    .where(eq(sessionBookingsTable.id, bookingId))
+    .returning();
+
+  void sendPushNotification(booking.parentId, {
+    title: "Session started ✓",
+    body: "Your session has begun. The specialist has scanned your start OTP.",
+    url: "/sessions",
+  }).catch(() => {});
+
+  res.json({ ok: true, startedAt: updated.startedAt });
+});
+
+// POST /sessions/:bookingId/verify-end-otp — specialist submits the finish OTP to close the session
+router.post("/sessions/:bookingId/verify-end-otp", requireAuth, requireRole("professional", "admin"), async (req: Request, res: Response): Promise<void> => {
+  const bookingId = parseInt(req.params["bookingId"] as string, 10);
+  if (isNaN(bookingId)) { res.status(400).json({ error: "Invalid booking id" }); return; }
+
+  const otp = typeof req.body?.otp === "string" ? req.body.otp.trim() : "";
+  if (!otp) { res.status(400).json({ error: "OTP is required" }); return; }
+
+  const [prof] = await db.select({ id: professionalProfilesTable.id, specialty: professionalProfilesTable.specialty })
+    .from(professionalProfilesTable).where(eq(professionalProfilesTable.userId, req.userId!)).limit(1);
+
+  const [booking] = await db.select().from(sessionBookingsTable).where(eq(sessionBookingsTable.id, bookingId)).limit(1);
+  if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+  const isAdmin = req.userRole === "admin";
+  if (!isAdmin && (!prof || prof.id !== booking.professionalId)) {
+    res.status(403).json({ error: "Not your booking" }); return;
+  }
+  if (booking.status !== "confirmed") {
+    res.status(400).json({ error: "Session is not in confirmed status" }); return;
+  }
+  if (!booking.startedAt) {
+    res.status(400).json({ error: "Session has not been started yet — verify the start OTP first" }); return;
+  }
+  if (booking.endOtp !== otp) {
+    res.status(400).json({ error: "Incorrect finish OTP — ask the parent for the 6-digit finish code" }); return;
+  }
+
+  const [completed] = await db.update(sessionBookingsTable)
+    .set({ status: "completed", updatedAt: new Date() })
+    .where(eq(sessionBookingsTable.id, bookingId))
+    .returning();
+
+  // Release escrow funds to the professional
+  void (async () => {
+    try {
+      const ledgerEntry = await findLedgerByBooking(bookingId);
+      if (ledgerEntry) await releaseWithCommission(ledgerEntry.id);
+    } catch { /* ledger failure must not block the response */ }
+  })();
+
+  void sendPushNotification(booking.parentId, {
+    title: "Session completed 🎉",
+    body: "Your session is complete. A progress note will appear in your dashboard shortly.",
+    url: "/sessions",
+  }).catch(() => {});
+
+  res.json({ ok: true, status: "completed" });
 });
 
 export default router;

@@ -551,7 +551,7 @@ function OverviewTab() {
 function ProfessionalsTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<string>("pending");
+  const [statusFilter, setStatusFilter] = useState<string>("");
   const [page, setPage] = useState(1);
   const [reviewProf, setReviewProf] = useState<AdminProfessionalRow | null>(null);
   const [documents, setDocuments] = useState<ProfDocuments | null>(null);

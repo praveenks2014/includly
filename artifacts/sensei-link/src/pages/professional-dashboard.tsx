@@ -34,11 +34,11 @@ import {
   ShieldCheck, Bell, Settings, Loader2, CheckCircle2, XCircle,
   Clock, AlertCircle, Eye, Phone, Mail, MapPin, Star, Unlock,
   Edit3, Save, HelpCircle, BadgeCheck, FileText, ChevronRight,
-  Menu, X, Plus, Trash2, TrendingUp, Check,
+  Menu, X, Plus, Trash2, TrendingUp, Check, MessageSquare, Send, ChevronLeft,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type ProTab = "home" | "profile" | "availability" | "bookings" | "earnings" | "certifications" | "verification" | "notifications";
+type ProTab = "home" | "profile" | "availability" | "bookings" | "earnings" | "certifications" | "verification" | "notifications" | "messages";
 
 interface Notification { id: number; title: string; body: string; read: boolean; createdAt: string; }
 interface CertDoc { id: number; documentType: string; fileKey: string; uploadedAt: string; }
@@ -90,9 +90,10 @@ const NAV_ITEMS: { id: ProTab; label: string; icon: React.ReactNode }[] = [
   { id: "earnings",     label: "My Earnings",      icon: <IndianRupee size={18} /> },
   { id: "certifications",label: "Certifications",  icon: <Award size={18} /> },
   { id: "verification", label: "ID Verification",  icon: <ShieldCheck size={18} /> },
+  { id: "messages",     label: "Messages",         icon: <MessageSquare size={18} /> },
   { id: "notifications",label: "Notifications",    icon: <Bell size={18} /> },
 ];
-const MOBILE_BOTTOM: ProTab[] = ["home", "profile", "bookings", "verification", "notifications"];
+const MOBILE_BOTTOM: ProTab[] = ["home", "profile", "bookings", "messages", "notifications"];
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: HOME
@@ -787,11 +788,131 @@ function AvailabilityTab() {
   );
 }
 
+// ─── Booking card with OTP verification ────────────────────────────────────────
+function BookingCard({ s, onRefresh }: { s: SessionBookingWithDetails; onRefresh: () => void }) {
+  const { toast } = useToast();
+  const [startOtpInput, setStartOtpInput] = useState("");
+  const [endOtpInput, setEndOtpInput] = useState("");
+  const [loading, setLoading] = useState<"start" | "end" | null>(null);
+  const sa = s as any;
+
+  const isPast = ["completed", "cancelled_by_parent", "cancelled_by_professional", "no_show"].includes(s.status);
+  const isStarted = !!sa.startedAt;
+
+  const STATUS_COLOR: Record<string, string> = {
+    confirmed: "bg-green-100 text-green-700",
+    pending_payment: "bg-yellow-100 text-yellow-700",
+    completed: "bg-gray-100 text-gray-600",
+    cancelled_by_parent: "bg-red-100 text-red-600",
+    cancelled_by_professional: "bg-red-100 text-red-600",
+    no_show: "bg-red-100 text-red-600",
+  };
+
+  async function verifyOtp(type: "start" | "end") {
+    const otp = type === "start" ? startOtpInput.trim() : endOtpInput.trim();
+    if (otp.length !== 6) { toast({ title: "Enter the 6-digit code", variant: "destructive" }); return; }
+    setLoading(type);
+    try {
+      const res = await fetchWithAuth(`/api/sessions/${s.id}/verify-${type}-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ otp }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast({ title: data.error ?? "Error", variant: "destructive" }); return; }
+      toast({ title: type === "start" ? "Session started ✓" : "Session completed 🎉" });
+      if (type === "start") setStartOtpInput(""); else setEndOtpInput("");
+      onRefresh();
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-semibold text-[#1A2340]">{s.parentName ?? "Parent"}</p>
+          <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
+            <span className="flex items-center gap-1"><CalendarCheck size={11} />{fmtDate(s.bookedDate)}</span>
+            <span className="flex items-center gap-1"><Clock size={11} />{fmtTime(s.startTime)}</span>
+            <span>{s.durationMinutes} min</span>
+          </div>
+          {s.parentLocation && (
+            <p className="text-xs text-gray-400 mt-1 flex items-center gap-1"><MapPin size={11} />{s.parentLocation}</p>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLOR[s.status] ?? "bg-gray-100 text-gray-600"}`}>
+            {s.status.replace(/_/g, " ")}
+          </span>
+          {isStarted && s.status === "confirmed" && (
+            <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium">In progress</span>
+          )}
+        </div>
+      </div>
+      {s.amountInr > 0 && <p className="text-xs text-green-700 mt-2 font-semibold">₹{s.amountInr}</p>}
+      {s.notes && <p className="text-xs text-gray-400 mt-2 italic">{s.notes}</p>}
+
+      {/* OTP verification — only shown for confirmed upcoming sessions */}
+      {!isPast && s.status === "confirmed" && (
+        <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+          {!isStarted ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="Start code (from parent)"
+                value={startOtpInput}
+                onChange={(e) => setStartOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] placeholder:text-gray-300"
+              />
+              <Button
+                size="sm"
+                className="bg-[#2EC4A5] hover:bg-[#26a98d] text-white shrink-0"
+                disabled={loading === "start" || startOtpInput.length !== 6}
+                onClick={() => verifyOtp("start")}
+              >
+                {loading === "start" ? <Loader2 size={14} className="animate-spin" /> : "Start"}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="Finish code (from parent)"
+                value={endOtpInput}
+                onChange={(e) => setEndOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-[#FF6B6B] placeholder:text-gray-300"
+              />
+              <Button
+                size="sm"
+                className="bg-[#FF6B6B] hover:bg-[#e05a5a] text-white shrink-0"
+                disabled={loading === "end" || endOtpInput.length !== 6}
+                onClick={() => verifyOtp("end")}
+              >
+                {loading === "end" ? <Loader2 size={14} className="animate-spin" /> : "Complete"}
+              </Button>
+            </div>
+          )}
+          <p className="text-[10px] text-gray-400">Ask the parent for the 6-digit code shown in their app.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: BOOKINGS
 // ═══════════════════════════════════════════════════════════════════════════════
 function BookingsTab() {
   const { data: sessions = [], isLoading } = useGetMySessions({ role: "professional" } as Parameters<typeof useGetMySessions>[0]);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<"upcoming" | "past" | "all">("upcoming");
 
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-[#2EC4A5]" /></div>;
@@ -839,28 +960,7 @@ function BookingsTab() {
       ) : (
         <div className="space-y-3">
           {shown.map((s) => (
-            <div key={s.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-[#1A2340]">{s.parentName ?? "Parent"}</p>
-                  <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
-                    <span className="flex items-center gap-1"><CalendarCheck size={11} />{fmtDate(s.bookedDate)}</span>
-                    <span className="flex items-center gap-1"><Clock size={11} />{fmtTime(s.startTime)}</span>
-                    <span>{s.durationMinutes} min</span>
-                  </div>
-                  {s.parentLocation && (
-                    <p className="text-xs text-gray-400 mt-1 flex items-center gap-1"><MapPin size={11} />{s.parentLocation}</p>
-                  )}
-                </div>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${STATUS_COLOR[s.status] ?? "bg-gray-100 text-gray-600"}`}>
-                  {s.status.replace(/_/g, " ")}
-                </span>
-              </div>
-              {s.amountInr > 0 && (
-                <p className="text-xs text-green-700 mt-2 font-semibold">₹{s.amountInr}</p>
-              )}
-              {s.notes && <p className="text-xs text-gray-400 mt-2 italic">{s.notes}</p>}
-            </div>
+            <BookingCard key={s.id} s={s} onRefresh={() => queryClient.invalidateQueries({ queryKey: ["sessions"] })} />
           ))}
         </div>
       )}
@@ -1257,6 +1357,147 @@ function NotificationsTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// TAB: MESSAGES
+// ═══════════════════════════════════════════════════════════════════════════════
+interface ConnectThread { id: number; parentId: number; parentName: string | null; createdAt: string; }
+interface ConnectMessage { id: number; threadId: number; senderId: number; senderName: string | null; body: string; createdAt: string; }
+
+function MessagesTab() {
+  const { data: me } = useGetMe();
+  const { toast } = useToast();
+  const [threads, setThreads] = useState<ConnectThread[]>([]);
+  const [selectedThread, setSelectedThread] = useState<ConnectThread | null>(null);
+  const [messages, setMessages] = useState<ConnectMessage[]>([]);
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [loadingThreads, setLoadingThreads] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+
+  useEffect(() => {
+    fetchWithAuth("/api/connect/inbox")
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setThreads(data); })
+      .catch(() => {})
+      .finally(() => setLoadingThreads(false));
+  }, []);
+
+  async function openThread(thread: ConnectThread) {
+    setSelectedThread(thread);
+    setMessages([]);
+    setLoadingMessages(true);
+    try {
+      const res = await fetchWithAuth(`/api/connect/thread/${thread.id}/messages`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.messages)) setMessages(data.messages);
+      }
+    } catch { }
+    finally { setLoadingMessages(false); }
+  }
+
+  async function send() {
+    if (!body.trim() || !selectedThread) return;
+    setSending(true);
+    try {
+      const res = await fetchWithAuth(`/api/connect/thread/${selectedThread.id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: body.trim() }),
+      });
+      const msg = await res.json();
+      if (!res.ok) { toast({ title: msg.error ?? "Could not send", variant: "destructive" }); return; }
+      setMessages((prev) => [...prev, msg]);
+      setBody("");
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (loadingThreads) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-[#2EC4A5]" /></div>;
+
+  if (selectedThread) {
+    return (
+      <div className="flex flex-col gap-4" style={{ height: "calc(100vh - 160px)" }}>
+        <button onClick={() => { setSelectedThread(null); setMessages([]); }} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#2EC4A5] transition-colors w-fit">
+          <ChevronLeft size={16} /> Back to inbox
+        </button>
+        <h2 className="font-serif font-semibold text-[#1A2340] text-lg">{selectedThread.parentName ?? "Parent"}</h2>
+
+        <div className="flex-1 overflow-y-auto bg-gray-50 rounded-2xl p-4 space-y-3 min-h-0">
+          {loadingMessages && <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-[#2EC4A5]" /></div>}
+          {!loadingMessages && messages.length === 0 && (
+            <div className="text-center py-8 text-gray-400">
+              <MessageSquare size={28} className="mx-auto mb-2 text-gray-300" />
+              <p className="text-sm">No messages yet. Start the conversation!</p>
+            </div>
+          )}
+          {messages.map((msg) => {
+            const isMe = msg.senderId === (me as any)?.id;
+            return (
+              <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm ${isMe ? "bg-[#2EC4A5] text-white rounded-br-sm" : "bg-white border border-gray-100 text-gray-800 rounded-bl-sm shadow-sm"}`}>
+                  {!isMe && <p className="text-[10px] font-semibold mb-0.5 opacity-60">{msg.senderName ?? "Parent"}</p>}
+                  <p>{msg.body}</p>
+                  <p className={`text-[10px] mt-1 ${isMe ? "opacity-70" : "text-gray-400"}`}>{timeAgo(msg.createdAt)}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex gap-2 pb-2">
+          <input
+            type="text"
+            placeholder="Type a message…"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+            className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]"
+          />
+          <Button onClick={send} disabled={sending || !body.trim()} className="bg-[#2EC4A5] hover:bg-[#26a98d] text-white px-4 shrink-0">
+            {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <h1 className="text-xl font-serif font-semibold text-[#1A2340]">Messages</h1>
+      {threads.length === 0 ? (
+        <div className="bg-white border border-gray-100 rounded-2xl p-10 text-center shadow-sm">
+          <MessageSquare size={36} className="mx-auto mb-3 text-gray-300" />
+          <p className="font-semibold text-gray-600">No messages yet</p>
+          <p className="text-sm text-gray-400 mt-1">Parents who have unlocked your contact will appear here.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {threads.map((thread) => (
+            <button
+              key={thread.id}
+              onClick={() => openThread(thread)}
+              className="w-full bg-white border border-gray-100 rounded-2xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)] flex items-center gap-3 hover:border-[#2EC4A5]/40 transition-colors text-left"
+            >
+              <div className="w-10 h-10 rounded-full bg-[#2EC4A5]/10 flex items-center justify-center shrink-0">
+                <span className="text-sm font-bold text-[#2EC4A5]">{(thread.parentName ?? "P")[0]?.toUpperCase()}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-[#1A2340] text-sm">{thread.parentName ?? "Parent"}</p>
+                <p className="text-xs text-gray-400 mt-0.5">Tap to open conversation</p>
+              </div>
+              <ChevronRight size={16} className="text-gray-300 shrink-0" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN: PROFESSIONAL DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function ProfessionalDashboard() {
@@ -1393,6 +1634,7 @@ export default function ProfessionalDashboard() {
           {activeTab === "earnings"      && <EarningsTab />}
           {activeTab === "certifications"&& <CertificationsTab />}
           {activeTab === "verification"  && <VerificationTab />}
+          {activeTab === "messages"      && <MessagesTab />}
           {activeTab === "notifications" && <NotificationsTab />}
         </main>
       </div>
