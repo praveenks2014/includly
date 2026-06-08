@@ -814,8 +814,9 @@ function BookingsTab() {
   const [bookingTab, setBookingTab] = useState<"upcoming" | "past">("upcoming");
 
   const now = new Date();
+  const ACTIVE_STATUSES = ["confirmed", "pending_payment", "requested", "confirmed_by_pro", "paid_held", "session_started"];
   const upcoming = (sessions ?? [])
-    .filter((s) => ["confirmed", "pending_payment"].includes(s.status) && new Date(s.bookedDate) >= now)
+    .filter((s) => ACTIVE_STATUSES.includes(s.status) && new Date(s.bookedDate) >= now)
     .sort((a, b) => new Date(a.bookedDate).getTime() - new Date(b.bookedDate).getTime());
   const past = (sessions ?? [])
     .filter((s) => !upcoming.find((u) => u.id === s.id))

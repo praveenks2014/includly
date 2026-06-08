@@ -2,12 +2,14 @@ import { useUser } from "@clerk/react";
 import { Redirect, useSearch } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { useGetMySessions, useUpdateSessionStatus, type SessionBookingWithDetails } from "@workspace/api-client-react";
-import { Loader2, CalendarCheck, Clock, IndianRupee, User, MessageCircle, MapPin } from "lucide-react";
+import { Loader2, CalendarCheck, Clock, IndianRupee, User, MessageCircle, MapPin, ShieldCheck, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useRef } from "react";
 import { getSpecialtyLabel } from "@/lib/specialties";
+import { fetchWithAuth } from "@/lib/api";
+import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
 import {
   Dialog,
   DialogContent,
@@ -17,7 +19,12 @@ import {
 } from "@/components/ui/dialog";
 import { ChatThread } from "@/components/ChatThread";
 
-type SessionWithMessageCount = SessionBookingWithDetails & { messageCount?: number };
+type SessionWithMessageCount = SessionBookingWithDetails & {
+  messageCount?: number;
+  startOtp?: string | null;
+  endOtp?: string | null;
+  breakdown?: { proAmountInr: number; markupInr: number; gstInr: number; totalInr: number } | null;
+};
 
 const STATUS_COLORS: Record<string, string> = {
   pending_payment: "bg-yellow-100 text-yellow-800",
@@ -26,6 +33,17 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled_by_parent: "bg-red-100 text-red-800",
   cancelled_by_professional: "bg-red-100 text-red-800",
   no_show: "bg-gray-100 text-gray-700",
+  // Flow B statuses
+  requested: "bg-yellow-100 text-yellow-800",
+  confirmed_by_pro: "bg-blue-100 text-blue-800",
+  paid_held: "bg-indigo-100 text-indigo-800",
+  session_started: "bg-teal-100 text-teal-800",
+  session_completed: "bg-gray-100 text-gray-700",
+  releasable: "bg-purple-100 text-purple-800",
+  released: "bg-green-100 text-green-800",
+  cancelled: "bg-red-100 text-red-800",
+  refunded: "bg-gray-100 text-gray-600",
+  disputed: "bg-red-100 text-red-900",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -35,6 +53,17 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled_by_parent: "Cancelled by Parent",
   cancelled_by_professional: "Cancelled",
   no_show: "No Show",
+  // Flow B statuses
+  requested: "Request Sent",
+  confirmed_by_pro: "Confirmed — Pay Now",
+  paid_held: "Paid & Secured",
+  session_started: "Session In Progress",
+  session_completed: "Session Complete",
+  releasable: "Awaiting Payout",
+  released: "Complete",
+  cancelled: "Cancelled",
+  refunded: "Refunded",
+  disputed: "Under Dispute",
 };
 
 function formatDate(dateStr: string) {
@@ -118,7 +147,9 @@ export default function SessionsPage() {
   }
 
   const typedSessions = (sessions ?? []) as SessionWithMessageCount[];
-  const upcoming = typedSessions.filter((s) => s.status === "confirmed" && s.bookedDate >= new Date().toISOString().slice(0, 10));
+  const ACTIVE_STATUSES = ["confirmed", "requested", "confirmed_by_pro", "paid_held", "session_started"];
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = typedSessions.filter((s) => ACTIVE_STATUSES.includes(s.status) && s.bookedDate >= today);
   const other = typedSessions.filter((s) => !upcoming.includes(s));
 
   const chatOtherParty = chatSession
@@ -172,6 +203,7 @@ export default function SessionsPage() {
                       isUpdating={updatingId === session.id}
                       unreadCount={Math.max(0, (session.messageCount ?? 0) - (readCounts[session.id] ?? 0))}
                       onOpenChat={handleOpenChat}
+                      onRefresh={refetch}
                     />
                   ))}
                 </div>
@@ -190,6 +222,7 @@ export default function SessionsPage() {
                       isUpdating={updatingId === session.id}
                       unreadCount={Math.max(0, (session.messageCount ?? 0) - (readCounts[session.id] ?? 0))}
                       onOpenChat={handleOpenChat}
+                      onRefresh={refetch}
                     />
                   ))}
                 </div>
@@ -234,6 +267,7 @@ function SessionCard({
   isUpdating,
   unreadCount,
   onOpenChat,
+  onRefresh,
 }: {
   session: SessionWithMessageCount;
   isProfessional: boolean;
@@ -241,6 +275,7 @@ function SessionCard({
   isUpdating: boolean;
   unreadCount: number;
   onOpenChat: (session: SessionWithMessageCount) => void;
+  onRefresh: () => void;
 }) {
   return (
     <div className="bg-card border border-border rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
@@ -297,24 +332,37 @@ function SessionCard({
         {session.notes && (
           <p className="text-xs text-muted-foreground italic">"{session.notes}"</p>
         )}
+
+        {/* OTP codes for parent — shown when payment is held */}
+        {!isProfessional && ["paid_held", "session_started"].includes(session.status) && (
+          <SessionOtpDisplay session={session} />
+        )}
+
+        {/* Pay now CTA for parent when pro has confirmed */}
+        {!isProfessional && session.status === "confirmed_by_pro" && (
+          <SessionPayNow session={session} onRefresh={onRefresh} />
+        )}
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 relative"
-          onClick={() => onOpenChat(session)}
-          data-testid={`chat-btn-${session.id}`}
-        >
-          <MessageCircle size={14} />
-          Message
-          {unreadCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1" data-testid={`unread-badge-${session.id}`}>
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
-          )}
-        </Button>
+        {/* Chat available from confirmed_by_pro onwards */}
+        {["confirmed", "confirmed_by_pro", "paid_held", "session_started", "session_completed", "releasable", "released", "disputed"].includes(session.status) && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 relative"
+            onClick={() => onOpenChat(session)}
+            data-testid={`chat-btn-${session.id}`}
+          >
+            <MessageCircle size={14} />
+            Message
+            {unreadCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1" data-testid={`unread-badge-${session.id}`}>
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </Button>
+        )}
 
         {isProfessional && session.status === "confirmed" && (
           isUpdating ? (
@@ -333,6 +381,112 @@ function SessionCard({
           )
         )}
       </div>
+    </div>
+  );
+}
+
+// ── OTP display for parent (paid_held / session_started) ─────────────────────
+function SessionOtpDisplay({ session }: { session: SessionWithMessageCount }) {
+  const startOtp = session.startOtp;
+  const endOtp = session.endOtp;
+
+  if (!startOtp && !endOtp) return null;
+
+  return (
+    <div className="mt-2 bg-muted/40 rounded-xl p-3 space-y-2">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+        <ShieldCheck size={12} className="text-primary" />
+        Session codes — share with your specialist
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {startOtp && session.status === "paid_held" && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-2 text-center">
+            <p className="text-[10px] font-medium text-green-700 mb-0.5">START</p>
+            <p className="text-lg font-mono font-bold text-green-800 tracking-[0.15em]">{startOtp}</p>
+          </div>
+        )}
+        {endOtp && session.status === "session_started" && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-center">
+            <p className="text-[10px] font-medium text-blue-700 mb-0.5">END</p>
+            <p className="text-lg font-mono font-bold text-blue-800 tracking-[0.15em]">{endOtp}</p>
+          </div>
+        )}
+      </div>
+      <p className="text-[10px] text-muted-foreground flex items-start gap-1">
+        <AlertCircle size={10} className="shrink-0 mt-0.5" />
+        Only share the start code when the session begins, and the end code when it finishes.
+      </p>
+    </div>
+  );
+}
+
+// ── Pay now button for confirmed_by_pro sessions ──────────────────────────────
+function SessionPayNow({ session, onRefresh }: { session: SessionWithMessageCount; onRefresh: () => void }) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+
+  async function handlePay() {
+    setLoading(true);
+    try {
+      const loaded = await loadRazorpayScript();
+      if (!loaded) { toast({ title: "Payment gateway error", variant: "destructive" }); return; }
+
+      const res = await fetchWithAuth(`/api/sessions-v2/${session.id}/pay`, { method: "POST" });
+      const orderData = await res.json();
+      if (!res.ok) { toast({ title: orderData.error ?? "Could not create order", variant: "destructive" }); return; }
+
+      await new Promise<void>((resolve, reject) => {
+        const rzp = new window.Razorpay({
+          key: orderData.keyId as string,
+          amount: orderData.amount as number,
+          currency: orderData.currency as string,
+          order_id: orderData.orderId as string,
+          name: "Includly",
+          description: `Session with ${session.professionalName ?? "specialist"}`,
+          handler: async (response: RazorpayPaymentResponse) => {
+            try {
+              const vRes = await fetchWithAuth(`/api/sessions-v2/${session.id}/verify-payment`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpaySignature: response.razorpay_signature,
+                }),
+              });
+              const vData = await vRes.json();
+              if (!vRes.ok) { toast({ title: vData.error ?? "Verification failed", variant: "destructive" }); reject(new Error("verify")); return; }
+              toast({ title: "Payment successful! Your session is secured.", description: "OTP codes will appear here." });
+              onRefresh();
+              resolve();
+            } catch { reject(new Error("verify")); }
+          },
+          modal: { ondismiss: () => reject(new Error("dismissed")) },
+        });
+        rzp.open();
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg !== "dismissed") toast({ title: "Payment failed", description: msg, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-2">
+      <p className="text-xs font-medium text-blue-800">
+        Your specialist has confirmed this slot. Complete payment to secure it.
+      </p>
+      {session.breakdown && (
+        <p className="text-[10px] text-blue-700">
+          ₹{session.breakdown.proAmountInr} session + ₹{session.breakdown.markupInr} platform fee + ₹{session.breakdown.gstInr} GST = <strong>₹{session.breakdown.totalInr}</strong>
+        </p>
+      )}
+      <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white" disabled={loading} onClick={handlePay}>
+        {loading ? <Loader2 size={12} className="animate-spin" /> : <IndianRupee size={12} />}
+        {loading ? "Processing…" : `Pay ₹${session.amountInr} now`}
+      </Button>
     </div>
   );
 }

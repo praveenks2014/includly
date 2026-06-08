@@ -44,7 +44,40 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 
-type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "payments" | "settings" | "commissions" | "moderation";
+type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "payments" | "settings" | "commissions" | "moderation" | "bookings" | "shadow-teacher";
+
+// ── Booking row shape from /admin/bookings ────────────────────────────────────
+interface AdminBookingRow {
+  id: number;
+  status: string;
+  parentName: string | null;
+  proName: string | null;
+  proUpiVpa: string | null;
+  bookedDate: string;
+  startTime: string;
+  amountInr: number;
+  proAmountInr: number;
+  markupInr: number;
+  gstInr: number;
+  disputeReason: string | null;
+  releasedAt: string | null;
+  createdAt: string;
+}
+
+// ── Shadow match row ───────────────────────────────────────────────────────────
+interface AdminMatchRow {
+  id: number;
+  status: string;
+  parentName: string | null;
+  parentEmail: string | null;
+  matchedProName: string | null;
+  matchingFeeInr: number;
+  childDetails: string | null;
+  requirements: string | null;
+  adminNotes: string | null;
+  matchedAt: string | null;
+  createdAt: string;
+}
 
 interface ProfDocuments {
   identity: { id: number; documentType: string; fileKey: string; status: string; submittedAt: string } | null;
@@ -386,6 +419,8 @@ export default function AdminPage() {
     { id: "verifications", label: "Verifications", icon: <Shield size={18} /> },
     { id: "parents", label: "Parents", icon: <Users size={18} /> },
     { id: "payments", label: "Payments", icon: <CreditCard size={18} /> },
+    { id: "bookings", label: "Bookings & Payouts", icon: <IndianRupee size={18} /> },
+    { id: "shadow-teacher", label: "Shadow Teacher", icon: <UserCheck size={18} /> },
     { id: "moderation", label: "Moderation", icon: <Flag size={18} /> },
     { id: "settings", label: "Settings", icon: <Settings size={18} /> },
     { id: "commissions", label: "Commission Rates", icon: <IndianRupee size={18} /> },
@@ -467,6 +502,8 @@ export default function AdminPage() {
           {activeTab === "verifications" && <VerificationsTab />}
           {activeTab === "parents" && <ParentsTab />}
           {activeTab === "payments" && <PaymentsTab />}
+          {activeTab === "bookings" && <AdminBookingsTab />}
+          {activeTab === "shadow-teacher" && <AdminShadowTeacherTab />}
           {activeTab === "moderation" && <ModerationTab />}
           {activeTab === "settings" && <SettingsTab />}
           {activeTab === "commissions" && <CommissionRatesTab />}
@@ -1224,5 +1261,476 @@ function SettingsTab() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: BOOKINGS & PAYOUTS (Flow B state machine)
+// ═══════════════════════════════════════════════════════════════════════════════
+const BOOKING_STATUS_COLORS: Record<string, string> = {
+  requested: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  confirmed_by_pro: "bg-blue-50 text-blue-700 border-blue-200",
+  paid_held: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  session_started: "bg-teal-50 text-teal-700 border-teal-200",
+  session_completed: "bg-gray-50 text-gray-600 border-gray-200",
+  releasable: "bg-purple-50 text-purple-700 border-purple-200",
+  released: "bg-green-50 text-green-700 border-green-200",
+  cancelled: "bg-red-50 text-red-600 border-red-200",
+  refunded: "bg-gray-50 text-gray-500 border-gray-200",
+  disputed: "bg-red-50 text-red-700 border-red-300",
+  confirmed: "bg-green-50 text-green-700 border-green-200",
+  pending_payment: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  completed: "bg-gray-50 text-gray-600 border-gray-200",
+};
+
+function AdminBookingsTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState("releasable");
+  const [releasing, setReleasing] = useState<number | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [batchReleasing, setBatchReleasing] = useState(false);
+  const [disputeModal, setDisputeModal] = useState<AdminBookingRow | null>(null);
+  const [resolution, setResolution] = useState<"release" | "refund">("release");
+  const [resolvingDispute, setResolvingDispute] = useState(false);
+
+  const { data, isLoading, refetch } = useQuery<{ bookings: AdminBookingRow[]; total: number }>({
+    queryKey: ["admin-bookings", statusFilter],
+    queryFn: async () => {
+      const qs = statusFilter ? `?status=${statusFilter}` : "";
+      const res = await fetchWithAuth(`/api/admin/bookings${qs}`);
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+
+  const bookings = data?.bookings ?? [];
+
+  const STATUS_FILTERS = [
+    { value: "releasable", label: "Ready to release" },
+    { value: "disputed", label: "Disputed" },
+    { value: "paid_held", label: "Paid & held" },
+    { value: "requested", label: "Requested" },
+    { value: "confirmed_by_pro", label: "Confirmed" },
+    { value: "released", label: "Released" },
+    { value: "", label: "All" },
+  ];
+
+  async function handleRelease(id: number) {
+    setReleasing(id);
+    try {
+      const res = await fetchWithAuth(`/api/admin/bookings/${id}/release`, { method: "PATCH" });
+      const data = await res.json();
+      if (!res.ok) { toast({ title: data.error ?? "Release failed", variant: "destructive" }); return; }
+      toast({ title: "Payout marked as released ✓" });
+      refetch();
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setReleasing(null); }
+  }
+
+  async function handleBatchRelease() {
+    if (selected.size === 0) return;
+    setBatchReleasing(true);
+    try {
+      const res = await fetchWithAuth("/api/admin/bookings/batch-release", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selected) }),
+      });
+      const data = await res.json();
+      toast({ title: `Released ${data.releasedCount ?? 0} of ${selected.size} bookings ✓` });
+      setSelected(new Set());
+      refetch();
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setBatchReleasing(false); }
+  }
+
+  async function handleResolveDispute() {
+    if (!disputeModal) return;
+    setResolvingDispute(true);
+    try {
+      const res = await fetchWithAuth(`/api/admin/bookings/${disputeModal.id}/resolve-dispute`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resolution }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast({ title: data.error ?? "Failed", variant: "destructive" }); return; }
+      toast({ title: `Dispute resolved — booking moved to ${resolution === "release" ? "RELEASABLE" : "REFUNDED"} ✓` });
+      setDisputeModal(null);
+      refetch();
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setResolvingDispute(false); }
+  }
+
+  const allReleasableSelected = bookings.filter((b) => b.status === "releasable");
+
+  return (
+    <div className="space-y-5 max-w-6xl">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-lg font-serif font-bold text-[#1A2340] flex-1">Bookings & Payouts</h2>
+        {selected.size > 0 && (
+          <Button
+            size="sm"
+            className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white"
+            disabled={batchReleasing}
+            onClick={handleBatchRelease}
+          >
+            {batchReleasing ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+            Release selected ({selected.size})
+          </Button>
+        )}
+        {statusFilter === "releasable" && allReleasableSelected.length > 0 && selected.size === 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setSelected(new Set(allReleasableSelected.map((b) => b.id)))}
+          >
+            Select all releasable
+          </Button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {STATUS_FILTERS.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => { setStatusFilter(f.value); setSelected(new Set()); }}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+              statusFilter === f.value
+                ? "bg-[#1A2340] text-white border-[#1A2340]"
+                : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-16 bg-white rounded-xl animate-pulse" />)}</div>
+      ) : bookings.length === 0 ? (
+        <div className="bg-white rounded-xl p-10 text-center shadow-sm">
+          <p className="text-gray-400 text-sm">No bookings found for this filter.</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-[0_4px_24px_rgba(26,35,64,0.08)] overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th className="w-8 px-3 py-3" />
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Booking</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">Parties</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Amount</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {bookings.map((b) => (
+                <tr key={b.id} className="hover:bg-gray-50/50">
+                  <td className="px-3 py-3">
+                    {b.status === "releasable" && (
+                      <input
+                        type="checkbox"
+                        checked={selected.has(b.id)}
+                        onChange={(e) => {
+                          const s = new Set(selected);
+                          e.target.checked ? s.add(b.id) : s.delete(b.id);
+                          setSelected(s);
+                        }}
+                        className="rounded"
+                      />
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-[#1A2340]">#{b.id}</p>
+                    <p className="text-xs text-gray-400">{b.bookedDate} · {b.startTime}</p>
+                  </td>
+                  <td className="px-4 py-3 hidden sm:table-cell">
+                    <p className="text-xs text-gray-600">Parent: {b.parentName ?? "—"}</p>
+                    <p className="text-xs text-gray-600">Pro: {b.proName ?? "—"}</p>
+                    {b.proUpiVpa && <p className="text-[10px] text-gray-400 mt-0.5">UPI: {b.proUpiVpa}</p>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-[#1A2340]">₹{b.amountInr?.toLocaleString("en-IN")}</p>
+                    <p className="text-[10px] text-gray-400">Pro: ₹{b.proAmountInr} · Fee: ₹{b.markupInr} · GST: ₹{b.gstInr}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs px-2 py-1 rounded-full border font-medium ${BOOKING_STATUS_COLORS[b.status] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                      {b.status.replace(/_/g, " ")}
+                    </span>
+                    {b.disputeReason && (
+                      <p className="text-[10px] text-red-500 mt-1 max-w-[120px] truncate" title={b.disputeReason}>{b.disputeReason}</p>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex justify-end gap-1.5">
+                      {b.status === "releasable" && (
+                        <Button
+                          size="sm"
+                          className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-xs h-7 px-2.5"
+                          disabled={releasing === b.id}
+                          onClick={() => handleRelease(b.id)}
+                        >
+                          {releasing === b.id ? <Loader2 size={11} className="animate-spin" /> : "Release"}
+                        </Button>
+                      )}
+                      {b.status === "disputed" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7 px-2.5 border-red-200 text-red-600 hover:bg-red-50"
+                          onClick={() => setDisputeModal(b)}
+                        >
+                          Resolve
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <Dialog open={!!disputeModal} onOpenChange={() => setDisputeModal(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-[#1A2340]">Resolve Dispute #{disputeModal?.id}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            {disputeModal?.disputeReason && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+                <p className="font-semibold text-xs mb-1">Dispute reason:</p>
+                {disputeModal.disputeReason}
+              </div>
+            )}
+            <p className="text-sm text-gray-600">How would you like to resolve this dispute?</p>
+            <div className="space-y-2">
+              {(["release", "refund"] as const).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setResolution(r)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl border text-sm transition-all ${
+                    resolution === r ? "border-[#2EC4A5] bg-[#2EC4A5]/5 text-[#1A2340]" : "border-gray-200 text-gray-600 hover:border-gray-300"
+                  }`}
+                >
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${resolution === r ? "border-[#2EC4A5]" : "border-gray-300"}`}>
+                    {resolution === r && <div className="w-2 h-2 rounded-full bg-[#2EC4A5]" />}
+                  </div>
+                  {r === "release" ? "Release payment to professional" : "Refund payment to parent"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setDisputeModal(null)}>Cancel</Button>
+            <Button
+              className="bg-[#2EC4A5] hover:bg-[#26a88d]"
+              disabled={resolvingDispute}
+              onClick={handleResolveDispute}
+            >
+              {resolvingDispute ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+              Confirm Resolution
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: SHADOW TEACHER MATCHING (Flow A)
+// ═══════════════════════════════════════════════════════════════════════════════
+function AdminShadowTeacherTab() {
+  const { toast } = useToast();
+  const [assignModal, setAssignModal] = useState<AdminMatchRow | null>(null);
+  const [proId, setProId] = useState("");
+  const [adminNotes, setAdminNotes] = useState("");
+  const [assigning, setAssigning] = useState(false);
+  const [cancelling, setCancelling] = useState<number | null>(null);
+
+  const { data: rows, isLoading, refetch } = useQuery<AdminMatchRow[]>({
+    queryKey: ["admin-shadow-teacher"],
+    queryFn: async () => {
+      const res = await fetchWithAuth("/api/shadow-teacher/requests");
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+
+  const STATUS_COLORS_MATCH: Record<string, string> = {
+    pending_payment: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    queued: "bg-blue-50 text-blue-700 border-blue-200",
+    matched: "bg-green-50 text-green-700 border-green-200",
+    cancelled: "bg-gray-50 text-gray-500 border-gray-200",
+    refunded: "bg-gray-50 text-gray-500 border-gray-200",
+    payment_failed: "bg-red-50 text-red-600 border-red-200",
+  };
+
+  async function handleAssign() {
+    if (!assignModal || !proId.trim()) return;
+    setAssigning(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${assignModal.id}/assign`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ professionalId: parseInt(proId, 10), adminNotes: adminNotes.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast({ title: data.error ?? "Assignment failed", variant: "destructive" }); return; }
+      toast({ title: "Shadow teacher assigned ✓" });
+      setAssignModal(null);
+      setProId("");
+      setAdminNotes("");
+      refetch();
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setAssigning(false); }
+  }
+
+  async function handleCancel(id: number) {
+    setCancelling(id);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${id}/cancel`, { method: "PATCH" });
+      const data = await res.json();
+      if (!res.ok) { toast({ title: data.error ?? "Cancel failed", variant: "destructive" }); return; }
+      toast({ title: data.refundInitiated ? "Cancelled & refund initiated ✓" : "Cancelled ✓" });
+      refetch();
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setCancelling(null); }
+  }
+
+  return (
+    <div className="space-y-5 max-w-6xl">
+      <h2 className="text-lg font-serif font-bold text-[#1A2340]">Shadow Teacher Matching Requests</h2>
+
+      {isLoading ? (
+        <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-16 bg-white rounded-xl animate-pulse" />)}</div>
+      ) : !rows?.length ? (
+        <div className="bg-white rounded-xl p-10 text-center shadow-sm">
+          <p className="text-gray-400 text-sm">No shadow teacher match requests yet.</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-[0_4px_24px_rgba(26,35,64,0.08)] overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Parent</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">Child / Requirements</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">Fee / Match</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {(rows ?? []).map((m) => (
+                <tr key={m.id} className="hover:bg-gray-50/50">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-[#1A2340]">{m.parentName ?? "—"}</p>
+                    <p className="text-xs text-gray-400">{m.parentEmail ?? ""}</p>
+                  </td>
+                  <td className="px-4 py-3 hidden sm:table-cell max-w-[200px]">
+                    <p className="text-xs text-gray-600 truncate">{m.childDetails ?? "—"}</p>
+                    <p className="text-[10px] text-gray-400 truncate mt-0.5">{m.requirements ?? ""}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs px-2 py-1 rounded-full border font-medium ${STATUS_COLORS_MATCH[m.status] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                      {m.status.replace(/_/g, " ")}
+                    </span>
+                    {m.matchedProName && (
+                      <p className="text-[10px] text-green-600 mt-1">{m.matchedProName}</p>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 hidden md:table-cell">
+                    <p className="text-sm font-semibold text-[#1A2340]">₹{m.matchingFeeInr?.toLocaleString("en-IN")}</p>
+                    {m.matchedAt && <p className="text-[10px] text-gray-400">Matched: {new Date(m.matchedAt).toLocaleDateString("en-IN")}</p>}
+                    {m.adminNotes && <p className="text-[10px] text-gray-400 mt-0.5 italic">{m.adminNotes}</p>}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex justify-end gap-1.5">
+                      {m.status === "queued" && (
+                        <>
+                          <Button
+                            size="sm"
+                            className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-xs h-7 px-2.5"
+                            onClick={() => { setAssignModal(m); setProId(""); setAdminNotes(""); }}
+                          >
+                            Assign
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-7 px-2 border-red-200 text-red-600 hover:bg-red-50"
+                            disabled={cancelling === m.id}
+                            onClick={() => handleCancel(m.id)}
+                          >
+                            {cancelling === m.id ? <Loader2 size={11} className="animate-spin" /> : "Cancel"}
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <Dialog open={!!assignModal} onOpenChange={() => setAssignModal(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-[#1A2340]">Assign Shadow Teacher</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Parent</p>
+              <p className="text-sm font-medium text-[#1A2340]">{assignModal?.parentName}</p>
+            </div>
+            {assignModal?.childDetails && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Child details</p>
+                <p className="text-sm text-gray-600">{assignModal.childDetails}</p>
+              </div>
+            )}
+            <div>
+              <Label className="text-xs text-gray-600 mb-1 block">Professional ID</Label>
+              <Input
+                type="number"
+                placeholder="Enter professional profile ID"
+                value={proId}
+                onChange={(e) => setProId(e.target.value)}
+                className="focus-visible:ring-[#2EC4A5]"
+              />
+              <p className="text-[10px] text-gray-400 mt-1">You can find the ID in the Professionals tab.</p>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-600 mb-1 block">Admin notes (optional)</Label>
+              <Textarea
+                placeholder="Why this match was made, any extra context…"
+                value={adminNotes}
+                onChange={(e) => setAdminNotes(e.target.value)}
+                rows={2}
+                className="resize-none text-sm focus-visible:ring-[#2EC4A5]"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setAssignModal(null)}>Cancel</Button>
+            <Button
+              className="bg-[#2EC4A5] hover:bg-[#26a88d]"
+              disabled={assigning || !proId.trim()}
+              onClick={handleAssign}
+            >
+              {assigning ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+              Assign Professional
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

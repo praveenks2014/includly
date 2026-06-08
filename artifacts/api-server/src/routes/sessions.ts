@@ -479,6 +479,9 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         createdAt: sessionBookingsTable.createdAt,
         startOtp: sessionBookingsTable.startOtp,
         endOtp: sessionBookingsTable.endOtp,
+        proAmountInr: sessionBookingsTable.proAmountInr,
+        markupInr: sessionBookingsTable.markupInr,
+        gstInr: sessionBookingsTable.gstInr,
         professionalName: professionalProfilesTable.fullName,
         professionalSpecialty: professionalProfilesTable.specialty,
         professionalCity: professionalProfilesTable.city,
@@ -491,6 +494,7 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
       .where(eq(sessionBookingsTable.parentId, req.userId!))
       .orderBy(desc(sessionBookingsTable.bookedDate), desc(sessionBookingsTable.startTime));
 
+    const OTP_VISIBLE_STATUSES = ["paid_held", "session_started"];
     res.json(
       bookings.map((b) => ({
         ...b,
@@ -500,6 +504,16 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         professionalDisplayArea: b.professionalDisplayArea ?? null,
         // Full clinic address only revealed after booking is confirmed
         professionalAddress: b.status === "confirmed" ? (b.professionalAddress ?? null) : null,
+        // OTPs only visible to parent when escrow is active
+        startOtp: OTP_VISIBLE_STATUSES.includes(b.status) ? (b.startOtp ?? null) : null,
+        endOtp: b.status === "session_started" ? (b.endOtp ?? null) : null,
+        // Breakdown for confirmed_by_pro pay-now CTA and paid_held display
+        breakdown: (b.proAmountInr != null && b.proAmountInr > 0) ? {
+          proAmountInr: b.proAmountInr,
+          markupInr: b.markupInr ?? 0,
+          gstInr: b.gstInr ?? 0,
+          totalInr: (b.proAmountInr ?? 0) + (b.markupInr ?? 0) + (b.gstInr ?? 0),
+        } : null,
       })),
     );
   }

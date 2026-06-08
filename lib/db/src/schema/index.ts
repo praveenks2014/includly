@@ -23,3 +23,5 @@ export * from "./assessments";
 export * from "./community";
 export * from "./resources";
 export * from "./referrals";
+export * from "./shadowTeacher";
+export * from "./bookingPayouts";

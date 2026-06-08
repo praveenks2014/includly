@@ -59,6 +59,7 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   pricingMaxINR: integer("pricing_max_inr"),
   rejectionReason: text("rejection_reason"),
   upiId: text("upi_id"),
+  upiVpa: text("upi_vpa"),
   paymentActivated: boolean("payment_activated").notNull().default(false),
   isPremium: boolean("is_premium").notNull().default(false),
   specializationTags: text("specialization_tags").array().notNull().default([]),

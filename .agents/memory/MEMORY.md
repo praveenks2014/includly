@@ -1,2 +1,2 @@
-- [Missing DB tables pattern](missing-db-tables.md) — Drizzle schema and actual DB can diverge; use psql \dt vs grep pgTable to diff, then run raw SQL (drizzle-kit push is interactive and blocks in scripts).
-- [Includly project overview](includly-overview.md) — Indian special-needs marketplace; key architectural decisions and gotchas.
+- [V2 booking status enum](v2-status-enum.md) — all 10 V2 statuses must be kept in sync across DB enum, api.schemas.ts, STATUS_LABELS/COLORS in sessions.tsx and professional-dashboard.tsx
+- [OTP visibility rules](otp-visibility.md) — startOtp revealed at paid_held+session_started; endOtp only at session_started; never expose before payment

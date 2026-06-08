@@ -789,37 +789,115 @@ function AvailabilityTab() {
 }
 
 // ─── Booking card with OTP verification ────────────────────────────────────────
+const STATUS_COLOR_MAP: Record<string, string> = {
+  // Legacy statuses
+  confirmed: "bg-green-100 text-green-700",
+  pending_payment: "bg-yellow-100 text-yellow-700",
+  completed: "bg-gray-100 text-gray-600",
+  cancelled_by_parent: "bg-red-100 text-red-600",
+  cancelled_by_professional: "bg-red-100 text-red-600",
+  no_show: "bg-red-100 text-red-600",
+  // New Flow B statuses
+  requested: "bg-yellow-100 text-yellow-700",
+  confirmed_by_pro: "bg-blue-100 text-blue-700",
+  paid_held: "bg-indigo-100 text-indigo-700",
+  session_started: "bg-[#2EC4A5]/20 text-[#1a8a73]",
+  session_completed: "bg-gray-100 text-gray-600",
+  releasable: "bg-purple-100 text-purple-700",
+  released: "bg-green-100 text-green-700",
+  cancelled: "bg-red-100 text-red-600",
+  refunded: "bg-gray-100 text-gray-500",
+  disputed: "bg-red-100 text-red-700",
+};
+
+const STATUS_LABEL_MAP: Record<string, string> = {
+  requested: "Awaiting your confirmation",
+  confirmed_by_pro: "Awaiting payment",
+  paid_held: "Payment held — session upcoming",
+  session_started: "In progress",
+  session_completed: "Completed",
+  releasable: "Awaiting payout release",
+  released: "Payout released",
+  cancelled: "Cancelled",
+  refunded: "Refunded",
+  disputed: "Under dispute",
+  confirmed: "Confirmed",
+  pending_payment: "Payment pending",
+  completed: "Completed",
+  cancelled_by_parent: "Cancelled by parent",
+  cancelled_by_professional: "Cancelled",
+  no_show: "No show",
+};
+
 function BookingCard({ s, onRefresh }: { s: SessionBookingWithDetails; onRefresh: () => void }) {
   const { toast } = useToast();
   const [startOtpInput, setStartOtpInput] = useState("");
   const [endOtpInput, setEndOtpInput] = useState("");
-  const [loading, setLoading] = useState<"start" | "end" | null>(null);
+  const [loading, setLoading] = useState<"start" | "end" | "confirm" | "reject" | null>(null);
   const sa = s as any;
 
-  const isPast = ["completed", "cancelled_by_parent", "cancelled_by_professional", "no_show"].includes(s.status);
-  const isStarted = !!sa.startedAt;
+  const TERMINAL = ["completed", "cancelled_by_parent", "cancelled_by_professional", "no_show", "session_completed", "releasable", "released", "cancelled", "refunded"];
+  const isPast = TERMINAL.includes(s.status);
+  const isLegacyStarted = !!sa.startedAt && s.status === "confirmed";
 
-  const STATUS_COLOR: Record<string, string> = {
-    confirmed: "bg-green-100 text-green-700",
-    pending_payment: "bg-yellow-100 text-yellow-700",
-    completed: "bg-gray-100 text-gray-600",
-    cancelled_by_parent: "bg-red-100 text-red-600",
-    cancelled_by_professional: "bg-red-100 text-red-600",
-    no_show: "bg-red-100 text-red-600",
-  };
+  // V2 route helper
+  async function v2Action(path: string, body?: Record<string, unknown>) {
+    const res = await fetchWithAuth(`/api/sessions-v2/${s.id}/${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return res;
+  }
+
+  async function handleConfirm() {
+    setLoading("confirm");
+    try {
+      const res = await fetchWithAuth(`/api/sessions-v2/${s.id}/confirm`, { method: "PATCH" });
+      const data = await res.json();
+      if (!res.ok) { toast({ title: data.error ?? "Error", variant: "destructive" }); return; }
+      toast({ title: "Session confirmed! The parent will now complete payment." });
+      onRefresh();
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setLoading(null); }
+  }
+
+  async function handleReject() {
+    setLoading("reject");
+    try {
+      const res = await fetchWithAuth(`/api/sessions-v2/${s.id}/reject`, { method: "PATCH" });
+      const data = await res.json();
+      if (!res.ok) { toast({ title: data.error ?? "Error", variant: "destructive" }); return; }
+      toast({ title: "Booking declined." });
+      onRefresh();
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setLoading(null); }
+  }
 
   async function verifyOtp(type: "start" | "end") {
-    const otp = type === "start" ? startOtpInput.trim() : endOtpInput.trim();
+    const otp = (type === "start" ? startOtpInput : endOtpInput).trim();
     if (otp.length !== 6) { toast({ title: "Enter the 6-digit code", variant: "destructive" }); return; }
     setLoading(type);
     try {
-      const res = await fetchWithAuth(`/api/sessions/${s.id}/verify-${type}-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ otp }),
-      });
+      // V2 statuses use the new route; legacy uses old route
+      const isV2 = ["paid_held", "session_started"].includes(s.status);
+      let res: Response;
+      if (isV2) {
+        const endpoint = type === "start" ? "start-otp" : "end-otp";
+        res = await v2Action(endpoint, { otp });
+      } else {
+        res = await fetchWithAuth(`/api/sessions/${s.id}/verify-${type}-otp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ otp }),
+        });
+      }
       const data = await res.json();
-      if (!res.ok) { toast({ title: data.error ?? "Error", variant: "destructive" }); return; }
+      if (!res.ok) {
+        const attemptsLeft = data.attemptsRemaining != null ? ` (${data.attemptsRemaining} attempts left)` : "";
+        toast({ title: data.error ?? "Error" + attemptsLeft, variant: "destructive" });
+        return;
+      }
       toast({ title: type === "start" ? "Session started ✓" : "Session completed 🎉" });
       if (type === "start") setStartOtpInput(""); else setEndOtpInput("");
       onRefresh();
@@ -829,6 +907,17 @@ function BookingCard({ s, onRefresh }: { s: SessionBookingWithDetails; onRefresh
       setLoading(null);
     }
   }
+
+  const showOtpBlock =
+    !isPast && (
+      s.status === "confirmed" ||   // legacy
+      s.status === "paid_held" ||   // V2: show start OTP input
+      s.status === "session_started" // V2: show end OTP input
+    );
+
+  const isV2Started = s.status === "session_started";
+  const needsStart = s.status === "paid_held" || (s.status === "confirmed" && !isLegacyStarted);
+  const needsEnd = isV2Started || isLegacyStarted;
 
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
@@ -845,21 +934,62 @@ function BookingCard({ s, onRefresh }: { s: SessionBookingWithDetails; onRefresh
           )}
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
-          <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLOR[s.status] ?? "bg-gray-100 text-gray-600"}`}>
-            {s.status.replace(/_/g, " ")}
+          <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLOR_MAP[s.status] ?? "bg-gray-100 text-gray-600"}`}>
+            {STATUS_LABEL_MAP[s.status] ?? s.status.replace(/_/g, " ")}
           </span>
-          {isStarted && s.status === "confirmed" && (
-            <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium">In progress</span>
-          )}
         </div>
       </div>
-      {s.amountInr > 0 && <p className="text-xs text-green-700 mt-2 font-semibold">₹{s.amountInr}</p>}
+
+      {sa.proAmountInr > 0 && (
+        <p className="text-xs text-green-700 mt-2 font-semibold">
+          Your earnings: ₹{sa.proAmountInr.toLocaleString("en-IN")}
+          {sa.markupInr > 0 && <span className="text-gray-400 font-normal"> (platform fee ₹{sa.markupInr} + GST ₹{sa.gstInr})</span>}
+        </p>
+      )}
+      {!sa.proAmountInr && s.amountInr > 0 && (
+        <p className="text-xs text-green-700 mt-2 font-semibold">₹{s.amountInr}</p>
+      )}
       {s.notes && <p className="text-xs text-gray-400 mt-2 italic">{s.notes}</p>}
 
-      {/* OTP verification — only shown for confirmed upcoming sessions */}
-      {!isPast && s.status === "confirmed" && (
+      {/* Action: confirm/reject for V2 requested bookings */}
+      {s.status === "requested" && (
         <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
-          {!isStarted ? (
+          <p className="text-xs text-gray-500">A parent has requested this slot. Confirm to allow them to pay.</p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="flex-1 bg-[#2EC4A5] hover:bg-[#26a98d] text-white"
+              disabled={loading === "confirm"}
+              onClick={handleConfirm}
+            >
+              {loading === "confirm" ? <Loader2 size={14} className="animate-spin" /> : "Confirm"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1 border-red-200 text-red-600 hover:bg-red-50"
+              disabled={loading === "reject"}
+              onClick={handleReject}
+            >
+              {loading === "reject" ? <Loader2 size={14} className="animate-spin" /> : "Decline"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Action: waiting for parent payment */}
+      {s.status === "confirmed_by_pro" && (
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <p className="text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
+            Waiting for the parent to complete payment. The slot is reserved for them.
+          </p>
+        </div>
+      )}
+
+      {/* OTP verification */}
+      {showOtpBlock && (
+        <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+          {needsStart && !needsEnd ? (
             <div className="flex items-center gap-2">
               <input
                 type="text"
@@ -879,7 +1009,7 @@ function BookingCard({ s, onRefresh }: { s: SessionBookingWithDetails; onRefresh
                 {loading === "start" ? <Loader2 size={14} className="animate-spin" /> : "Start"}
               </Button>
             </div>
-          ) : (
+          ) : needsEnd ? (
             <div className="flex items-center gap-2">
               <input
                 type="text"
@@ -899,8 +1029,17 @@ function BookingCard({ s, onRefresh }: { s: SessionBookingWithDetails; onRefresh
                 {loading === "end" ? <Loader2 size={14} className="animate-spin" /> : "Complete"}
               </Button>
             </div>
-          )}
+          ) : null}
           <p className="text-[10px] text-gray-400">Ask the parent for the 6-digit code shown in their app.</p>
+        </div>
+      )}
+
+      {/* Disputed notice */}
+      {s.status === "disputed" && (
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <p className="text-xs text-red-700 bg-red-50 rounded-lg px-3 py-2">
+            This booking is under dispute and has been escalated to our team. We'll resolve it shortly.
+          </p>
         </div>
       )}
     </div>
@@ -919,17 +1058,13 @@ function BookingsTab() {
 
   const typedSessions = sessions as SessionBookingWithDetails[];
 
-  const STATUS_COLOR: Record<string, string> = {
-    confirmed: "bg-green-100 text-green-700",
-    pending_payment: "bg-yellow-100 text-yellow-700",
-    completed: "bg-gray-100 text-gray-600",
-    cancelled_by_parent: "bg-red-100 text-red-600",
-    cancelled_by_professional: "bg-red-100 text-red-600",
-    no_show: "bg-red-100 text-red-600",
-  };
+  const PAST_STATUSES = [
+    "completed", "cancelled_by_parent", "cancelled_by_professional", "no_show",
+    "session_completed", "releasable", "released", "cancelled", "refunded",
+  ];
 
   const shown = typedSessions.filter((s) => {
-    const isPast = ["completed", "cancelled_by_parent", "cancelled_by_professional", "no_show"].includes(s.status);
+    const isPast = PAST_STATUSES.includes(s.status);
     if (filter === "upcoming") return !isPast;
     if (filter === "past") return isPast;
     return true;

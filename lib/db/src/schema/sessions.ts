@@ -11,6 +11,17 @@ export const sessionStatusEnum = pgEnum("session_status", [
   "cancelled_by_professional",
   "completed",
   "no_show",
+  // New Flow B state machine
+  "requested",
+  "confirmed_by_pro",
+  "paid_held",
+  "session_started",
+  "session_completed",
+  "releasable",
+  "released",
+  "cancelled",
+  "refunded",
+  "disputed",
 ]);
 
 export const professionalAvailabilityTable = pgTable("professional_availability", {
@@ -46,7 +57,19 @@ export const sessionBookingsTable = pgTable("session_bookings", {
   reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
   startOtp: text("start_otp"),
   endOtp: text("end_otp"),
+  otpIssuedAt: timestamp("otp_issued_at", { withTimezone: true }),
+  otpAttempts: integer("otp_attempts").notNull().default(0),
+  otpLockedAt: timestamp("otp_locked_at", { withTimezone: true }),
   startedAt: timestamp("started_at", { withTimezone: true }),
+  // Escrow amounts snapshot (stored at booking time, never recalculated)
+  proAmountInr: integer("pro_amount_inr").notNull().default(0),
+  markupInr: integer("markup_inr").notNull().default(0),
+  gstInr: integer("gst_inr").notNull().default(0),
+  // Release / dispute tracking
+  disputeReason: text("dispute_reason"),
+  disputedAt: timestamp("disputed_at", { withTimezone: true }),
+  releasedAt: timestamp("released_at", { withTimezone: true }),
+  releasedBy: integer("released_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

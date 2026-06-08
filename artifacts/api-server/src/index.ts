@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { db, usersTable } from "@workspace/db";
 import { eq, or } from "drizzle-orm";
 import { initNudgeScheduler } from "./lib/nudgeScheduler";
+import { runAutoCancelJob } from "./routes/sessionsV2";
 
 const rawPort = process.env["PORT"];
 
@@ -123,4 +124,6 @@ app.listen(port, (err) => {
 
   seedAdmin().catch((e) => logger.warn({ e }, "Admin seed failed"));
   initNudgeScheduler();
+  // Auto-cancel unpaid confirmed bookings every 5 minutes
+  setInterval(() => { runAutoCancelJob().catch((e) => logger.warn({ e }, "AutoCancel job error")); }, 5 * 60 * 1000);
 });

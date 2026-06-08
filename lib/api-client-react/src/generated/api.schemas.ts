@@ -875,6 +875,17 @@ export const SessionBookingStatus = {
   cancelled_by_professional: "cancelled_by_professional",
   completed: "completed",
   no_show: "no_show",
+  // Flow B statuses
+  requested: "requested",
+  confirmed_by_pro: "confirmed_by_pro",
+  paid_held: "paid_held",
+  session_started: "session_started",
+  session_completed: "session_completed",
+  releasable: "releasable",
+  released: "released",
+  cancelled: "cancelled",
+  refunded: "refunded",
+  disputed: "disputed",
 } as const;
 
 export interface SessionBooking {
@@ -901,6 +912,17 @@ export const SessionBookingWithDetailsStatus = {
   cancelled_by_professional: "cancelled_by_professional",
   completed: "completed",
   no_show: "no_show",
+  // Flow B statuses
+  requested: "requested",
+  confirmed_by_pro: "confirmed_by_pro",
+  paid_held: "paid_held",
+  session_started: "session_started",
+  session_completed: "session_completed",
+  releasable: "releasable",
+  released: "released",
+  cancelled: "cancelled",
+  refunded: "refunded",
+  disputed: "disputed",
 } as const;
 
 export interface SessionBookingWithDetails {
@@ -938,6 +960,17 @@ export interface SessionBookingWithDetails {
    * @nullable
    */
   parentLocation?: string | null;
+  /** OTP parent shares with pro to start the session (Flow B) */
+  startOtp?: string | null;
+  /** OTP parent shares with pro to end the session (Flow B) */
+  endOtp?: string | null;
+  /** Escrow breakdown for Flow B sessions */
+  breakdown?: {
+    proAmountInr: number;
+    markupInr: number;
+    gstInr: number;
+    totalInr: number;
+  } | null;
 }
 
 export type UpdateSessionStatusBodyStatus =

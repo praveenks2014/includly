@@ -21,6 +21,8 @@ import assessmentsRouter from "./assessments";
 import communityRouter from "./community";
 import resourcesRouter from "./resources";
 import referralsRouter from "./referrals";
+import shadowTeacherRouter from "./shadowTeacher";
+import { sessionsV2Router } from "./sessionsV2";
 
 const router: IRouter = Router();
 
@@ -46,5 +48,7 @@ router.use(assessmentsRouter);
 router.use(communityRouter);
 router.use(resourcesRouter);
 router.use(referralsRouter);
+router.use(shadowTeacherRouter);
+router.use(sessionsV2Router);
 
 export default router;

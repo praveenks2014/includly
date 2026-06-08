@@ -17,6 +17,8 @@ import { Button } from "@/components/ui/button";
 import { getSpecialtyLabel, SPECIALTY_COLORS } from "@/lib/specialties";
 import { UnlockPaymentModal } from "@/components/UnlockPaymentModal";
 import { BookingWidget } from "@/components/BookingWidget";
+import { BookingWidgetV2 } from "@/components/BookingWidgetV2";
+import { ShadowTeacherRequestWidget } from "@/components/ShadowTeacherRequestWidget";
 import { AssessmentBookingModal } from "@/components/AssessmentBookingModal";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -570,14 +572,15 @@ export default function ProfessionalProfilePage() {
               )}
             </section>
 
-            {/* Booking widget */}
+            {/* Booking widget — Flow A for shadow teachers, Flow B for all others */}
             {isSignedIn && (
-              <BookingWidget
-                professionalId={professionalId}
-                professionalName={p.fullName}
-                specialty={p.specialty}
-                offersHomeVisits={p.offersHomeVisits}
-              />
+              p.specialty === "shadow_teacher"
+                ? <ShadowTeacherRequestWidget />
+                : <BookingWidgetV2
+                    professionalId={professionalId}
+                    professionalName={p.fullName}
+                    offersHomeVisits={p.offersHomeVisits}
+                  />
             )}
 
             {/* Assessment offerings */}

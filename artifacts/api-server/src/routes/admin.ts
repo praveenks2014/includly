@@ -11,6 +11,9 @@ import {
   professionalCertificationsTable,
   paymentsTable,
   commissionRatesTable,
+  sessionBookingsTable,
+  bookingPayoutsTable,
+  shadowTeacherMatchesTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import {
@@ -405,6 +408,241 @@ router.patch("/admin/commission-rates/:bookingType", ...adminGuard, async (req, 
   }
 
   res.json(updated);
+});
+
+// ─── Admin: Booking management (Flow B) ────────────────────────────────────
+
+// GET /admin/bookings — list bookings with optional status filter
+router.get("/admin/bookings", ...adminGuard, async (req, res): Promise<void> => {
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "30"), 10)));
+  const offset = (page - 1) * limit;
+
+  const conditions = status
+    ? [eq(sessionBookingsTable.status, status as any)]
+    : [];
+
+  const [rows, totalRows] = await Promise.all([
+    db
+      .select({
+        id: sessionBookingsTable.id,
+        status: sessionBookingsTable.status,
+        parentId: sessionBookingsTable.parentId,
+        parentName: usersTable.fullName,
+        professionalId: sessionBookingsTable.professionalId,
+        proName: professionalProfilesTable.fullName,
+        proUpiVpa: professionalProfilesTable.upiVpa,
+        bookedDate: sessionBookingsTable.bookedDate,
+        startTime: sessionBookingsTable.startTime,
+        amountInr: sessionBookingsTable.amountInr,
+        proAmountInr: sessionBookingsTable.proAmountInr,
+        markupInr: sessionBookingsTable.markupInr,
+        gstInr: sessionBookingsTable.gstInr,
+        disputeReason: sessionBookingsTable.disputeReason,
+        disputedAt: sessionBookingsTable.disputedAt,
+        releasedAt: sessionBookingsTable.releasedAt,
+        createdAt: sessionBookingsTable.createdAt,
+      })
+      .from(sessionBookingsTable)
+      .leftJoin(usersTable, eq(sessionBookingsTable.parentId, usersTable.id))
+      .leftJoin(professionalProfilesTable, eq(sessionBookingsTable.professionalId, professionalProfilesTable.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(sessionBookingsTable.createdAt))
+      .limit(limit)
+      .offset(offset),
+    db.select({ count: count() }).from(sessionBookingsTable)
+      .where(conditions.length > 0 ? and(...conditions) : undefined),
+  ]);
+
+  res.json({ bookings: rows, total: Number(totalRows[0]?.count ?? 0), page, limit });
+});
+
+// PATCH /admin/bookings/:id/release — mark payout as RELEASED (DB only; no live RazorpayX)
+router.patch("/admin/bookings/:id/release", ...adminGuard, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { note } = req.body as { note?: string };
+
+  const [booking] = await db.select().from(sessionBookingsTable).where(eq(sessionBookingsTable.id, id));
+  if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+  if (booking.status !== "releasable") { res.status(400).json({ error: `Can only release bookings in RELEASABLE status, currently: ${booking.status}` }); return; }
+
+  const now = new Date();
+  const adminUser = req.userId!;
+
+  // Get professional's user ID for payout record
+  const [prof] = await db
+    .select({ userId: professionalProfilesTable.userId, upiVpa: professionalProfilesTable.upiVpa })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, booking.professionalId));
+
+  await db.transaction(async (tx) => {
+    await tx.update(sessionBookingsTable)
+      .set({ status: "released", releasedAt: now, releasedBy: adminUser, updatedAt: now })
+      .where(eq(sessionBookingsTable.id, id));
+
+    await tx.insert(bookingPayoutsTable).values({
+      bookingId: id,
+      professionalUserId: prof?.userId ?? null,
+      proAmountInr: booking.proAmountInr ?? 0,
+      markupInr: booking.markupInr ?? 0,
+      gstInr: booking.gstInr ?? 0,
+      totalCollectedInr: booking.amountInr ?? 0,
+      upiVpa: prof?.upiVpa ?? null,
+      status: "released",
+      note: note ?? null,
+      releasedBy: adminUser,
+      releasedAt: now,
+    });
+  });
+
+  const [updated] = await db.select().from(sessionBookingsTable).where(eq(sessionBookingsTable.id, id));
+  res.json(updated);
+});
+
+// POST /admin/bookings/batch-release — release multiple RELEASABLE bookings
+router.post("/admin/bookings/batch-release", ...adminGuard, async (req, res): Promise<void> => {
+  const { ids } = req.body as { ids?: number[] };
+  if (!Array.isArray(ids) || ids.length === 0) {
+    res.status(400).json({ error: "ids array required" }); return;
+  }
+
+  const adminUser = req.userId!;
+  const now = new Date();
+  const results: Array<{ id: number; ok: boolean; error?: string }> = [];
+
+  for (const id of ids) {
+    try {
+      const [booking] = await db.select().from(sessionBookingsTable).where(eq(sessionBookingsTable.id, id));
+      if (!booking || booking.status !== "releasable") {
+        results.push({ id, ok: false, error: `Not releasable (status: ${booking?.status ?? "not found"})` });
+        continue;
+      }
+
+      const [prof] = await db
+        .select({ userId: professionalProfilesTable.userId, upiVpa: professionalProfilesTable.upiVpa })
+        .from(professionalProfilesTable)
+        .where(eq(professionalProfilesTable.id, booking.professionalId));
+
+      await db.transaction(async (tx) => {
+        await tx.update(sessionBookingsTable)
+          .set({ status: "released", releasedAt: now, releasedBy: adminUser, updatedAt: now })
+          .where(eq(sessionBookingsTable.id, id));
+        await tx.insert(bookingPayoutsTable).values({
+          bookingId: id,
+          professionalUserId: prof?.userId ?? null,
+          proAmountInr: booking.proAmountInr ?? 0,
+          markupInr: booking.markupInr ?? 0,
+          gstInr: booking.gstInr ?? 0,
+          totalCollectedInr: booking.amountInr ?? 0,
+          upiVpa: prof?.upiVpa ?? null,
+          status: "released",
+          releasedBy: adminUser,
+          releasedAt: now,
+        });
+      });
+      results.push({ id, ok: true });
+    } catch (err) {
+      results.push({ id, ok: false, error: String(err) });
+    }
+  }
+
+  res.json({ results, releasedCount: results.filter((r) => r.ok).length });
+});
+
+// PATCH /admin/bookings/:id/refund — refund a DISPUTED or PAID_HELD booking via Razorpay
+router.patch("/admin/bookings/:id/refund", ...adminGuard, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { note } = req.body as { note?: string };
+
+  const [booking] = await db.select().from(sessionBookingsTable).where(eq(sessionBookingsTable.id, id));
+  if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+  const refundable = ["disputed", "paid_held", "cancelled"];
+  if (!refundable.includes(booking.status ?? "")) {
+    res.status(400).json({ error: `Cannot refund in status: ${booking.status}` }); return;
+  }
+
+  let razorpayRefundId: string | null = null;
+  if (booking.providerPaymentId) {
+    try {
+      const keyId = process.env["RAZORPAY_KEY_ID"];
+      const keySecret = process.env["RAZORPAY_KEY_SECRET"];
+      if (keyId && keySecret) {
+        const Razorpay = (await import("razorpay")).default;
+        const rz = new Razorpay({ key_id: keyId, key_secret: keySecret });
+        const refund = await (rz.payments as any).refund(booking.providerPaymentId, {
+          amount: (booking.amountInr ?? 0) * 100,
+          notes: { reason: note ?? "Admin refund", bookingId: String(id) },
+        }) as { id?: string };
+        razorpayRefundId = refund?.id ?? null;
+      }
+    } catch (err) {
+      console.error("[admin/refund] Razorpay refund failed:", err);
+    }
+  }
+
+  const now = new Date();
+  const [updated] = await db
+    .update(sessionBookingsTable)
+    .set({ status: "refunded", releasedAt: now, releasedBy: req.userId!, updatedAt: now })
+    .where(eq(sessionBookingsTable.id, id))
+    .returning();
+
+  res.json({ ...updated, razorpayRefundId });
+});
+
+// PATCH /admin/bookings/:id/resolve-dispute — admin resolves a dispute
+router.patch("/admin/bookings/:id/resolve-dispute", ...adminGuard, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { resolution } = req.body as { resolution?: "release" | "refund" };
+  if (!resolution || !["release", "refund"].includes(resolution)) {
+    res.status(400).json({ error: "resolution must be 'release' or 'refund'" }); return;
+  }
+
+  const [booking] = await db.select().from(sessionBookingsTable).where(eq(sessionBookingsTable.id, id));
+  if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+  if (booking.status !== "disputed") { res.status(400).json({ error: "Booking is not in DISPUTED status" }); return; }
+
+  const newStatus = resolution === "release" ? "releasable" : "refunded";
+  const now = new Date();
+  const [updated] = await db
+    .update(sessionBookingsTable)
+    .set({ status: newStatus, releasedBy: req.userId!, updatedAt: now })
+    .where(eq(sessionBookingsTable.id, id))
+    .returning();
+
+  res.json(updated);
+});
+
+// GET /admin/payouts — list all booking payouts
+router.get("/admin/payouts", ...adminGuard, async (req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      id: bookingPayoutsTable.id,
+      bookingId: bookingPayoutsTable.bookingId,
+      proName: professionalProfilesTable.fullName,
+      upiVpa: bookingPayoutsTable.upiVpa,
+      proAmountInr: bookingPayoutsTable.proAmountInr,
+      markupInr: bookingPayoutsTable.markupInr,
+      gstInr: bookingPayoutsTable.gstInr,
+      totalCollectedInr: bookingPayoutsTable.totalCollectedInr,
+      status: bookingPayoutsTable.status,
+      note: bookingPayoutsTable.note,
+      releasedAt: bookingPayoutsTable.releasedAt,
+    })
+    .from(bookingPayoutsTable)
+    .leftJoin(usersTable, eq(bookingPayoutsTable.professionalUserId, usersTable.id))
+    .leftJoin(professionalProfilesTable, eq(usersTable.id, professionalProfilesTable.userId))
+    .orderBy(desc(bookingPayoutsTable.createdAt));
+
+  res.json(rows);
 });
 
 export default router;
