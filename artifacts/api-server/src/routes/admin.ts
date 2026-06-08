@@ -330,7 +330,9 @@ router.get("/admin/parents", ...adminGuard, async (req, res): Promise<void> => {
       .select({
         id: usersTable.id,
         email: usersTable.email,
-        name: usersTable.fullName,
+        fullName: usersTable.fullName,
+        city: usersTable.city,
+        location: usersTable.location,
         createdAt: usersTable.createdAt,
       })
       .from(usersTable)
@@ -344,7 +346,7 @@ router.get("/admin/parents", ...adminGuard, async (req, res): Promise<void> => {
   res.json({
     parents: rows.map((r) => ({
       ...r,
-      fullName: r.name,
+      city: r.city ?? r.location ?? null,
       createdAt: r.createdAt?.toISOString() ?? null,
     })),
     total: Number(totalRows[0]?.count ?? 0),

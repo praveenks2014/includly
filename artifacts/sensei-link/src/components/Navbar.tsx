@@ -22,7 +22,6 @@ const GUEST_NAV = [
   { label: "How It Works", href: "/#how-it-works" },
   { label: "Find Professionals", href: "/search" },
   { label: "Resources", href: "/resources" },
-  { label: "Pricing", href: "/pricing" },
 ];
 
 export function Navbar() {
@@ -91,12 +90,6 @@ export function Navbar() {
                   <Button variant="ghost" size="sm" className="gap-2 text-gray-600 hover:text-gray-900">
                     <Search size={15} />
                     Search
-                  </Button>
-                </Link>
-                <Link href="/pricing">
-                  <Button variant="ghost" size="sm" className="gap-2 text-gray-600 hover:text-gray-900">
-                    <Sparkles size={15} />
-                    Pricing
                   </Button>
                 </Link>
                 <Link href="/dashboard">
@@ -212,7 +205,6 @@ export function Navbar() {
             {isSignedIn ? (
               <>
                 <MobileNavItem href="/search" icon={<Search size={16} />} label="Search" onClick={closeMobile} />
-                <MobileNavItem href="/pricing" icon={<Sparkles size={16} />} label="Pricing" onClick={closeMobile} />
                 <MobileNavItem href="/dashboard" icon={<LayoutDashboard size={16} />} label="Dashboard" onClick={closeMobile} />
                 {isAdmin && (
                   <MobileNavItem href="/admin" icon={<Shield size={16} />} label="Admin" onClick={closeMobile} className="text-violet-700" />

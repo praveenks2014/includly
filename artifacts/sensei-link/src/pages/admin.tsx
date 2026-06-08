@@ -55,6 +55,20 @@ function fileKeyToUrl(fileKey: string): string {
   return `/api/storage/objects/${fileKey.replace(/^\/objects\//, "")}`;
 }
 
+async function openDocWithAuth(fileKey: string): Promise<void> {
+  try {
+    const url = fileKeyToUrl(fileKey);
+    const res = await fetchWithAuth(url);
+    if (!res.ok) { alert("Could not load document — access denied or file not found."); return; }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    window.open(objectUrl, "_blank", "noopener");
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  } catch {
+    alert("Failed to open document.");
+  }
+}
+
 function StatCard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color?: string }) {
   return (
     <div className="bg-white rounded-xl p-5 shadow-[0_4px_24px_rgba(26,35,64,0.08)] border border-gray-100">
@@ -757,24 +771,27 @@ function ProfessionalsTab() {
                 ) : documents ? (
                   <div className="space-y-2">
                     {documents.identity ? (
-                      <a href={fileKeyToUrl(documents.identity.fileKey)} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
+                      <button
+                        onClick={() => openDocWithAuth(documents!.identity!.fileKey)}
+                        className="w-full flex items-center gap-2 text-sm px-3 py-2 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors focus-visible:ring-2 focus-visible:ring-[#2EC4A5] text-left"
                         aria-label="View identity document"
                       >
                         <FileText size={14} className="text-[#2EC4A5] shrink-0" />
                         <span className="flex-1">Identity: <span className="capitalize">{documents.identity.documentType.replace(/_/g, " ")}</span></span>
                         <ExternalLink size={12} className="text-gray-400" />
-                      </a>
+                      </button>
                     ) : <p className="text-sm text-gray-400 italic">No identity document uploaded.</p>}
                     {documents.certifications.map((cert) => (
-                      <a key={cert.id} href={fileKeyToUrl(cert.fileKey)} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-sm px-3 py-2 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
+                      <button
+                        key={cert.id}
+                        onClick={() => openDocWithAuth(cert.fileKey)}
+                        className="w-full flex items-center gap-2 text-sm px-3 py-2 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors focus-visible:ring-2 focus-visible:ring-[#2EC4A5] text-left"
                         aria-label="View certification"
                       >
                         <FileText size={14} className="text-blue-400 shrink-0" />
                         <span className="flex-1">Cert: <span className="capitalize">{cert.documentType.replace(/_/g, " ")}</span></span>
                         <ExternalLink size={12} className="text-gray-400" />
-                      </a>
+                      </button>
                     ))}
                     {documents.certifications.length === 0 && <p className="text-sm text-gray-400 italic">No certifications uploaded.</p>}
                   </div>
@@ -829,24 +846,14 @@ function ProfessionalsTab() {
 }
 
 function VerificationsTab() {
-  const [statusFilter, setStatusFilter] = useState("pending");
-
   const { data, isLoading } = useQuery({
-    queryKey: ["adminVerifications", statusFilter],
+    queryKey: ["adminVerifications", "pending"],
     queryFn: async () => {
-      const params = statusFilter ? `?status=${statusFilter}` : "";
-      const res = await fetchWithAuth(`/api/admin/verifications${params}`);
+      const res = await fetchWithAuth("/api/admin/verifications?status=pending");
       if (!res.ok) throw new Error("Failed");
       return res.json() as Promise<{ verifications: any[]; total: number }>;
     },
   });
-
-  const STATUSES = [
-    { value: "pending", label: "Pending" },
-    { value: "approved", label: "Approved" },
-    { value: "rejected", label: "Rejected" },
-    { value: "", label: "All" },
-  ];
 
   const STATUS_COLORS: Record<string, string> = {
     pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -856,23 +863,7 @@ function VerificationsTab() {
 
   return (
     <div className="space-y-4 max-w-6xl">
-      <p className="text-sm text-gray-500">ID documents submitted by professionals for identity verification.</p>
-      <div className="flex flex-wrap gap-2">
-        {STATUSES.map((s) => (
-          <button
-            key={s.value}
-            onClick={() => setStatusFilter(s.value)}
-            aria-label={`Filter by ${s.label}`}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all focus-visible:ring-2 focus-visible:ring-[#2EC4A5] ${
-              statusFilter === s.value
-                ? "bg-[#1A2340] text-white border-[#1A2340]"
-                : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
+      <p className="text-sm text-gray-500">Pending ID documents awaiting admin review.</p>
 
       <div className="bg-white rounded-xl shadow-[0_4px_24px_rgba(26,35,64,0.08)] overflow-hidden">
         <table className="w-full text-sm">
@@ -919,16 +910,14 @@ function VerificationsTab() {
                     {v.submittedAt ? new Date(v.submittedAt).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" }) : "—"}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <a
-                      href={fileKeyToUrl(v.fileKey ?? "")}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      onClick={() => openDocWithAuth(v.fileKey ?? "")}
                       className="inline-flex items-center gap-1 text-xs text-[#2EC4A5] hover:underline focus-visible:ring-2 focus-visible:ring-[#2EC4A5] rounded"
                       aria-label="View document"
                     >
                       <Eye size={13} />
                       View Doc
-                    </a>
+                    </button>
                   </td>
                 </tr>
               ))
