@@ -6,13 +6,12 @@ import {
   useGetMe,
   useGetParentDashboard,
   useGetMySessions,
-  useGetMyUnlocks,
   useSearchProfessionals,
   useCreateRating,
   useGetWalletBalance,
   getGetMeQueryKey,
 } from "@workspace/api-client-react";
-import type { ProfessionalSearchResult, SessionBookingWithDetails, ContactUnlock } from "@workspace/api-client-react";
+import type { ProfessionalSearchResult, SessionBookingWithDetails } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -21,14 +20,15 @@ import { fetchWithAuth } from "@/lib/api";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Home, Search, CalendarCheck, Unlock, Bell, BookOpen, Settings,
+  Home, Search, CalendarCheck, Bell, BookOpen, Settings,
   Star, MapPin, Loader2, ChevronDown, CheckCircle2,
-  Clock, Video, Navigation, User, ArrowRight, HelpCircle,
-  Phone, Mail, MessageSquarePlus, Check, X, Filter, Wallet,
-  TrendingUp, Gift, Copy, Sparkles,
+  Clock, Video, Navigation, ArrowRight, HelpCircle,
+  Phone, Mail, MessageSquarePlus, Check, X, Wallet,
+  TrendingUp, Gift, Copy, Sparkles, Menu, MessageCircle,
+  User,
 } from "lucide-react";
 
-type Tab = "home" | "find" | "bookings" | "unlocks" | "notifications";
+type Tab = "home" | "find" | "bookings" | "messages" | "notifications";
 
 interface ProgressNote {
   bookingId: number;
@@ -55,13 +55,24 @@ interface Notification {
   createdAt: string;
 }
 
+interface ChatMsg {
+  id: number;
+  threadId: number;
+  senderId: number;
+  senderName: string | null;
+  body: string;
+  createdAt: string;
+}
+
 const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "home",          label: "Home",               icon: <Home size={18} /> },
   { id: "find",          label: "Find Professionals", icon: <Search size={18} /> },
   { id: "bookings",      label: "My Bookings",        icon: <CalendarCheck size={18} /> },
-  { id: "unlocks",       label: "My Unlocks",         icon: <Unlock size={18} /> },
+  { id: "messages",      label: "Messages",           icon: <MessageCircle size={18} /> },
   { id: "notifications", label: "Notifications",      icon: <Bell size={18} /> },
 ];
+
+const MOBILE_BOTTOM: Tab[] = ["home", "find", "bookings", "messages", "notifications"];
 
 const SPECIALTIES = [
   { value: "", label: "All Specialties" },
@@ -99,23 +110,22 @@ function timeAgo(iso: string) {
   if (hr < 24) return `${hr}h ago`;
   return `${Math.floor(hr / 24)}d ago`;
 }
-
 function initials(name?: string | null) {
   if (!name) return "?";
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
 }
 
-// ─── Professional card used in Find + Unlocks + Recommendations ───────────────
+// ─── Professional card ────────────────────────────────────────────────────────
 function ProfCard({
   p,
-  showContact = false,
   onReview,
   hasReviewed,
+  onChat,
 }: {
   p: ProfessionalSearchResult;
-  showContact?: boolean;
   onReview?: () => void;
   hasReviewed?: boolean;
+  onChat?: () => void;
 }) {
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-3">
@@ -138,7 +148,7 @@ function ProfCard({
         )}
       </div>
 
-      <div className="flex items-center gap-3 text-xs text-gray-500">
+      <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
         {p.city && <span className="flex items-center gap-1"><MapPin size={11} />{p.city}</span>}
         {p.averageRating != null && p.totalRatings > 0 && (
           <span className="flex items-center gap-1">
@@ -147,13 +157,13 @@ function ProfCard({
           </span>
         )}
         {p.pricingMinINR != null && (
-          <span className="ml-auto font-medium text-gray-800">
-            {p.pricingMinINR === 0 ? "Free intro" : `₹${p.pricingMinINR}+`}
+          <span className="ml-auto font-semibold text-gray-800">
+            {p.pricingMinINR === 0 ? "Free intro" : `₹${p.pricingMinINR}/session`}
           </span>
         )}
       </div>
 
-      {showContact && (p.phone || p.email) && (
+      {(p.phone || p.email) && (
         <div className="bg-teal-50 rounded-xl p-3 space-y-1 text-xs">
           {p.phone && <p className="flex items-center gap-2 text-teal-800"><Phone size={12} />{p.phone}</p>}
           {p.email && <p className="flex items-center gap-2 text-teal-800"><Mail size={12} />{p.email}</p>}
@@ -166,9 +176,14 @@ function ProfCard({
             View Profile
           </Button>
         </Link>
-        {showContact && onReview && !hasReviewed && (
+        {onChat && (
+          <Button size="sm" variant="ghost" className="text-xs gap-1 text-teal-600 border border-teal-100 hover:bg-teal-50" onClick={onChat}>
+            <MessageCircle size={13} /> Message
+          </Button>
+        )}
+        {onReview && !hasReviewed && (
           <Button size="sm" variant="ghost" className="text-xs gap-1 text-teal-600" onClick={onReview}>
-            <MessageSquarePlus size={13} /> Review
+            <Star size={13} /> Review
           </Button>
         )}
       </div>
@@ -176,7 +191,7 @@ function ProfCard({
   );
 }
 
-// ─── Session card ──────────────────────────────────────────────────────────────
+// ─── Session card ─────────────────────────────────────────────────────────────
 function SessionCard({ s, compact = false }: { s: SessionBookingWithDetails; compact?: boolean }) {
   const isPast = ["completed", "cancelled_by_parent", "cancelled_by_professional", "no_show"].includes(s.status);
   const statusColor: Record<string, string> = {
@@ -217,7 +232,6 @@ function SessionCard({ s, compact = false }: { s: SessionBookingWithDetails; com
               </Button>
             )}
           </div>
-          {/* OTP codes — parent shows these to the specialist */}
           {((s as any).startOtp || (s as any).endOtp) && (
             <div className="bg-teal-50 border border-teal-100 rounded-xl p-3 space-y-2">
               <p className="text-[11px] font-semibold text-teal-700 uppercase tracking-wide">Session Codes — show to your specialist</p>
@@ -245,7 +259,7 @@ function SessionCard({ s, compact = false }: { s: SessionBookingWithDetails; com
   );
 }
 
-// ─── Review modal ──────────────────────────────────────────────────────────────
+// ─── Review modal ─────────────────────────────────────────────────────────────
 function ReviewModal({ professionalId, onClose }: { professionalId: number; onClose: () => void }) {
   const { toast } = useToast();
   const { mutateAsync: createRating, isPending } = useCreateRating();
@@ -254,7 +268,7 @@ function ReviewModal({ professionalId, onClose }: { professionalId: number; onCl
 
   async function submit() {
     try {
-      await createRating({ data: { professionalId, stars, review: review.trim() || undefined } });
+      await createRating({ data: { professionalId, score: stars, comment: review.trim() || undefined } });
       toast({ title: "Review submitted!" });
       onClose();
     } catch {
@@ -290,20 +304,110 @@ function ReviewModal({ professionalId, onClose }: { professionalId: number; onCl
   );
 }
 
-// ── Progress timeline ───────────────────────────────────────────────────────────
+// ─── Chat modal ────────────────────────────────────────────────────────────────
+function ChatModal({ professionalId, professionalName, onClose }: { professionalId: number; professionalName: string; onClose: () => void }) {
+  const { toast } = useToast();
+  const { data: me } = useGetMe();
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [threadId, setThreadId] = useState<number | null>(null);
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchWithAuth(`/api/connect/${professionalId}/thread`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.thread?.id) setThreadId(data.thread.id);
+        if (Array.isArray(data.messages)) setMessages(data.messages);
+      })
+      .catch(() => toast({ title: "Could not load messages", variant: "destructive" }))
+      .finally(() => setLoading(false));
+  }, [professionalId]);
+
+  async function send() {
+    if (!body.trim() || !threadId) return;
+    setSending(true);
+    try {
+      const res = await fetchWithAuth(`/api/connect/thread/${threadId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: body.trim() }),
+      });
+      const msg = await res.json();
+      if (!res.ok) { toast({ title: msg.error ?? "Could not send", variant: "destructive" }); return; }
+      setMessages((prev) => [...prev, msg]);
+      setBody("");
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40" onClick={onClose}>
+      <div className="bg-white w-full sm:max-w-md sm:rounded-2xl shadow-2xl flex flex-col" style={{ height: "clamp(400px, 80vh, 600px)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <div>
+            <p className="font-semibold text-[#1A2340] text-sm">{professionalName}</p>
+            <p className="text-xs text-gray-400">Message</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+            <X size={18} className="text-gray-500" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+          {loading && <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-teal-500" /></div>}
+          {!loading && messages.length === 0 && (
+            <div className="text-center py-8 text-gray-400">
+              <MessageSquarePlus size={28} className="mx-auto mb-2 text-gray-300" />
+              <p className="text-sm">Start the conversation!</p>
+            </div>
+          )}
+          {messages.map((msg) => {
+            const meId = (me as any)?.id;
+            const isMe = meId && msg.senderId === meId;
+            return (
+              <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-sm ${isMe ? "bg-teal-500 text-white rounded-br-sm" : "bg-white border border-gray-100 text-gray-800 rounded-bl-sm shadow-sm"}`}>
+                  {!isMe && <p className="text-[10px] font-semibold mb-0.5 opacity-60">{msg.senderName ?? professionalName}</p>}
+                  <p>{msg.body}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex gap-2 p-3 border-t border-gray-100">
+          <input
+            type="text"
+            placeholder="Type a message…"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+            className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+          />
+          <button
+            onClick={send}
+            disabled={sending || !body.trim()}
+            className="bg-teal-500 hover:bg-teal-600 disabled:opacity-50 text-white rounded-xl px-3.5 flex items-center justify-center transition-colors"
+          >
+            {sending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Progress timeline ─────────────────────────────────────────────────────────
 function ProgressTimeline() {
   const { data: notes, isLoading } = useQuery<ProgressNote[]>({
     queryKey: ["sessions-progress"],
     queryFn: () => fetchWithAuth("/api/sessions/progress").then((r) => r.json()),
   });
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-6">
-        <Loader2 size={18} className="animate-spin text-teal-400" />
-      </div>
-    );
-  }
+  if (isLoading) return <div className="flex items-center justify-center py-6"><Loader2 size={18} className="animate-spin text-teal-400" /></div>;
 
   return (
     <div>
@@ -316,17 +420,11 @@ function ProgressTimeline() {
           <span className="text-xs text-gray-400">{notes.length} update{notes.length !== 1 ? "s" : ""}</span>
         )}
       </div>
-
       {!notes || notes.length === 0 ? (
         <div className="bg-white border border-dashed border-teal-200 rounded-2xl p-6 text-center">
           <Sparkles size={28} className="mx-auto mb-2 text-teal-300" />
           <p className="text-sm font-medium text-gray-600">Progress notes will appear here</p>
           <p className="text-xs text-gray-400 mt-1">After each session, your specialist leaves a note on your child's progress.</p>
-          <Link href="/search">
-            <Button variant="outline" size="sm" className="mt-3 text-teal-600 border-teal-200 hover:bg-teal-50 gap-1 text-xs">
-              Book a session <ArrowRight size={12} />
-            </Button>
-          </Link>
         </div>
       ) : (
         <div className="relative">
@@ -344,15 +442,11 @@ function ProgressTimeline() {
                       {new Date(note.noteCreatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                     </time>
                   </div>
-                  {note.parentSummary && (
-                    <p className="text-sm text-gray-700 leading-relaxed">{note.parentSummary}</p>
-                  )}
+                  {note.parentSummary && <p className="text-sm text-gray-700 leading-relaxed">{note.parentSummary}</p>}
                   {note.progressMarkers && (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {note.progressMarkers.split(",").filter(Boolean).map((m) => (
-                        <span key={m.trim()} className="text-[11px] bg-teal-50 text-teal-700 border border-teal-100 rounded-full px-2 py-0.5">
-                          {m.trim()}
-                        </span>
+                        <span key={m.trim()} className="text-[11px] bg-teal-50 text-teal-700 border border-teal-100 rounded-full px-2 py-0.5">{m.trim()}</span>
                       ))}
                     </div>
                   )}
@@ -366,7 +460,7 @@ function ProgressTimeline() {
   );
 }
 
-// ── Referral card ───────────────────────────────────────────────────────────────
+// ─── Referral card ─────────────────────────────────────────────────────────────
 function ReferralCard() {
   const { toast } = useToast();
   const [claimCode, setClaimCode] = useState("");
@@ -415,22 +509,16 @@ function ReferralCard() {
           <p className="text-xs text-gray-500 mt-0.5">Both you and your friend get ₹100 wallet credit when they book their first session.</p>
         </div>
       </div>
-
       {data && (
         <>
           <div className="mt-4 flex items-center gap-2">
             <div className="flex-1 bg-white border border-teal-200 rounded-xl px-3 py-2 flex items-center justify-between">
               <span className="font-mono font-bold text-teal-700 tracking-widest text-sm">{data.code}</span>
-              <button
-                onClick={copyCode}
-                className="text-teal-500 hover:text-teal-700 transition-colors"
-                title="Copy share link"
-              >
+              <button onClick={copyCode} className="text-teal-500 hover:text-teal-700 transition-colors" title="Copy share link">
                 {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
               </button>
             </div>
           </div>
-
           {(data.convertedReferrals > 0 || data.totalEarnedInr > 0) && (
             <div className="mt-3 flex gap-4 text-center">
               <div className="flex-1 bg-white rounded-xl border border-teal-100 py-2">
@@ -443,7 +531,6 @@ function ReferralCard() {
               </div>
             </div>
           )}
-
           <div className="mt-3 flex gap-2">
             <Input
               value={claimCode}
@@ -452,12 +539,7 @@ function ReferralCard() {
               className="h-9 text-sm border-teal-200 bg-white"
               maxLength={10}
             />
-            <Button
-              size="sm"
-              className="h-9 bg-teal-600 hover:bg-teal-700 text-white shrink-0"
-              onClick={claimReferral}
-              disabled={claiming || !claimCode.trim()}
-            >
+            <Button size="sm" className="h-9 bg-teal-600 hover:bg-teal-700 text-white shrink-0" onClick={claimReferral} disabled={claiming || !claimCode.trim()}>
               {claiming ? <Loader2 size={14} className="animate-spin" /> : "Claim"}
             </Button>
           </div>
@@ -470,14 +552,14 @@ function ReferralCard() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: HOME
 // ═══════════════════════════════════════════════════════════════════════════════
-function HomeTab({ parentName, city }: { parentName: string; city?: string | null }) {
+function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?: string | null; onTabChange: (t: Tab) => void }) {
   const { data: dashData } = useGetParentDashboard();
   const { data: sessions } = useGetMySessions();
   const { data: walletData } = useGetWalletBalance();
 
   const { data: recsData } = useSearchProfessionals(
-    { city: city ?? undefined, limit: 4 } as Parameters<typeof useSearchProfessionals>[0],
-    { query: { enabled: !!city } }
+    { city: city ?? undefined, limit: 4 },
+    { query: { enabled: !!city } as any }
   );
   const recommendations = recsData?.professionals ?? [];
 
@@ -489,9 +571,9 @@ function HomeTab({ parentName, city }: { parentName: string; city?: string | nul
   const activity = [
     ...(dashData?.recentUnlocks ?? []).map((u) => ({
       id: `unlock-${u.id}`,
-      text: `Unlocked ${u.professional?.fullName ?? "a professional"}'s contact`,
+      text: `Connected with ${u.professional?.fullName ?? "a professional"}`,
       time: u.unlockedAt,
-      icon: <Unlock size={13} className="text-teal-600" />,
+      icon: <User size={13} className="text-teal-600" />,
     })),
     ...(sessions ?? []).slice(0, 3).map((s) => ({
       id: `session-${s.id}`,
@@ -505,15 +587,12 @@ function HomeTab({ parentName, city }: { parentName: string; city?: string | nul
 
   return (
     <div className="space-y-6">
-      {/* Greeting */}
       <div>
-        <h1 className="text-2xl font-serif font-semibold text-gray-900">
-          {greeting()}, {parentName}!
-        </h1>
+        <h1 className="text-2xl font-serif font-semibold text-gray-900">{greeting()}, {parentName}!</h1>
         <p className="text-gray-500 text-sm mt-1">Here's what's happening on your Includly dashboard.</p>
       </div>
 
-      {/* Wallet widget */}
+      {/* Wallet */}
       {walletData !== undefined && (
         <div className="bg-gradient-to-r from-[#1A2340] to-[#2a3660] rounded-2xl p-5 text-white shadow-[0_4px_24px_rgba(26,35,64,0.2)]">
           <div className="flex items-center justify-between">
@@ -529,20 +608,17 @@ function HomeTab({ parentName, city }: { parentName: string; city?: string | nul
         </div>
       )}
 
-      {/* Referral card */}
       <ReferralCard />
 
       {/* Quick stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Professionals Connected", value: dashData?.totalUnlocks ?? 0, icon: <Unlock size={16} className="text-teal-600" />, bg: "bg-teal-50" },
           { label: "Sessions Booked", value: (sessions ?? []).length, icon: <CalendarCheck size={16} className="text-violet-600" />, bg: "bg-violet-50" },
-          { label: "Upcoming Sessions", value: upcoming.length, icon: <Clock size={16} className="text-orange-500" />, bg: "bg-orange-50" },
+          { label: "Upcoming", value: upcoming.length, icon: <Clock size={16} className="text-orange-500" />, bg: "bg-orange-50" },
+          { label: "Professionals", value: dashData?.totalUnlocks ?? 0, icon: <User size={16} className="text-teal-600" />, bg: "bg-teal-50" },
         ].map((stat) => (
           <div key={stat.label} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-            <div className={`w-9 h-9 ${stat.bg} rounded-xl flex items-center justify-center mb-3`}>
-              {stat.icon}
-            </div>
+            <div className={`w-9 h-9 ${stat.bg} rounded-xl flex items-center justify-center mb-3`}>{stat.icon}</div>
             <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
             <p className="text-xs text-gray-500 mt-0.5">{stat.label}</p>
           </div>
@@ -550,58 +626,48 @@ function HomeTab({ parentName, city }: { parentName: string; city?: string | nul
       </div>
 
       {/* Recommendations */}
-      {city && (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900">Professionals near {city}</h2>
-            <Link href="/search">
-              <Button variant="ghost" size="sm" className="text-teal-600 text-xs gap-1">
-                See all <ArrowRight size={13} />
-              </Button>
-            </Link>
-          </div>
-          {recommendations.length === 0 ? (
-            <div className="bg-white border border-gray-100 rounded-2xl p-6 text-center text-sm text-gray-400">
-              No professionals found nearby yet — <Link href="/search" className="text-teal-600 underline">search all</Link>.
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-4">
-              {recommendations.map((p) => <ProfCard key={p.id} p={p} />)}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Upcoming sessions widget */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900">Upcoming Sessions</h2>
-          <Link href="#" onClick={() => {}}><span /></Link>
+          <h2 className="font-semibold text-gray-900">{city ? `Professionals near ${city}` : "Recommended Professionals"}</h2>
+          <button onClick={() => onTabChange("find")} className="text-xs text-teal-600 flex items-center gap-1 hover:underline">
+            See all <ArrowRight size={13} />
+          </button>
         </div>
-        {upcoming.length === 0 ? (
+        {recommendations.length === 0 ? (
           <div className="bg-white border border-gray-100 rounded-2xl p-6 text-center text-sm text-gray-400">
-            No upcoming sessions. <Link href="/search" className="text-teal-600 underline">Find a professional</Link> to book.
+            {city ? "No professionals found nearby yet — " : "Browse all "}<button onClick={() => onTabChange("find")} className="text-teal-600 underline">search all</button>.
           </div>
         ) : (
-          <div className="space-y-3">
-            {upcoming.map((s) => <SessionCard key={s.id} s={s} />)}
+          <div className="grid grid-cols-2 gap-4">
+            {recommendations.map((p) => <ProfCard key={p.id} p={p} />)}
           </div>
         )}
       </div>
 
-      {/* Progress timeline — habit loop anchor */}
+      {/* Upcoming sessions */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-gray-900">Upcoming Sessions</h2>
+          <button onClick={() => onTabChange("bookings")} className="text-xs text-teal-600 hover:underline">View all</button>
+        </div>
+        {upcoming.length === 0 ? (
+          <div className="bg-white border border-gray-100 rounded-2xl p-6 text-center text-sm text-gray-400">
+            No upcoming sessions. <button onClick={() => onTabChange("find")} className="text-teal-600 underline">Find a professional</button> to book.
+          </div>
+        ) : (
+          <div className="space-y-3">{upcoming.map((s) => <SessionCard key={s.id} s={s} />)}</div>
+        )}
+      </div>
+
       <ProgressTimeline />
 
-      {/* Recent activity */}
       {activity.length > 0 && (
         <div>
           <h2 className="font-semibold text-gray-900 mb-3">Recent Activity</h2>
           <div className="bg-white border border-gray-100 rounded-2xl divide-y divide-gray-50 shadow-sm">
             {activity.map((a) => (
               <div key={a.id} className="flex items-center gap-3 px-4 py-3">
-                <div className="w-7 h-7 bg-gray-50 rounded-full flex items-center justify-center shrink-0">
-                  {a.icon}
-                </div>
+                <div className="w-7 h-7 bg-gray-50 rounded-full flex items-center justify-center shrink-0">{a.icon}</div>
                 <p className="text-sm text-gray-700 flex-1">{a.text}</p>
                 <span className="text-xs text-gray-400 shrink-0">{timeAgo(a.time)}</span>
               </div>
@@ -610,7 +676,6 @@ function HomeTab({ parentName, city }: { parentName: string; city?: string | nul
         </div>
       )}
 
-      {/* Resource highlight */}
       <div className="bg-gradient-to-r from-teal-600 to-teal-500 rounded-2xl p-5 text-white flex items-center justify-between gap-4">
         <div>
           <div className="text-xs font-medium opacity-80 mb-1">Featured Resource</div>
@@ -618,9 +683,7 @@ function HomeTab({ parentName, city }: { parentName: string; city?: string | nul
           <p className="text-xs opacity-80 mt-1 max-w-xs">A parent's guide to evaluating qualifications, communication style, and approach.</p>
         </div>
         <Link href="/support">
-          <Button size="sm" className="bg-white text-teal-700 hover:bg-gray-50 shrink-0 gap-1">
-            Read <ArrowRight size={13} />
-          </Button>
+          <Button size="sm" className="bg-white text-teal-700 hover:bg-gray-50 shrink-0 gap-1">Read <ArrowRight size={13} /></Button>
         </Link>
       </div>
     </div>
@@ -635,25 +698,26 @@ function FindTab() {
   const [city, setCity] = useState("");
   const [mode, setMode] = useState("");
   const [maxFee, setMaxFee] = useState<number | undefined>();
-  const [submitted, setSubmitted] = useState(false);
+  const [chatProfessional, setChatProfessional] = useState<{ id: number; name: string } | null>(null);
+  const [reviewingId, setReviewingId] = useState<number | null>(null);
 
   const modeParam = mode === "online" ? true : mode === "offline" ? false : undefined;
-  const { data, isFetching } = useSearchProfessionals(
-    {
-      specialty: (specialty as Parameters<typeof useSearchProfessionals>[0]["specialty"]) || undefined,
-      city: city || undefined,
-      willingToTravel: modeParam,
-      budgetMaxINR: maxFee,
-      limit: 20,
-    },
-    { query: { enabled: submitted } }
-  );
+  const { data, isFetching } = useSearchProfessionals({
+    specialty: (specialty as any) || undefined,
+    city: city || undefined,
+    willingToTravel: modeParam,
+    budgetMaxINR: maxFee,
+    limit: 40,
+  });
 
   const results = data?.professionals ?? [];
 
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-serif font-semibold text-gray-900">Find Professionals</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-serif font-semibold text-gray-900">Find Professionals</h1>
+        {isFetching && <Loader2 size={16} className="animate-spin text-teal-500" />}
+      </div>
 
       {/* Filters */}
       <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm space-y-3">
@@ -668,7 +732,6 @@ function FindTab() {
             </select>
             <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
-
           <div className="relative">
             <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <Input
@@ -679,7 +742,6 @@ function FindTab() {
             />
           </div>
         </div>
-
         <div className="grid grid-cols-2 gap-3">
           <div className="relative">
             <select
@@ -693,7 +755,6 @@ function FindTab() {
             </select>
             <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
-
           <div className="relative">
             <Input
               type="number"
@@ -706,191 +767,33 @@ function FindTab() {
             />
           </div>
         </div>
-
-        <Button
-          className="w-full bg-teal-600 hover:bg-teal-700 text-white gap-2"
-          onClick={() => setSubmitted(true)}
-          disabled={isFetching}
-        >
-          {isFetching ? <Loader2 size={15} className="animate-spin" /> : <Filter size={15} />}
-          {isFetching ? "Searching…" : "Search"}
-        </Button>
       </div>
 
       {/* Results */}
-      {submitted && (
+      {isFetching && results.length === 0 ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 size={28} className="animate-spin text-teal-500" />
+        </div>
+      ) : (
         <>
           <p className="text-sm text-gray-500">{results.length} professional{results.length !== 1 ? "s" : ""} found</p>
           {results.length === 0 ? (
-            <div className="text-center py-10 text-gray-400">No results — try different filters.</div>
+            <div className="text-center py-10 text-gray-400">No professionals found — try different filters.</div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {results.map((p) => <ProfCard key={p.id} p={p} showContact={p.isUnlocked} />)}
+              {results.map((p) => (
+                <ProfCard
+                  key={p.id}
+                  p={p}
+                  onChat={() => setChatProfessional({ id: p.id, name: p.fullName ?? "Professional" })}
+                  onReview={() => setReviewingId(p.id)}
+                />
+              ))}
             </div>
           )}
         </>
       )}
 
-      {!submitted && (
-        <div className="text-center py-10 text-gray-400 text-sm">
-          Use the filters above to find professionals.
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// TAB: MY UNLOCKS
-// ─── Chat modal (parent → professional) ────────────────────────────────────────
-interface ChatMsg { id: number; threadId: number; senderId: number; senderName: string | null; body: string; createdAt: string; }
-
-function ChatModal({ professionalId, professionalName, onClose }: { professionalId: number; professionalName: string; onClose: () => void }) {
-  const { toast } = useToast();
-  const { data: me } = useGetMe();
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [threadId, setThreadId] = useState<number | null>(null);
-  const [body, setBody] = useState("");
-  const [sending, setSending] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchWithAuth(`/api/connect/${professionalId}/thread`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.thread?.id) setThreadId(data.thread.id);
-        if (Array.isArray(data.messages)) setMessages(data.messages);
-      })
-      .catch(() => toast({ title: "Could not load messages", variant: "destructive" }))
-      .finally(() => setLoading(false));
-  }, [professionalId]);
-
-  async function send() {
-    if (!body.trim() || !threadId) return;
-    setSending(true);
-    try {
-      const res = await fetchWithAuth(`/api/connect/thread/${threadId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: body.trim() }),
-      });
-      const msg = await res.json();
-      if (!res.ok) { toast({ title: msg.error ?? "Could not send", variant: "destructive" }); return; }
-      setMessages((prev) => [...prev, msg]);
-      setBody("");
-    } catch {
-      toast({ title: "Network error", variant: "destructive" });
-    } finally {
-      setSending(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40" onClick={onClose}>
-      <div className="bg-white w-full sm:max-w-md sm:rounded-2xl shadow-2xl flex flex-col" style={{ height: "clamp(400px, 80vh, 600px)" }} onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <div>
-            <p className="font-semibold text-[#1A2340] text-sm">{professionalName}</p>
-            <p className="text-xs text-gray-400">Connect message</p>
-          </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-            <X size={18} className="text-gray-500" />
-          </button>
-        </div>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-          {loading && <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-teal-500" /></div>}
-          {!loading && messages.length === 0 && (
-            <div className="text-center py-8 text-gray-400">
-              <MessageSquarePlus size={28} className="mx-auto mb-2 text-gray-300" />
-              <p className="text-sm">Start the conversation!</p>
-            </div>
-          )}
-          {messages.map((msg) => {
-            const meId = (me as any)?.id;
-            const isMe = meId && msg.senderId === meId;
-            return (
-              <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-sm ${isMe ? "bg-teal-500 text-white rounded-br-sm" : "bg-white border border-gray-100 text-gray-800 rounded-bl-sm shadow-sm"}`}>
-                  {!isMe && <p className="text-[10px] font-semibold mb-0.5 opacity-60">{msg.senderName ?? professionalName}</p>}
-                  <p>{msg.body}</p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Input */}
-        <div className="flex gap-2 p-3 border-t border-gray-100">
-          <input
-            type="text"
-            placeholder="Type a message…"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
-          />
-          <button
-            onClick={send}
-            disabled={sending || !body.trim()}
-            className="bg-teal-500 hover:bg-teal-600 disabled:opacity-50 text-white rounded-xl px-3.5 flex items-center justify-center transition-colors"
-          >
-            {sending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-function UnlocksTab() {
-  const { data: unlocks, isLoading } = useGetMyUnlocks();
-  const [reviewingId, setReviewingId] = useState<number | null>(null);
-  const [chatProfessional, setChatProfessional] = useState<{ id: number; name: string } | null>(null);
-
-  if (isLoading) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-teal-600" /></div>;
-
-  return (
-    <div className="space-y-5">
-      <h1 className="text-xl font-serif font-semibold text-gray-900">My Unlocks</h1>
-
-      {(!unlocks || unlocks.length === 0) ? (
-        <div className="text-center py-16 text-gray-400">
-          <Unlock size={32} className="mx-auto mb-3 text-gray-300" />
-          <p className="font-medium text-gray-600">No unlocks yet</p>
-          <p className="text-sm mt-1">Find a professional and unlock their contact details.</p>
-          <Link href="/search">
-            <Button className="mt-4 bg-teal-600 hover:bg-teal-700 gap-2">
-              <Search size={15} /> Browse professionals
-            </Button>
-          </Link>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {unlocks.map((unlock: ContactUnlock) => unlock.professional ? (
-            <div key={unlock.id} className="space-y-2">
-              <ProfCard
-                p={unlock.professional}
-                showContact
-                onReview={() => setReviewingId(unlock.professionalId)}
-              />
-              <button
-                onClick={() => setChatProfessional({ id: unlock.professionalId, name: unlock.professional?.fullName ?? "Professional" })}
-                className="flex items-center gap-2 text-sm font-medium text-teal-600 hover:text-teal-700 bg-teal-50 hover:bg-teal-100 px-4 py-2 rounded-xl transition-colors w-full justify-center border border-teal-100"
-              >
-                <MessageSquarePlus size={15} /> Message {unlock.professional?.fullName?.split(" ")[0] ?? "Professional"}
-              </button>
-            </div>
-          ) : null)}
-        </div>
-      )}
-
-      {reviewingId && (
-        <ReviewModal professionalId={reviewingId} onClose={() => setReviewingId(null)} />
-      )}
       {chatProfessional && (
         <ChatModal
           professionalId={chatProfessional.id}
@@ -898,6 +801,7 @@ function UnlocksTab() {
           onClose={() => setChatProfessional(null)}
         />
       )}
+      {reviewingId && <ReviewModal professionalId={reviewingId} onClose={() => setReviewingId(null)} />}
     </div>
   );
 }
@@ -913,7 +817,6 @@ function BookingsTab() {
   const upcoming = (sessions ?? [])
     .filter((s) => ["confirmed", "pending_payment"].includes(s.status) && new Date(s.bookedDate) >= now)
     .sort((a, b) => new Date(a.bookedDate).getTime() - new Date(b.bookedDate).getTime());
-
   const past = (sessions ?? [])
     .filter((s) => !upcoming.find((u) => u.id === s.id))
     .sort((a, b) => new Date(b.bookedDate).getTime() - new Date(a.bookedDate).getTime());
@@ -925,7 +828,6 @@ function BookingsTab() {
   return (
     <div className="space-y-5">
       <h1 className="text-xl font-serif font-semibold text-gray-900">My Bookings</h1>
-
       <div className="inline-flex bg-gray-100 rounded-xl p-1 gap-1">
         {(["upcoming", "past"] as const).map((t) => (
           <button
@@ -939,15 +841,82 @@ function BookingsTab() {
           </button>
         ))}
       </div>
-
       {shown.length === 0 ? (
-        <div className="text-center py-12 text-gray-400 text-sm">
-          No {bookingTab} bookings.
+        <div className="text-center py-12 text-gray-400 text-sm">No {bookingTab} bookings.</div>
+      ) : (
+        <div className="space-y-3">{shown.map((s) => <SessionCard key={s.id} s={s} />)}</div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: MESSAGES
+// ═══════════════════════════════════════════════════════════════════════════════
+interface ThreadSummary {
+  threadId: number;
+  professionalId: number;
+  professionalName: string | null;
+  lastMessage: string | null;
+  lastAt: string | null;
+  unread: number;
+}
+
+function MessagesTab() {
+  const [threads, setThreads] = useState<ThreadSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [chatProfessional, setChatProfessional] = useState<{ id: number; name: string } | null>(null);
+
+  useEffect(() => {
+    fetchWithAuth("/api/connect/inbox")
+      .then((r) => r.json())
+      .then((data) => setThreads(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-teal-600" /></div>;
+
+  return (
+    <div className="space-y-5">
+      <h1 className="text-xl font-serif font-semibold text-gray-900">Messages</h1>
+      {threads.length === 0 ? (
+        <div className="text-center py-16 text-gray-400">
+          <MessageCircle size={32} className="mx-auto mb-3 text-gray-300" />
+          <p className="font-medium text-gray-600">No conversations yet</p>
+          <p className="text-sm mt-1">Find a professional and start a conversation.</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {shown.map((s) => <SessionCard key={s.id} s={s} />)}
+        <div className="bg-white border border-gray-100 rounded-2xl divide-y divide-gray-50 shadow-sm">
+          {threads.map((t) => (
+            <button
+              key={t.threadId}
+              onClick={() => setChatProfessional({ id: t.professionalId, name: t.professionalName ?? "Professional" })}
+              className="w-full flex items-center gap-3 px-4 py-4 hover:bg-gray-50 transition-colors text-left"
+            >
+              <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm shrink-0">
+                {initials(t.professionalName)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm text-gray-900 truncate">{t.professionalName ?? "Professional"}</p>
+                {t.lastMessage && <p className="text-xs text-gray-500 truncate mt-0.5">{t.lastMessage}</p>}
+              </div>
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                {t.lastAt && <span className="text-xs text-gray-400">{timeAgo(t.lastAt)}</span>}
+                {t.unread > 0 && (
+                  <span className="text-[10px] font-bold bg-teal-500 text-white rounded-full w-5 h-5 flex items-center justify-center">{t.unread}</span>
+                )}
+              </div>
+            </button>
+          ))}
         </div>
+      )}
+      {chatProfessional && (
+        <ChatModal
+          professionalId={chatProfessional.id}
+          professionalName={chatProfessional.name}
+          onClose={() => setChatProfessional(null)}
+        />
       )}
     </div>
   );
@@ -967,14 +936,12 @@ function NotificationsTab() {
     await fetchWithAuth(`/api/notifications/${id}/read`, { method: "PATCH" });
     queryClient.invalidateQueries({ queryKey: ["notifications"] });
   }
-
   async function markAllRead() {
     await fetchWithAuth("/api/notifications/read-all", { method: "PATCH" });
     queryClient.invalidateQueries({ queryKey: ["notifications"] });
   }
 
   const unreadCount = (notifications ?? []).filter((n) => !n.read).length;
-
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-teal-600" /></div>;
 
   return (
@@ -989,7 +956,6 @@ function NotificationsTab() {
           </Button>
         )}
       </div>
-
       {(!notifications || notifications.length === 0) ? (
         <div className="text-center py-16 text-gray-400">
           <Bell size={32} className="mx-auto mb-3 text-gray-300" />
@@ -1000,7 +966,7 @@ function NotificationsTab() {
           {notifications.map((n) => (
             <div
               key={n.id}
-              className={`flex items-start gap-3 px-4 py-4 ${!n.read ? "bg-teal-50/40" : ""}`}
+              className={`flex items-start gap-3 px-4 py-4 cursor-pointer ${!n.read ? "bg-teal-50/40" : ""}`}
               onClick={() => !n.read && markRead(n.id)}
             >
               <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${n.read ? "bg-transparent" : "bg-teal-500"}`} />
@@ -1022,98 +988,147 @@ function NotificationsTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function ParentDashboard() {
   const { user } = useUser();
-  const { data: me } = useGetMe();
   const [, setLocation] = useLocation();
+  const { data: me } = useGetMe();
   const [activeTab, setActiveTab] = useState<Tab>("home");
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const firstName = me?.fullName?.split(" ")[0] ?? user?.firstName ?? "there";
   const city = me?.location ?? null;
 
+  const { data: notifications } = useQuery<Notification[]>({
+    queryKey: ["notifications"],
+    queryFn: () => fetchWithAuth("/api/notifications").then((r) => r.json()),
+  });
+  const unreadCount = (notifications ?? []).filter((n) => !n.read).length;
+
+  function handleTabChange(tab: Tab) {
+    setActiveTab(tab);
+    setDrawerOpen(false);
+    window.scrollTo(0, 0);
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* ── SIDEBAR (desktop) ────────────────────────────────────────────── */}
-      <aside className="hidden md:flex flex-col w-[240px] shrink-0 bg-white border-r border-gray-100 fixed top-16 bottom-0 z-30">
-        {/* Avatar + user info */}
-        <div className="p-5 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-teal-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
-              {initials(me?.fullName ?? user?.fullName)}
-            </div>
-            <div className="min-w-0">
-              <p className="font-semibold text-sm text-gray-900 truncate">{me?.fullName ?? user?.fullName ?? "Parent"}</p>
-              {city && <p className="text-xs text-gray-500 flex items-center gap-1 truncate"><MapPin size={10} />{city}</p>}
-            </div>
+    <div className="min-h-screen bg-[#F5F7FA] flex">
+      {/* Mobile drawer overlay */}
+      {drawerOpen && (
+        <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
+      )}
+
+      {/* ── SIDEBAR ────────────────────────────────────────────────────────── */}
+      <aside
+        className={`fixed top-0 bottom-0 left-0 z-50 w-[240px] bg-white border-r border-gray-100 flex flex-col transition-transform duration-200 md:top-16 md:translate-x-0 md:z-30 ${drawerOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
+        aria-label="Parent dashboard sidebar"
+      >
+        {/* Avatar + close (mobile) */}
+        <div className="p-5 border-b border-gray-100 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-[#2EC4A5] flex items-center justify-center text-white font-bold text-sm shrink-0">
+            {initials(me?.fullName ?? user?.fullName)}
           </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm text-[#1A2340] truncate">{me?.fullName ?? user?.fullName ?? "Parent"}</p>
+            {city && <p className="text-xs text-gray-500 flex items-center gap-1 truncate"><MapPin size={10} />{city}</p>}
+          </div>
+          <button onClick={() => setDrawerOpen(false)} className="md:hidden p-1 text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
 
-        {/* Nav items */}
-        <nav className="flex-1 py-3 overflow-y-auto">
+        {/* Nav */}
+        <nav className="flex-1 py-2 overflow-y-auto" aria-label="Dashboard navigation">
           {NAV_ITEMS.map((item) => (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => handleTabChange(item.id)}
+              aria-label={item.label}
+              aria-current={activeTab === item.id ? "page" : undefined}
               className={`w-full flex items-center gap-3 px-5 py-3 text-sm font-medium transition-colors text-left ${
                 activeTab === item.id
-                  ? "bg-teal-50 text-teal-700 border-r-2 border-teal-600"
+                  ? "bg-[#2EC4A5]/10 text-[#2EC4A5] border-r-2 border-[#2EC4A5]"
                   : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               }`}
             >
               {item.icon}
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.id === "notifications" && unreadCount > 0 && (
+                <span className="text-[10px] font-bold bg-[#FF6B6B] text-white rounded-full w-5 h-5 flex items-center justify-center shrink-0">{unreadCount}</span>
+              )}
             </button>
           ))}
 
           <div className="mx-3 my-2 border-t border-gray-100" />
-
           <Link href="/support">
             <div className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors">
               <BookOpen size={18} />
               Resources
             </div>
           </Link>
-          <Link href="/account">
-            <div className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors">
-              <Settings size={18} />
-              Account Settings
-            </div>
-          </Link>
+          <button
+            onClick={() => setLocation("/account")}
+            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors text-left"
+          >
+            <Settings size={18} />
+            Account Settings
+          </button>
         </nav>
 
-        {/* Bottom */}
         <div className="p-4 border-t border-gray-100 space-y-1">
           <a href="/support" className="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-600 transition-colors px-1">
-            <HelpCircle size={14} />
-            Need Help?
+            <HelpCircle size={14} /> Need Help?
           </a>
-          <p className="text-xs text-gray-300 px-1">Includly v1.0</p>
+          <p className="text-xs text-gray-300 px-1">Includly · Parent</p>
         </div>
       </aside>
 
-      {/* ── MAIN CONTENT ─────────────────────────────────────────────────── */}
-      <main className="flex-1 md:ml-[240px] pb-20 md:pb-0">
-        <div className="max-w-[860px] mx-auto px-4 sm:px-6 py-6">
-          {activeTab === "home"          && <HomeTab parentName={firstName} city={city} />}
+      {/* ── MAIN CONTENT ───────────────────────────────────────────────────── */}
+      <div className="flex-1 md:ml-[240px] flex flex-col min-w-0">
+        {/* Mobile top bar */}
+        <div className="md:hidden sticky top-16 z-30 bg-white border-b border-gray-100 px-4 h-12 flex items-center gap-3 shadow-sm">
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
+            aria-label="Open navigation"
+          >
+            <Menu size={20} />
+          </button>
+          <span className="font-semibold text-[#1A2340] text-sm">
+            {NAV_ITEMS.find((n) => n.id === activeTab)?.label ?? "Dashboard"}
+          </span>
+          {unreadCount > 0 && (
+            <button onClick={() => handleTabChange("notifications")} className="ml-auto relative">
+              <Bell size={20} className="text-gray-600" />
+              <span className="absolute -top-1 -right-1 text-[9px] font-bold bg-[#FF6B6B] text-white rounded-full w-4 h-4 flex items-center justify-center">{unreadCount}</span>
+            </button>
+          )}
+        </div>
+
+        <main className="flex-1 px-4 sm:px-6 py-6 pb-24 md:pb-6 max-w-[900px] w-full mx-auto">
+          {activeTab === "home"          && <HomeTab parentName={firstName} city={city} onTabChange={handleTabChange} />}
           {activeTab === "find"          && <FindTab />}
           {activeTab === "bookings"      && <BookingsTab />}
-          {activeTab === "unlocks"       && <UnlocksTab />}
+          {activeTab === "messages"      && <MessagesTab />}
           {activeTab === "notifications" && <NotificationsTab />}
-        </div>
-      </main>
+        </main>
+      </div>
 
-      {/* ── BOTTOM TAB BAR (mobile) ──────────────────────────────────────── */}
+      {/* ── MOBILE BOTTOM TAB BAR ──────────────────────────────────────────── */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-100 z-40 flex">
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setActiveTab(item.id)}
-            className={`flex-1 flex flex-col items-center justify-center py-2 gap-1 transition-colors ${
-              activeTab === item.id ? "text-teal-600" : "text-gray-400 hover:text-gray-600"
-            }`}
-          >
-            {item.icon}
-            <span className="text-[10px] leading-none">{item.label.split(" ")[0]}</span>
-          </button>
-        ))}
+        {MOBILE_BOTTOM.map((id) => {
+          const item = NAV_ITEMS.find((n) => n.id === id)!;
+          return (
+            <button
+              key={id}
+              onClick={() => handleTabChange(id)}
+              className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors relative ${
+                activeTab === id ? "text-[#2EC4A5]" : "text-gray-400 hover:text-gray-600"
+              }`}
+            >
+              {item.icon}
+              <span className="text-[10px] leading-none">{item.label.split(" ")[0]}</span>
+              {id === "notifications" && unreadCount > 0 && (
+                <span className="absolute top-1 right-[calc(50%-14px)] text-[9px] font-bold bg-[#FF6B6B] text-white rounded-full w-4 h-4 flex items-center justify-center">{unreadCount}</span>
+              )}
+            </button>
+          );
+        })}
       </nav>
     </div>
   );
