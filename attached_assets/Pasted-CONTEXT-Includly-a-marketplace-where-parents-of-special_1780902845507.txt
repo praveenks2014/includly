@@ -1,0 +1,63 @@
+CONTEXT: Includly — a marketplace where parents of special-needs children find and book
+(a) shadow teachers and (b) other professionals (therapists, counsellors, etc.).
+Stack: React/Expo + Supabase + Razorpay. REMOVE the existing "contact unlock" payment
+entirely. Chat between parent and professional opens once a booking is CONFIRMED — no pay-to-contact.
+
+=== TWO SEPARATE FLOWS ===
+
+FLOW A — SHADOW TEACHER (matching model):
+- Parent requests a shadow-teacher match → pays an upfront MATCHING FEE.
+- Matching fee amount is set in Admin config (single global value, editable).
+- On successful payment, the request enters the matching queue; admin/system matches a shadow teacher.
+- «After matching, individual sessions with the matched shadow teacher follow FLOW B's
+  session+escrow logic.» Confirm if this is intended or if the matching fee is the only charge.
+
+FLOW B — OTHER PROFESSIONALS (per-session escrow model):
+Parent sees ONE total price = (professional's price) + (platform markup). Parent does NOT see
+the markup as a line item; the professional sees only their net (their set price).
+Markup % (or flat amount) is set in Admin config, editable.
+
+State machine (build exactly these statuses):
+REQUESTED → CONFIRMED_BY_PRO → PAID_HELD → SESSION_STARTED → SESSION_COMPLETED
+→ RELEASABLE → RELEASED   (plus: CANCELLED, REFUNDED, DISPUTED)
+
+1. Parent selects professional → booking = REQUESTED (with a scheduled time slot).
+2. Professional confirms → CONFIRMED_BY_PRO. Chat opens now.
+3. Parent pays the total. Funds are CAPTURED INTO THE PLATFORM Razorpay balance and HELD
+   (not paid to the pro yet) → PAID_HELD. «Use RazorpayX payout-on-release to the pro's UPI VPA.»
+4. SESSION START: system generates a 6-digit START OTP, shown in the parent's app.
+   Parent reads it to the professional; pro enters it in their app to begin → SESSION_STARTED.
+5. SESSION END: system generates a SEPARATE END OTP, shown to parent; pro enters it to close
+   → SESSION_COMPLETED → RELEASABLE.
+   OTP rules: 10-min validity, regenerate-on-demand, max 5 wrong attempts then lock + admin alert.
+6. ADMIN RELEASE: a "Release Payment" button visible ONLY in admin. On click, RazorpayX payout
+   of (total − markup − applicable taxes) goes to the professional's stored UPI VPA → RELEASED.
+   Support single and batch release.
+
+=== PAYMENTS / RAZORPAY ===
+- Order creation server-side; verify payment signature; verify webhooks (payment.captured,
+  payout.processed/failed); make all payout operations idempotent.
+- Store every money movement (order, capture, payout, refund) with status + Razorpay IDs.
+
+=== GST & TAX (compute and store, generate invoice; make rates admin-configurable) ===
+- 18% GST on the PLATFORM MARKUP = platform's output liability. Show on platform invoice.
+- Flag (do NOT hardcode rates): TCS under Sec 52 and TDS under Sec 194-O may apply depending on
+  the professional's GST-registration status — leave a config flag + a note to confirm with CA.
+- Generate a GST invoice per transaction.
+
+=== REFUNDS / EDGE CASES (build these paths) ===
+- Pro confirms but never starts (start-OTP not entered within «24h» of slot) → auto-refund parent → CANCELLED.
+- Parent no-show → admin can mark and choose refund/partial/forfeit per «policy».
+- Dispute raised before release → DISPUTED; funds stay held until admin resolves (release or refund).
+- Matching fee refundability (Flow A): «non-refundable, configurable».
+
+=== ADMIN PANEL ===
+Config: matching fee, markup %/flat, GST rate, tax flags, OTP validity, auto-cancel window.
+Views: all bookings by status, held funds total, release/refund actions, dispute queue.
+
+=== DATA ENTITIES (define cleanly) ===
+Parent, Professional (with UPI VPA + own price), ShadowTeacher, Booking (status, slot, amounts,
+markup snapshot, GST snapshot), Session (start/end OTP, timestamps), Payment, Payout, AdminConfig.
+
+IMPORTANT: Ask me before assuming anything on the «bracketed» items above. Do not pay professionals
+directly at checkout — funds must be held and released only via the admin button.
