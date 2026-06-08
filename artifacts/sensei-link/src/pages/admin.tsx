@@ -574,9 +574,10 @@ function ProfessionalsTab() {
   const [isRejecting, setIsRejecting] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
 
+  const resolvedStatus = (statusFilter || undefined) as "pending" | "verified" | "rejected" | "unsubmitted" | undefined;
   const { data, isLoading } = useAdminListProfessionals(
-    { status: statusFilter as "pending" | "verified" | "rejected" | "unsubmitted" | undefined, page, limit: 20 },
-    { query: { queryKey: getAdminListProfessionalsQueryKey({ status: statusFilter as "pending" | "verified" | "rejected" | "unsubmitted" | undefined, page, limit: 20 }) } },
+    { status: resolvedStatus, page, limit: 20 },
+    { query: { queryKey: getAdminListProfessionalsQueryKey({ status: resolvedStatus, page, limit: 20 }) } },
   );
 
   const { mutateAsync: approve } = useAdminApproveProfessional();

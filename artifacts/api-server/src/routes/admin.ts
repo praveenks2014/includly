@@ -88,6 +88,11 @@ router.patch("/admin/professionals/:id/approve", ...adminGuard, async (req, res)
     return;
   }
 
+  await db
+    .update(identityVerificationsTable)
+    .set({ status: "approved" })
+    .where(eq(identityVerificationsTable.professionalId, id));
+
   res.json(profile);
 });
 
@@ -110,6 +115,11 @@ router.patch("/admin/professionals/:id/reject", ...adminGuard, async (req, res):
     res.status(404).json({ error: "Professional not found" });
     return;
   }
+
+  await db
+    .update(identityVerificationsTable)
+    .set({ status: "rejected" })
+    .where(eq(identityVerificationsTable.professionalId, id));
 
   res.json(profile);
 });

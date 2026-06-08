@@ -1088,15 +1088,22 @@ function CertificationsTab() {
                     Uploaded {new Date(cert.uploadedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                   </p>
                 </div>
-                <a
-                  href={`/api/storage/objects/${cert.fileKey.replace(/^\/objects\//, "")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetchWithAuth(`/api/storage/objects/${cert.fileKey.replace(/^\/objects\//, "")}`);
+                      if (!res.ok) { toast({ title: "Could not load document", variant: "destructive" }); return; }
+                      const blob = await res.blob();
+                      const url = URL.createObjectURL(blob);
+                      window.open(url, "_blank", "noopener");
+                      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                    } catch { toast({ title: "Failed to open document", variant: "destructive" }); }
+                  }}
                   className="text-xs text-[#2EC4A5] hover:underline flex items-center gap-1 shrink-0"
                   aria-label="View certification"
                 >
                   <Eye size={13} /> View
-                </a>
+                </button>
               </div>
             ))}
           </div>

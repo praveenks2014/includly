@@ -174,13 +174,11 @@ export const requireAuth = async (
       .filter(Boolean) as string[],
   );
 
-  // Fetch email from Clerk for any user whose email is not yet stored AND who
-  // is not already admin. This covers both brand-new inserts and existing rows
-  // that were created before email-sync was added — critical for the admin
-  // account when Clerk creates a new ID (e.g. switching between Google OAuth
-  // and email/password sign-in before accounts are linked).
+  // Fetch email + fullName from Clerk for any user whose email or fullName is
+  // not yet stored. Covers brand-new inserts and rows created before sync was added.
   let resolvedEmail = user.email ?? null;
-  if (!resolvedEmail && user.role !== "admin") {
+  const needsClerkSync = (!resolvedEmail || !user.fullName) && user.role !== "admin";
+  if (needsClerkSync) {
     const clerkSecret = process.env["CLERK_SECRET_KEY"];
     if (clerkSecret) {
       try {
@@ -190,17 +188,22 @@ export const requireAuth = async (
         if (clerkRes.ok) {
           const cu = await clerkRes.json() as {
             email_addresses?: { email_address: string; verification?: { status: string } }[];
+            first_name?: string | null;
+            last_name?: string | null;
           };
           const primary =
             cu.email_addresses?.find((e) => e.verification?.status === "verified")?.email_address
             ?? cu.email_addresses?.[0]?.email_address;
-          if (primary) {
-            resolvedEmail = primary;
-            await db.update(usersTable).set({ email: primary }).where(eq(usersTable.id, user.id));
+          const fullNameFromClerk = [cu.first_name, cu.last_name].filter(Boolean).join(" ") || null;
+          const updates: { email?: string; fullName?: string } = {};
+          if (primary && !user.email) { updates.email = primary; resolvedEmail = primary; }
+          if (fullNameFromClerk && !user.fullName) { updates.fullName = fullNameFromClerk; }
+          if (Object.keys(updates).length > 0) {
+            await db.update(usersTable).set(updates).where(eq(usersTable.id, user.id));
           }
         }
       } catch {
-        // Non-fatal — email sync is best-effort; will retry on the next request.
+        // Non-fatal — sync is best-effort; will retry on the next request.
       }
     }
   }
