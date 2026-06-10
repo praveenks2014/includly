@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useUser } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -309,32 +309,43 @@ function ChatModal({ professionalId, professionalName, onClose }: { professional
   const { toast } = useToast();
   const { data: me } = useGetMe();
   const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [threadId, setThreadId] = useState<number | null>(null);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchWithAuth(`/api/connect/${professionalId}/thread`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.thread?.id) setThreadId(data.thread.id);
+      .then(async (r) => {
+        if (r.status === 403) {
+          const d = await r.json() as { error?: string };
+          setAccessError(d.error ?? "You need to connect with this specialist before messaging.");
+          return;
+        }
+        if (!r.ok) { setAccessError("Could not load messages. Please try again."); return; }
+        const data = await r.json() as { messages?: ChatMsg[] };
         if (Array.isArray(data.messages)) setMessages(data.messages);
       })
-      .catch(() => toast({ title: "Could not load messages", variant: "destructive" }))
+      .catch(() => setAccessError("Could not load messages. Please try again."))
       .finally(() => setLoading(false));
   }, [professionalId]);
 
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages]);
+
   async function send() {
-    if (!body.trim() || !threadId) return;
+    const trimmed = body.trim();
+    if (!trimmed || sending || accessError) return;
     setSending(true);
     try {
-      const res = await fetchWithAuth(`/api/connect/thread/${threadId}/messages`, {
+      const res = await fetchWithAuth(`/api/connect/${professionalId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: body.trim() }),
+        body: JSON.stringify({ body: trimmed }),
       });
-      const msg = await res.json();
+      const msg = await res.json() as ChatMsg & { error?: string };
       if (!res.ok) { toast({ title: msg.error ?? "Could not send", variant: "destructive" }); return; }
       setMessages((prev) => [...prev, msg]);
       setBody("");
@@ -344,6 +355,8 @@ function ChatModal({ professionalId, professionalName, onClose }: { professional
       setSending(false);
     }
   }
+
+  const canSend = !sending && !loading && !accessError && body.trim().length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40" onClick={onClose}>
@@ -357,17 +370,23 @@ function ChatModal({ professionalId, professionalName, onClose }: { professional
             <X size={18} className="text-gray-500" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
           {loading && <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-teal-500" /></div>}
-          {!loading && messages.length === 0 && (
+          {!loading && accessError && (
+            <div className="text-center py-8 text-gray-500">
+              <MessageSquarePlus size={28} className="mx-auto mb-2 text-gray-300" />
+              <p className="text-sm">{accessError}</p>
+            </div>
+          )}
+          {!loading && !accessError && messages.length === 0 && (
             <div className="text-center py-8 text-gray-400">
               <MessageSquarePlus size={28} className="mx-auto mb-2 text-gray-300" />
               <p className="text-sm">Start the conversation!</p>
             </div>
           )}
           {messages.map((msg) => {
-            const meId = (me as any)?.id;
-            const isMe = meId && msg.senderId === meId;
+            const meId = (me as unknown as { id?: number })?.id;
+            const isMe = meId != null && msg.senderId === meId;
             return (
               <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[78%] rounded-2xl px-3.5 py-2 text-sm ${isMe ? "bg-teal-500 text-white rounded-br-sm" : "bg-white border border-gray-100 text-gray-800 rounded-bl-sm shadow-sm"}`}>
@@ -381,16 +400,17 @@ function ChatModal({ professionalId, professionalName, onClose }: { professional
         <div className="flex gap-2 p-3 border-t border-gray-100">
           <input
             type="text"
-            placeholder="Type a message…"
+            placeholder={accessError ? "Connect first to message" : "Type a message…"}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
+            disabled={!!accessError || loading}
+            className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 disabled:bg-gray-50 disabled:text-gray-400"
           />
           <button
-            onClick={send}
-            disabled={sending || !body.trim()}
-            className="bg-teal-500 hover:bg-teal-600 disabled:opacity-50 text-white rounded-xl px-3.5 flex items-center justify-center transition-colors"
+            onClick={() => void send()}
+            disabled={!canSend}
+            className="bg-teal-500 hover:bg-teal-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl px-3.5 flex items-center justify-center transition-colors"
           >
             {sending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
           </button>
