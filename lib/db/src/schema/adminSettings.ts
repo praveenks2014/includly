@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, timestamp, boolean, real } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, timestamp, boolean, real, text } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -21,6 +21,11 @@ export const adminSettingsTable = pgTable("admin_settings", {
   // OTP + auto-cancel
   otpValidityMinutes: integer("otp_validity_minutes").notNull().default(10),
   autoCancelHours: integer("auto_cancel_hours").notNull().default(2),
+  // Shadow Teacher Engagement module
+  salaryPlatformCutPct: real("salary_platform_cut_pct").notNull().default(10),
+  noticePeriodDays: integer("notice_period_days").notNull().default(30),
+  parentBuyoutDays: integer("parent_buyout_days").notNull().default(15),
+  tiersJson: text("tiers_json"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -29,3 +34,11 @@ export type InsertAdminSetting = z.infer<typeof insertAdminSettingSchema>;
 export type AdminSettings = typeof adminSettingsTable.$inferSelect;
 
 export const DEFAULT_CONTACT_LIMIT = 5;
+
+export const DEFAULT_TIERS = [
+  { id: "budget", name: "Budget", description: "Basic qualifications, minimal experience", minSalaryInr: 12000, maxSalaryInr: 18000, minExperienceYears: 0, requiresAba: false, requiresBcba: false, englishFluency: "basic" },
+  { id: "standard", name: "Standard", description: "Some special-needs experience", minSalaryInr: 18000, maxSalaryInr: 28000, minExperienceYears: 1, requiresAba: false, requiresBcba: false, englishFluency: "basic" },
+  { id: "premium", name: "Premium", description: "Strong experience + good English fluency", minSalaryInr: 28000, maxSalaryInr: 45000, minExperienceYears: 3, requiresAba: false, requiresBcba: false, englishFluency: "conversational" },
+  { id: "aba_specialist", name: "ABA Specialist", description: "ABA-trained shadow teacher", minSalaryInr: 45000, maxSalaryInr: 65000, minExperienceYears: 2, requiresAba: true, requiresBcba: false, englishFluency: "conversational" },
+  { id: "bcba_specialist", name: "BCBA Specialist", description: "BCBA-certified shadow teacher", minSalaryInr: 65000, maxSalaryInr: 120000, minExperienceYears: 3, requiresAba: true, requiresBcba: true, englishFluency: "fluent" },
+];

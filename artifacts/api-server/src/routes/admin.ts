@@ -14,6 +14,10 @@ import {
   sessionBookingsTable,
   bookingPayoutsTable,
   shadowTeacherMatchesTable,
+  shadowTeacherEngagementsTable,
+  childrenTable,
+  engagementLifecycleRequestsTable,
+  engagementSalaryPaymentsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import {
@@ -619,6 +623,106 @@ router.patch("/admin/bookings/:id/resolve-dispute", ...adminGuard, async (req, r
     .returning();
 
   res.json(updated);
+});
+
+// ── Admin Engagement Management ─────────────────────────────────────────────
+
+// GET /admin/engagements — list all shadow teacher engagements
+router.get("/admin/engagements", ...adminGuard, async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      id: shadowTeacherEngagementsTable.id,
+      parentId: shadowTeacherEngagementsTable.parentId,
+      professionalId: shadowTeacherEngagementsTable.professionalId,
+      childId: shadowTeacherEngagementsTable.childId,
+      matchRequestId: shadowTeacherEngagementsTable.matchRequestId,
+      tier: shadowTeacherEngagementsTable.tier,
+      startDate: shadowTeacherEngagementsTable.startDate,
+      monthlyFeeInr: shadowTeacherEngagementsTable.monthlyFeeInr,
+      status: shadowTeacherEngagementsTable.status,
+      endDate: shadowTeacherEngagementsTable.endDate,
+      notes: shadowTeacherEngagementsTable.notes,
+      createdAt: shadowTeacherEngagementsTable.createdAt,
+      parentName: usersTable.fullName,
+      professionalName: professionalProfilesTable.fullName,
+      childName: childrenTable.name,
+    })
+    .from(shadowTeacherEngagementsTable)
+    .leftJoin(usersTable, eq(shadowTeacherEngagementsTable.parentId, usersTable.id))
+    .leftJoin(professionalProfilesTable, eq(shadowTeacherEngagementsTable.professionalId, professionalProfilesTable.id))
+    .leftJoin(childrenTable, eq(shadowTeacherEngagementsTable.childId, childrenTable.id))
+    .orderBy(desc(shadowTeacherEngagementsTable.createdAt));
+
+  res.json(rows);
+});
+
+// POST /admin/engagements — admin creates a new engagement (from a matched request)
+router.post("/admin/engagements", ...adminGuard, async (req, res): Promise<void> => {
+  const { parentId, professionalId, childId, matchRequestId, tier, startDate, monthlyFeeInr, notes } = req.body ?? {};
+  if (!parentId || !professionalId || !startDate || !monthlyFeeInr) {
+    res.status(400).json({ error: "parentId, professionalId, startDate, monthlyFeeInr are required" });
+    return;
+  }
+
+  const [eng] = await db
+    .insert(shadowTeacherEngagementsTable)
+    .values({
+      parentId: Number(parentId),
+      professionalId: Number(professionalId),
+      childId: childId ? Number(childId) : null,
+      matchRequestId: matchRequestId ? Number(matchRequestId) : null,
+      tier: tier ?? null,
+      startDate,
+      hoursPerWeek: 0,
+      monthlyFeeInr: Number(monthlyFeeInr),
+      notes: notes ?? null,
+      status: "active",
+    })
+    .returning();
+
+  // If created from a match request, mark it as matched
+  if (matchRequestId) {
+    await db
+      .update(shadowTeacherMatchesTable)
+      .set({ status: "matched", matchedAt: new Date(), updatedAt: new Date() })
+      .where(eq(shadowTeacherMatchesTable.id, Number(matchRequestId)));
+  }
+
+  res.status(201).json(eng);
+});
+
+// GET /admin/engagements/:id/lifecycle — admin views lifecycle requests for engagement
+router.get("/admin/engagements/:id/lifecycle", ...adminGuard, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const rows = await db
+    .select()
+    .from(engagementLifecycleRequestsTable)
+    .where(eq(engagementLifecycleRequestsTable.engagementId, id))
+    .orderBy(desc(engagementLifecycleRequestsTable.createdAt));
+  res.json(rows);
+});
+
+// GET /admin/salary-payments — list all salary payments
+router.get("/admin/salary-payments", ...adminGuard, async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      id: engagementSalaryPaymentsTable.id,
+      engagementId: engagementSalaryPaymentsTable.engagementId,
+      month: engagementSalaryPaymentsTable.month,
+      grossInr: engagementSalaryPaymentsTable.grossInr,
+      platformCutInr: engagementSalaryPaymentsTable.platformCutInr,
+      netInr: engagementSalaryPaymentsTable.netInr,
+      status: engagementSalaryPaymentsTable.status,
+      paidAt: engagementSalaryPaymentsTable.paidAt,
+      parentName: usersTable.fullName,
+    })
+    .from(engagementSalaryPaymentsTable)
+    .leftJoin(shadowTeacherEngagementsTable, eq(engagementSalaryPaymentsTable.engagementId, shadowTeacherEngagementsTable.id))
+    .leftJoin(usersTable, eq(shadowTeacherEngagementsTable.parentId, usersTable.id))
+    .orderBy(desc(engagementSalaryPaymentsTable.createdAt));
+  res.json(rows);
 });
 
 // GET /admin/payouts — list all booking payouts

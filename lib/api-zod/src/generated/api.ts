@@ -622,6 +622,15 @@ export const UpdateAdminSettingsBody = zod.object({
   contactUnlockPriceInr: zod.number().optional(),
   platformCommissionPct: zod.number().optional(),
   monetisationEnabled: zod.boolean().optional(),
+  matchingFeeInr: zod.number().optional(),
+  matchingFeeRefundable: zod.boolean().optional(),
+  markupPct: zod.number().optional(),
+  markupFlatInr: zod.number().optional(),
+  gstRatePct: zod.number().optional(),
+  salaryPlatformCutPct: zod.number().optional(),
+  noticePeriodDays: zod.number().optional(),
+  parentBuyoutDays: zod.number().optional(),
+  tiersJson: zod.string().optional(),
 });
 
 export const UpdateAdminSettingsResponse = zod.object({

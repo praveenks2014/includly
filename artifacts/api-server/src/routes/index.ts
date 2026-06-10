@@ -23,6 +23,10 @@ import resourcesRouter from "./resources";
 import referralsRouter from "./referrals";
 import shadowTeacherRouter from "./shadowTeacher";
 import { sessionsV2Router } from "./sessionsV2";
+import lifecycleRouter from "./lifecycleRequests";
+import dailyLogsRouter from "./dailyLogs";
+import salaryPaymentsRouter from "./salaryPayments";
+import parentNeedsRouter from "./parentNeeds";
 
 const router: IRouter = Router();
 
@@ -50,5 +54,9 @@ router.use(resourcesRouter);
 router.use(referralsRouter);
 router.use(shadowTeacherRouter);
 router.use(sessionsV2Router);
+router.use(lifecycleRouter);
+router.use(dailyLogsRouter);
+router.use(salaryPaymentsRouter);
+router.use(parentNeedsRouter);
 
 export default router;

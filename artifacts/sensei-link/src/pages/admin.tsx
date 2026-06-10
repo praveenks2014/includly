@@ -44,7 +44,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 
-type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "payments" | "settings" | "commissions" | "moderation" | "bookings" | "shadow-teacher";
+type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "payments" | "settings" | "commissions" | "moderation" | "bookings" | "shadow-teacher" | "engagements";
 
 // ── Booking row shape from /admin/bookings ────────────────────────────────────
 interface AdminBookingRow {
@@ -421,6 +421,7 @@ export default function AdminPage() {
     { id: "payments", label: "Payments", icon: <CreditCard size={18} /> },
     { id: "bookings", label: "Bookings & Payouts", icon: <IndianRupee size={18} /> },
     { id: "shadow-teacher", label: "Shadow Teacher", icon: <UserCheck size={18} /> },
+    { id: "engagements", label: "Engagements", icon: <IndianRupee size={18} /> },
     { id: "moderation", label: "Moderation", icon: <Flag size={18} /> },
     { id: "settings", label: "Settings", icon: <Settings size={18} /> },
     { id: "commissions", label: "Commission Rates", icon: <IndianRupee size={18} /> },
@@ -504,6 +505,7 @@ export default function AdminPage() {
           {activeTab === "payments" && <PaymentsTab />}
           {activeTab === "bookings" && <AdminBookingsTab />}
           {activeTab === "shadow-teacher" && <AdminShadowTeacherTab />}
+          {activeTab === "engagements" && <AdminEngagementsTab />}
           {activeTab === "moderation" && <ModerationTab />}
           {activeTab === "settings" && <SettingsTab />}
           {activeTab === "commissions" && <CommissionRatesTab />}
@@ -1072,16 +1074,34 @@ function PaymentsTab() {
   );
 }
 
+type TierDef = { name: string; minSalaryInr: number; maxSalaryInr: number; description: string; };
+const DEFAULT_TIERS_FE: TierDef[] = [
+  { name: "Foundation", minSalaryInr: 8000, maxSalaryInr: 12000, description: "Entry-level shadow teachers" },
+  { name: "Certified",  minSalaryInr: 12001, maxSalaryInr: 20000, description: "Trained & certified teachers" },
+  { name: "Expert",     minSalaryInr: 20001, maxSalaryInr: 35000, description: "Experienced specialists" },
+];
+
 function SettingsTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: settings, isLoading } = useGetAdminSettings();
   const { mutateAsync: updateSettings } = useUpdateAdminSettings();
+
   const [contactLimit, setContactLimit] = useState<number | "">("");
   const [unlockPrice, setUnlockPrice] = useState<number | "">("");
   const [commissionPct, setCommissionPct] = useState<number | "">("");
   const [monetisationEnabled, setMonetisationEnabled] = useState(false);
   const [showMonetisationModal, setShowMonetisationModal] = useState(false);
+
+  const [matchingFeeInr, setMatchingFeeInr] = useState<number | "">("");
+  const [matchingFeeRefundable, setMatchingFeeRefundable] = useState(true);
+  const [salaryPlatformCutPct, setSalaryPlatformCutPct] = useState<number | "">("");
+  const [noticePeriodDays, setNoticePeriodDays] = useState<number | "">("");
+  const [parentBuyoutDays, setParentBuyoutDays] = useState<number | "">("");
+  const [markupPct, setMarkupPct] = useState<number | "">("");
+  const [gstRatePct, setGstRatePct] = useState<number | "">("");
+  const [tiers, setTiers] = useState<TierDef[]>(DEFAULT_TIERS_FE);
+
   const [isSaving, setIsSaving] = useState(false);
   const [synced, setSynced] = useState(false);
 
@@ -1090,6 +1110,15 @@ function SettingsTab() {
     setUnlockPrice(settings.contactUnlockPriceInr ?? 0);
     setCommissionPct(settings.platformCommissionPct ?? 0);
     setMonetisationEnabled(settings.monetisationEnabled ?? false);
+    setMatchingFeeInr((settings as Record<string, unknown>)["matchingFeeInr"] as number ?? 500);
+    setMatchingFeeRefundable(((settings as Record<string, unknown>)["matchingFeeRefundable"] as boolean) ?? true);
+    setSalaryPlatformCutPct((settings as Record<string, unknown>)["salaryPlatformCutPct"] as number ?? 10);
+    setNoticePeriodDays((settings as Record<string, unknown>)["noticePeriodDays"] as number ?? 30);
+    setParentBuyoutDays((settings as Record<string, unknown>)["parentBuyoutDays"] as number ?? 15);
+    setMarkupPct((settings as Record<string, unknown>)["markupPct"] as number ?? 10);
+    setGstRatePct((settings as Record<string, unknown>)["gstRatePct"] as number ?? 18);
+    const tj = (settings as Record<string, unknown>)["tiersJson"] as string | undefined;
+    if (tj) { try { setTiers(JSON.parse(tj)); } catch { /* ignore */ } }
     setSynced(true);
   }
 
@@ -1102,6 +1131,14 @@ function SettingsTab() {
           contactUnlockPriceInr: Number(unlockPrice) || 0,
           platformCommissionPct: Number(commissionPct) || 0,
           monetisationEnabled,
+          matchingFeeInr: Number(matchingFeeInr) || 500,
+          matchingFeeRefundable,
+          salaryPlatformCutPct: Number(salaryPlatformCutPct) || 10,
+          noticePeriodDays: Number(noticePeriodDays) || 30,
+          parentBuyoutDays: Number(parentBuyoutDays) || 15,
+          markupPct: Number(markupPct) || 10,
+          gstRatePct: Number(gstRatePct) || 18,
+          tiersJson: JSON.stringify(tiers),
         },
       });
       queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() });
@@ -1111,17 +1148,8 @@ function SettingsTab() {
     } finally { setIsSaving(false); }
   }
 
-  function handleToggleMonetisation() {
-    if (!monetisationEnabled) {
-      setShowMonetisationModal(true);
-    } else {
-      setMonetisationEnabled(false);
-    }
-  }
-
-  function handleConfirmEnableMonetisation() {
-    setMonetisationEnabled(true);
-    setShowMonetisationModal(false);
+  function updateTier(idx: number, field: string, value: unknown) {
+    setTiers(prev => prev.map((t, i) => i === idx ? { ...t, [field]: value } : t));
   }
 
   if (isLoading) {
@@ -1130,15 +1158,13 @@ function SettingsTab() {
 
   return (
     <>
-      <div className="max-w-lg space-y-6">
+      <div className="max-w-2xl space-y-6">
         {monetisationEnabled ? (
           <div className="flex items-start gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
             <IndianRupee size={18} className="text-green-600 mt-0.5 shrink-0" />
             <div>
               <p className="text-sm font-semibold text-green-800">Monetisation is active</p>
-              <p className="text-xs text-green-600 mt-0.5">
-                Parents are charged ₹{Number(unlockPrice) || 0} per contact unlock. Platform commission: {Number(commissionPct) || 0}%.
-              </p>
+              <p className="text-xs text-green-600 mt-0.5">Parents are charged ₹{Number(unlockPrice) || 0} per contact unlock. Platform commission: {Number(commissionPct) || 0}%.</p>
             </div>
           </div>
         ) : (
@@ -1146,92 +1172,176 @@ function SettingsTab() {
             <TrendingUp size={18} className="text-[#FFB830] mt-0.5 shrink-0" />
             <div>
               <p className="text-sm font-semibold text-[#1A2340]">Platform is currently free</p>
-              <p className="text-xs text-gray-500 mt-0.5">All contact unlocks are free. Enable monetisation below to charge parents per unlock via Razorpay.</p>
+              <p className="text-xs text-gray-500 mt-0.5">Enable monetisation below to charge parents per unlock via Razorpay.</p>
             </div>
           </div>
         )}
 
+        {/* ── Contact Unlocks ── */}
         <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-5">
+          <p className="text-base font-bold text-[#1A2340]">Contact Unlocks</p>
           <div>
-            <Label htmlFor="contact-limit" className="text-sm font-semibold text-[#1A2340]">Contact Unlocks Per Parent</Label>
+            <Label htmlFor="contact-limit" className="text-sm font-semibold text-[#1A2340]">Unlocks Per Parent</Label>
             <p className="text-xs text-gray-400 mb-2">Maximum number of professionals a parent can unlock contact details for.</p>
-            <Input
-              id="contact-limit"
-              type="number"
-              min={1}
-              max={1000}
-              value={contactLimit}
+            <Input id="contact-limit" type="number" min={1} max={1000} value={contactLimit}
               onChange={(e) => setContactLimit(e.target.value === "" ? "" : Number(e.target.value))}
-              className="rounded-lg focus-visible:ring-[#2EC4A5]"
-              aria-label="Contact unlock limit per parent"
-            />
+              className="rounded-lg focus-visible:ring-[#2EC4A5] max-w-xs" />
           </div>
-
           <hr className="border-gray-100" />
-
           <div>
-            <p className="text-sm font-semibold text-[#1A2340] mb-0.5">Monetisation</p>
+            <p className="text-sm font-semibold text-[#1A2340] mb-1">Monetisation</p>
             <p className="text-xs text-gray-400 mb-4">Control whether parents are charged for contact unlocks.</p>
-
             <div className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50 mb-4">
               <div>
                 <p className="text-sm font-medium text-[#1A2340]">Enable paid contact unlocks</p>
                 <p className="text-xs text-gray-400">Charge parents each time they unlock a professional's contact details.</p>
               </div>
-              <button
-                type="button"
-                onClick={handleToggleMonetisation}
+              <button type="button"
+                onClick={() => !monetisationEnabled ? setShowMonetisationModal(true) : setMonetisationEnabled(false)}
                 aria-label={monetisationEnabled ? "Disable monetisation" : "Enable monetisation"}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4A5] focus-visible:ring-offset-2 ${monetisationEnabled ? "bg-[#2EC4A5]" : "bg-gray-200"}`}
-              >
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4A5] focus-visible:ring-offset-2 ${monetisationEnabled ? "bg-[#2EC4A5]" : "bg-gray-200"}`}>
                 <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${monetisationEnabled ? "translate-x-5" : "translate-x-0"}`} />
               </button>
             </div>
-
-            <div className={`space-y-4 transition-opacity duration-200 ${monetisationEnabled ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
+            <div className={`grid grid-cols-2 gap-4 transition-opacity duration-200 ${monetisationEnabled ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
               <div>
-                <Label htmlFor="unlock-price" className="text-sm font-semibold text-[#1A2340]">Contact Unlock Price (₹)</Label>
-                <p className="text-xs text-gray-400 mb-2">Amount charged to parents per contact unlock.</p>
-                <Input
-                  id="unlock-price"
-                  type="number"
-                  min={0}
-                  max={10000}
-                  value={unlockPrice}
+                <Label htmlFor="unlock-price" className="text-sm font-semibold text-[#1A2340]">Unlock Price (₹)</Label>
+                <Input id="unlock-price" type="number" min={0} max={10000} value={unlockPrice}
                   onChange={(e) => setUnlockPrice(e.target.value === "" ? "" : Number(e.target.value))}
-                  className="rounded-lg focus-visible:ring-[#2EC4A5]"
-                  aria-label="Contact unlock price in rupees"
-                  disabled={!monetisationEnabled}
-                />
+                  className="rounded-lg focus-visible:ring-[#2EC4A5] mt-1.5" disabled={!monetisationEnabled} />
               </div>
               <div>
                 <Label htmlFor="commission-pct" className="text-sm font-semibold text-[#1A2340]">Platform Commission (%)</Label>
-                <p className="text-xs text-gray-400 mb-2">Percentage of each unlock payment retained by Includly.</p>
-                <Input
-                  id="commission-pct"
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={commissionPct}
+                <Input id="commission-pct" type="number" min={0} max={100} value={commissionPct}
                   onChange={(e) => setCommissionPct(e.target.value === "" ? "" : Number(e.target.value))}
-                  className="rounded-lg focus-visible:ring-[#2EC4A5]"
-                  aria-label="Platform commission percentage"
-                  disabled={!monetisationEnabled}
-                />
+                  className="rounded-lg focus-visible:ring-[#2EC4A5] mt-1.5" disabled={!monetisationEnabled} />
               </div>
             </div>
           </div>
-
-          <Button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
-            aria-label="Save settings"
-          >
-            {isSaving ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
-            Save Settings
-          </Button>
         </div>
+
+        {/* ── Shadow Teacher — Matching Fee ── */}
+        <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-5">
+          <p className="text-base font-bold text-[#1A2340]">Shadow Teacher — Matching Fee</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">Matching Fee (₹)</Label>
+              <p className="text-xs text-gray-400 mb-1.5">Charged to parents when they submit a match request.</p>
+              <Input type="number" min={0} value={matchingFeeInr}
+                onChange={(e) => setMatchingFeeInr(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label className="text-sm font-semibold text-[#1A2340]">Matching Fee Refundable?</Label>
+              <p className="text-xs text-gray-400">If yes, fee is refunded when no match is found.</p>
+              <div className="flex items-center gap-3 mt-1">
+                <button type="button" onClick={() => setMatchingFeeRefundable(v => !v)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4A5] focus-visible:ring-offset-2 ${matchingFeeRefundable ? "bg-[#2EC4A5]" : "bg-gray-200"}`}>
+                  <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${matchingFeeRefundable ? "translate-x-5" : "translate-x-0"}`} />
+                </button>
+                <span className="text-sm text-gray-600">{matchingFeeRefundable ? "Yes, refundable" : "Non-refundable"}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Shadow Teacher — Engagement Terms ── */}
+        <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-5">
+          <p className="text-base font-bold text-[#1A2340]">Shadow Teacher — Engagement Terms</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">Platform Cut on Salary (%)</Label>
+              <p className="text-xs text-gray-400 mb-1.5">% taken from each monthly salary payment.</p>
+              <Input type="number" min={0} max={100} value={salaryPlatformCutPct}
+                onChange={(e) => setSalaryPlatformCutPct(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">Notice Period (days)</Label>
+              <p className="text-xs text-gray-400 mb-1.5">Days either party must give before ending engagement.</p>
+              <Input type="number" min={0} value={noticePeriodDays}
+                onChange={(e) => setNoticePeriodDays(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">Parent Buyout Period (days)</Label>
+              <p className="text-xs text-gray-400 mb-1.5">Days parent pays to exit early without notice.</p>
+              <Input type="number" min={0} value={parentBuyoutDays}
+                onChange={(e) => setParentBuyoutDays(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Session Pricing ── */}
+        <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-5">
+          <p className="text-base font-bold text-[#1A2340]">Session Pricing</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">Markup %</Label>
+              <p className="text-xs text-gray-400 mb-1.5">Markup added on top of professional's base rate.</p>
+              <Input type="number" min={0} max={100} value={markupPct}
+                onChange={(e) => setMarkupPct(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">GST Rate %</Label>
+              <p className="text-xs text-gray-400 mb-1.5">GST applied on sessions (18% standard).</p>
+              <Input type="number" min={0} max={100} value={gstRatePct}
+                onChange={(e) => setGstRatePct(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Tiers Editor ── */}
+        <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-base font-bold text-[#1A2340]">Shadow Teacher Tiers</p>
+            <button type="button"
+              onClick={() => setTiers(prev => [...prev, { name: "New Tier", minSalaryInr: 0, maxSalaryInr: 0, description: "" }])}
+              className="text-xs text-[#2EC4A5] hover:underline font-semibold">+ Add Tier</button>
+          </div>
+          {tiers.map((tier, idx) => (
+            <div key={idx} className="border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50/50">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-[#1A2340]">Tier {idx + 1}</p>
+                <button type="button" onClick={() => setTiers(prev => prev.filter((_, i) => i !== idx))}
+                  className="text-xs text-[#FF6B6B] hover:underline">Remove</button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-gray-500 mb-1">Tier Name</Label>
+                  <Input value={tier.name} onChange={(e) => updateTier(idx, "name", e.target.value)}
+                    className="rounded-lg focus-visible:ring-[#2EC4A5] h-8 text-sm" />
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500 mb-1">Description</Label>
+                  <Input value={tier.description} onChange={(e) => updateTier(idx, "description", e.target.value)}
+                    className="rounded-lg focus-visible:ring-[#2EC4A5] h-8 text-sm" />
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500 mb-1">Min Salary (₹/mo)</Label>
+                  <Input type="number" value={tier.minSalaryInr}
+                    onChange={(e) => updateTier(idx, "minSalaryInr", Number(e.target.value))}
+                    className="rounded-lg focus-visible:ring-[#2EC4A5] h-8 text-sm" />
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500 mb-1">Max Salary (₹/mo)</Label>
+                  <Input type="number" value={tier.maxSalaryInr}
+                    onChange={(e) => updateTier(idx, "maxSalaryInr", Number(e.target.value))}
+                    className="rounded-lg focus-visible:ring-[#2EC4A5] h-8 text-sm" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <Button onClick={handleSave} disabled={isSaving}
+          className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white focus-visible:ring-2 focus-visible:ring-[#2EC4A5]">
+          {isSaving ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
+          Save All Settings
+        </Button>
       </div>
 
       <Dialog open={showMonetisationModal} onOpenChange={setShowMonetisationModal}>
@@ -1249,18 +1359,247 @@ function SettingsTab() {
             <p className="text-xs text-gray-400">Make sure the unlock price and commission are configured correctly before enabling.</p>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="ghost" onClick={() => setShowMonetisationModal(false)} aria-label="Cancel">Cancel</Button>
-            <Button
-              className="bg-[#2EC4A5] hover:bg-[#26a88d] focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
-              onClick={handleConfirmEnableMonetisation}
-              aria-label="Confirm enable monetisation"
-            >
+            <Button variant="ghost" onClick={() => setShowMonetisationModal(false)}>Cancel</Button>
+            <Button className="bg-[#2EC4A5] hover:bg-[#26a88d] focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
+              onClick={() => { setMonetisationEnabled(true); setShowMonetisationModal(false); }}>
               Enable Monetisation
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: ENGAGEMENTS (Admin)
+// ═══════════════════════════════════════════════════════════════════════════════
+interface AdminEngagement {
+  id: number; parentId: number; professionalId: number; childId: number | null;
+  matchRequestId: number | null; tier: string | null; startDate: string;
+  monthlyFeeInr: string; status: string; endDate: string | null; notes: string | null;
+  createdAt: string; parentName: string | null; professionalName: string | null; childName: string | null;
+}
+interface LifecycleReq {
+  id: number; engagementId: number; requestType: string; requestedBy: string;
+  requestedAt: string; status: string; notes: string | null; adminNotes: string | null;
+}
+interface AdminSalaryPayment {
+  id: number; engagementId: number; month: string; grossInr: string;
+  platformCutInr: string; netInr: string; status: string; paidAt: string | null; parentName: string | null;
+}
+
+function AdminEngagementsTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: engagements = [], isLoading } = useQuery<AdminEngagement[]>({
+    queryKey: ["admin-engagements"],
+    queryFn: () => fetchWithAuth("/api/admin/engagements").then(r => r.json()),
+  });
+
+  const { data: salaryPayments = [] } = useQuery<AdminSalaryPayment[]>({
+    queryKey: ["admin-salary-payments"],
+    queryFn: () => fetchWithAuth("/api/admin/salary-payments").then(r => r.json()),
+  });
+
+  const [engAdminTab, setEngAdminTab] = useState<"engagements" | "salary">("engagements");
+  const [showCreate, setShowCreate] = useState(false);
+  const [selectedEng, setSelectedEng] = useState<number | null>(null);
+  const [lifecycle, setLifecycle] = useState<LifecycleReq[]>([]);
+  const [loadingLifecycle, setLoadingLifecycle] = useState(false);
+  const [form, setForm] = useState({ parentId: "", professionalId: "", childId: "", startDate: "", monthlyFeeInr: "", tier: "", notes: "" });
+  const [creating, setCreating] = useState(false);
+
+  async function handleCreate() {
+    setCreating(true);
+    try {
+      await fetchWithAuth("/api/admin/engagements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parentId: Number(form.parentId), professionalId: Number(form.professionalId),
+          childId: form.childId ? Number(form.childId) : null, startDate: form.startDate,
+          monthlyFeeInr: Number(form.monthlyFeeInr), tier: form.tier || null, notes: form.notes || null,
+        }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["admin-engagements"] });
+      setShowCreate(false);
+      setForm({ parentId: "", professionalId: "", childId: "", startDate: "", monthlyFeeInr: "", tier: "", notes: "" });
+      toast({ title: "Engagement created ✓" });
+    } catch { toast({ title: "Failed to create engagement", variant: "destructive" }); }
+    finally { setCreating(false); }
+  }
+
+  async function loadLifecycle(id: number) {
+    setSelectedEng(id); setLoadingLifecycle(true);
+    try {
+      const data = await fetchWithAuth(`/api/admin/engagements/${id}/lifecycle`).then(r => r.json());
+      setLifecycle(data);
+    } catch { setLifecycle([]); }
+    finally { setLoadingLifecycle(false); }
+  }
+
+  async function handleLifecycleAction(reqId: number, action: "approved" | "rejected") {
+    try {
+      await fetchWithAuth(`/api/admin/lifecycle/${reqId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: action }),
+      });
+      if (selectedEng) await loadLifecycle(selectedEng);
+      queryClient.invalidateQueries({ queryKey: ["admin-engagements"] });
+      toast({ title: `Request ${action} ✓` });
+    } catch { toast({ title: "Action failed", variant: "destructive" }); }
+  }
+
+  const ENG_STATUS_COLORS: Record<string, string> = {
+    active: "bg-green-50 text-green-700 border-green-200",
+    notice_period: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    ended: "bg-gray-50 text-gray-500 border-gray-200",
+    paused: "bg-blue-50 text-blue-700 border-blue-200",
+  };
+
+  if (isLoading) return <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-14 bg-white rounded-xl animate-pulse shadow-sm" />)}</div>;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-[#1A2340]">Engagements</h2>
+          <p className="text-sm text-gray-400 mt-0.5">Manage shadow teacher engagements and lifecycle</p>
+        </div>
+        <Button onClick={() => setShowCreate(true)} className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-sm">
+          + New Engagement
+        </Button>
+      </div>
+
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
+        {([["engagements", "Engagements"], ["salary", "Salary Payments"]] as [string, string][]).map(([id, label]) => (
+          <button key={id} onClick={() => setEngAdminTab(id as typeof engAdminTab)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${engAdminTab === id ? "bg-white text-[#1A2340] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {engAdminTab === "engagements" && (
+        <div className="space-y-3">
+          {engagements.length === 0 && (
+            <div className="text-center py-16 text-gray-400"><p className="text-sm">No engagements yet. Create one to get started.</p></div>
+          )}
+          {engagements.map(eng => (
+            <div key={eng.id} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-[#1A2340]">
+                      {eng.parentName ?? `Parent #${eng.parentId}`} ↔ {eng.professionalName ?? `Pro #${eng.professionalId}`}
+                    </p>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border uppercase tracking-wide ${ENG_STATUS_COLORS[eng.status] ?? "bg-gray-50 text-gray-500 border-gray-200"}`}>
+                      {eng.status.replace("_", " ")}
+                    </span>
+                    {eng.tier && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#2EC4A5]/10 text-[#2EC4A5] border border-[#2EC4A5]/20">{eng.tier}</span>}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {eng.childName ? `Child: ${eng.childName} · ` : ""}₹{Number(eng.monthlyFeeInr).toLocaleString("en-IN")}/mo · From {new Date(eng.startDate).toLocaleDateString("en-IN")}
+                  </p>
+                </div>
+                <button onClick={() => selectedEng === eng.id ? setSelectedEng(null) : loadLifecycle(eng.id)}
+                  className="shrink-0 text-xs text-[#2EC4A5] hover:underline font-medium">
+                  {selectedEng === eng.id ? "Hide" : "Lifecycle →"}
+                </button>
+              </div>
+              {selectedEng === eng.id && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <p className="text-xs font-bold text-[#1A2340] mb-3">Lifecycle Requests</p>
+                  {loadingLifecycle ? (
+                    <div className="space-y-2">{[1,2].map(i => <div key={i} className="h-10 bg-gray-50 rounded-lg animate-pulse" />)}</div>
+                  ) : lifecycle.length === 0 ? (
+                    <p className="text-xs text-gray-400">No lifecycle requests.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {lifecycle.map(lc => (
+                        <div key={lc.id} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-[#1A2340] capitalize">{lc.requestType.replace(/_/g, " ")} · by {lc.requestedBy}</p>
+                            <p className="text-xs text-gray-400 truncate">{lc.notes ?? "No notes"}</p>
+                          </div>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${lc.status === "pending" ? "bg-yellow-50 text-yellow-700 border-yellow-200" : lc.status === "approved" ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
+                            {lc.status}
+                          </span>
+                          {lc.status === "pending" && (
+                            <div className="flex gap-1">
+                              <button onClick={() => handleLifecycleAction(lc.id, "approved")} className="text-xs bg-green-50 hover:bg-green-100 text-green-700 px-2 py-1 rounded font-medium">Approve</button>
+                              <button onClick={() => handleLifecycleAction(lc.id, "rejected")} className="text-xs bg-red-50 hover:bg-red-100 text-red-700 px-2 py-1 rounded font-medium">Reject</button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {engAdminTab === "salary" && (
+        <div className="space-y-3">
+          {salaryPayments.length === 0 && (
+            <div className="text-center py-16 text-gray-400"><p className="text-sm">No salary payments recorded yet.</p></div>
+          )}
+          {salaryPayments.map(pmt => (
+            <div key={pmt.id} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)] flex items-center gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-[#1A2340]">Eng #{pmt.engagementId} · {pmt.month}</p>
+                <p className="text-xs text-gray-400">
+                  Gross ₹{Number(pmt.grossInr).toLocaleString("en-IN")} · Platform ₹{Number(pmt.platformCutInr).toLocaleString("en-IN")} · Net ₹{Number(pmt.netInr).toLocaleString("en-IN")}
+                  {pmt.parentName ? ` · ${pmt.parentName}` : ""}
+                </p>
+              </div>
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${pmt.status === "paid" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}`}>
+                {pmt.status}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="max-w-md shadow-[0_8px_40px_rgba(26,35,64,0.12)]">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-[#1A2340]">Create Engagement</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            {([
+              ["parentId", "Parent User ID"],
+              ["professionalId", "Professional Profile ID"],
+              ["childId", "Child ID (optional)"],
+              ["startDate", "Start Date (YYYY-MM-DD)"],
+              ["monthlyFeeInr", "Monthly Fee (₹)"],
+              ["tier", "Tier (optional)"],
+              ["notes", "Notes (optional)"],
+            ] as [string, string][]).map(([field, label]) => (
+              <div key={field}>
+                <Label className="text-sm font-semibold text-[#1A2340]">{label}</Label>
+                <Input value={form[field as keyof typeof form]}
+                  onChange={(e) => setForm(f => ({ ...f, [field]: e.target.value }))}
+                  className="rounded-lg focus-visible:ring-[#2EC4A5] mt-1" />
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button onClick={handleCreate} disabled={creating}
+              className="bg-[#2EC4A5] hover:bg-[#26a88d] focus-visible:ring-2 focus-visible:ring-[#2EC4A5]">
+              {creating ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 

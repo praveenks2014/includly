@@ -38,7 +38,7 @@ import {
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type ProTab = "home" | "profile" | "availability" | "bookings" | "earnings" | "certifications" | "verification" | "notifications" | "messages";
+type ProTab = "home" | "profile" | "availability" | "bookings" | "earnings" | "certifications" | "verification" | "notifications" | "messages" | "engagement";
 
 interface Notification { id: number; title: string; body: string; read: boolean; createdAt: string; }
 interface CertDoc { id: number; documentType: string; fileKey: string; uploadedAt: string; }
@@ -90,10 +90,11 @@ const NAV_ITEMS: { id: ProTab; label: string; icon: React.ReactNode }[] = [
   { id: "earnings",     label: "My Earnings",      icon: <IndianRupee size={18} /> },
   { id: "certifications",label: "Certifications",  icon: <Award size={18} /> },
   { id: "verification", label: "ID Verification",  icon: <ShieldCheck size={18} /> },
+  { id: "engagement",   label: "Engagement",       icon: <IndianRupee size={18} /> },
   { id: "messages",     label: "Messages",         icon: <MessageSquare size={18} /> },
   { id: "notifications",label: "Notifications",    icon: <Bell size={18} /> },
 ];
-const MOBILE_BOTTOM: ProTab[] = ["home", "profile", "bookings", "messages", "notifications"];
+const MOBILE_BOTTOM: ProTab[] = ["home", "profile", "bookings", "engagement", "messages"];
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: HOME
@@ -1640,6 +1641,250 @@ function MessagesTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// TAB: ENGAGEMENT (Shadow Teacher)
+// ═══════════════════════════════════════════════════════════════════════════════
+function EngagementTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  interface STEngagement {
+    id: number;
+    parentId: number;
+    childId: number | null;
+    tier: string | null;
+    startDate: string;
+    monthlyFeeInr: string;
+    status: string;
+    notes: string | null;
+    parentName: string | null;
+    childName: string | null;
+  }
+  interface DailyLog {
+    id: number;
+    logDate: string;
+    template: string;
+    responses: Record<string, string>;
+    mood: string | null;
+    notes: string | null;
+    postedBy: string;
+    createdAt: string;
+  }
+
+  const { data: engagements = [], isLoading } = useQuery<STEngagement[]>({
+    queryKey: ["pro-engagements"],
+    queryFn: () => fetchWithAuth("/api/engagements").then(r => r.json()),
+  });
+
+  const active = engagements.find(e => e.status === "active" || e.status === "notice_period");
+
+  const { data: logs = [] } = useQuery<DailyLog[]>({
+    queryKey: ["pro-engagement-logs", active?.id],
+    queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/daily-logs`).then(r => r.json()),
+    enabled: !!active,
+  });
+
+  const TEMPLATE_QUESTIONS = [
+    { key: "goals_covered",  label: "IEP Goals Covered Today" },
+    { key: "behaviour",      label: "Behaviour & Participation" },
+    { key: "progress",       label: "Progress & Observations" },
+    { key: "next_steps",     label: "Plan for Next Session" },
+  ];
+
+  const [logResponses, setLogResponses] = useState<Record<string, string>>({});
+  const [logMood, setLogMood] = useState("");
+  const [logNote, setLogNote] = useState("");
+  const [postingLog, setPostingLog] = useState(false);
+  const [lifecycleType, setLifecycleType] = useState<"stop" | "pause" | "">("");
+  const [lifecycleNotes, setLifecycleNotes] = useState("");
+  const [postingLifecycle, setPostingLifecycle] = useState(false);
+  const [engTab, setEngTab] = useState<"overview" | "log" | "lifecycle">("overview");
+
+  async function handlePostLog() {
+    if (!active) return;
+    setPostingLog(true);
+    try {
+      await fetchWithAuth(`/api/engagements/${active.id}/daily-logs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template: "teacher", responses: logResponses, mood: logMood || null, notes: logNote || null }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["pro-engagement-logs", active.id] });
+      setLogResponses({}); setLogMood(""); setLogNote("");
+      toast({ title: "Daily log submitted ✓" });
+    } catch { toast({ title: "Failed to submit log", variant: "destructive" }); }
+    finally { setPostingLog(false); }
+  }
+
+  async function handleLifecycleRequest() {
+    if (!active || !lifecycleType) return;
+    setPostingLifecycle(true);
+    try {
+      await fetchWithAuth(`/api/engagements/${active.id}/lifecycle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestType: lifecycleType, notes: lifecycleNotes || null }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["pro-engagements"] });
+      setLifecycleType(""); setLifecycleNotes("");
+      toast({ title: "Request submitted ✓" });
+    } catch { toast({ title: "Failed to submit", variant: "destructive" }); }
+    finally { setPostingLifecycle(false); }
+  }
+
+  if (isLoading) {
+    return <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-14 bg-white rounded-xl animate-pulse shadow-sm" />)}</div>;
+  }
+
+  if (!active) {
+    return (
+      <div className="text-center py-20">
+        <div className="w-16 h-16 bg-[#2EC4A5]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+          <IndianRupee size={28} className="text-[#2EC4A5]" />
+        </div>
+        <h3 className="text-lg font-bold text-[#1A2340] mb-1">No Active Engagement</h3>
+        <p className="text-sm text-gray-400 max-w-xs mx-auto">The admin will assign an engagement when a parent selects you as their shadow teacher.</p>
+      </div>
+    );
+  }
+
+  const MOODS = ["😊 Excellent", "🙂 Good", "😐 Average", "😔 Challenging"];
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayLogged = logs.some(l => l.logDate === todayStr && l.template === "teacher");
+
+  return (
+    <div className="space-y-5">
+      {/* Header card */}
+      <div className="bg-gradient-to-br from-[#1A2340] to-[#2d3a5c] rounded-2xl p-5 text-white">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide opacity-60">Active Engagement</p>
+            <p className="text-xl font-bold mt-1">{active.childName ?? `Child #${active.childId}`}</p>
+            {active.parentName && <p className="text-sm opacity-70 mt-0.5">Parent: {active.parentName}</p>}
+          </div>
+          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/15 uppercase tracking-wide">
+            {active.status.replace("_", " ")}
+          </span>
+        </div>
+        <div className="mt-4 flex items-center gap-4 text-sm">
+          <div><span className="opacity-60">My Salary</span><br /><strong>₹{Number(active.monthlyFeeInr).toLocaleString("en-IN")}/mo</strong></div>
+          <div className="w-px h-8 bg-white/15" />
+          <div><span className="opacity-60">Since</span><br /><strong>{new Date(active.startDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</strong></div>
+          {active.tier && <>
+            <div className="w-px h-8 bg-white/15" />
+            <div><span className="opacity-60">Tier</span><br /><strong>{active.tier}</strong></div>
+          </>}
+        </div>
+      </div>
+
+      {/* Sub-tabs */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
+        {([["overview", "Overview"], ["log", "Daily Log"], ["lifecycle", "Manage"]] as [string, string][]).map(([id, label]) => (
+          <button key={id} onClick={() => setEngTab(id as typeof engTab)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${engTab === id ? "bg-white text-[#1A2340] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {engTab === "overview" && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold text-[#1A2340]">Recent Logs</p>
+              <span className="text-xs text-gray-400">{logs.length} total</span>
+            </div>
+            {logs.length === 0 ? (
+              <p className="text-xs text-gray-400">No logs yet. Submit today's log in the Daily Log tab.</p>
+            ) : (
+              <div className="space-y-2">
+                {[...logs].reverse().slice(0, 5).map(log => (
+                  <div key={log.id} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-[#1A2340]">{new Date(log.logDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</p>
+                      <p className="text-xs text-gray-400 truncate">{log.mood ?? Object.values(log.responses as Record<string, string>)[0] ?? ""}</p>
+                    </div>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${log.template === "teacher" ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-[#2EC4A5]/10 text-[#2EC4A5] border-[#2EC4A5]/20"}`}>
+                      {log.template === "teacher" ? "You" : "Parent"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {todayLogged && (
+            <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl">
+              <Check size={16} className="text-green-600 shrink-0" />
+              <p className="text-sm text-green-700 font-medium">Today's log submitted ✓</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {engTab === "log" && (
+        <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-bold text-[#1A2340]">Today's Log</p>
+            {todayLogged && <span className="text-xs text-green-600 font-semibold">Already submitted</span>}
+          </div>
+          {TEMPLATE_QUESTIONS.map(q => (
+            <div key={q.key}>
+              <p className="text-xs font-semibold text-[#1A2340] mb-1">{q.label}</p>
+              <textarea value={logResponses[q.key] ?? ""}
+                onChange={(e) => setLogResponses(prev => ({ ...prev, [q.key]: e.target.value }))}
+                rows={2} placeholder={`Describe ${q.label.toLowerCase()}…`}
+                className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
+            </div>
+          ))}
+          <div>
+            <p className="text-xs text-gray-500 mb-2">Child's mood today</p>
+            <div className="flex gap-2 flex-wrap">
+              {MOODS.map(m => (
+                <button key={m} onClick={() => setLogMood(logMood === m ? "" : m)}
+                  className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${logMood === m ? "border-[#2EC4A5] bg-[#2EC4A5]/10 text-[#2EC4A5]" : "border-gray-200 hover:border-gray-300"}`}>
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Additional notes (optional)</p>
+            <textarea value={logNote} onChange={(e) => setLogNote(e.target.value)} rows={2}
+              placeholder="Any other observations…"
+              className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
+          </div>
+          <Button onClick={handlePostLog} disabled={postingLog}
+            className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-sm">
+            {postingLog ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Submit Today's Log
+          </Button>
+        </div>
+      )}
+
+      {engTab === "lifecycle" && (
+        <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
+          <p className="text-sm font-bold text-[#1A2340]">Request Engagement Change</p>
+          <p className="text-xs text-gray-400">Requests are reviewed by the admin. Your notice period applies.</p>
+          <div className="grid grid-cols-2 gap-2">
+            {([["stop", "End Engagement"], ["pause", "Pause Temporarily"]] as [string, string][]).map(([t, label]) => (
+              <button key={t} onClick={() => setLifecycleType(lifecycleType === t ? "" : t as typeof lifecycleType)}
+                className={`py-2.5 px-3 rounded-xl border text-sm font-semibold transition-colors ${lifecycleType === t ? "border-[#FF6B6B] bg-[#FF6B6B]/10 text-[#FF6B6B]" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <textarea value={lifecycleNotes} onChange={(e) => setLifecycleNotes(e.target.value)} rows={3}
+            placeholder="Please explain why you are making this request…"
+            className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
+          <Button onClick={handleLifecycleRequest} disabled={postingLifecycle || !lifecycleType}
+            className="w-full bg-[#FF6B6B] hover:bg-[#e85a5a] text-white text-sm">
+            {postingLifecycle ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Submit Request
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN: PROFESSIONAL DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function ProfessionalDashboard() {
@@ -1776,6 +2021,7 @@ export default function ProfessionalDashboard() {
           {activeTab === "earnings"      && <EarningsTab />}
           {activeTab === "certifications"&& <CertificationsTab />}
           {activeTab === "verification"  && <VerificationTab />}
+          {activeTab === "engagement"    && <EngagementTab />}
           {activeTab === "messages"      && <MessagesTab />}
           {activeTab === "notifications" && <NotificationsTab />}
         </main>

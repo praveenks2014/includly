@@ -25,10 +25,10 @@ import {
   Clock, Video, Navigation, ArrowRight, HelpCircle,
   Phone, Mail, MessageSquarePlus, Check, X, Wallet,
   TrendingUp, Gift, Copy, Sparkles, Menu, MessageCircle,
-  User,
+  User, IndianRupee,
 } from "lucide-react";
 
-type Tab = "home" | "find" | "bookings" | "messages" | "notifications";
+type Tab = "home" | "find" | "bookings" | "messages" | "notifications" | "shadow-teacher";
 
 interface ProgressNote {
   bookingId: number;
@@ -65,14 +65,15 @@ interface ChatMsg {
 }
 
 const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: "home",          label: "Home",               icon: <Home size={18} /> },
-  { id: "find",          label: "Find Professionals", icon: <Search size={18} /> },
-  { id: "bookings",      label: "My Bookings",        icon: <CalendarCheck size={18} /> },
-  { id: "messages",      label: "Messages",           icon: <MessageCircle size={18} /> },
-  { id: "notifications", label: "Notifications",      icon: <Bell size={18} /> },
+  { id: "home",           label: "Home",               icon: <Home size={18} /> },
+  { id: "find",           label: "Find Professionals", icon: <Search size={18} /> },
+  { id: "bookings",       label: "My Bookings",        icon: <CalendarCheck size={18} /> },
+  { id: "shadow-teacher", label: "Shadow Teacher",     icon: <User size={18} /> },
+  { id: "messages",       label: "Messages",           icon: <MessageCircle size={18} /> },
+  { id: "notifications",  label: "Notifications",      icon: <Bell size={18} /> },
 ];
 
-const MOBILE_BOTTOM: Tab[] = ["home", "find", "bookings", "messages", "notifications"];
+const MOBILE_BOTTOM: Tab[] = ["home", "find", "bookings", "shadow-teacher", "messages"];
 
 const SPECIALTIES = [
   { value: "", label: "All Specialties" },
@@ -1005,6 +1006,329 @@ function NotificationsTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// TAB: SHADOW TEACHER
+// ═══════════════════════════════════════════════════════════════════════════════
+function ShadowTeacherTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  interface STEngagement {
+    id: number;
+    professionalId: number;
+    childId: number | null;
+    tier: string | null;
+    startDate: string;
+    monthlyFeeInr: string;
+    status: string;
+    notes: string | null;
+    professionalName: string | null;
+    childName: string | null;
+  }
+  interface DailyLog {
+    id: number;
+    logDate: string;
+    template: string;
+    responses: Record<string, string>;
+    mood: string | null;
+    notes: string | null;
+    postedBy: string;
+    createdAt: string;
+  }
+  interface SalaryPayment {
+    id: number;
+    month: string;
+    grossInr: string;
+    status: string;
+    paidAt: string | null;
+  }
+
+  const { data: engagements = [], isLoading } = useQuery<STEngagement[]>({
+    queryKey: ["parent-engagements"],
+    queryFn: () => fetchWithAuth("/api/engagements").then(r => r.json()),
+  });
+
+  const active = engagements.find(e => e.status === "active" || e.status === "notice_period");
+
+  const { data: logs = [] } = useQuery<DailyLog[]>({
+    queryKey: ["engagement-logs", active?.id],
+    queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/daily-logs`).then(r => r.json()),
+    enabled: !!active,
+  });
+
+  const { data: payments = [] } = useQuery<SalaryPayment[]>({
+    queryKey: ["engagement-payments", active?.id],
+    queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/payments`).then(r => r.json()),
+    enabled: !!active,
+  });
+
+  const [logNote, setLogNote] = useState("");
+  const [logMood, setLogMood] = useState("");
+  const [postingLog, setPostingLog] = useState(false);
+  const [lifecycleType, setLifecycleType] = useState<"stop" | "pause" | "buyout" | "">("");
+  const [lifecycleNotes, setLifecycleNotes] = useState("");
+  const [postingLifecycle, setPostingLifecycle] = useState(false);
+  const [payingMonth, setPayingMonth] = useState("");
+  const [payingInProgress, setPayingInProgress] = useState(false);
+  const [stTab, setStTab] = useState<"overview" | "logs" | "payments" | "lifecycle">("overview");
+
+  async function handlePostLog() {
+    if (!active || !logNote.trim()) return;
+    setPostingLog(true);
+    try {
+      await fetchWithAuth(`/api/engagements/${active.id}/daily-logs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ template: "parent", responses: { general: logNote }, mood: logMood || null, notes: null }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["engagement-logs", active.id] });
+      setLogNote(""); setLogMood("");
+      toast({ title: "Log posted ✓" });
+    } catch { toast({ title: "Failed to post log", variant: "destructive" }); }
+    finally { setPostingLog(false); }
+  }
+
+  async function handlePaySalary() {
+    if (!active || !payingMonth.trim()) return;
+    setPayingInProgress(true);
+    try {
+      const salaryResp = await fetchWithAuth(`/api/engagements/${active.id}/pay-salary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: payingMonth }),
+      });
+      if (salaryResp.status === 409) { toast({ title: "Already paid for this month" }); return; }
+      if (!salaryResp.ok) { const e = await salaryResp.json(); throw new Error(e.error ?? "Failed to create order"); }
+      const orderRes = await salaryResp.json();
+
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      document.body.appendChild(script);
+      await new Promise<void>(res => { script.onload = () => res(); });
+
+      await new Promise<void>((resolve, reject) => {
+        const rzp = new (window as unknown as { Razorpay: new (opts: unknown) => { open: () => void } }).Razorpay({
+          key: orderRes.keyId,
+          amount: orderRes.amountPaise,
+          currency: "INR",
+          name: "Includly",
+          description: `Shadow Teacher Salary – ${payingMonth}`,
+          order_id: orderRes.orderId,
+          handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+            try {
+              await fetchWithAuth(`/api/engagements/${active.id}/verify-salary-payment`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  paymentId: orderRes.paymentId,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpaySignature: response.razorpay_signature,
+                }),
+              });
+              queryClient.invalidateQueries({ queryKey: ["engagement-payments", active.id] });
+              toast({ title: "Salary paid ✓" }); resolve();
+            } catch { reject(new Error("Verification failed")); }
+          },
+          modal: { ondismiss: () => reject(new Error("dismissed")) },
+          theme: { color: "#2EC4A5" },
+        });
+        rzp.open();
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Payment failed";
+      if (msg !== "dismissed") toast({ title: msg, variant: "destructive" });
+    } finally { setPayingInProgress(false); }
+  }
+
+  async function handleLifecycleRequest() {
+    if (!active || !lifecycleType) return;
+    setPostingLifecycle(true);
+    try {
+      await fetchWithAuth(`/api/engagements/${active.id}/lifecycle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestType: lifecycleType, notes: lifecycleNotes || null }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["parent-engagements"] });
+      setLifecycleType(""); setLifecycleNotes("");
+      toast({ title: "Request submitted ✓" });
+    } catch { toast({ title: "Failed to submit request", variant: "destructive" }); }
+    finally { setPostingLifecycle(false); }
+  }
+
+  if (isLoading) {
+    return <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-14 bg-white rounded-xl animate-pulse shadow-sm" />)}</div>;
+  }
+
+  if (!active) {
+    return (
+      <div className="text-center py-20">
+        <div className="w-16 h-16 bg-[#2EC4A5]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+          <User size={28} className="text-[#2EC4A5]" />
+        </div>
+        <h3 className="text-lg font-bold text-[#1A2340] mb-1">No Active Shadow Teacher</h3>
+        <p className="text-sm text-gray-400 max-w-xs mx-auto">You don't have an active shadow teacher engagement yet. Submit a match request from the Find tab to get started.</p>
+      </div>
+    );
+  }
+
+  const MOODS = ["😊 Great", "🙂 Good", "😐 Okay", "😔 Difficult"];
+
+  return (
+    <div className="space-y-5">
+      {/* Header card */}
+      <div className="bg-gradient-to-br from-[#2EC4A5] to-[#26a88d] rounded-2xl p-5 text-white">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide opacity-75">Active Engagement</p>
+            <p className="text-xl font-bold mt-1">{active.professionalName ?? `Teacher #${active.professionalId}`}</p>
+            {active.childName && <p className="text-sm opacity-80 mt-0.5">For {active.childName}</p>}
+          </div>
+          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/20 uppercase tracking-wide">
+            {active.status.replace("_", " ")}
+          </span>
+        </div>
+        <div className="mt-4 flex items-center gap-4 text-sm">
+          <div><span className="opacity-70">Monthly</span><br /><strong>₹{Number(active.monthlyFeeInr).toLocaleString("en-IN")}</strong></div>
+          <div className="w-px h-8 bg-white/20" />
+          <div><span className="opacity-70">Since</span><br /><strong>{new Date(active.startDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</strong></div>
+          {active.tier && <>
+            <div className="w-px h-8 bg-white/20" />
+            <div><span className="opacity-70">Tier</span><br /><strong>{active.tier}</strong></div>
+          </>}
+        </div>
+      </div>
+
+      {/* Sub-tabs */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
+        {([["overview", "Overview"], ["logs", "Daily Logs"], ["payments", "Payments"], ["lifecycle", "Manage"]] as [string, string][]).map(([id, label]) => (
+          <button key={id} onClick={() => setStTab(id as typeof stTab)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${stTab === id ? "bg-white text-[#1A2340] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {stTab === "overview" && (
+        <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
+          <p className="text-sm font-bold text-[#1A2340]">Engagement Summary</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-xs text-gray-400">Total Logs</p>
+              <p className="text-2xl font-bold text-[#1A2340] mt-0.5">{logs.length}</p>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-xs text-gray-400">Payments Made</p>
+              <p className="text-2xl font-bold text-[#1A2340] mt-0.5">{payments.filter(p => p.status === "paid").length}</p>
+            </div>
+          </div>
+          {active.notes && <p className="text-xs text-gray-500 bg-gray-50 rounded-xl p-3">{active.notes}</p>}
+        </div>
+      )}
+
+      {stTab === "logs" && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
+            <p className="text-sm font-bold text-[#1A2340]">Post Today's Observation</p>
+            <div>
+              <p className="text-xs text-gray-500 mb-2">How was today's session?</p>
+              <div className="flex gap-2 flex-wrap">
+                {MOODS.map(m => (
+                  <button key={m} onClick={() => setLogMood(logMood === m ? "" : m)}
+                    className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${logMood === m ? "border-[#2EC4A5] bg-[#2EC4A5]/10 text-[#2EC4A5]" : "border-gray-200 hover:border-gray-300"}`}>
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <textarea value={logNote} onChange={(e) => setLogNote(e.target.value)} rows={3}
+              placeholder="Describe how the session went today…"
+              className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
+            <Button onClick={handlePostLog} disabled={postingLog || !logNote.trim()}
+              className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-sm">
+              {postingLog ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Post Log
+            </Button>
+          </div>
+          {logs.length === 0 ? (
+            <p className="text-center text-sm text-gray-400 py-8">No logs yet. Post the first one above.</p>
+          ) : (
+            <div className="space-y-3">
+              {[...logs].reverse().map(log => (
+                <div key={log.id} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-semibold text-[#1A2340]">{new Date(log.logDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</span>
+                    {log.mood && <span className="text-xs text-gray-500">{log.mood}</span>}
+                    <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full border font-semibold ${log.template === "teacher" ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-[#2EC4A5]/10 text-[#2EC4A5] border-[#2EC4A5]/20"}`}>
+                      {log.template === "teacher" ? "Teacher" : "Parent"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">{(log.responses as Record<string, string>)["general"] ?? Object.values(log.responses as Record<string, string>)[0] ?? ""}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {stTab === "payments" && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
+            <p className="text-sm font-bold text-[#1A2340]">Pay Salary</p>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Month (YYYY-MM)</p>
+              <input value={payingMonth} onChange={(e) => setPayingMonth(e.target.value)}
+                placeholder="2026-06"
+                className="w-full max-w-xs rounded-lg border border-gray-200 p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]" />
+            </div>
+            <Button onClick={handlePaySalary} disabled={payingInProgress || !payingMonth.trim()}
+              className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-sm">
+              {payingInProgress ? <Loader2 size={14} className="animate-spin mr-1" /> : <IndianRupee size={14} className="mr-1" />}
+              Pay ₹{Number(active.monthlyFeeInr).toLocaleString("en-IN")} via Razorpay
+            </Button>
+          </div>
+          {payments.length === 0 ? (
+            <p className="text-center text-sm text-gray-400 py-8">No salary payments yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {payments.map(pmt => (
+                <div key={pmt.id} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)] flex items-center gap-4">
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-[#1A2340]">{pmt.month}</p>
+                    <p className="text-xs text-gray-400">₹{Number(pmt.grossInr).toLocaleString("en-IN")} gross{pmt.paidAt ? ` · Paid ${new Date(pmt.paidAt).toLocaleDateString("en-IN")}` : ""}</p>
+                  </div>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${pmt.status === "paid" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}`}>{pmt.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {stTab === "lifecycle" && (
+        <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
+          <p className="text-sm font-bold text-[#1A2340]">Request a Change</p>
+          <div className="grid grid-cols-3 gap-2">
+            {([["stop", "End Engagement"], ["pause", "Pause"], ["buyout", "Early Exit"]] as [string, string][]).map(([t, label]) => (
+              <button key={t} onClick={() => setLifecycleType(lifecycleType === t ? "" : t as typeof lifecycleType)}
+                className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-colors ${lifecycleType === t ? "border-[#FF6B6B] bg-[#FF6B6B]/10 text-[#FF6B6B]" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <textarea value={lifecycleNotes} onChange={(e) => setLifecycleNotes(e.target.value)} rows={3}
+            placeholder="Please explain why you are making this request…"
+            className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
+          <Button onClick={handleLifecycleRequest} disabled={postingLifecycle || !lifecycleType}
+            className="w-full bg-[#FF6B6B] hover:bg-[#e85a5a] text-white text-sm">
+            {postingLifecycle ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Submit Request
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN PARENT DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function ParentDashboard() {
@@ -1122,11 +1446,12 @@ export default function ParentDashboard() {
         </div>
 
         <main className="flex-1 px-4 sm:px-6 py-6 pb-24 md:pb-6 max-w-[900px] w-full mx-auto">
-          {activeTab === "home"          && <HomeTab parentName={firstName} city={city} onTabChange={handleTabChange} />}
-          {activeTab === "find"          && <FindTab />}
-          {activeTab === "bookings"      && <BookingsTab />}
-          {activeTab === "messages"      && <MessagesTab />}
-          {activeTab === "notifications" && <NotificationsTab />}
+          {activeTab === "home"           && <HomeTab parentName={firstName} city={city} onTabChange={handleTabChange} />}
+          {activeTab === "find"           && <FindTab />}
+          {activeTab === "bookings"       && <BookingsTab />}
+          {activeTab === "shadow-teacher" && <ShadowTeacherTab />}
+          {activeTab === "messages"       && <MessagesTab />}
+          {activeTab === "notifications"  && <NotificationsTab />}
         </main>
       </div>
 

@@ -651,6 +651,15 @@ export interface AdminSettings {
   contactUnlockPriceInr: number;
   platformCommissionPct: number;
   monetisationEnabled: boolean;
+  matchingFeeInr: number;
+  matchingFeeRefundable: boolean;
+  markupPct: number;
+  markupFlatInr: number;
+  gstRatePct: number;
+  salaryPlatformCutPct: number;
+  noticePeriodDays: number;
+  parentBuyoutDays: number;
+  tiersJson: string | null;
   updatedAt: string;
 }
 
@@ -659,6 +668,15 @@ export interface UpdateAdminSettingsBody {
   contactUnlockPriceInr?: number;
   platformCommissionPct?: number;
   monetisationEnabled?: boolean;
+  matchingFeeInr?: number;
+  matchingFeeRefundable?: boolean;
+  markupPct?: number;
+  markupFlatInr?: number;
+  gstRatePct?: number;
+  salaryPlatformCutPct?: number;
+  noticePeriodDays?: number;
+  parentBuyoutDays?: number;
+  tiersJson?: string;
 }
 
 export interface VapidPublicKeyResponse {

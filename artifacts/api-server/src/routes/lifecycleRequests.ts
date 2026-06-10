@@ -1,0 +1,205 @@
+import { Router, type IRouter } from "express";
+import { eq, and, desc } from "drizzle-orm";
+import {
+  db,
+  shadowTeacherEngagementsTable,
+  engagementLifecycleRequestsTable,
+  adminSettingsTable,
+  professionalProfilesTable,
+  usersTable,
+} from "@workspace/db";
+import { requireAuth, requireRole } from "../middlewares/requireAuth";
+import { z } from "zod";
+
+const router: IRouter = Router();
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+async function getSettings() {
+  const [s] = await db.select().from(adminSettingsTable).limit(1);
+  return s ?? { noticePeriodDays: 30, parentBuyoutDays: 15, salaryPlatformCutPct: 10 };
+}
+
+async function getEngagementWithAccess(engagementId: number, userId: number, userRole: string) {
+  const [eng] = await db
+    .select()
+    .from(shadowTeacherEngagementsTable)
+    .where(eq(shadowTeacherEngagementsTable.id, engagementId))
+    .limit(1);
+  if (!eng) return { eng: null, role: null };
+  if (userRole === "admin") return { eng, role: "admin" as const };
+  if (eng.parentId === userId) return { eng, role: "parent" as const };
+  const [prof] = await db
+    .select({ id: professionalProfilesTable.id })
+    .from(professionalProfilesTable)
+    .where(and(eq(professionalProfilesTable.userId, userId), eq(professionalProfilesTable.id, eng.professionalId)))
+    .limit(1);
+  if (prof) return { eng, role: "teacher" as const };
+  return { eng: null, role: null };
+}
+
+const RaiseLifecycleBody = z.object({
+  type: z.enum(["stop", "change"]),
+  method: z.enum(["notice", "buyout"]).optional(),
+  reason: z.string().max(1000).optional(),
+});
+
+router.post("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = RaiseLifecycleBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const { eng, role } = await getEngagementWithAccess(id, req.userId!, req.userRole!);
+  if (!eng || !role) { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
+
+  if (!["active", "notice_period"].includes(eng.status)) {
+    res.status(409).json({ error: "Engagement is not active" });
+    return;
+  }
+
+  const settings = await getSettings();
+  const { type, method, reason } = parsed.data;
+
+  // Teachers can only raise "stop" requests
+  if (role === "teacher" && type !== "stop") {
+    res.status(403).json({ error: "Shadow teachers can only raise stop requests" });
+    return;
+  }
+
+  // Teachers always serve notice; parents choose
+  const resolvedMethod = role === "teacher" ? "notice" : (method ?? "notice");
+
+  const today = new Date().toISOString().slice(0, 10);
+  let effectiveEndDate: string;
+  if (resolvedMethod === "buyout") {
+    effectiveEndDate = addDays(today, settings.parentBuyoutDays);
+  } else {
+    effectiveEndDate = addDays(today, settings.noticePeriodDays);
+  }
+
+  const [req_] = await db
+    .insert(engagementLifecycleRequestsTable)
+    .values({
+      engagementId: id,
+      type,
+      method: resolvedMethod,
+      raisedByUserId: req.userId!,
+      raisedByRole: role === "teacher" ? "teacher" : "parent",
+      status: "pending",
+      reason: reason ?? null,
+      effectiveEndDate,
+    })
+    .returning();
+
+  // If teacher stops or parent notice, put engagement in notice_period
+  if (resolvedMethod === "notice") {
+    await db
+      .update(shadowTeacherEngagementsTable)
+      .set({ status: "notice_period", endDate: effectiveEndDate, updatedAt: new Date() })
+      .where(eq(shadowTeacherEngagementsTable.id, id));
+  }
+
+  res.status(201).json(req_);
+});
+
+router.get("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { eng, role } = await getEngagementWithAccess(id, req.userId!, req.userRole!);
+  if (!eng || !role) { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
+
+  const rows = await db
+    .select({
+      id: engagementLifecycleRequestsTable.id,
+      engagementId: engagementLifecycleRequestsTable.engagementId,
+      type: engagementLifecycleRequestsTable.type,
+      method: engagementLifecycleRequestsTable.method,
+      raisedByRole: engagementLifecycleRequestsTable.raisedByRole,
+      status: engagementLifecycleRequestsTable.status,
+      reason: engagementLifecycleRequestsTable.reason,
+      effectiveEndDate: engagementLifecycleRequestsTable.effectiveEndDate,
+      adminNotes: engagementLifecycleRequestsTable.adminNotes,
+      raisedAt: engagementLifecycleRequestsTable.raisedAt,
+      resolvedAt: engagementLifecycleRequestsTable.resolvedAt,
+      raisedByName: usersTable.fullName,
+    })
+    .from(engagementLifecycleRequestsTable)
+    .leftJoin(usersTable, eq(engagementLifecycleRequestsTable.raisedByUserId, usersTable.id))
+    .where(eq(engagementLifecycleRequestsTable.engagementId, id))
+    .orderBy(desc(engagementLifecycleRequestsTable.createdAt));
+
+  res.json(rows);
+});
+
+router.patch("/admin/lifecycle/:reqId", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+  const reqId = parseInt(req.params["reqId"] as string, 10);
+  if (isNaN(reqId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { status, adminNotes } = req.body ?? {};
+  if (!["approved", "rejected", "completed"].includes(status)) {
+    res.status(400).json({ error: "status must be approved | rejected | completed" });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(engagementLifecycleRequestsTable)
+    .where(eq(engagementLifecycleRequestsTable.id, reqId))
+    .limit(1);
+  if (!existing) { res.status(404).json({ error: "Request not found" }); return; }
+
+  const [updated] = await db
+    .update(engagementLifecycleRequestsTable)
+    .set({ status, adminNotes: adminNotes ?? null, resolvedAt: new Date(), updatedAt: new Date() })
+    .where(eq(engagementLifecycleRequestsTable.id, reqId))
+    .returning();
+
+  // If completed/approved and method is buyout → end the engagement immediately
+  if (status === "approved" && existing.method === "buyout") {
+    await db
+      .update(shadowTeacherEngagementsTable)
+      .set({ status: "ended", endDate: existing.effectiveEndDate, endedReason: "buyout", updatedAt: new Date() })
+      .where(eq(shadowTeacherEngagementsTable.id, existing.engagementId));
+  }
+
+  if (status === "completed") {
+    await db
+      .update(shadowTeacherEngagementsTable)
+      .set({ status: "ended", endDate: existing.effectiveEndDate ?? new Date().toISOString().slice(0, 10), updatedAt: new Date() })
+      .where(eq(shadowTeacherEngagementsTable.id, existing.engagementId));
+  }
+
+  res.json(updated);
+});
+
+router.get("/admin/lifecycle", requireAuth, requireRole("admin"), async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      id: engagementLifecycleRequestsTable.id,
+      engagementId: engagementLifecycleRequestsTable.engagementId,
+      type: engagementLifecycleRequestsTable.type,
+      method: engagementLifecycleRequestsTable.method,
+      raisedByRole: engagementLifecycleRequestsTable.raisedByRole,
+      status: engagementLifecycleRequestsTable.status,
+      reason: engagementLifecycleRequestsTable.reason,
+      effectiveEndDate: engagementLifecycleRequestsTable.effectiveEndDate,
+      adminNotes: engagementLifecycleRequestsTable.adminNotes,
+      raisedAt: engagementLifecycleRequestsTable.raisedAt,
+      resolvedAt: engagementLifecycleRequestsTable.resolvedAt,
+      raisedByName: usersTable.fullName,
+    })
+    .from(engagementLifecycleRequestsTable)
+    .leftJoin(usersTable, eq(engagementLifecycleRequestsTable.raisedByUserId, usersTable.id))
+    .orderBy(desc(engagementLifecycleRequestsTable.raisedAt));
+
+  res.json(rows);
+});
+
+export default router;

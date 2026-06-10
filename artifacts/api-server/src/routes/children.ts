@@ -11,6 +11,11 @@ const CreateChildBody = z.object({
   dob: z.string().optional(),
   diagnosisTags: z.string().optional(),
   notes: z.string().optional(),
+  city: z.string().optional(),
+  area: z.string().optional(),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
+  documentsJson: z.string().optional(),
 });
 
 const UpdateChildBody = z.object({
@@ -18,6 +23,11 @@ const UpdateChildBody = z.object({
   dob: z.string().optional(),
   diagnosisTags: z.string().optional(),
   notes: z.string().optional(),
+  city: z.string().optional(),
+  area: z.string().optional(),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
+  documentsJson: z.string().optional(),
 });
 
 router.get("/children", requireAuth, requireRole("parent", "admin"), async (req, res): Promise<void> => {
