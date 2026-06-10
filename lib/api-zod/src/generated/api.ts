@@ -25,7 +25,7 @@ export const GetMeResponse = zod.object({
   phone: zod.string().nullish(),
   fullName: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
-  role: zod.enum(["parent", "professional", "admin"]),
+  role: zod.enum(["parent", "professional", "admin", "centre_admin"]),
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   location: zod.string().nullish(),
@@ -74,7 +74,7 @@ export const UpdateMeResponse = zod.object({
   phone: zod.string().nullish(),
   fullName: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
-  role: zod.enum(["parent", "professional", "admin"]),
+  role: zod.enum(["parent", "professional", "admin", "centre_admin"]),
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   location: zod.string().nullish(),
@@ -100,7 +100,7 @@ export const UpdateMeResponse = zod.object({
  * @summary Set current user role (parent or professional)
  */
 export const SetMyRoleBody = zod.object({
-  role: zod.enum(["parent", "professional"]),
+  role: zod.enum(["parent", "professional", "centre_admin"]),
 });
 
 export const SetMyRoleResponse = zod.object({
@@ -110,7 +110,7 @@ export const SetMyRoleResponse = zod.object({
   phone: zod.string().nullish(),
   fullName: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
-  role: zod.enum(["parent", "professional", "admin"]),
+  role: zod.enum(["parent", "professional", "admin", "centre_admin"]),
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   location: zod.string().nullish(),

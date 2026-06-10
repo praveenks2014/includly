@@ -29,3 +29,4 @@ export * from "./lifecycleRequests";
 export * from "./engagementSalaryPayments";
 export * from "./engagementDailyLogs";
 export * from "./parentNeedsRequests";
+export * from "./therapyCentres";

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useUser } from "@clerk/react";
 import { fetchWithAuth } from "@/lib/api";
@@ -39,12 +39,13 @@ import {
   Loader2, Users, BarChart3, Settings, CheckCircle, XCircle, Clock,
   ShieldAlert, UserCheck, TrendingUp, FileText, Eye, ExternalLink, Bell,
   IndianRupee, CreditCard, Menu, X, UserX, Shield, ChevronRight, Flag,
+  Building2, Plus, Check, Edit2, Trash2, Package,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 
-type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "payments" | "settings" | "commissions" | "moderation" | "bookings" | "shadow-teacher" | "engagements";
+type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "payments" | "settings" | "commissions" | "moderation" | "bookings" | "shadow-teacher" | "engagements" | "centres";
 
 // ── Booking row shape from /admin/bookings ────────────────────────────────────
 interface AdminBookingRow {
@@ -422,6 +423,7 @@ export default function AdminPage() {
     { id: "bookings", label: "Bookings & Payouts", icon: <IndianRupee size={18} /> },
     { id: "shadow-teacher", label: "Shadow Teacher", icon: <UserCheck size={18} /> },
     { id: "engagements", label: "Engagements", icon: <IndianRupee size={18} /> },
+    { id: "centres", label: "Therapy Centres", icon: <Building2 size={18} /> },
     { id: "moderation", label: "Moderation", icon: <Flag size={18} /> },
     { id: "settings", label: "Settings", icon: <Settings size={18} /> },
     { id: "commissions", label: "Commission Rates", icon: <IndianRupee size={18} /> },
@@ -506,6 +508,7 @@ export default function AdminPage() {
           {activeTab === "bookings" && <AdminBookingsTab />}
           {activeTab === "shadow-teacher" && <AdminShadowTeacherTab />}
           {activeTab === "engagements" && <AdminEngagementsTab />}
+          {activeTab === "centres" && <AdminCentresTab />}
           {activeTab === "moderation" && <ModerationTab />}
           {activeTab === "settings" && <SettingsTab />}
           {activeTab === "commissions" && <CommissionRatesTab />}
@@ -2070,6 +2073,432 @@ function AdminShadowTeacherTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// ── AdminCentresTab ──────────────────────────────────────────────────────────
+
+interface AdminCentreRow {
+  id: number;
+  name: string;
+  city: string | null;
+  state: string | null;
+  status: string;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  description: string | null;
+  therapyTypesOffered: string | null;
+  registrationNumbers: string | null;
+  yearsInOperation: number | null;
+  verificationNotes: string | null;
+  rejectedReason: string | null;
+  createdAt: string;
+}
+
+interface AdminCentreService {
+  id: number;
+  name: string;
+  serviceType: string;
+  durationMinutes: number;
+  mode: string;
+  currentPriceInr: number | null;
+}
+
+type CentresSubTab = "queue" | "all" | "pricing";
+
+function AdminCentresTab() {
+  const { toast } = useToast();
+  const [subTab, setSubTab] = useState<CentresSubTab>("queue");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedCentre, setSelectedCentre] = useState<AdminCentreRow | null>(null);
+  const [verifyModal, setVerifyModal] = useState<{ centre: AdminCentreRow; action: "verify" | "reject" } | null>(null);
+  const [pricingCentre, setPricingCentre] = useState<AdminCentreRow | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [verifyNotes, setVerifyNotes] = useState("");
+  const [acting, setActing] = useState(false);
+
+  const { data: centres = [], isLoading, refetch } = useQuery<AdminCentreRow[]>({
+    queryKey: ["admin-centres", statusFilter],
+    queryFn: async () => {
+      const params = statusFilter !== "all" ? `?status=${statusFilter}` : "";
+      const r = await fetchWithAuth(`/api/admin/centres${params}`);
+      return r.ok ? r.json() : [];
+    },
+  });
+
+  const filtered = centres.filter((c) =>
+    !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (c.city ?? "").toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const queue = centres.filter((c) => c.status === "submitted");
+
+  async function handleVerify(centre: AdminCentreRow, action: "verify" | "reject") {
+    setActing(true);
+    try {
+      const body: Record<string, string> = {};
+      if (action === "verify") body.notes = verifyNotes;
+      if (action === "reject") body.reason = rejectReason;
+      const r = await fetchWithAuth(`/api/admin/centres/${centre.id}/verify`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...body }),
+      });
+      if (!r.ok) throw new Error();
+      toast({ title: action === "verify" ? "Centre verified ✓" : "Centre rejected" });
+      setVerifyModal(null);
+      setRejectReason(""); setVerifyNotes("");
+      refetch();
+    } catch {
+      toast({ title: "Action failed", variant: "destructive" });
+    } finally {
+      setActing(false);
+    }
+  }
+
+  const STATUS_COLORS: Record<string, string> = {
+    draft: "bg-gray-100 text-gray-600",
+    submitted: "bg-yellow-50 text-yellow-700",
+    verified: "bg-blue-50 text-blue-700",
+    live: "bg-teal-50 text-teal-700",
+    rejected: "bg-red-50 text-red-700",
+    suspended: "bg-orange-50 text-orange-700",
+  };
+
+  const SUB_TABS: { id: CentresSubTab; label: string }[] = [
+    { id: "queue", label: `Verification Queue${queue.length > 0 ? ` (${queue.length})` : ""}` },
+    { id: "all", label: "All Centres" },
+    { id: "pricing", label: "Set Prices" },
+  ];
+
+  return (
+    <div className="max-w-5xl space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-serif font-bold text-[#1A2340]">Therapy Centres</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Verify centres and manage service prices.</p>
+        </div>
+      </div>
+
+      {/* Sub-tab switcher */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
+        {SUB_TABS.map((t) => (
+          <button key={t.id} onClick={() => setSubTab(t.id)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${subTab === t.id ? "bg-white text-[#1A2340] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Verification Queue */}
+      {subTab === "queue" && (
+        <div className="space-y-3">
+          {queue.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-12 text-center text-gray-400">
+              <CheckCircle size={36} className="mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No centres pending review.</p>
+            </div>
+          ) : (
+            queue.map((centre) => (
+              <CentreCard key={centre.id} centre={centre} statusColors={STATUS_COLORS}
+                onVerify={() => { setVerifyModal({ centre, action: "verify" }); setVerifyNotes(""); }}
+                onReject={() => { setVerifyModal({ centre, action: "reject" }); setRejectReason(""); }}
+                onPricing={() => setPricingCentre(centre)}
+              />
+            ))
+          )}
+        </div>
+      )}
+
+      {/* All Centres */}
+      {subTab === "all" && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <input
+              type="text"
+              placeholder="Search by name or city..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]"
+            />
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+              className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]">
+              <option value="all">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="submitted">Submitted</option>
+              <option value="verified">Verified</option>
+              <option value="live">Live</option>
+              <option value="rejected">Rejected</option>
+              <option value="suspended">Suspended</option>
+            </select>
+          </div>
+
+          {isLoading ? (
+            <div className="flex justify-center py-10"><Loader2 className="animate-spin text-teal-500" size={24} /></div>
+          ) : filtered.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-12 text-center text-gray-400">
+              <Building2 size={36} className="mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No centres found.</p>
+            </div>
+          ) : (
+            filtered.map((centre) => (
+              <CentreCard key={centre.id} centre={centre} statusColors={STATUS_COLORS}
+                onVerify={() => { setVerifyModal({ centre, action: "verify" }); setVerifyNotes(""); }}
+                onReject={() => { setVerifyModal({ centre, action: "reject" }); setRejectReason(""); }}
+                onPricing={() => setPricingCentre(centre)}
+              />
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Pricing tab — pick centre then set prices */}
+      {subTab === "pricing" && (
+        <div className="space-y-4">
+          {!pricingCentre ? (
+            <>
+              <p className="text-sm text-gray-500">Select a verified centre to manage prices.</p>
+              <div className="space-y-3">
+                {centres.filter((c) => c.status === "verified" || c.status === "live").map((centre) => (
+                  <button key={centre.id} onClick={() => setPricingCentre(centre)}
+                    className="w-full text-left bg-white rounded-2xl border border-gray-100 p-4 shadow-sm hover:border-teal-300 transition-colors flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-[#1A2340]">{centre.name}</p>
+                      {centre.city && <p className="text-xs text-gray-400">{centre.city}{centre.state ? `, ${centre.state}` : ""}</p>}
+                    </div>
+                    <ChevronRight size={16} className="text-gray-400" />
+                  </button>
+                ))}
+                {centres.filter((c) => c.status === "verified" || c.status === "live").length === 0 && (
+                  <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-12 text-center text-gray-400">
+                    <Package size={36} className="mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">No verified centres yet.</p>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <CentrePricingPanel centre={pricingCentre} onBack={() => setPricingCentre(null)} />
+          )}
+        </div>
+      )}
+
+      {/* Verify / Reject modal */}
+      <Dialog open={!!verifyModal} onOpenChange={(o) => { if (!o) setVerifyModal(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-serif">
+              {verifyModal?.action === "verify" ? "Verify Centre" : "Reject Centre"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-gray-600">
+              {verifyModal?.action === "verify"
+                ? `Verify "${verifyModal.centre.name}"? This will notify the centre admin.`
+                : `Reject "${verifyModal?.centre.name}"? Please provide a reason.`}
+            </p>
+            {verifyModal?.action === "verify" && (
+              <div>
+                <Label className="text-xs">Internal notes (optional)</Label>
+                <Textarea value={verifyNotes} onChange={(e) => setVerifyNotes(e.target.value)} placeholder="e.g. Documents verified, MSME cert on file..." className="mt-1 min-h-[70px] text-sm" />
+              </div>
+            )}
+            {verifyModal?.action === "reject" && (
+              <div>
+                <Label className="text-xs">Rejection reason <span className="text-red-500">*</span></Label>
+                <Textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="e.g. Registration documents not uploaded..." className="mt-1 min-h-[70px] text-sm" />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setVerifyModal(null)}>Cancel</Button>
+            <Button
+              onClick={() => verifyModal && handleVerify(verifyModal.centre, verifyModal.action)}
+              disabled={acting || (verifyModal?.action === "reject" && !rejectReason.trim())}
+              className={verifyModal?.action === "verify" ? "bg-teal-600 hover:bg-teal-700 text-white" : "bg-red-500 hover:bg-red-600 text-white"}
+            >
+              {acting ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+              {verifyModal?.action === "verify" ? "Verify" : "Reject"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function CentreCard({ centre, statusColors, onVerify, onReject, onPricing }: {
+  centre: AdminCentreRow;
+  statusColors: Record<string, string>;
+  onVerify: () => void;
+  onReject: () => void;
+  onPricing: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+      <div className="p-4 flex items-start gap-4">
+        <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center shrink-0">
+          <Building2 size={18} className="text-teal-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-2 flex-wrap">
+            <p className="font-semibold text-[#1A2340]">{centre.name}</p>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[centre.status] ?? "bg-gray-100 text-gray-500"}`}>
+              {centre.status}
+            </span>
+          </div>
+          {centre.city && <p className="text-xs text-gray-400 mt-0.5">{centre.city}{centre.state ? `, ${centre.state}` : ""}</p>}
+          {centre.therapyTypesOffered && <p className="text-xs text-teal-600 mt-0.5 truncate">{centre.therapyTypesOffered}</p>}
+          <p className="text-xs text-gray-400 mt-0.5">Submitted {new Date(centre.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          {centre.status === "submitted" && (
+            <>
+              <Button size="sm" onClick={onVerify} className="text-xs h-7 bg-teal-600 hover:bg-teal-700 text-white gap-1">
+                <Check size={11} /> Verify
+              </Button>
+              <Button size="sm" variant="outline" onClick={onReject} className="text-xs h-7 text-red-500 border-red-200 hover:bg-red-50 gap-1">
+                <XCircle size={11} /> Reject
+              </Button>
+            </>
+          )}
+          {(centre.status === "verified" || centre.status === "live") && (
+            <Button size="sm" variant="outline" onClick={onPricing} className="text-xs h-7 gap-1 border-teal-200 text-teal-700 hover:bg-teal-50">
+              <Edit2 size={11} /> Prices
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={() => setExpanded(!expanded)} className="text-xs h-7 px-2">
+            {expanded ? <XCircle size={13} className="text-gray-400" /> : <Eye size={13} className="text-gray-400" />}
+          </Button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="px-4 pb-4 border-t border-gray-50 pt-3 space-y-2">
+          {centre.description && <p className="text-sm text-gray-600 leading-relaxed">{centre.description}</p>}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
+            {centre.phone && <div className="text-gray-500"><span className="font-medium">Phone: </span>{centre.phone}</div>}
+            {centre.email && <div className="text-gray-500"><span className="font-medium">Email: </span>{centre.email}</div>}
+            {centre.website && <div className="text-gray-500"><span className="font-medium">Web: </span>{centre.website}</div>}
+            {centre.registrationNumbers && <div className="text-gray-500"><span className="font-medium">Reg No: </span>{centre.registrationNumbers}</div>}
+            {centre.yearsInOperation != null && <div className="text-gray-500"><span className="font-medium">Years: </span>{centre.yearsInOperation}</div>}
+          </div>
+          {centre.verificationNotes && (
+            <div className="text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
+              <span className="font-medium">Notes: </span>{centre.verificationNotes}
+            </div>
+          )}
+          {centre.rejectedReason && (
+            <div className="text-xs text-red-700 bg-red-50 rounded-lg px-3 py-2">
+              <span className="font-medium">Rejection reason: </span>{centre.rejectedReason}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CentrePricingPanel({ centre, onBack }: { centre: AdminCentreRow; onBack: () => void }) {
+  const { toast } = useToast();
+  const [services, setServices] = useState<AdminCentreService[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [prices, setPrices] = useState<Record<number, string>>({});
+  const [saving, setSaving] = useState<number | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchWithAuth(`/api/admin/centres/${centre.id}/services`)
+      .then(r => r.ok ? r.json() : [])
+      .then((data: AdminCentreService[]) => {
+        setServices(data);
+        const init: Record<number, string> = {};
+        data.forEach((s: AdminCentreService) => { init[s.id] = s.currentPriceInr?.toString() ?? ""; });
+        setPrices(init);
+      })
+      .finally(() => setLoading(false));
+  }, [centre.id]);
+
+  async function handleSetPrice(serviceId: number) {
+    const val = prices[serviceId];
+    if (!val || isNaN(Number(val))) return;
+    setSaving(serviceId);
+    try {
+      const r = await fetchWithAuth(`/api/admin/centres/${centre.id}/service-prices`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serviceId, priceInr: Number(val), effectiveFrom: new Date().toISOString() }),
+      });
+      if (!r.ok) throw new Error();
+      toast({ title: "Price set ✓" });
+      setServices(prev => prev.map(s => s.id === serviceId ? { ...s, currentPriceInr: Number(val) } : s));
+    } catch {
+      toast({ title: "Failed to set price", variant: "destructive" });
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  const MODE_LABELS: Record<string, string> = { in_centre: "In-Centre", home_visit: "Home Visit", online: "Online" };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="sm" onClick={onBack} className="gap-1 text-gray-500 hover:text-gray-800">
+          <ChevronRight size={14} className="rotate-180" /> Back
+        </Button>
+        <div>
+          <h3 className="font-semibold text-[#1A2340]">{centre.name}</h3>
+          <p className="text-xs text-gray-400">Set service prices</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-10"><Loader2 className="animate-spin text-teal-500" size={22} /></div>
+      ) : services.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-10 text-center text-gray-400">
+          <Package size={32} className="mx-auto mb-2 opacity-30" />
+          <p className="text-sm">This centre has no services defined yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {services.map((s) => (
+            <div key={s.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm flex items-center gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-[#1A2340] text-sm">{s.name}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{s.serviceType} · {s.durationMinutes} min · {MODE_LABELS[s.mode] ?? s.mode}</p>
+                {s.currentPriceInr && (
+                  <p className="text-xs text-teal-600 font-medium mt-0.5">Current: ₹{s.currentPriceInr.toLocaleString("en-IN")}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₹</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={prices[s.id] ?? ""}
+                    onChange={(e) => setPrices(p => ({ ...p, [s.id]: e.target.value }))}
+                    placeholder="0"
+                    className="w-28 pl-7 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-400"
+                  />
+                </div>
+                <Button size="sm" onClick={() => handleSetPrice(s.id)}
+                  disabled={saving === s.id || !prices[s.id] || isNaN(Number(prices[s.id]))}
+                  className="bg-teal-600 hover:bg-teal-700 text-white text-xs h-8 gap-1">
+                  {saving === s.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                  Set
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

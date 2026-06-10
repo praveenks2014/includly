@@ -3,7 +3,7 @@ import { createRemoteJWKSet, jwtVerify, decodeJwt } from "jose";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
-type UserRole = "parent" | "professional" | "admin";
+type UserRole = "parent" | "professional" | "admin" | "centre_admin";
 
 declare global {
   namespace Express {

@@ -110,6 +110,16 @@ export default function OnboardPage() {
       setLocation("/choose-role");
       return;
     }
+    const isCentre = sessionStorage.getItem("is_therapy_centre") === "true";
+    sessionStorage.removeItem("is_therapy_centre");
+    if (isCentre) {
+      roleSetTriggered.current = true;
+      setMyRoleAsync({ data: { role: "centre_admin" as "professional" } })
+        .then(() => queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() }))
+        .catch(() => { roleSetTriggered.current = false; })
+        .finally(() => { setRoleReady(true); setLocation("/centre-dashboard"); });
+      return;
+    }
     roleSetTriggered.current = true;
     setMyRoleAsync({ data: { role: "professional" } })
       .then(() => {

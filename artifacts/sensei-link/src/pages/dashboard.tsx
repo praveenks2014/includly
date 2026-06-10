@@ -95,6 +95,12 @@ export default function DashboardPage() {
     return <ProfessionalDashboardNew />;
   }
 
+  // Therapy Centre admin gets their own dashboard
+  if ((role as string) === "centre_admin") {
+    setLocation("/centre-dashboard");
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">

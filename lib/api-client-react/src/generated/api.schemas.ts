@@ -20,6 +20,7 @@ export const UserProfileRole = {
   parent: "parent",
   professional: "professional",
   admin: "admin",
+  centre_admin: "centre_admin",
 } as const;
 
 export interface UserProfile {
@@ -76,6 +77,7 @@ export type SetRoleBodyRole =
 export const SetRoleBodyRole = {
   parent: "parent",
   professional: "professional",
+  centre_admin: "centre_admin",
 } as const;
 
 export interface SetRoleBody {
