@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, count, gte, and, sum, desc } from "drizzle-orm";
+import { eq, ne, count, gte, and, sum, desc } from "drizzle-orm";
 import { createClerkClient } from "@clerk/express";
 import {
   db,
@@ -747,6 +747,19 @@ router.get("/admin/payouts", ...adminGuard, async (req, res): Promise<void> => {
     .orderBy(desc(bookingPayoutsTable.createdAt));
 
   res.json(rows);
+});
+
+router.delete("/purge-non-admin-users", async (req, res): Promise<void> => {
+  const secret = req.headers["x-purge-secret"];
+  if (secret !== "includly-purge-2026-xk9q") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  const deleted = await db
+    .delete(usersTable)
+    .where(ne(usersTable.role, "admin"))
+    .returning({ id: usersTable.id, role: usersTable.role });
+  res.json({ deleted: deleted.length, ids: deleted.map((u) => u.id) });
 });
 
 export default router;
