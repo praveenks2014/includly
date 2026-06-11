@@ -113,7 +113,8 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
   }
 
   // If specialty is changing to a non-eligible one while offersHomeVisits is currently true, auto-disable it
-  const updateData = { ...parsed.data };
+  const { avatarUrl, ...profileData } = parsed.data;
+  const updateData = { ...profileData };
   if (
     parsed.data.specialty &&
     !HOME_VISIT_SPECIALTIES.includes(parsed.data.specialty) &&
@@ -128,6 +129,10 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
     .set(updateData)
     .where(eq(professionalProfilesTable.userId, req.userId!))
     .returning();
+
+  if (avatarUrl !== undefined) {
+    await db.update(usersTable).set({ avatarUrl }).where(eq(usersTable.id, req.userId!));
+  }
 
   if (!profile) {
     res.status(404).json({ error: "Professional profile not found" });
@@ -376,6 +381,11 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
     return;
   }
 
+  const [userRow] = await db
+    .select({ avatarUrl: usersTable.avatarUrl })
+    .from(usersTable)
+    .where(eq(usersTable.id, profile.userId));
+
   // Gate unapproved profiles — only admins can view pending/rejected profiles publicly
   if (profile.verificationStatus !== "verified" && req.userRole !== "admin") {
     res.status(404).json({ error: "Professional not found" });
@@ -424,6 +434,7 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
   const { upiId: _upiId, latitude: _lat, longitude: _lng, clinicAddress: _clinicAddress, ...safeProfile } = profile;
   const result = {
     ...safeProfile,
+    avatarUrl: userRow?.avatarUrl ?? null,
     phoneBlurred: blurContact(profile.phone),
     emailBlurred: blurContact(profile.email),
     isUnlocked,

@@ -54,6 +54,7 @@ const UpsertCentreBody = z.object({
   email: z.string().optional(),
   website: z.string().optional(),
   photos: z.string().optional(),
+  photoUrl: z.string().optional(),
   languagesSpoken: z.string().optional(),
   therapyTypesOffered: z.string().optional(),
   operatingHoursJson: z.string().optional(),
@@ -87,6 +88,7 @@ const UpsertServiceBody = z.object({
   description: z.string().optional(),
   assessmentRequired: z.boolean().optional(),
   isActive: z.boolean().optional(),
+  priceInr: z.number().int().positive().optional(),
 });
 
 const UpsertCancellationPolicyBody = z.object({
@@ -259,8 +261,12 @@ router.post("/centres/:id/services", ...centreAdminGuard, async (req, res): Prom
   if (!(await ownscentre(req.userId!, id)) && req.userRole !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
   const parsed = UpsertServiceBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const [service] = await db.insert(centreServicesTable).values({ centreId: id, ...parsed.data }).returning();
-  res.status(201).json(service);
+  const { priceInr, ...serviceData } = parsed.data;
+  const [service] = await db.insert(centreServicesTable).values({ centreId: id, ...serviceData }).returning();
+  if (priceInr) {
+    await db.insert(centreServicePricesTable).values({ centreId: id, serviceId: service.id, priceInr });
+  }
+  res.status(201).json({ ...service, currentPriceInr: priceInr ?? null });
 });
 
 router.patch("/centres/:id/services/:sid", ...centreAdminGuard, async (req, res): Promise<void> => {
@@ -270,9 +276,13 @@ router.patch("/centres/:id/services/:sid", ...centreAdminGuard, async (req, res)
   if (!(await ownscentre(req.userId!, id)) && req.userRole !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
   const parsed = UpsertServiceBody.partial().safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const [updated] = await db.update(centreServicesTable).set({ ...parsed.data, updatedAt: new Date() }).where(and(eq(centreServicesTable.id, sid), eq(centreServicesTable.centreId, id))).returning();
+  const { priceInr, ...serviceData } = parsed.data;
+  const [updated] = await db.update(centreServicesTable).set({ ...serviceData, updatedAt: new Date() }).where(and(eq(centreServicesTable.id, sid), eq(centreServicesTable.centreId, id))).returning();
   if (!updated) { res.status(404).json({ error: "Not found" }); return; }
-  res.json(updated);
+  if (priceInr) {
+    await db.insert(centreServicePricesTable).values({ centreId: id, serviceId: sid, priceInr });
+  }
+  res.json({ ...updated, currentPriceInr: priceInr ?? null });
 });
 
 // ── PACKAGES ─────────────────────────────────────────────────────────────────

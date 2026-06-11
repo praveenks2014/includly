@@ -21,18 +21,18 @@ const PARENT_PLANS = [
     id: "plan_a_subscription",
     icon: <Zap size={22} className="text-primary" />,
     iconBg: "bg-primary/10",
-    title: "Shadow Teacher Plan",
-    price: "₹499",
-    period: "/ 30 days",
-    description: "Unlock up to 5 shadow teacher contacts for 30 days. Or pay ₹149 per contact if you only need one.",
+    title: "Shadow Teacher Matching",
+    price: "Matching fee",
+    period: "(admin-set)",
+    description: "Get expertly matched with a verified, trained shadow teacher suited to your child's unique school needs.",
     features: [
-      "Unlock up to 5 shadow teacher contacts for 30 days",
-      "Download contact info for each unlock",
-      "Priority listings first",
+      "Curated match based on child's needs & school context",
+      "Verified and background-checked professionals only",
+      "Dedicated support throughout the placement",
+      "Transparent fee — no hidden charges",
     ],
     highlight: true,
-    badge: "Best value",
-    altOption: { price: "₹149", label: "/ contact", planId: "plan_b_per_contact" },
+    badge: "Personalised",
   },
   {
     id: "plan_f_per_booking",
@@ -99,9 +99,9 @@ const PROFESSIONAL_PLANS = [
       "Premium placement in search results",
       "Unlimited seat & session listings",
       "Centre profile + team bios",
-      "₹149 platform fee per confirmed session",
+      "Platform commission % per confirmed session (admin-configured)",
     ],
-    commission: "₹149",
+    commission: "Admin %",
     highlight: true,
     badge: "Most Popular",
   },
@@ -287,7 +287,7 @@ export default function PricingPage() {
               {[
                 { label: "Educators & Therapists", amount: "₹49" },
                 { label: "Medical Specialists", amount: "₹99" },
-                { label: "Therapy Centres", amount: "₹149" },
+                { label: "Therapy Centres", amount: "Admin %" },
               ].map((item) => (
                 <div key={item.label} className="bg-background border border-border rounded-lg p-3 text-center">
                   <div className="text-lg font-bold text-foreground">{item.amount}</div>
@@ -404,14 +404,6 @@ export default function PricingPage() {
                 <span className="text-3xl font-bold text-foreground">{plan.price}</span>
                 <span className="text-muted-foreground text-sm ml-1">{plan.period}</span>
               </div>
-              {"altOption" in plan && plan.altOption && (
-                <div className="mb-4 text-sm text-muted-foreground">
-                  or{" "}
-                  <span className="font-semibold text-foreground">{plan.altOption.price}</span>
-                  <span className="ml-0.5">{plan.altOption.label}</span>
-                  <span className="ml-1 text-xs">(per contact, no subscription)</span>
-                </div>
-              )}
               <ul className="space-y-2 mb-6">
                 {plan.features.map((f) => (
                   <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -428,28 +420,11 @@ export default function PricingPage() {
                     </Button>
                   </Link>
                 ) : plan.id === "plan_a_subscription" ? (
-                  <>
-                    <Button
-                      className="w-full"
-                      variant="default"
-                      disabled={!!loadingKey || !!hasActiveSub}
-                      onClick={() => handleRazorpay(plan.id)}
-                      data-testid={`cta-rzp-${plan.id}`}
-                    >
-                      {loadingKey === `rzp-${plan.id}` ? (
-                        <Loader2 size={14} className="animate-spin mr-2" />
-                      ) : null}
-                      {hasActiveSub ? "Already subscribed" : loadingKey === `rzp-${plan.id}` ? "Processing…" : "₹499 / 30 days — Pay via UPI"}
+                  <Link href="/dashboard">
+                    <Button className="w-full" variant="default" data-testid="cta-shadow-match">
+                      Request a shadow teacher match
                     </Button>
-                    <p className="text-xs text-muted-foreground/70 italic text-center mt-1">
-                      Or pay ₹99 per contact — click "Unlock" on any shadow teacher's profile.
-                    </p>
-                    <Link href="/search">
-                      <Button className="w-full" variant="default" data-testid="cta-browse-teachers">
-                        Browse teachers to unlock
-                      </Button>
-                    </Link>
-                  </>
+                  </Link>
                 ) : (
                   <>
                     <p className="text-xs text-muted-foreground/70 italic mb-1">

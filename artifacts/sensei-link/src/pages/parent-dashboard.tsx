@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { StarRating } from "@/components/StarRating";
+import { ShadowTeacherRequestWidget } from "@/components/ShadowTeacherRequestWidget";
 import { fetchWithAuth } from "@/lib/api";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import { useToast } from "@/hooks/use-toast";
@@ -1161,15 +1162,7 @@ function ShadowTeacherTab() {
   }
 
   if (!active) {
-    return (
-      <div className="text-center py-20">
-        <div className="w-16 h-16 bg-[#2EC4A5]/10 rounded-full flex items-center justify-center mx-auto mb-4">
-          <User size={28} className="text-[#2EC4A5]" />
-        </div>
-        <h3 className="text-lg font-bold text-[#1A2340] mb-1">No Active Shadow Teacher</h3>
-        <p className="text-sm text-gray-400 max-w-xs mx-auto">You don't have an active shadow teacher engagement yet. Submit a match request from the Find tab to get started.</p>
-      </div>
-    );
+    return <ShadowTeacherRequestWidget />;
   }
 
   const MOODS = ["😊 Great", "🙂 Good", "😐 Okay", "😔 Difficult"];

@@ -18,6 +18,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
+import { FileUploadField } from "@/components/FileUploadField";
 
 type CentreStatus = "draft" | "submitted" | "verified" | "live" | "rejected" | "suspended";
 
@@ -32,6 +33,7 @@ interface TherapyCentre {
   phone: string | null;
   email: string | null;
   website: string | null;
+  photoUrl: string | null;
   therapyTypesOffered: string | null;
   languagesSpoken: string | null;
   registrationNumbers: string | null;
@@ -151,7 +153,7 @@ export default function CentreDashboard() {
   const [form, setForm] = useState<ProfileForm>({
     name: "", description: "", address: "", city: "", state: "", pincode: "",
     phone: "", email: "", website: "", registrationNumbers: "", yearsInOperation: "",
-    therapyTypesOffered: [], languagesSpoken: "",
+    therapyTypesOffered: [], languagesSpoken: "", photoUrl: "",
   });
 
   useEffect(() => {
@@ -170,6 +172,7 @@ export default function CentreDashboard() {
         yearsInOperation: centre.yearsInOperation?.toString() ?? "",
         therapyTypesOffered: centre.therapyTypesOffered ? centre.therapyTypesOffered.split(",").map(s => s.trim()) : [],
         languagesSpoken: centre.languagesSpoken ?? "",
+        photoUrl: centre.photoUrl ?? "",
       });
     }
   }, [centre]);
@@ -749,7 +752,7 @@ function ServicesTab({ centreId, services, onRefresh }: { centreId: number; serv
   const [showAdd, setShowAdd] = useState(false);
   const [editItem, setEditItem] = useState<Service | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", serviceType: "Initial Assessment", durationMinutes: "60", mode: "in_centre" as "in_centre" | "home_visit" | "online", description: "", assessmentRequired: false });
+  const [form, setForm] = useState({ name: "", serviceType: "Initial Assessment", durationMinutes: "60", mode: "in_centre" as "in_centre" | "home_visit" | "online", description: "", assessmentRequired: false, priceInr: "" });
 
   function resetForm(s?: Service) {
     setForm({
@@ -759,13 +762,14 @@ function ServicesTab({ centreId, services, onRefresh }: { centreId: number; serv
       mode: (s?.mode ?? "in_centre") as "in_centre" | "home_visit" | "online",
       description: s?.description ?? "",
       assessmentRequired: s?.assessmentRequired ?? false,
+      priceInr: s?.currentPriceInr?.toString() ?? "",
     });
   }
 
   async function handleSave() {
     setSaving(true);
     try {
-      const payload = { ...form, durationMinutes: Number(form.durationMinutes) };
+      const payload = { ...form, durationMinutes: Number(form.durationMinutes), priceInr: form.priceInr ? Number(form.priceInr) : undefined };
       if (editItem) {
         await fetchWithAuth(`/api/centres/${centreId}/services/${editItem.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       } else {
@@ -785,7 +789,7 @@ function ServicesTab({ centreId, services, onRefresh }: { centreId: number; serv
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-serif font-bold text-[#1A2340]">Services</h2>
-          <p className="text-xs text-gray-400">List the services your centre offers. Prices are set by the admin.</p>
+          <p className="text-xs text-gray-400">List the services your centre offers. Set your own price per session.</p>
         </div>
         <Button size="sm" onClick={() => { resetForm(); setShowAdd(true); }} className="bg-teal-600 hover:bg-teal-700 text-white gap-1.5">
           <Plus size={14} /> Add Service
@@ -811,7 +815,7 @@ function ServicesTab({ centreId, services, onRefresh }: { centreId: number; serv
               {s.currentPriceInr ? (
                 <p className="text-xs font-semibold text-teal-600 mt-0.5">₹{s.currentPriceInr.toLocaleString("en-IN")}</p>
               ) : (
-                <p className="text-xs text-gray-400 mt-0.5">Price not set yet (pending admin)</p>
+                <p className="text-xs text-gray-400 mt-0.5">Price not set</p>
               )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -854,6 +858,10 @@ function ServicesTab({ centreId, services, onRefresh }: { centreId: number; serv
             <div>
               <Label>Description <span className="text-gray-400 text-xs">(optional)</span></Label>
               <Textarea value={form.description} onChange={(e) => setForm(p => ({ ...p, description: e.target.value }))} className="mt-1 min-h-[60px] text-sm" />
+            </div>
+            <div>
+              <Label>Price you charge (₹) <span className="text-gray-400 text-xs">(optional)</span></Label>
+              <Input type="number" min={1} value={form.priceInr} onChange={(e) => setForm(p => ({ ...p, priceInr: e.target.value }))} placeholder="e.g. 1500" className="mt-1 w-36" />
             </div>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" checked={form.assessmentRequired} onChange={(e) => setForm(p => ({ ...p, assessmentRequired: e.target.checked }))} className="accent-teal-600" />
@@ -961,6 +969,7 @@ type ProfileForm = {
   pincode: string; phone: string; email: string; website: string;
   registrationNumbers: string; yearsInOperation: string;
   therapyTypesOffered: string[]; languagesSpoken: string;
+  photoUrl: string;
 };
 
 function ProfileSettingsTab({ form, setForm, onSave, saving }: {
@@ -987,6 +996,20 @@ function ProfileSettingsTab({ form, setForm, onSave, saving }: {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm space-y-4">
+        <div>
+          <Label className="mb-2 block">Centre Photo</Label>
+          <div className="flex items-center gap-4">
+            {form.photoUrl && (
+              <img src={form.photoUrl} alt="Centre" className="w-16 h-16 rounded-xl object-cover border border-gray-200 shrink-0" />
+            )}
+            <FileUploadField
+              label={form.photoUrl ? "Change photo" : "Upload photo"}
+              onUploaded={(key) => setForm((p) => ({ ...p, photoUrl: key }))}
+              uploadedPath={form.photoUrl}
+              accept="image/*"
+            />
+          </div>
+        </div>
         <div><Label>Centre Name</Label><Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} className="mt-1" /></div>
         <div><Label>Description</Label><Textarea value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} className="mt-1 min-h-[90px]" /></div>
         <div className="grid grid-cols-2 gap-3">

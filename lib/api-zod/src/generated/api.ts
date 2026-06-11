@@ -310,6 +310,7 @@ export const UpdateProfessionalProfileBody = zod.object({
     .optional(),
   inclusiveExperience: zod.boolean().optional(),
   specializationTags: zod.array(zod.string()).optional(),
+  avatarUrl: zod.string().optional(),
 });
 
 export const UpdateProfessionalProfileResponse = zod.object({
@@ -381,6 +382,7 @@ export const GetProfessionalResponse = zod.object({
   id: zod.number(),
   userId: zod.number(),
   fullName: zod.string().nullish(),
+  avatarUrl: zod.string().nullish(),
   specialty: zod.string(),
   bio: zod.string().nullish(),
   yearsExperience: zod.number(),

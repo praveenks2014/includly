@@ -305,8 +305,12 @@ export default function ProfessionalProfilePage() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         {/* Avatar row */}
         <div className="flex flex-col sm:flex-row gap-4 -mt-14 sm:-mt-16 mb-6">
-          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-[#2EC4A5] border-4 border-white shadow-lg flex items-center justify-center shrink-0">
-            <span className="text-white text-2xl sm:text-3xl font-bold font-serif">{initials}</span>
+          <div className="relative z-10 w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-[#2EC4A5] border-4 border-white shadow-lg flex items-center justify-center shrink-0 overflow-hidden">
+            {p.avatarUrl ? (
+              <img src={p.avatarUrl} alt={p.fullName ?? "Profile photo"} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-white text-2xl sm:text-3xl font-bold font-serif">{initials}</span>
+            )}
           </div>
           <div className="pb-1 flex-1 sm:pt-16">
             <div className="flex flex-wrap items-center gap-2 mb-1">

@@ -382,6 +382,21 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
   const queryClient = useQueryClient();
   const { mutateAsync: patchProfile, isPending } = useUpdateProfessionalProfile();
   const [editing, setEditing] = useState(false);
+  const [avatarFileKey, setAvatarFileKey] = useState("");
+  const [savingAvatar, setSavingAvatar] = useState(false);
+
+  async function handleSaveAvatar() {
+    if (!avatarFileKey) return;
+    setSavingAvatar(true);
+    try {
+      await patchProfile({ data: { avatarUrl: avatarFileKey } });
+      queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
+      toast({ title: "Photo updated ✓" });
+      setAvatarFileKey("");
+    } catch {
+      toast({ title: "Could not save photo", variant: "destructive" });
+    } finally { setSavingAvatar(false); }
+  }
 
   const [form, setForm] = useState({
     fullName: profile?.fullName ?? "",
@@ -514,6 +529,29 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
           )}
         </div>
       </div>
+
+      {/* Avatar photo upload — shadow teachers */}
+      {profile.specialty === "shadow_teacher" && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-3">
+          <p className="text-sm font-semibold text-[#1A2340]">Profile Photo</p>
+          <p className="text-xs text-gray-400">Upload a photo so parents can recognise you.</p>
+          <FileUploadField
+            label="Choose photo"
+            onUploaded={setAvatarFileKey}
+            uploadedPath={avatarFileKey}
+            accept="image/*"
+          />
+          <Button
+            onClick={handleSaveAvatar}
+            disabled={savingAvatar || !avatarFileKey}
+            size="sm"
+            className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white gap-2 rounded-xl"
+          >
+            {savingAvatar ? <Loader2 size={13} className="animate-spin" /> : null}
+            Save Photo
+          </Button>
+        </div>
+      )}
 
       {/* Edit form */}
       {!editing ? (
