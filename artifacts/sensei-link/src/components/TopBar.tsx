@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { useClerk, useUser } from "@clerk/react";
 import {
@@ -7,6 +8,10 @@ import {
   User,
   CreditCard,
   HelpCircle,
+  Check,
+  Plus,
+  Loader2,
+  Baby,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -16,8 +21,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useGetMe } from "@workspace/api-client-react";
+import { useGetMe, useGetMyChildren } from "@workspace/api-client-react";
+import type { ChildResponseType } from "@workspace/api-client-react";
 import { NAV, SHELL_ROOT, type Role } from "@/nav/config";
+
+const SELECTED_CHILD_KEY = "includly:selectedChildId";
 
 export function TopBar() {
   const [loc, setLocation] = useLocation();
@@ -41,6 +49,35 @@ export function TopBar() {
         .slice(0, 2)
     : (user?.firstName?.[0] ?? "U").toUpperCase();
 
+  const { data: children, isLoading: childrenLoading } = useGetMyChildren({
+    query: { enabled: role === "parent" },
+  });
+
+  const [selectedId, setSelectedId] = useState<number | null>(() => {
+    const stored = localStorage.getItem(SELECTED_CHILD_KEY);
+    return stored ? parseInt(stored, 10) : null;
+  });
+
+  useEffect(() => {
+    if (!children || children.length === 0) return;
+    const valid = children.find((c: ChildResponseType) => c.id === selectedId);
+    if (!valid) {
+      const first = children[0];
+      if (first) {
+        setSelectedId(first.id);
+        localStorage.setItem(SELECTED_CHILD_KEY, String(first.id));
+      }
+    }
+  }, [children, selectedId]);
+
+  const selectedChild = children?.find((c: ChildResponseType) => c.id === selectedId);
+  const childLabel = selectedChild?.name ?? "Select child";
+
+  function handleSelectChild(child: ChildResponseType) {
+    setSelectedId(child.id);
+    localStorage.setItem(SELECTED_CHILD_KEY, String(child.id));
+  }
+
   function handleSignOut() {
     signOut(() => setLocation("/"));
   }
@@ -48,13 +85,70 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-white px-4">
       {role === "parent" ? (
-        <button
-          className="flex min-w-0 shrink-0 items-center gap-1.5 rounded-full border border-border bg-gray-50 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
-          aria-label="Switch child"
-        >
-          <span className="max-w-[90px] truncate">Select child</span>
-          <ChevronDown size={14} className="shrink-0 text-gray-400" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="flex min-w-0 shrink-0 items-center gap-1.5 rounded-full border border-border bg-gray-50 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+              aria-label="Switch child"
+            >
+              {childrenLoading ? (
+                <Loader2 size={13} className="animate-spin text-gray-400" />
+              ) : (
+                <Baby size={13} className="shrink-0 text-teal-500" />
+              )}
+              <span className="max-w-[90px] truncate">{childLabel}</span>
+              <ChevronDown size={13} className="shrink-0 text-gray-400" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            {childrenLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 size={16} className="animate-spin text-teal-600" />
+              </div>
+            ) : children && children.length > 0 ? (
+              <>
+                <div className="px-2 py-1.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    My children
+                  </p>
+                </div>
+                {children.map((child: ChildResponseType) => (
+                  <DropdownMenuItem
+                    key={child.id}
+                    onClick={() => handleSelectChild(child)}
+                    className="flex cursor-pointer items-center justify-between gap-2"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-700">
+                        <span className="text-[10px] font-bold">
+                          {child.name[0]?.toUpperCase()}
+                        </span>
+                      </div>
+                      <span className="truncate text-sm">{child.name}</span>
+                    </div>
+                    {child.id === selectedId && (
+                      <Check size={14} className="shrink-0 text-teal-600" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+              </>
+            ) : (
+              <div className="flex flex-col items-center gap-1 px-3 py-4 text-center">
+                <Baby size={20} className="text-gray-300" />
+                <p className="text-sm font-medium text-gray-600">No children added</p>
+                <p className="text-xs text-muted-foreground">Add your child to get started</p>
+              </div>
+            )}
+            <DropdownMenuItem
+              onClick={() => setLocation("/onboarding/child")}
+              className="flex cursor-pointer items-center gap-2 text-teal-600 focus:text-teal-700"
+            >
+              <Plus size={14} />
+              Add a child
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ) : (
         <Link href={shellRoot} className="flex shrink-0 items-center gap-1.5">
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-teal-600">
