@@ -1324,11 +1324,11 @@ function ShadowTeacherTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN PARENT DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function ParentDashboard() {
+export default function ParentDashboard({ initialTab = "home" }: { initialTab?: Tab }) {
   const { user } = useUser();
   const [, setLocation] = useLocation();
   const { data: me } = useGetMe();
-  const [activeTab, setActiveTab] = useState<Tab>("home");
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const firstName = me?.fullName?.split(" ")[0] ?? user?.firstName ?? "there";

@@ -6,12 +6,18 @@ import { setFetchAuthTokenGetter } from "@/lib/api";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, useRef } from "react";
+import { Loader2 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
+import { AppShell } from "@/components/AppShell";
+import { RequireRole } from "@/guards/RequireRole";
+import { RequireChildProfile } from "@/guards/RequireChildProfile";
+import { SHELL_ROOT, isShellPath, type Role } from "@/nav/config";
+import { useGetMe } from "@workspace/api-client-react";
+
 import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home";
 import SearchPage from "@/pages/search";
 import ProfessionalProfilePage from "@/pages/professional-profile";
-import DashboardPage from "@/pages/dashboard";
 import OnboardPage from "@/pages/onboard";
 import AccountPage from "@/pages/account";
 import PrivacyPage from "@/pages/privacy";
@@ -21,22 +27,16 @@ import PricingPage from "@/pages/pricing";
 import PaymentSuccessPage from "@/pages/payment-success";
 import PaymentCancelPage from "@/pages/payment-cancel";
 import AdminPage from "@/pages/admin";
-import AvailabilityPage from "@/pages/availability";
-import SessionsPage from "@/pages/sessions";
 import SignUpPage from "@/pages/sign-up";
 import SignInPage from "@/pages/sign-in";
 import SsoCallbackPage from "@/pages/sso-callback";
 import ChooseRolePage from "@/pages/choose-role";
 import ResourcesPage from "@/pages/resources";
 import ForumPage from "@/pages/forum";
-import EngagementsPage from "@/pages/engagements";
-import AssessmentsPage from "@/pages/assessments";
-import AssessmentOfferingsPage from "@/pages/assessment-offerings";
-import CentreDashboardPage from "@/pages/centre-dashboard";
+import ParentDashboard from "@/pages/parent-dashboard";
+import ProfessionalDashboard from "@/pages/professional-dashboard";
+import CentreDashboard from "@/pages/centre-dashboard";
 
-// Production: use the live key (only works on includly.in and subdomains).
-// Development (Replit workspace preview): use a test-instance key so Clerk
-// initialises on any origin without domain restrictions.
 const DEV_CLERK_KEY = "pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA";
 
 const clerkPubKey = import.meta.env.DEV
@@ -101,11 +101,14 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
-const HIDE_NAVBAR_PATHS = ["/sign-in", "/sign-up", "/sso-callback", "/choose-role"];
+// ─── Layout helpers ────────────────────────────────────────────────────────────
+
+const HIDE_NAVBAR_PATHS = ["/sign-in", "/sign-up", "/sso-callback", "/onboarding"];
 
 function Layout({ children }: { children: React.ReactNode }) {
   const [loc] = useLocation();
-  const hideNav = HIDE_NAVBAR_PATHS.some((p) => loc.startsWith(p));
+  const hideNav =
+    HIDE_NAVBAR_PATHS.some((p) => loc.startsWith(p)) || isShellPath(loc);
   return (
     <>
       {!hideNav && <Navbar />}
@@ -129,57 +132,293 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// ─── Redirect helpers ──────────────────────────────────────────────────────────
+
+function StaticRedirect({ to }: { to: string }) {
+  const [, setLocation] = useLocation();
+  useEffect(() => {
+    setLocation(to, { replace: true });
+  }, [to, setLocation]);
+  return null;
+}
+
+function LegacyDashboardRedirect() {
+  const { data: me, isLoading } = useGetMe();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (isLoading) return;
+    const role = (me?.role ?? "parent") as Role;
+    setLocation(SHELL_ROOT[role] ?? "/", { replace: true });
+  }, [isLoading, me, setLocation]);
+
+  return (
+    <div className="flex h-dvh items-center justify-center">
+      <Loader2 className="animate-spin text-teal-600" size={24} />
+    </div>
+  );
+}
+
+function RoleRedirect({ parentTo, proTo, defaultTo }: { parentTo: string; proTo: string; defaultTo: string }) {
+  const { data: me } = useGetMe();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    const role = me?.role;
+    const dest =
+      role === "parent" ? parentTo
+      : role === "professional" ? proTo
+      : defaultTo;
+    setLocation(dest, { replace: true });
+  }, [me, setLocation, parentTo, proTo, defaultTo]);
+
+  return null;
+}
+
+// ─── Stub pages (replaced in later passes) ────────────────────────────────────
+
+function StubPage({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+      <h2 className="text-xl font-semibold text-gray-800 mb-2">{title}</h2>
+      <p className="text-sm text-muted-foreground max-w-sm">{description}</p>
+    </div>
+  );
+}
+
+// ─── Router ────────────────────────────────────────────────────────────────────
+
 function Router() {
   return (
     <Layout>
       <Switch>
+
+        {/* ── Legacy redirects (matched before new routes) ── */}
+        <Route path="/dashboard">
+          <RequireAuth><LegacyDashboardRedirect /></RequireAuth>
+        </Route>
+        <Route path="/choose-role">
+          <StaticRedirect to="/onboarding" />
+        </Route>
+        <Route path="/onboard">
+          <StaticRedirect to="/onboarding/pro" />
+        </Route>
+        <Route path="/centre-dashboard">
+          <StaticRedirect to="/centre/overview" />
+        </Route>
+        <Route path="/availability">
+          <StaticRedirect to="/pro/calendar" />
+        </Route>
+        <Route path="/engagements">
+          <StaticRedirect to="/pro/clients" />
+        </Route>
+        <Route path="/assessments">
+          <StaticRedirect to="/pro/today" />
+        </Route>
+        <Route path="/assessment-offerings">
+          <StaticRedirect to="/pro/today" />
+        </Route>
+        <Route path="/sessions">
+          <RequireAuth>
+            <RoleRedirect parentTo="/bookings" proTo="/pro/today" defaultTo="/home" />
+          </RequireAuth>
+        </Route>
+        {/* Legacy professional profile URL → new canonical */}
+        <Route path="/professionals/:id">
+          {(params) => <StaticRedirect to={`/p/${params.id}`} />}
+        </Route>
+
+        {/* ── Public pages ── */}
         <Route path="/" component={HomePage} />
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/sign-up/*?" component={SignUpPage} />
         <Route path="/sso-callback" component={SsoCallbackPage} />
-        <Route path="/choose-role">
-          <RequireAuth><ChooseRolePage /></RequireAuth>
-        </Route>
         <Route path="/search" component={SearchPage} />
-        <Route path="/professionals/:id" component={ProfessionalProfilePage} />
-        <Route path="/dashboard">
-          <RequireAuth><DashboardPage /></RequireAuth>
-        </Route>
-        <Route path="/onboard">
-          <RequireAuth><OnboardPage /></RequireAuth>
-        </Route>
-        <Route path="/account">
-          <RequireAuth><AccountPage /></RequireAuth>
-        </Route>
+        <Route path="/p/:id" component={ProfessionalProfilePage} />
         <Route path="/pricing" component={PricingPage} />
         <Route path="/payment/success" component={PaymentSuccessPage} />
         <Route path="/payment/cancel" component={PaymentCancelPage} />
-        <Route path="/admin">
-          <RequireAuth><AdminPage /></RequireAuth>
-        </Route>
-        <Route path="/availability">
-          <RequireAuth><AvailabilityPage /></RequireAuth>
-        </Route>
-        <Route path="/sessions">
-          <RequireAuth><SessionsPage /></RequireAuth>
-        </Route>
         <Route path="/resources" component={ResourcesPage} />
         <Route path="/forum" component={ForumPage} />
-        <Route path="/engagements">
-          <RequireAuth><EngagementsPage /></RequireAuth>
-        </Route>
-        <Route path="/assessments">
-          <RequireAuth><AssessmentsPage /></RequireAuth>
-        </Route>
-        <Route path="/assessment-offerings">
-          <RequireAuth><AssessmentOfferingsPage /></RequireAuth>
-        </Route>
-        <Route path="/centre-dashboard">
-          <RequireAuth><CentreDashboardPage /></RequireAuth>
-        </Route>
         <Route path="/privacy" component={PrivacyPage} />
         <Route path="/terms" component={TermsPage} />
         <Route path="/support" component={SupportPage} />
+
+        {/* ── Onboarding (RequireAuth, no AppShell chrome) ── */}
+        <Route path="/onboarding/pro">
+          <RequireAuth><OnboardPage /></RequireAuth>
+        </Route>
+        <Route path="/onboarding/child">
+          <RequireAuth>
+            <StubPage
+              title="Child profile coming soon"
+              description="You'll set up your child's profile here in the next update."
+            />
+          </RequireAuth>
+        </Route>
+        <Route path="/onboarding">
+          <RequireAuth><ChooseRolePage /></RequireAuth>
+        </Route>
+
+        {/* ── Account (auth, public layout) ── */}
+        <Route path="/account">
+          <RequireAuth><AccountPage /></RequireAuth>
+        </Route>
+
+        {/* ── Admin (auth, existing layout — no AppShell) ── */}
+        <Route path="/admin">
+          <RequireAuth><AdminPage /></RequireAuth>
+        </Route>
+
+        {/* ── Parent shell ── */}
+        <Route path="/home">
+          <RequireAuth>
+            <RequireRole allow={["parent"]}>
+              <RequireChildProfile>
+                <AppShell>
+                  <ParentDashboard initialTab="home" />
+                </AppShell>
+              </RequireChildProfile>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+        <Route path="/explore">
+          <RequireAuth>
+            <RequireRole allow={["parent"]}>
+              <AppShell>
+                <ParentDashboard initialTab="find" />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+        <Route path="/bookings/:id?">
+          <RequireAuth>
+            <RequireRole allow={["parent"]}>
+              <AppShell>
+                <ParentDashboard initialTab="bookings" />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+        <Route path="/journey">
+          <RequireAuth>
+            <RequireRole allow={["parent"]}>
+              <AppShell>
+                <StubPage
+                  title="Journey"
+                  description="Track your child's progress, goals, and milestones — coming in V2."
+                />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+        <Route path="/inbox/:threadId?">
+          <RequireAuth>
+            <RequireRole allow={["parent"]}>
+              <AppShell>
+                <ParentDashboard initialTab="messages" />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+
+        {/* ── Professional shell ── */}
+        <Route path="/pro/today">
+          <RequireAuth>
+            <RequireRole allow={["professional"]}>
+              <AppShell>
+                <ProfessionalDashboard initialTab="home" />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+        <Route path="/pro/calendar">
+          <RequireAuth>
+            <RequireRole allow={["professional"]}>
+              <AppShell>
+                <ProfessionalDashboard initialTab="availability" />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+        <Route path="/pro/clients/:childId?">
+          <RequireAuth>
+            <RequireRole allow={["professional"]}>
+              <AppShell>
+                <StubPage
+                  title="My Clients"
+                  description="Your client roster with goals, notes, and session history — coming in V2."
+                />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+        <Route path="/pro/inbox/:threadId?">
+          <RequireAuth>
+            <RequireRole allow={["professional"]}>
+              <AppShell>
+                <ProfessionalDashboard initialTab="messages" />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+        <Route path="/pro/earnings">
+          <RequireAuth>
+            <RequireRole allow={["professional"]}>
+              <AppShell>
+                <ProfessionalDashboard initialTab="earnings" />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+
+        {/* ── Centre shell ── */}
+        <Route path="/centre/overview">
+          <RequireAuth>
+            <RequireRole allow={["centre_admin"]}>
+              <AppShell>
+                <CentreDashboard initialTab="overview" />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+        <Route path="/centre/bookings">
+          <RequireAuth>
+            <RequireRole allow={["centre_admin"]}>
+              <AppShell>
+                <CentreDashboard initialTab="overview" />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+        <Route path="/centre/roster">
+          <RequireAuth>
+            <RequireRole allow={["centre_admin"]}>
+              <AppShell>
+                <CentreDashboard initialTab="therapists" />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+        <Route path="/centre/services">
+          <RequireAuth>
+            <RequireRole allow={["centre_admin"]}>
+              <AppShell>
+                <CentreDashboard initialTab="services" />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+        <Route path="/centre/inbox">
+          <RequireAuth>
+            <RequireRole allow={["centre_admin"]}>
+              <AppShell>
+                <CentreDashboard initialTab="overview" />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+
         <Route component={NotFound} />
       </Switch>
     </Layout>
@@ -195,7 +434,7 @@ function ClerkProviderWithRoutes() {
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
       signInFallbackRedirectUrl="/dashboard"
-      signUpFallbackRedirectUrl="/choose-role"
+      signUpFallbackRedirectUrl="/onboarding"
       routerPush={(to) => {
         if (to.startsWith("http://") || to.startsWith("https://")) {
           window.location.href = to;

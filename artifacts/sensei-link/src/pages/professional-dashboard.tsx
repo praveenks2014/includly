@@ -1925,12 +1925,12 @@ function EngagementTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN: PROFESSIONAL DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function ProfessionalDashboard() {
+export default function ProfessionalDashboard({ initialTab = "home" }: { initialTab?: ProTab }) {
   const { user } = useUser();
   const [, setLocation] = useLocation();
   const { data: me } = useGetMe();
   const { data: profile, isLoading: profileLoading } = useGetMyProfessionalProfile();
-  const [activeTab, setActiveTab] = useState<ProTab>("home");
+  const [activeTab, setActiveTab] = useState<ProTab>(initialTab);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const firstName = me?.fullName?.split(" ")[0] ?? user?.firstName ?? "there";

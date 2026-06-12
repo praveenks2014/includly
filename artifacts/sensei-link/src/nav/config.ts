@@ -1,0 +1,85 @@
+import type { LucideIcon } from "lucide-react";
+import {
+  Home,
+  Search,
+  CalendarDays,
+  LineChart,
+  MessageSquare,
+  LayoutDashboard,
+  Users,
+  Wallet,
+  Layers,
+} from "lucide-react";
+
+export type Role = "parent" | "professional" | "centre_admin" | "admin";
+
+export type BadgeKey = "unreadMessages" | "pendingRequests";
+
+export interface NavItem {
+  label: string;
+  icon: LucideIcon;
+  path: string;
+  match: (loc: string) => boolean;
+  badge?: BadgeKey;
+}
+
+function tab(
+  label: string,
+  icon: LucideIcon,
+  path: string,
+  badge?: BadgeKey,
+): NavItem {
+  return {
+    label,
+    icon,
+    path,
+    match: (loc) => loc === path || loc.startsWith(path + "/"),
+    badge,
+  };
+}
+
+export const NAV: Record<Exclude<Role, "admin">, NavItem[]> = {
+  parent: [
+    tab("Home", Home, "/home"),
+    tab("Explore", Search, "/explore"),
+    tab("Bookings", CalendarDays, "/bookings"),
+    tab("Journey", LineChart, "/journey"),
+    tab("Inbox", MessageSquare, "/inbox", "unreadMessages"),
+  ],
+  professional: [
+    tab("Today", LayoutDashboard, "/pro/today", "pendingRequests"),
+    tab("Calendar", CalendarDays, "/pro/calendar"),
+    tab("Clients", Users, "/pro/clients"),
+    tab("Inbox", MessageSquare, "/pro/inbox", "unreadMessages"),
+    tab("Earnings", Wallet, "/pro/earnings"),
+  ],
+  centre_admin: [
+    tab("Overview", LayoutDashboard, "/centre/overview"),
+    tab("Bookings", CalendarDays, "/centre/bookings"),
+    tab("Roster", Users, "/centre/roster"),
+    tab("Services", Layers, "/centre/services"),
+    tab("Inbox", MessageSquare, "/centre/inbox", "unreadMessages"),
+  ],
+};
+
+export const SHELL_ROOT: Record<Role, string> = {
+  parent: "/home",
+  professional: "/pro/today",
+  centre_admin: "/centre/overview",
+  admin: "/admin",
+};
+
+export const SHELL_PREFIXES = [
+  "/home",
+  "/explore",
+  "/bookings",
+  "/journey",
+  "/inbox",
+  "/pro/",
+  "/centre/",
+  "/onboarding",
+];
+
+export function isShellPath(loc: string): boolean {
+  return SHELL_PREFIXES.some((p) => loc === p || loc.startsWith(p));
+}

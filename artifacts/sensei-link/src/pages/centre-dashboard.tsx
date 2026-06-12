@@ -98,13 +98,13 @@ const STATUS_CONFIG: Record<CentreStatus, { label: string; color: string; icon: 
   suspended: { label: "Suspended", color: "bg-orange-50 text-orange-700 border-orange-200", icon: <AlertCircle size={12} /> },
 };
 
-export default function CentreDashboard() {
+export default function CentreDashboard({ initialTab = "overview" }: { initialTab?: SidebarTab }) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { data: me, isLoading: meLoading } = useGetMe();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<SidebarTab>("overview");
+  const [activeTab, setActiveTab] = useState<SidebarTab>(initialTab);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
