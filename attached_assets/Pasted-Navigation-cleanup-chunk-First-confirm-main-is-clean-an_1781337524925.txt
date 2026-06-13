@@ -1,0 +1,41 @@
+Navigation cleanup chunk. First confirm main is clean and the
+monetization change is merged, then create a branch called
+nav-shell-cleanup and work only there. Remnants of the OLD navigation are
+still rendering alongside the new AppShell, and one entry point got
+orphaned. Show me your plan before writing any code.
+
+Three things to fix:
+
+1. Stray old nav controls on pages that DO use the new shell. A hamburger
+menu (three lines, top-left) and an old top-right header/avatar menu are
+still rendering on top of the new AppShell (new sidebar + child-switcher
+chip). Find the old header/hamburger/avatar-menu components and remove
+them everywhere the new AppShell already renders, so only the new TopBar +
+sidebar/bottom-nav show.
+
+2. Orphaned pages not wrapped in the new shell. The Account, Plans &
+payments, and profile-edit pages (and anything reachable from the old
+avatar menu) still render in the OLD layout — old top links ("Search",
+"Dashboard"), no left sidebar. Mount these pages INSIDE the new AppShell
+like every other page, so they show the same sidebar/TopBar and the user
+never loses the navigation.
+
+3. Restore the orphaned shadow-teacher match entry point. The
+shadow-teacher match-request flow still works on the backend
+(POST /api/shadow-teacher/request) but there is no way to reach it from
+the new shell — its old entry point was removed with the old nav. Add a
+clear entry point for parents to request a shadow-teacher match, placed as
+a card on the parent Home (Care Plan) screen. Tell me where you put it and
+confirm the full request flow works end-to-end from that entry point.
+
+Before writing code, list:
+- Every page still rendering outside the new AppShell
+- Every old nav component (hamburger, old header, old avatar menu) and
+  exactly where each is still mounted
+- Where you'll place the shadow-teacher match entry point
+- Confirm that after this there is ONE navigation system everywhere: no
+  hamburger, no old header, no second avatar menu, no page that drops the
+  sidebar
+
+Do NOT touch centre contact visibility — leave it exactly as is for now.
+No DB push, no deploy. Build on the branch; I'll test on the preview URL.
