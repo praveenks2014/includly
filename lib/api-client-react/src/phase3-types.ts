@@ -1,12 +1,60 @@
+export interface ChildConsentType {
+  intakeShare: boolean;
+  media: boolean;
+  reports: boolean;
+  consentedAt: string;
+}
+
+export interface CareNotesType {
+  calming: string;
+  triggers: string;
+  communicationMode: string;
+  favorites: string;
+}
+
+export interface ExistingTherapyType {
+  type: string;
+  frequency: string;
+}
+
 export interface ChildResponseType {
   id: number;
   parentId: number;
   name: string;
   dob: string | null;
-  diagnosisTags: string | null;
   notes: string | null;
+  city: string | null;
+  area: string | null;
+  lat: number | null;
+  lng: number | null;
+  gender: string | null;
+  diagnosisStatus: string | null;
+  conditions: string[] | null;
+  languages: string[] | null;
+  schoolType: string | null;
+  grade: string | null;
+  existingTherapies: ExistingTherapyType[] | null;
+  goalsAreas: string[] | null;
+  availableTimeWindows: string[] | null;
+  preferredModes: string[] | null;
+  budgetMinInr: number | null;
+  budgetMaxInr: number | null;
+  careNotes: CareNotesType | null;
+  consent: ChildConsentType | null;
+  completionPct?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ChildIntakeCardType {
+  id: number;
+  name: string;
+  ageMonths: number | null;
+  conditions: string[] | null;
+  diagnosisStatus: string | null;
+  goalsAreas: string[] | null;
+  languages: string[] | null;
+  careNotes: CareNotesType | null;
 }
 
 export interface ConnectMessageResponseType {

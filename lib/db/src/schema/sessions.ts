@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { professionalProfilesTable } from "./professionals";
 import { usersTable } from "./users";
+import { childrenTable } from "./children";
 
 export const sessionStatusEnum = pgEnum("session_status", [
   "pending_payment",
@@ -50,7 +51,7 @@ export const sessionBookingsTable = pgTable("session_bookings", {
   status: sessionStatusEnum("status").notNull().default("pending_payment"),
   providerOrderId: text("provider_order_id"),
   providerPaymentId: text("provider_payment_id"),
-  childId: integer("child_id"),
+  childId: integer("child_id").references(() => childrenTable.id, { onDelete: "setNull" }),
   notes: text("notes"),
   bookingType: text("booking_type").notNull().default("session"),
   assessmentOfferingId: integer("assessment_offering_id"),
