@@ -1,0 +1,47 @@
+New isolated chunk — monetization change, parent-side. Work on a branch
+called free-parent-discovery. This removes the parent contact-unlock
+paywall; it does NOT delete unlock infrastructure. Show me your plan
+before writing code.
+
+Goal: parent discovery and professional contact become free. Revenue
+shifts entirely to bookings, the shadow-teacher matching fee (already
+collected today), and the professional side. No parent ever pays to see
+contact details.
+
+Changes:
+
+1. Therapists, doctors, OTs, speech therapists, centres, trainers —
+contact details (phone/email) are FULLY VISIBLE on the profile with no
+unlock gate. Remove the locked-contact overlay and the "Unlock for ₹99 /
+₹499" CTAs from these profiles. Booking still works exactly as now
+(commission + platform fee on the booking).
+
+2. Shadow teachers — contact details are NOT freely shown. The profile's
+primary CTA becomes "Request a match" which routes into the EXISTING
+shadow-teacher matching flow (the one that already charges the matching
+fee). Do not expose phone/email on the shadow-teacher public profile;
+the connection is gated by the matching fee via that flow, not by a
+contact unlock. Confirm there is no other path on the profile or in
+search that reveals a shadow teacher's contact without going through
+matching.
+
+3. Pricing page, parent view — remove Plan A (₹499/30-day unlimited
+unlocks) and Plan B (₹99/contact) entirely. Parent pricing should now
+show: shadow-teacher matching fee, and the ₹49 platform fee per booking
+for other specialists. Leave the professional view of the pricing page
+unchanged.
+
+4. Do NOT delete the contact_unlocks table, the Razorpay unlock
+endpoints, or related migrations. Just stop surfacing the paywall to
+parents. If any unlock CTA is now unreachable, leave the backend intact
+and only remove the front-end entry points.
+
+Before coding, tell me:
+- Every file/route you'll touch (especially anything payment-related)
+- How shadow-teacher contact is currently revealed today, and exactly
+  how you'll ensure matching is the only path after this change
+- Confirm no therapist/doctor booking flow breaks when the unlock step
+  is removed (some booking code may currently assume an unlock exists —
+  check for that)
+
+Don't write code yet.
