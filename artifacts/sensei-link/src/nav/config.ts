@@ -75,6 +75,8 @@ export const SHELL_PREFIXES = [
   "/bookings",
   "/journey",
   "/inbox",
+  "/shadow-teacher",
+  "/account",
   "/pro/",
   "/centre/",
   "/onboarding",

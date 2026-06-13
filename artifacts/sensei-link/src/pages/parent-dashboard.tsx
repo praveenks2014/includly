@@ -65,16 +65,6 @@ interface ChatMsg {
   createdAt: string;
 }
 
-const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: "home",           label: "Home",               icon: <Home size={18} /> },
-  { id: "find",           label: "Find Professionals", icon: <Search size={18} /> },
-  { id: "bookings",       label: "My Bookings",        icon: <CalendarCheck size={18} /> },
-  { id: "shadow-teacher", label: "Shadow Teacher",     icon: <User size={18} /> },
-  { id: "messages",       label: "Messages",           icon: <MessageCircle size={18} /> },
-  { id: "notifications",  label: "Notifications",      icon: <Bell size={18} /> },
-];
-
-const MOBILE_BOTTOM: Tab[] = ["home", "find", "bookings", "shadow-teacher", "messages"];
 
 const SPECIALTIES = [
   { value: "", label: "All Specialties" },
@@ -646,6 +636,20 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
           </div>
         ))}
       </div>
+
+      {/* Shadow Teacher Matching */}
+      <Link href="/shadow-teacher">
+        <div className="bg-white border border-teal-100 rounded-2xl p-5 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow cursor-pointer">
+          <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center shrink-0">
+            <User size={22} className="text-teal-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-gray-900 text-sm">Request a Shadow Teacher</p>
+            <p className="text-xs text-gray-500 mt-0.5">Get matched with a verified shadow teacher for your child's classroom support.</p>
+          </div>
+          <ArrowRight size={16} className="text-teal-500 shrink-0" />
+        </div>
+      </Link>
 
       {/* Recommendations */}
       <div>
@@ -1339,7 +1343,16 @@ export default function ParentDashboard({ initialTab = "home" }: { initialTab?: 
   const unreadCount = (notifications ?? []).filter((n) => !n.read).length;
 
   function handleTabChange(tab: Tab) {
-    setActiveTab(tab);
+    const routes: Partial<Record<Tab, string>> = {
+      home: "/home",
+      find: "/explore",
+      bookings: "/bookings",
+      "shadow-teacher": "/shadow-teacher",
+      messages: "/inbox",
+    };
+    const route = routes[tab];
+    if (route) setLocation(route);
+    else setActiveTab(tab);
   }
 
   return (

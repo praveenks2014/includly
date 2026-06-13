@@ -1,12 +1,9 @@
 import { useLocation, Link } from "wouter";
-import { useClerk } from "@clerk/react";
 import { useGetMe } from "@workspace/api-client-react";
-import { LogOut } from "lucide-react";
 import { NAV, SHELL_ROOT, type Role } from "@/nav/config";
 
 export function SideNav() {
-  const [loc, setLocation] = useLocation();
-  const { signOut } = useClerk();
+  const [loc] = useLocation();
   const { data: me } = useGetMe();
   const role = me?.role as Role | undefined;
 
@@ -54,17 +51,6 @@ export function SideNav() {
           );
         })}
       </nav>
-
-      <div className="border-t border-border px-3 py-4">
-        <button
-          onClick={() => signOut(() => setLocation("/"))}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600"
-          style={{ minHeight: 44 }}
-        >
-          <LogOut size={18} />
-          Sign out
-        </button>
-      </div>
     </aside>
   );
 }

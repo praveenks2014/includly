@@ -106,10 +106,24 @@ function ClerkQueryClientCacheInvalidator() {
 
 const HIDE_NAVBAR_PATHS = ["/sign-in", "/sign-up", "/sso-callback", "/onboarding"];
 
+// Wraps children in AppShell when signed in, bare layout otherwise.
+// Used for pages that are public but should show the shell to authenticated users.
+function AuthShell({ children }: { children: React.ReactNode }) {
+  const { isSignedIn, isLoaded } = useAuth();
+  if (!isLoaded) return null;
+  if (isSignedIn) return <AppShell>{children}</AppShell>;
+  return <>{children}</>;
+}
+
 function Layout({ children }: { children: React.ReactNode }) {
   const [loc] = useLocation();
+  const { isSignedIn } = useAuth();
+  // Suppress old Navbar on shell paths AND on /support when signed in
+  // (AuthShell provides the AppShell header/sidebar for signed-in users there).
   const hideNav =
-    HIDE_NAVBAR_PATHS.some((p) => loc.startsWith(p)) || isShellPath(loc);
+    HIDE_NAVBAR_PATHS.some((p) => loc.startsWith(p)) ||
+    isShellPath(loc) ||
+    (isSignedIn === true && loc.startsWith("/support"));
   return (
     <>
       {!hideNav && <Navbar />}
@@ -266,7 +280,11 @@ function Router() {
         <Route path="/forum" component={ForumPage} />
         <Route path="/privacy" component={PrivacyPage} />
         <Route path="/terms" component={TermsPage} />
-        <Route path="/support" component={SupportPage} />
+        <Route path="/support">
+          <AuthShell>
+            <SupportPage />
+          </AuthShell>
+        </Route>
 
         {/* ── Onboarding (RequireAuth, no AppShell chrome) ── */}
         <Route path="/onboarding/pro">
@@ -279,9 +297,13 @@ function Router() {
           <RequireAuth><ChooseRolePage /></RequireAuth>
         </Route>
 
-        {/* ── Account (auth, public layout) ── */}
+        {/* ── Account ── */}
         <Route path="/account">
-          <RequireAuth><AccountPage /></RequireAuth>
+          <RequireAuth>
+            <AppShell>
+              <AccountPage />
+            </AppShell>
+          </RequireAuth>
         </Route>
 
         {/* ── Admin (auth, existing layout — no AppShell) ── */}
@@ -337,6 +359,17 @@ function Router() {
               <AppShell>
                 <ParentDashboard initialTab="messages" />
               </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+        <Route path="/shadow-teacher">
+          <RequireAuth>
+            <RequireRole allow={["parent"]}>
+              <RequireChildProfile>
+                <AppShell>
+                  <ParentDashboard initialTab="shadow-teacher" />
+                </AppShell>
+              </RequireChildProfile>
             </RequireRole>
           </RequireAuth>
         </Route>
