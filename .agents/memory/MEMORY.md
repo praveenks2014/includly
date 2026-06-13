@@ -3,3 +3,5 @@
 - [ChatModal send bug pattern](chat-modal-send-bug.md) — guard send() AND disable the button on the same conditions; never let button appear active when a silent early-return guard exists in the handler
 - [SelectedChildContext pattern](selected-child-context.md) — single source of truth for active child; localStorage is only persistence; sessionStorage skip key gates the soft-wall guard
 - [N1 nav shell architecture](n1-nav-shell.md) — AppShell/navConfig/guards layout; double-nav is intentional N1 state until N2 restructures page internals
+- [Drizzle push interactive prompt](drizzle-push-interactive.md) — drizzle-kit push asks rename vs create questions even with --force; apply DDL directly via SQL for reliable non-interactive schema changes
+- [Children V2 schema pattern](children-v2-schema.md) — text[].array() for filterable arrays, jsonb for structured objects; children API: completionPct from 8 fields; professional GET/:id needs paid_held+ booking + consent.intakeShare

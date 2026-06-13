@@ -8,9 +8,40 @@ import type {
   EngagementLogResponse,
   WalletTransactionResponseType,
   CommissionRateResponseType,
+  CareNotesType,
+  ExistingTherapyType,
 } from "./phase3-types";
 
 // ─── Children ──────────────────────────────────────────────────────────────────
+
+export type CreateChildPayload = {
+  name: string;
+  dob?: string;
+  gender?: string;
+  city?: string;
+  area?: string;
+  notes?: string;
+  diagnosisStatus?: string;
+  conditions?: string[];
+  languages?: string[];
+  schoolType?: string;
+  grade?: string;
+  existingTherapies?: ExistingTherapyType[];
+  goalsAreas?: string[];
+  availableTimeWindows?: string[];
+  preferredModes?: string[];
+  budgetMinInr?: number | null;
+  budgetMaxInr?: number | null;
+  careNotes?: CareNotesType;
+  consent: { intakeShare: boolean; media: boolean; reports: boolean };
+};
+
+export type UpdateChildPayload = {
+  id: number;
+  data: Partial<Omit<CreateChildPayload, "consent">> & {
+    consent?: { intakeShare: boolean; media: boolean; reports: boolean };
+  };
+};
 
 export const getGetMyChildrenQueryKey = () => ["/children"] as const;
 
@@ -22,16 +53,37 @@ export function useGetMyChildren(options?: { query?: Omit<UseQueryOptions<ChildR
   });
 }
 
-export function useCreateChild(options?: UseMutationOptions<ChildResponseType, Error, { name: string; dob?: string; diagnosisTags?: string; notes?: string }>) {
-  return useMutation<ChildResponseType, Error, { name: string; dob?: string; diagnosisTags?: string; notes?: string }>({
-    mutationFn: (data) => customFetch<ChildResponseType>("/api/children", { method: "POST", body: JSON.stringify(data), headers: { "Content-Type": "application/json" } }),
+export const getGetChildQueryKey = (id: number) => [`/children/${id}`] as const;
+
+export function useGetChild(id: number, options?: { query?: Omit<UseQueryOptions<ChildResponseType>, "queryKey" | "queryFn"> }) {
+  return useQuery<ChildResponseType>({
+    queryKey: getGetChildQueryKey(id),
+    queryFn: () => customFetch<ChildResponseType>(`/api/children/${id}`),
+    enabled: !!id,
+    ...options?.query,
+  });
+}
+
+export function useCreateChild(options?: UseMutationOptions<ChildResponseType, Error, CreateChildPayload>) {
+  return useMutation<ChildResponseType, Error, CreateChildPayload>({
+    mutationFn: (data) =>
+      customFetch<ChildResponseType>("/api/children", {
+        method: "POST",
+        body: JSON.stringify(data),
+        headers: { "Content-Type": "application/json" },
+      }),
     ...options,
   });
 }
 
-export function useUpdateChild(options?: UseMutationOptions<ChildResponseType, Error, { id: number; data: Partial<{ name: string; dob: string; diagnosisTags: string; notes: string }> }>) {
-  return useMutation<ChildResponseType, Error, { id: number; data: Partial<{ name: string; dob: string; diagnosisTags: string; notes: string }> }>({
-    mutationFn: ({ id, data }) => customFetch<ChildResponseType>(`/api/children/${id}`, { method: "PATCH", body: JSON.stringify(data), headers: { "Content-Type": "application/json" } }),
+export function useUpdateChild(options?: UseMutationOptions<ChildResponseType, Error, UpdateChildPayload>) {
+  return useMutation<ChildResponseType, Error, UpdateChildPayload>({
+    mutationFn: ({ id, data }) =>
+      customFetch<ChildResponseType>(`/api/children/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+        headers: { "Content-Type": "application/json" },
+      }),
     ...options,
   });
 }
