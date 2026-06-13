@@ -60,6 +60,12 @@ function maskProfile(
   };
 }
 
+// ── GET /shadow-teacher/pricing — public: returns current matching fee ────────
+router.get("/shadow-teacher/pricing", async (_req: Request, res: Response): Promise<void> => {
+  const s = await getSettings();
+  res.json({ matchingFeeInr: s.matchingFeeInr });
+});
+
 // ── POST /shadow-teacher/request — parent submits (new flow: no upfront fee) ─
 const NewRequestBody = z.object({
   childId: z.number().int().positive(),

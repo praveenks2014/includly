@@ -102,6 +102,17 @@ function useChildren() {
   });
 }
 
+function useMatchingFee() {
+  return useQuery<{ matchingFeeInr: number }>({
+    queryKey: ["shadow-teacher-pricing"],
+    queryFn: async () => {
+      const res = await fetch(`${getApiBase()}/shadow-teacher/pricing`);
+      return res.json() as Promise<{ matchingFeeInr: number }>;
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-700",
   shortlisted: "bg-blue-100 text-blue-700",
@@ -253,6 +264,8 @@ export function ShadowTeacherRequestWidget() {
 
   const { data: match, isLoading: loadingMatch, refetch } = useMyMatch();
   const { data: children = [], isLoading: loadingChildren } = useChildren();
+  const { data: pricing } = useMatchingFee();
+  const matchingFee = pricing?.matchingFeeInr ?? 500;
 
   const [selectedChildId, setSelectedChildId] = useState<number | "">("");
   const [extraNotes, setExtraNotes] = useState("");
@@ -324,7 +337,7 @@ export function ShadowTeacherRequestWidget() {
           currency: "INR",
           order_id: orderData.orderId!,
           name: "Includly",
-          description: `First month — ${orderData.teacherFirstName ?? "Teacher"}`,
+          description: `Matching fee — ${orderData.teacherFirstName ?? "Teacher"}`,
           handler: async (response: RazorpayPaymentResponse) => {
             try {
               const vRes = await fetchWithAuth(`/api/shadow-teacher/${match.id}/verify-commitment`, {
@@ -440,7 +453,7 @@ export function ShadowTeacherRequestWidget() {
         </Button>
 
         <p className="text-[11px] text-center text-muted-foreground">
-          No fee to request a match. A commitment fee (first month's salary) is charged only when you choose a teacher.
+          No fee to request a match. A one-time matching fee of ₹{matchingFee.toLocaleString("en-IN")} is charged only when you choose a teacher.
         </p>
       </div>
     );
@@ -485,7 +498,7 @@ export function ShadowTeacherRequestWidget() {
         )}
 
         <p className="text-xs text-center text-muted-foreground">
-          Chat with teachers to ask questions. When ready, press <strong>Choose</strong> to proceed with the first month's fee.
+          Chat with teachers to ask questions. When ready, press <strong>Choose</strong> to pay the ₹{matchingFee.toLocaleString("en-IN")} matching fee and confirm your teacher.
         </p>
       </div>
     );
@@ -502,7 +515,7 @@ export function ShadowTeacherRequestWidget() {
           <h2 className="font-serif font-semibold text-lg text-foreground">Complete Your Selection</h2>
         </div>
         <p className="text-sm text-muted-foreground">
-          You selected a teacher. Complete the first month's payment to confirm your engagement.
+          You selected a teacher. Complete the ₹{matchingFee.toLocaleString("en-IN")} matching fee payment to confirm your engagement.
         </p>
         {selectedCandidate && (
           <CandidateCard
