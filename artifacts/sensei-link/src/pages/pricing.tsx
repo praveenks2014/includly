@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@clerk/react";
 import {
@@ -116,6 +117,17 @@ export default function PricingPage() {
   const { data: me } = useGetMe();
   const { data: myProfile } = useGetMyProfessionalProfile();
   const { data: sub } = useGetMySubscription();
+
+  const { data: publicSettings } = useQuery({
+    queryKey: ["public-settings"],
+    queryFn: async () => {
+      const res = await fetch(`${basePath}/api/settings/public`);
+      if (!res.ok) return null;
+      return res.json() as Promise<{ matchingFeeInr: number; matchingFeeRefundable: boolean }>;
+    },
+    staleTime: 5 * 60_000,
+  });
+  const matchingFeeInr = publicSettings?.matchingFeeInr;
 
   const { mutateAsync: createOrder } = useCreateRazorpayOrder();
   const { mutateAsync: verifyPayment } = useVerifyRazorpayPayment();
@@ -401,8 +413,16 @@ export default function PricingPage() {
               <h2 className="text-xl font-bold text-foreground mb-1">{plan.title}</h2>
               <p className="text-sm text-muted-foreground mb-4 flex-1">{plan.description}</p>
               <div className="mb-2">
-                <span className="text-3xl font-bold text-foreground">{plan.price}</span>
-                <span className="text-muted-foreground text-sm ml-1">{plan.period}</span>
+                {plan.id === "plan_a_subscription" ? (
+                  <span className="text-3xl font-bold text-foreground">
+                    {matchingFeeInr != null
+                      ? `₹${matchingFeeInr.toLocaleString("en-IN")}`
+                      : <Loader2 size={22} className="animate-spin inline-block" />}
+                  </span>
+                ) : (
+                  <span className="text-3xl font-bold text-foreground">{plan.price}</span>
+                )}
+                <span className="text-muted-foreground text-sm ml-1">{plan.id === "plan_a_subscription" ? "/ matching" : plan.period}</span>
               </div>
               <ul className="space-y-2 mb-6">
                 {plan.features.map((f) => (

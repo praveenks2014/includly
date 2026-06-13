@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc, arrayOverlaps, isNull, type SQL } from "drizzle-orm";
-import { db, usersTable, professionalProfilesTable, contactUnlocksTable, specialtyEnum, coachingSubTypeEnum, professionalSubscriptionsTable, professionalCertificationsTable } from "@workspace/db";
+import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc, arrayOverlaps, type SQL } from "drizzle-orm";
+import { db, usersTable, professionalProfilesTable, adminSettingsTable, specialtyEnum, coachingSubTypeEnum, professionalSubscriptionsTable, professionalCertificationsTable } from "@workspace/db";
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
 import { notifyParentsOnProfileUpdate } from "../lib/notificationService";
 import {
@@ -27,6 +27,14 @@ function blurContact(value: string | null | undefined): string {
   }
   return value.slice(0, 3) + "•".repeat(value.length - 3);
 }
+
+router.get("/settings/public", async (_req, res): Promise<void> => {
+  const [settings] = await db.select().from(adminSettingsTable).limit(1);
+  res.json({
+    matchingFeeInr: settings?.matchingFeeInr ?? 500,
+    matchingFeeRefundable: settings?.matchingFeeRefundable ?? true,
+  });
+});
 
 router.get("/professionals/me", requireAuth, async (req, res): Promise<void> => {
   const [profile] = await db
@@ -296,27 +304,8 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
     .limit(limitNum)
     .offset(offsetNum);
 
-  const unlockSet = new Set<number>();
-  const chatAccessOnlySet = new Set<number>();
-  if (req.userId) {
-    const unlocks = await db
-      .select()
-      .from(contactUnlocksTable)
-      .where(
-        and(
-          eq(contactUnlocksTable.parentId, req.userId),
-          or(isNull(contactUnlocksTable.expiresAt), gt(contactUnlocksTable.expiresAt, new Date())),
-        ),
-      );
-    unlocks.forEach((u) => {
-      unlockSet.add(u.professionalId);
-      if (u.chatAccessOnly) chatAccessOnlySet.add(u.professionalId);
-    });
-  }
-
   const results = paginated.map((p) => {
-    const isUnlocked = unlockSet.has(p.id);
-    const isChatOnly = chatAccessOnlySet.has(p.id);
+    const isShadowTeacher = p.specialty === "shadow_teacher";
     return {
       id: p.id,
       userId: p.userId,
@@ -336,12 +325,12 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       verificationStatus: p.verificationStatus,
       averageRating: p.averageRating,
       totalRatings: p.totalRatings,
-      phoneBlurred: blurContact(p.phone),
-      emailBlurred: blurContact(p.email),
-      isUnlocked,
-      chatAccessOnly: isChatOnly,
-      phone: (isUnlocked && !isChatOnly) ? p.phone : null,
-      email: (isUnlocked && !isChatOnly) ? p.email : null,
+      phoneBlurred: isShadowTeacher ? null : blurContact(p.phone),
+      emailBlurred: isShadowTeacher ? null : blurContact(p.email),
+      isUnlocked: !isShadowTeacher,
+      chatAccessOnly: false,
+      phone: isShadowTeacher ? null : p.phone,
+      email: isShadowTeacher ? null : p.email,
       distanceKm: p.distanceKm ?? null,
       pricingMinINR: p.pricingMinINR ?? null,
       pricingMaxINR: p.pricingMaxINR ?? null,
@@ -400,22 +389,7 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
       .where(eq(professionalProfilesTable.id, profile.id));
   }
 
-  let isUnlocked = false;
-  let isChatAccessOnly = false;
-  if (req.userId) {
-    const [unlock] = await db
-      .select()
-      .from(contactUnlocksTable)
-      .where(
-        and(
-          eq(contactUnlocksTable.parentId, req.userId),
-          eq(contactUnlocksTable.professionalId, profile.id),
-          or(isNull(contactUnlocksTable.expiresAt), gt(contactUnlocksTable.expiresAt, new Date())),
-        ),
-      );
-    isUnlocked = !!unlock;
-    isChatAccessOnly = unlock?.chatAccessOnly ?? false;
-  }
+  const isShadowTeacher = profile.specialty === "shadow_teacher";
 
   // Compute isPremium from active subscription — prevents permanent boost after expiry/cancel
   const [activeProfSub] = await db
@@ -435,12 +409,12 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
   const result = {
     ...safeProfile,
     avatarUrl: userRow?.avatarUrl ?? null,
-    phoneBlurred: blurContact(profile.phone),
-    emailBlurred: blurContact(profile.email),
-    isUnlocked,
-    chatAccessOnly: isChatAccessOnly,
-    phone: (isUnlocked && !isChatAccessOnly) ? profile.phone : null,
-    email: (isUnlocked && !isChatAccessOnly) ? profile.email : null,
+    phoneBlurred: isShadowTeacher ? null : blurContact(profile.phone),
+    emailBlurred: isShadowTeacher ? null : blurContact(profile.email),
+    isUnlocked: !isShadowTeacher,
+    chatAccessOnly: false,
+    phone: isShadowTeacher ? null : profile.phone,
+    email: isShadowTeacher ? null : profile.email,
     pricingMinINR: profile.pricingMinINR ?? null,
     pricingMaxINR: profile.pricingMaxINR ?? null,
     paymentActivated: profile.paymentActivated,

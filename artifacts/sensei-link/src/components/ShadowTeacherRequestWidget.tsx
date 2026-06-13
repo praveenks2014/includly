@@ -44,7 +44,8 @@ function useShadowSettings() {
   return useQuery<Settings>({
     queryKey: ["admin-settings-shadow"],
     queryFn: async () => {
-      const res = await fetchWithAuth("/api/admin/settings");
+      const res = await fetch("/api/settings/public");
+      if (!res.ok) throw new Error("Failed to fetch settings");
       const d = await res.json();
       return { matchingFeeInr: d.matchingFeeInr ?? 500, matchingFeeRefundable: d.matchingFeeRefundable ?? true };
     },

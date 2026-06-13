@@ -21,11 +21,8 @@ interface Professional {
   verificationStatus: string;
   averageRating?: number | null;
   totalRatings?: number;
-  phoneBlurred?: string | null;
-  emailBlurred?: string | null;
   phone?: string | null;
   email?: string | null;
-  isUnlocked?: boolean;
   pricingMinINR?: number | null;
   pricingMaxINR?: number | null;
   paymentActivated?: boolean;
@@ -37,15 +34,11 @@ interface Professional {
 
 interface ProfessionalCardProps {
   professional: Professional;
-  onUnlock?: (id: number) => void;
-  unlocking?: boolean;
   distanceKm?: number;
 }
 
-export function ProfessionalCard({ professional: p, onUnlock, unlocking, distanceKm }: ProfessionalCardProps) {
+export function ProfessionalCard({ professional: p, distanceKm }: ProfessionalCardProps) {
   const specialtyColor = SPECIALTY_COLORS[p.specialty] ?? "bg-gray-100 text-gray-800";
-  const phone = p.isUnlocked ? p.phone : p.phoneBlurred;
-  const email = p.isUnlocked ? p.email : p.emailBlurred;
   const SpecialtyIcon = getSpecialtyIcon(p.specialty);
   const inPersonOnly = isInPersonOnly(p.specialty);
   const isCoach = p.specialty === "coaching";
@@ -168,15 +161,11 @@ export function ProfessionalCard({ professional: p, onUnlock, unlocking, distanc
         {/* Contact + CTA */}
         <div className="flex items-center justify-between gap-3 pt-3 border-t border-border/60">
           <div className="flex-1 min-w-0">
-            {phone && (
-              <p className={`text-xs font-mono ${p.isUnlocked ? "text-foreground" : "text-muted-foreground/60 tracking-widest"}`}>
-                {phone}
-              </p>
+            {p.phone && (
+              <p className="text-xs font-mono text-foreground">{p.phone}</p>
             )}
-            {email && (
-              <p className={`text-xs font-mono truncate ${p.isUnlocked ? "text-foreground" : "text-muted-foreground/60 tracking-widest"}`}>
-                {email}
-              </p>
+            {p.email && (
+              <p className="text-xs font-mono truncate text-foreground">{p.email}</p>
             )}
           </div>
           <div className="flex gap-2 shrink-0">
@@ -185,16 +174,6 @@ export function ProfessionalCard({ professional: p, onUnlock, unlocking, distanc
                 View profile
               </Button>
             </Link>
-            {!p.isUnlocked && onUnlock && (
-              <Button
-                size="sm"
-                onClick={() => onUnlock(p.id)}
-                disabled={unlocking}
-                data-testid={`unlock-btn-${p.id}`}
-              >
-                {unlocking ? "Unlocking..." : "Unlock"}
-              </Button>
-            )}
           </div>
         </div>
       </CardContent>

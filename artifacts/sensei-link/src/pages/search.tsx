@@ -1,11 +1,9 @@
 import { useState, useRef } from "react";
 import {
   useSearchProfessionals,
-  getSearchProfessionalsQueryKey,
   type SearchProfessionalsSpecialty,
   useGetMe,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/react";
 import { ProfessionalCard } from "@/components/ProfessionalCard";
 import { Input } from "@/components/ui/input";
@@ -21,7 +19,6 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Search, SlidersHorizontal, X, Map, List, Navigation2, MapPin, Info } from "lucide-react";
 import { SPECIALTY_OPTIONS, SPECIALTY_ICONS, SPECIALTY_ICON_COLORS, SPECIALTY_LABELS, isInPersonOnly, COACHING_SUB_TYPE_OPTIONS } from "@/lib/specialties";
-import { UnlockPaymentModal } from "@/components/UnlockPaymentModal";
 import { PlacesAutocomplete, type PlaceResult } from "@/components/PlacesAutocomplete";
 import { ProfessionalsMap } from "@/components/ProfessionalsMap";
 
@@ -61,8 +58,6 @@ function ParentLocationPrompt({ onDismiss }: { onDismiss: () => void }) {
 }
 
 export default function SearchPage() {
-  const queryClient = useQueryClient();
-  const [unlockTarget, setUnlockTarget] = useState<{ id: number; name?: string } | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [locationPromptDismissed, setLocationPromptDismissed] = useState(false);
 
@@ -135,15 +130,6 @@ export default function SearchPage() {
       setGeoMode(false);
       setGeoLocation(null);
     }
-  }
-
-  function handleUnlock(professionalId: number, name?: string) {
-    setUnlockTarget({ id: professionalId, name });
-  }
-
-  function handleUnlockSuccess() {
-    queryClient.invalidateQueries({ queryKey: getSearchProfessionalsQueryKey(searchParams) });
-    setUnlockTarget(null);
   }
 
   function clearFilters() {
@@ -488,8 +474,6 @@ export default function SearchPage() {
                 <ProfessionalCard
                   key={p.id}
                   professional={p}
-                  onUnlock={(id) => handleUnlock(id, p.fullName ?? undefined)}
-                  unlocking={false}
                   distanceKm={p.distanceKm ?? undefined}
                 />
               ))}
@@ -498,13 +482,6 @@ export default function SearchPage() {
         )}
       </div>
 
-      <UnlockPaymentModal
-        open={unlockTarget !== null}
-        onClose={() => setUnlockTarget(null)}
-        professionalId={unlockTarget?.id ?? 0}
-        professionalName={unlockTarget?.name}
-        onUnlockSuccess={handleUnlockSuccess}
-      />
     </div>
   );
 }

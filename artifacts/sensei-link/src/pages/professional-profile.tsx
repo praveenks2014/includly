@@ -4,18 +4,15 @@ import { useUser } from "@clerk/react";
 import {
   useGetProfessional,
   useGetRatingsForProfessional,
-  useCheckUnlockStatus,
   useGetMyRatingForProfessional,
   useCreateRating,
   getGetProfessionalQueryKey,
-  getCheckUnlockStatusQueryKey,
   getGetRatingsForProfessionalQueryKey,
   getGetMyRatingForProfessionalQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { getSpecialtyLabel, SPECIALTY_COLORS } from "@/lib/specialties";
-import { UnlockPaymentModal } from "@/components/UnlockPaymentModal";
 import { BookingWidget } from "@/components/BookingWidget";
 import { BookingWidgetV2 } from "@/components/BookingWidgetV2";
 import { ShadowTeacherRequestWidget } from "@/components/ShadowTeacherRequestWidget";
@@ -175,7 +172,6 @@ export default function ProfessionalProfilePage() {
   const { isSignedIn } = useUser();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [showPayModal, setShowPayModal] = useState(false);
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [reviewScore, setReviewScore] = useState(0);
   const [reviewComment, setReviewComment] = useState("");
@@ -184,13 +180,6 @@ export default function ProfessionalProfilePage() {
 
   const { data: professional, isLoading } = useGetProfessional(professionalId);
   const { data: ratingsData } = useGetRatingsForProfessional(professionalId);
-  const { data: unlockStatus } = useCheckUnlockStatus(professionalId, {
-    query: {
-      enabled: isSignedIn === true,
-      retry: false,
-      queryKey: getCheckUnlockStatusQueryKey(professionalId),
-    },
-  });
   const { data: myRatingData } = useGetMyRatingForProfessional(professionalId, {
     query: {
       enabled: isSignedIn === true,
@@ -210,21 +199,9 @@ export default function ProfessionalProfilePage() {
     enabled: !!professionalId,
   });
 
-  const isUnlocked = unlockStatus?.isUnlocked ?? false;
-  const chatAccessOnly = (unlockStatus as any)?.chatAccessOnly ?? false;
+  const isUnlocked = professional?.specialty !== "shadow_teacher";
+  const chatAccessOnly = false;
   const myRating = myRatingData?.rating ?? null;
-  const unlockPrice = 0;
-  const isFree = true;
-
-  function handleUnlock() {
-    if (!isSignedIn) { setLocation("/sign-in"); return; }
-    setShowPayModal(true);
-  }
-
-  function handleUnlockSuccess() {
-    queryClient.invalidateQueries({ queryKey: getGetProfessionalQueryKey(professionalId) });
-    queryClient.invalidateQueries({ queryKey: getCheckUnlockStatusQueryKey(professionalId) });
-  }
 
   function handleStartReview() {
     if (myRating) { setReviewScore(myRating.score); setReviewComment(myRating.comment ?? ""); }
@@ -496,7 +473,7 @@ export default function ProfessionalProfilePage() {
                     </div>
                   )}
                 </div>
-                {isSignedIn && isUnlocked && !showReviewForm && (
+                {isSignedIn && !showReviewForm && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -554,7 +531,7 @@ export default function ProfessionalProfilePage() {
                     <path d="M26 14l3 9h9l-7 5 3 9-8-6-8 6 3-9-7-5h9z" stroke="#FFB830" strokeWidth="2" strokeLinejoin="round"/>
                   </svg>
                   <p className="text-sm font-semibold text-gray-500">No reviews yet</p>
-                  {isSignedIn && isUnlocked && !showReviewForm && (
+                  {isSignedIn && !showReviewForm && (
                     <p className="text-xs text-gray-400 mt-1">Be the first to share your experience.</p>
                   )}
                 </div>
@@ -604,10 +581,7 @@ export default function ProfessionalProfilePage() {
                 isSignedIn={!!isSignedIn}
                 isUnlocked={isUnlocked}
                 chatAccessOnly={chatAccessOnly}
-                isFree={isFree}
-                unlockPrice={unlockPrice}
                 firstName={firstName}
-                onUnlock={handleUnlock}
               />
             </div>
           </div>
@@ -621,21 +595,9 @@ export default function ProfessionalProfilePage() {
           isSignedIn={!!isSignedIn}
           isUnlocked={isUnlocked}
           chatAccessOnly={chatAccessOnly}
-          isFree={isFree}
-          unlockPrice={unlockPrice}
           firstName={firstName}
-          onUnlock={handleUnlock}
         />
       </div>
-
-      <UnlockPaymentModal
-        open={showPayModal}
-        onClose={() => setShowPayModal(false)}
-        professionalId={professionalId}
-        professionalName={p.fullName ?? undefined}
-        specialty={p.specialty}
-        onUnlockSuccess={handleUnlockSuccess}
-      />
 
       <AssessmentBookingModal
         open={showAssessmentModal}
@@ -652,13 +614,10 @@ interface ActionProps {
   isSignedIn: boolean;
   isUnlocked: boolean;
   chatAccessOnly: boolean;
-  isFree: boolean;
-  unlockPrice: number;
   firstName: string;
-  onUnlock: () => void;
 }
 
-function ActionCard({ p, isSignedIn, isUnlocked, chatAccessOnly, isFree, unlockPrice, firstName, onUnlock }: ActionProps) {
+function ActionCard({ p, isSignedIn, isUnlocked, chatAccessOnly, firstName }: ActionProps) {
   return (
     <div className="bg-white rounded-xl shadow-[0_8px_40px_rgba(26,35,64,0.12)] border border-gray-100 overflow-hidden">
       {isUnlocked && chatAccessOnly ? (
@@ -703,34 +662,6 @@ function ActionCard({ p, isSignedIn, isUnlocked, chatAccessOnly, isFree, unlockP
             </div>
           )}
         </div>
-      ) : isSignedIn ? (
-        <div className="p-5">
-          <div className="relative rounded-xl overflow-hidden border border-gray-100 mb-4">
-            <div className="px-4 py-4 blur-[4px] select-none pointer-events-none" aria-hidden="true">
-              <div className="flex items-center gap-2 text-sm font-mono text-gray-400 mb-2">
-                <Phone size={13} /> {p.phoneBlurred}
-              </div>
-              <div className="flex items-center gap-2 text-sm font-mono text-gray-400">
-                <Mail size={13} /> {p.emailBlurred}
-              </div>
-            </div>
-            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center p-3 text-center">
-              <div className="w-9 h-9 rounded-full bg-[#2EC4A5]/10 flex items-center justify-center mb-2">
-                <Lock size={16} className="text-[#2EC4A5]" />
-              </div>
-              <p className="text-xs font-semibold text-[#1A2340]">Contact details locked</p>
-            </div>
-          </div>
-          <Button
-            onClick={onUnlock}
-            className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white font-semibold rounded-xl focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
-            aria-label={isFree ? "Contact for free" : `Unlock contact for ₹${unlockPrice}`}
-            data-testid="unlock-contact-btn"
-          >
-            <Lock size={14} className="mr-2" />
-            {isFree ? `Connect with ${firstName} for Free` : `Connect · ₹${unlockPrice}`}
-          </Button>
-        </div>
       ) : (
         <div className="p-5 text-center">
           <div className="w-10 h-10 rounded-full bg-[#2EC4A5]/10 flex items-center justify-center mx-auto mb-3">
@@ -738,13 +669,11 @@ function ActionCard({ p, isSignedIn, isUnlocked, chatAccessOnly, isFree, unlockP
           </div>
           <p className="text-sm font-semibold text-[#1A2340] mb-1">Sign in to connect with {firstName}</p>
           <p className="text-xs text-gray-400 mb-4">Create a free account to chat and book sessions.</p>
-          <Button
-            onClick={onUnlock}
-            className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
-            aria-label="Sign in to connect with professional"
-          >
-            Sign In to Connect
-          </Button>
+          <a href="/sign-in" className="block w-full">
+            <Button className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] focus-visible:ring-2 focus-visible:ring-[#2EC4A5]">
+              Sign In to Connect
+            </Button>
+          </a>
         </div>
       )}
 
@@ -767,7 +696,7 @@ function ActionCard({ p, isSignedIn, isUnlocked, chatAccessOnly, isFree, unlockP
   );
 }
 
-function MobileActionBar({ p, isSignedIn, isUnlocked, chatAccessOnly, isFree, unlockPrice, firstName, onUnlock }: ActionProps) {
+function MobileActionBar({ p, isUnlocked, chatAccessOnly, firstName }: ActionProps) {
   if (isUnlocked && chatAccessOnly) {
     return (
       <Button
@@ -806,16 +735,15 @@ function MobileActionBar({ p, isSignedIn, isUnlocked, chatAccessOnly, isFree, un
     );
   }
   return (
-    <Button
-      onClick={onUnlock}
-      className="w-full h-12 bg-[#2EC4A5] hover:bg-[#26a88d] text-white font-semibold rounded-xl text-base focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
-      aria-label={isSignedIn ? (isFree ? `Connect with ${firstName} for Free` : `Connect · ₹${unlockPrice}`) : "Sign In to Connect"}
-      data-testid="unlock-contact-btn"
-    >
-      <MessageSquare size={16} className="mr-2" />
-      {isSignedIn
-        ? (isFree ? `Connect with ${firstName} for Free` : `Connect · ₹${unlockPrice}`)
-        : "Sign In to Connect"}
-    </Button>
+    <a href="/sign-in" className="block w-full">
+      <Button
+        className="w-full h-12 bg-[#2EC4A5] hover:bg-[#26a88d] text-white font-semibold rounded-xl text-base focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
+        aria-label={`Sign in to connect with ${firstName}`}
+        data-testid="unlock-contact-btn"
+      >
+        <MessageSquare size={16} className="mr-2" />
+        Sign In to Connect
+      </Button>
+    </a>
   );
 }
