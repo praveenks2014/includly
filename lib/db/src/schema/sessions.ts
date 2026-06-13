@@ -51,7 +51,7 @@ export const sessionBookingsTable = pgTable("session_bookings", {
   status: sessionStatusEnum("status").notNull().default("pending_payment"),
   providerOrderId: text("provider_order_id"),
   providerPaymentId: text("provider_payment_id"),
-  childId: integer("child_id").references(() => childrenTable.id, { onDelete: "setNull" }),
+  childId: integer("child_id").references(() => childrenTable.id, { onDelete: "set null" }),
   notes: text("notes"),
   bookingType: text("booking_type").notNull().default("session"),
   assessmentOfferingId: integer("assessment_offering_id"),
