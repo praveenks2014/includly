@@ -1,0 +1,61 @@
+Payment model change for shadow-teacher matching — PLAN ONLY, no code
+yet. Branch: shadow-match-deposit. Moves WHEN the matching fee is charged
+and adds a rolling shortlist + a PARENT-INITIATED conditional refund
+(no scheduler). Show me your full plan before writing anything.
+
+THE MODEL:
+- ₹500 matching fee (settings.matchingFeeInr) charged AT REQUEST, before
+  matches shown. Single Razorpay charge, existing HMAC pattern. This IS
+  the matching fee — commitment is FREE, no second charge ever. MOVE the
+  charge from the commit step to the request step and REMOVE the
+  commit-time charge. No double-charge possible.
+- ROLLING SHORTLIST, max 3 ACTIVE candidates at a time. Parent marks an
+  active candidate "not interested" → frees a slot → next-best-scored
+  teacher surfaces. Never more than 3 active. Re-matching FREE for 60
+  days, no re-charge.
+- Track DISTINCT teachers ever surfaced (increment on each NEW teacher
+  shown; marking not-interested and cycling does NOT decrement). This
+  count drives refund eligibility.
+
+REFUND — parent-initiated via a "Get Refund" button, NOT a scheduler:
+- A "Get Refund" button appears to the parent ONLY when ALL three hold:
+  (a) 60+ days since request, (b) fewer than 3 distinct teachers were
+  ever surfaced, (c) parent never committed to any match.
+- If any condition fails, the button does NOT show.
+- CRITICAL: the refund API endpoint must RE-VERIFY all three conditions
+  server-side at click time and reject the request if any fails — button
+  visibility is UX only, the server check is the real gate. Do not rely
+  on the button being hidden.
+- On a valid click: full ₹500 Razorpay refund. Refund must actually fire,
+  retry/log on failure, and the deposit is marked "refunded" ONLY if the
+  Razorpay refund succeeded (the existing refund code swallows failures
+  silently — do NOT repeat that).
+- NO refund, ever, if the parent committed (regardless of count) or if 3+
+  distinct teachers were surfaced. Committing immediately makes the
+  request refund-ineligible.
+
+COMMIT (free): parent picks an active candidate → engagement created, no
+charge, request becomes refund-ineligible.
+
+DO NOT touch the chat masking — phone/email/WhatsApp redaction stays
+exactly as built.
+
+Before coding, tell me:
+1. Full flow + every status state (request → paid → shortlisted →
+   re-match → commit | refund-eligible | refunded).
+2. How the rolling shortlist (max 3 active, mark-not-interested-to-get-
+   next) works, and how distinct-ever-shown is tracked separately from
+   active count.
+3. Exactly where the server-side three-condition check lives on the
+   refund endpoint, and the no-silent-failure refund guarantee. Confirm a
+   committed request can NEVER refund regardless of count.
+4. What changes vs the current build (charge moves request→commit-removed)
+   and confirmation no double-charge can occur.
+5. Every file/route touched, flagging payment-related ones, and whether a
+   schema migration is needed (additive-only; show me the SQL before
+   running). Note: no scheduler/cron is needed for this — confirm you're
+   not adding one.
+6. Confirm Chunk 2 recurring salary is NOT touched and chat masking is
+   NOT touched.
+
+No DB push, no deploy, no code until I approve the plan.

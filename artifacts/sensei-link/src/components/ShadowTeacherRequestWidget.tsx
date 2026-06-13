@@ -1,9 +1,10 @@
 /**
- * ShadowTeacherRequestWidget — New Flow
+ * ShadowTeacherRequestWidget — Deposit-at-Request Flow
  *
- * 1. Child selector → child snapshot → submit (no upfront fee)
- * 2. Shortlisted candidates → chat drawer → choose teacher
- * 3. Razorpay commitment fee → HMAC verify → engagement auto-created
+ * 1. Child selector → submit → Razorpay modal (₹500 matching fee)
+ * 2. Payment verified → up to 3 candidates surfaced → chat / dismiss / choose
+ * 3. Choose teacher → FREE commit → engagement auto-created
+ * 4. Refund button appears after 60 days if <3 distinct teachers shown & never committed
  *
  * Legacy (queued/matched) states also handled for existing records.
  */
@@ -66,9 +67,13 @@ interface MatchWithCandidates {
   id: number;
   status: string;
   matchingFeeInr: number;
+  providerOrderId: string | null;
+  feePaidAt: string | null;
+  distinctTeachersShown: number;
   matchedAt?: string;
   matchedProName?: string;
   selectedProfessionalId: number | null;
+  childId: number | null;
   childCity: string | null;
   childConditions: string[] | null;
   childBudgetMinInr: number | null;
@@ -143,6 +148,7 @@ function CandidateCard({
   myUserId,
   selected,
   onChoose,
+  onNotInterested,
 }: {
   candidate: Candidate;
   matchId: number;
@@ -150,6 +156,7 @@ function CandidateCard({
   myUserId: number;
   selected: boolean;
   onChoose: (professionalId: number) => void;
+  onNotInterested?: (candidateId: number) => void;
 }) {
   const [chatOpen, setChatOpen] = useState(false);
   const p = candidate.profile;
@@ -241,6 +248,16 @@ function CandidateCard({
             </Button>
           )}
         </div>
+        {!committed && !selected && onNotInterested && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl mt-1"
+            onClick={() => onNotInterested(candidate.id)}
+          >
+            Not interested
+          </Button>
+        )}
       </div>
 
       {chatOpen && (
@@ -271,76 +288,62 @@ export function ShadowTeacherRequestWidget() {
   const [extraNotes, setExtraNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [choosingId, setChoosingId] = useState<number | null>(null);
+  const [refunding, setRefunding] = useState(false);
 
   const status = match?.status ?? null;
   const isActive = status && !["cancelled", "refunded"].includes(status);
   const committed = status === "committed";
 
+  // ── handleSubmit — calls /request, opens Razorpay modal, then verifies ──
+  // Works for both new submissions AND resuming a pending_payment (uses match.childId fallback)
   async function handleSubmit() {
-    if (!selectedChildId) { toast({ title: "Please select a child profile", variant: "destructive" }); return; }
+    const effectiveChildId = selectedChildId || match?.childId || null;
+    if (!effectiveChildId) { toast({ title: "Please select a child profile", variant: "destructive" }); return; }
     setSubmitting(true);
-    try {
-      const res = await fetchWithAuth("/api/shadow-teacher/request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ childId: selectedChildId, extraNotes: extraNotes.trim() || undefined }),
-      });
-      const data = await res.json() as { error?: string; matchId?: number; candidateCount?: number };
-      if (!res.ok) {
-        if (res.status === 409 && data.matchId) {
-          toast({ title: "You already have an active request. Refreshing…" });
-          await refetch();
-          return;
-        }
-        toast({ title: data.error ?? "Could not submit request", variant: "destructive" });
-        return;
-      }
-      toast({ title: "Request submitted!", description: `Found ${data.candidateCount ?? 0} candidate${data.candidateCount === 1 ? "" : "s"} for you.` });
-      await refetch();
-    } catch {
-      toast({ title: "Network error", variant: "destructive" });
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleChoose(professionalId: number) {
-    if (!match) return;
-    setChoosingId(professionalId);
     try {
       const loaded = await loadRazorpayScript();
       if (!loaded) { toast({ title: "Payment gateway unavailable", variant: "destructive" }); return; }
 
-      const res = await fetchWithAuth(`/api/shadow-teacher/${match.id}/commit`, {
+      const res = await fetchWithAuth("/api/shadow-teacher/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ selectedProfessionalId: professionalId }),
+        body: JSON.stringify({ childId: effectiveChildId, extraNotes: extraNotes.trim() || undefined }),
       });
-      const orderData = await res.json() as {
-        error?: string; message?: string;
-        orderId?: string; amount?: number; keyId?: string; teacherFirstName?: string;
+      const data = await res.json() as {
+        error?: string;
+        matchId?: number;
+        orderId?: string;
+        providerOrderId?: string;
+        amount?: number;
+        keyId?: string;
       };
 
-      if (!res.ok) {
-        if (res.status === 409) {
-          toast({ title: "Cannot commit", description: orderData.message ?? orderData.error, variant: "destructive" });
-        } else {
-          toast({ title: orderData.error ?? "Could not initiate payment", variant: "destructive" });
-        }
+      if (!res.ok && res.status !== 409) {
+        toast({ title: data.error ?? "Could not submit request", variant: "destructive" });
         return;
       }
 
+      // Both 201 (new match) and 409 pending_payment return order fields for the modal
+      const orderId = data.orderId ?? data.providerOrderId;
+      if (!orderId || !data.amount || !data.keyId || !data.matchId) {
+        // 409 for a non-pending_payment active request
+        toast({ title: "You already have an active request", description: "Refreshing your status…" });
+        await refetch();
+        return;
+      }
+
+      const matchId = data.matchId;
       await new Promise<void>((resolve, reject) => {
         const rzp = new window.Razorpay({
-          key: orderData.keyId!,
-          amount: orderData.amount!,
+          key: data.keyId!,
+          amount: data.amount!,
           currency: "INR",
-          order_id: orderData.orderId!,
+          order_id: orderId,
           name: "Includly",
-          description: `Matching fee — ${orderData.teacherFirstName ?? "Teacher"}`,
+          description: "Shadow teacher matching fee",
           handler: async (response: RazorpayPaymentResponse) => {
             try {
-              const vRes = await fetchWithAuth(`/api/shadow-teacher/${match.id}/verify-commitment`, {
+              const vRes = await fetchWithAuth(`/api/shadow-teacher/${matchId}/verify-request-payment`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -351,12 +354,12 @@ export function ShadowTeacherRequestWidget() {
               });
               if (!vRes.ok) {
                 const vd = await vRes.json() as { error?: string };
-                toast({ title: vd.error ?? "Verification failed", variant: "destructive" });
+                toast({ title: vd.error ?? "Payment verification failed", variant: "destructive" });
                 reject(new Error("verify"));
                 return;
               }
-              toast({ title: "Teacher selected!", description: "Your engagement has been created. Check the engagement card below." });
-              queryClient.invalidateQueries({ queryKey: ["parent-engagements"] });
+              const vd = await vRes.json() as { candidateCount?: number };
+              toast({ title: "Payment confirmed!", description: `Found ${vd.candidateCount ?? 0} teacher${vd.candidateCount === 1 ? "" : "s"} for you.` });
               queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
               await refetch();
               resolve();
@@ -368,10 +371,88 @@ export function ShadowTeacherRequestWidget() {
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "";
-      if (msg !== "dismissed") toast({ title: "Payment failed", description: msg, variant: "destructive" });
+      if (msg !== "dismissed") toast({ title: "Request failed", description: msg, variant: "destructive" });
       await refetch();
     } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // ── handleChoose — FREE commit (matching fee was already paid at request) ──
+  async function handleChoose(professionalId: number) {
+    if (!match) return;
+    setChoosingId(professionalId);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${match.id}/commit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectedProfessionalId: professionalId }),
+      });
+      const data = await res.json() as { error?: string; message?: string; engagementId?: number };
+      if (!res.ok) {
+        if (res.status === 409) {
+          toast({ title: "Cannot choose teacher", description: data.message ?? data.error, variant: "destructive" });
+        } else {
+          toast({ title: data.error ?? "Could not select teacher", variant: "destructive" });
+        }
+        return;
+      }
+      toast({ title: "Teacher confirmed!", description: "Your engagement is live. Contact details are now visible." });
+      queryClient.invalidateQueries({ queryKey: ["parent-engagements"] });
+      queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+      await refetch();
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
       setChoosingId(null);
+    }
+  }
+
+  // ── handleNotInterested — soft-remove candidate, triggers server-side auto-refill ──
+  async function handleNotInterested(candidateId: number) {
+    if (!match) return;
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${match.id}/mark-not-interested`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidateId }),
+      });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        toast({ title: d.error ?? "Could not dismiss candidate", variant: "destructive" });
+        return;
+      }
+      await refetch();
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    }
+  }
+
+  // ── handleRefund — server re-checks all 3 conditions before initiating ──
+  async function handleRefund() {
+    if (!match) return;
+    setRefunding(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${match.id}/refund`, { method: "POST" });
+      const data = await res.json() as { error?: string; reason?: string; daysRemaining?: number; refunded?: boolean; amount?: number };
+      if (!res.ok) {
+        const reasonMsg: Record<string, string> = {
+          already_committed_or_closed: "This request is already closed or a teacher was confirmed.",
+          three_or_more_teachers_shown: "You've been shown 3+ teachers, so the matching fee is non-refundable.",
+          window_not_elapsed: `${data.daysRemaining ?? ""} day${data.daysRemaining === 1 ? "" : "s"} remaining before you can request a refund.`,
+          fee_payment_not_recorded: "Payment record not found. Please contact support.",
+          no_payment_to_refund: "No payment found to refund. Please contact support.",
+        };
+        const msg = (data.reason && reasonMsg[data.reason]) ?? data.error ?? "Refund could not be processed";
+        toast({ title: "Refund not available", description: msg, variant: "destructive" });
+        return;
+      }
+      toast({ title: "Refund initiated", description: `₹${(data.amount ?? 0).toLocaleString("en-IN")} will be returned within 5–7 business days.` });
+      await refetch();
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setRefunding(false);
     }
   }
 
@@ -448,12 +529,38 @@ export function ShadowTeacherRequestWidget() {
           onClick={handleSubmit}
           disabled={submitting || !selectedChildId || children.length === 0}
         >
-          {submitting ? <Loader2 size={14} className="animate-spin" /> : <UserCheck size={14} />}
-          {submitting ? "Submitting…" : "Find My Shadow Teacher (Free)"}
+          {submitting ? <Loader2 size={14} className="animate-spin" /> : <IndianRupee size={14} />}
+          {submitting ? "Opening payment…" : `Find My Shadow Teacher — ₹${matchingFee.toLocaleString("en-IN")}`}
         </Button>
 
         <p className="text-[11px] text-center text-muted-foreground">
-          No fee to request a match. A one-time matching fee of ₹{matchingFee.toLocaleString("en-IN")} is charged only when you choose a teacher.
+          A one-time matching fee of ₹{matchingFee.toLocaleString("en-IN")} is charged now. Choosing your teacher later is free.
+        </p>
+      </div>
+    );
+  }
+
+  // ── Pending payment: existing unpaid order → reopen Razorpay modal ────────
+  if (status === "pending_payment" && match) {
+    return (
+      <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="flex items-center gap-2">
+          <Clock size={18} className="text-amber-500" />
+          <h2 className="font-serif font-semibold text-lg text-foreground">Complete Your Payment</h2>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Your matching request is ready — complete the ₹{matchingFee.toLocaleString("en-IN")} payment to see your matched teachers.
+        </p>
+        <Button
+          className="w-full gap-2 bg-[#2EC4A5] hover:bg-[#26a88d] text-white"
+          onClick={handleSubmit}
+          disabled={submitting}
+        >
+          {submitting ? <Loader2 size={14} className="animate-spin" /> : <IndianRupee size={14} />}
+          {submitting ? "Opening payment…" : `Pay ₹${matchingFee.toLocaleString("en-IN")} to see teachers`}
+        </Button>
+        <p className="text-[11px] text-center text-muted-foreground">
+          Your request details are saved. Tap the button to continue where you left off.
         </p>
       </div>
     );
@@ -462,6 +569,9 @@ export function ShadowTeacherRequestWidget() {
   // ── Shortlisted: show candidates ─────────────────────────────────────────
   if (status === "shortlisted" && match) {
     const myId = me?.id ?? 0;
+    const feePaidAt = match.feePaidAt ? new Date(match.feePaidAt) : null;
+    const daysSincePaid = feePaidAt ? (Date.now() - feePaidAt.getTime()) / 86_400_000 : 0;
+    const refundEligible = !committed && (match.distinctTeachersShown < 3) && (daysSincePaid >= 60);
 
     return (
       <div className="space-y-4">
@@ -469,7 +579,7 @@ export function ShadowTeacherRequestWidget() {
           <UserCheck size={18} className="text-primary" />
           <h2 className="font-serif font-semibold text-lg text-foreground">Your Matches</h2>
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS.shortlisted}`}>
-            {match.candidates.filter((c) => !committed || c.professionalId === match.selectedProfessionalId).length} candidate{match.candidates.length !== 1 ? "s" : ""}
+            {match.candidates.length} candidate{match.candidates.length !== 1 ? "s" : ""}
           </span>
         </div>
 
@@ -492,51 +602,34 @@ export function ShadowTeacherRequestWidget() {
                   if (choosingId) return;
                   await handleChoose(proId);
                 }}
+                onNotInterested={async (candidateId) => { await handleNotInterested(candidateId); }}
               />
             ))}
           </div>
         )}
 
         <p className="text-xs text-center text-muted-foreground">
-          Chat with teachers to ask questions. When ready, press <strong>Choose</strong> to pay the ₹{matchingFee.toLocaleString("en-IN")} matching fee and confirm your teacher.
+          Chat with teachers to ask questions. When you're ready, press <strong>Choose</strong> — no extra charge.
         </p>
-      </div>
-    );
-  }
 
-  // ── Pending commitment ───────────────────────────────────────────────────
-  if (status === "pending_commitment" && match) {
-    const selectedCandidate = match.candidates.find((c) => c.professionalId === match.selectedProfessionalId);
-    const myId = me?.id ?? 0;
-    return (
-      <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
-        <div className="flex items-center gap-2">
-          <Clock size={18} className="text-purple-500" />
-          <h2 className="font-serif font-semibold text-lg text-foreground">Complete Your Selection</h2>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          You selected a teacher. Complete the ₹{matchingFee.toLocaleString("en-IN")} matching fee payment to confirm your engagement.
-        </p>
-        {selectedCandidate && (
-          <CandidateCard
-            candidate={selectedCandidate}
-            matchId={match.id}
-            committed={false}
-            myUserId={myId}
-            selected
-            onChoose={async (proId) => { await handleChoose(proId); }}
-          />
+        {refundEligible && (
+          <div className="border border-amber-200 bg-amber-50 rounded-xl p-4 space-y-2">
+            <p className="text-xs text-amber-800 font-medium">Refund available</p>
+            <p className="text-xs text-amber-700">
+              It's been 60+ days and fewer than 3 teachers have been suggested. You can request a full refund of ₹{matchingFee.toLocaleString("en-IN")}.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs border-amber-400 text-amber-800 hover:bg-amber-100"
+              onClick={handleRefund}
+              disabled={refunding}
+            >
+              {refunding ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
+              {refunding ? "Processing…" : `Get Refund — ₹${matchingFee.toLocaleString("en-IN")}`}
+            </Button>
+          </div>
         )}
-        <Button
-          className="w-full gap-2 bg-[#2EC4A5] hover:bg-[#26a88d] text-white"
-          onClick={async () => {
-            if (match.selectedProfessionalId) await handleChoose(match.selectedProfessionalId);
-          }}
-          disabled={choosingId != null}
-        >
-          {choosingId != null ? <Loader2 size={14} className="animate-spin" /> : <IndianRupee size={14} />}
-          Resume Payment
-        </Button>
       </div>
     );
   }
@@ -559,7 +652,6 @@ export function ShadowTeacherRequestWidget() {
   const legacyUI: Record<string, { label: string; icon: React.ReactNode; desc?: string }> = {
     queued: { label: "In queue — finding match", icon: <Clock size={14} />, desc: "Our team is reviewing your requirements. Typical turnaround: 1–3 business days." },
     matched: { label: "Matched!", icon: <CheckCircle2 size={14} /> },
-    pending_payment: { label: "Awaiting payment", icon: <Clock size={14} /> },
     payment_failed: { label: "Payment failed — try again", icon: <AlertCircle size={14} /> },
   };
   const ui = legacyUI[status ?? ""] ?? { label: status ?? "Unknown", icon: <AlertCircle size={14} /> };

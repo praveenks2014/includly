@@ -42,6 +42,8 @@ export const shadowTeacherMatchesTable = pgTable("shadow_teacher_matches", {
   childPreferredModes: text("child_preferred_modes").array(),
   extraNotes: text("extra_notes"),
   selectedProfessionalId: integer("selected_professional_id").references(() => professionalProfilesTable.id, { onDelete: "set null" }),
+  feePaidAt: timestamp("fee_paid_at", { withTimezone: true }),
+  distinctTeachersShown: integer("distinct_teachers_shown").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

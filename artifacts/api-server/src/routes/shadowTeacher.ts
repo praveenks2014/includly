@@ -66,7 +66,7 @@ router.get("/shadow-teacher/pricing", async (_req: Request, res: Response): Prom
   res.json({ matchingFeeInr: s.matchingFeeInr });
 });
 
-// ── POST /shadow-teacher/request — parent submits (new flow: no upfront fee) ─
+// ── POST /shadow-teacher/request — parent submits (deposit-at-request model) ─
 const NewRequestBody = z.object({
   childId: z.number().int().positive(),
   extraNotes: z.string().max(2000).optional(),
@@ -93,17 +93,110 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
 
   // Prevent duplicate active requests
   const existing = await db
-    .select({ id: shadowTeacherMatchesTable.id, status: shadowTeacherMatchesTable.status })
+    .select()
     .from(shadowTeacherMatchesTable)
     .where(eq(shadowTeacherMatchesTable.parentId, req.userId!))
     .orderBy(desc(shadowTeacherMatchesTable.createdAt))
     .limit(1);
+
   if (existing[0] && !["cancelled", "refunded", "committed"].includes(existing[0].status)) {
+    // Existing pending_payment match: return the existing order so the widget can reopen the modal
+    if (
+      existing[0].status === "pending_payment" &&
+      existing[0].providerOrderId &&
+      existing[0].matchingFeeInr > 0
+    ) {
+      res.status(409).json({
+        error: "You already have an active shadow teacher request",
+        matchId: existing[0].id,
+        providerOrderId: existing[0].providerOrderId,
+        amount: existing[0].matchingFeeInr * 100,
+        keyId: process.env["RAZORPAY_KEY_ID"]!,
+      });
+      return;
+    }
     res.status(409).json({ error: "You already have an active shadow teacher request", matchId: existing[0].id });
     return;
   }
 
-  // Fetch all verified shadow teachers
+  const settings = await getSettings();
+  const razorpay = getRazorpay();
+  if (!razorpay) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
+
+  // Create Razorpay order for the matching fee
+  const amount = settings.matchingFeeInr * 100;
+  const order = await razorpay.orders.create({
+    amount,
+    currency: "INR",
+    receipt: `streq_${Date.now()}`,
+    notes: { childId: String(childId) },
+  });
+
+  // Insert match in pending_payment state (candidates surfaced only after payment verified)
+  const [match] = await db
+    .insert(shadowTeacherMatchesTable)
+    .values({
+      parentId: req.userId!,
+      status: "pending_payment",
+      matchingFeeInr: settings.matchingFeeInr,
+      childId: child.id,
+      childCity: child.city ?? null,
+      childConditions: child.conditions ?? null,
+      childLanguages: child.languages ?? null,
+      childBudgetMinInr: child.budgetMinInr ?? null,
+      childBudgetMaxInr: child.budgetMaxInr ?? null,
+      childGoalsAreas: child.goalsAreas ?? null,
+      childPreferredModes: child.preferredModes ?? null,
+      extraNotes: extraNotes ?? null,
+      providerOrderId: order.id as string,
+    })
+    .returning();
+
+  res.status(201).json({
+    matchId: match.id,
+    orderId: order.id,
+    amount,
+    keyId: process.env["RAZORPAY_KEY_ID"]!,
+  });
+});
+
+// ── POST /shadow-teacher/:matchId/verify-request-payment — HMAC verify, surface candidates ─
+const VerifyRequestPaymentBody = z.object({
+  razorpayOrderId: z.string(),
+  razorpayPaymentId: z.string(),
+  razorpaySignature: z.string(),
+});
+
+router.post("/shadow-teacher/:matchId/verify-request-payment", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  if (isNaN(matchId)) { res.status(400).json({ error: "Invalid matchId" }); return; }
+
+  const parsed = VerifyRequestPaymentBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const keySecret = process.env["RAZORPAY_KEY_SECRET"];
+  if (!keySecret) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
+
+  const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = parsed.data;
+
+  const [match] = await db
+    .select()
+    .from(shadowTeacherMatchesTable)
+    .where(and(eq(shadowTeacherMatchesTable.id, matchId), eq(shadowTeacherMatchesTable.parentId, req.userId!)));
+  if (!match) { res.status(404).json({ error: "Match not found" }); return; }
+  if (match.status !== "pending_payment") { res.status(400).json({ error: "Match is not awaiting payment" }); return; }
+  if (match.providerOrderId !== razorpayOrderId) { res.status(400).json({ error: "Order ID mismatch" }); return; }
+
+  const expectedSig = crypto.createHmac("sha256", keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");
+  if (expectedSig !== razorpaySignature) { res.status(400).json({ error: "Payment signature verification failed" }); return; }
+
+  // Payment confirmed — record fee paid timestamp and transition to shortlisted
+  await db
+    .update(shadowTeacherMatchesTable)
+    .set({ status: "shortlisted", providerPaymentId: razorpayPaymentId, feePaidAt: new Date(), updatedAt: new Date() })
+    .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  // Run scoring and surface up to 3 candidates
   const professionals = await db
     .select()
     .from(professionalProfilesTable)
@@ -117,39 +210,19 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
 
   const settings = await getSettings();
   const tiers = parseTiers(settings.tiersJson);
-
   const snap: MatchSnapshot = {
-    childCity: child.city ?? null,
+    childCity: match.childCity ?? null,
     childLat: null,
     childLng: null,
-    childLanguages: child.languages ?? null,
-    childBudgetMinInr: child.budgetMinInr ?? null,
-    childBudgetMaxInr: child.budgetMaxInr ?? null,
-    childPreferredModes: child.preferredModes ?? null,
+    childLanguages: match.childLanguages ?? null,
+    childBudgetMinInr: match.childBudgetMinInr ?? null,
+    childBudgetMaxInr: match.childBudgetMaxInr ?? null,
+    childPreferredModes: match.childPreferredModes ?? null,
   };
 
   const ranked = rankCandidates(snap, professionals, tiers, 3);
+  let candidateCount = 0;
 
-  // Insert match
-  const [match] = await db
-    .insert(shadowTeacherMatchesTable)
-    .values({
-      parentId: req.userId!,
-      status: "shortlisted",
-      matchingFeeInr: 0,
-      childId: child.id,
-      childCity: child.city ?? null,
-      childConditions: child.conditions ?? null,
-      childLanguages: child.languages ?? null,
-      childBudgetMinInr: child.budgetMinInr ?? null,
-      childBudgetMaxInr: child.budgetMaxInr ?? null,
-      childGoalsAreas: child.goalsAreas ?? null,
-      childPreferredModes: child.preferredModes ?? null,
-      extraNotes: extraNotes ?? null,
-    })
-    .returning();
-
-  // Insert candidates
   if (ranked.length > 0) {
     await db.insert(shadowMatchCandidatesTable).values(
       ranked.map((c, i) => ({
@@ -160,6 +233,7 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
         addedBy: "auto",
       })),
     );
+    candidateCount = ranked.length;
 
     // Push notify teachers (fire-and-forget)
     const teacherUserIds = professionals
@@ -168,7 +242,13 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
     void notifyMatchShortlisted(teacherUserIds).catch(() => {});
   }
 
-  res.status(201).json({ matchId: match.id, candidateCount: ranked.length });
+  // Set high-water-mark counter (never decrements from here)
+  await db
+    .update(shadowTeacherMatchesTable)
+    .set({ distinctTeachersShown: candidateCount })
+    .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  res.json({ matchId: match.id, candidateCount });
 });
 
 // ── POST /shadow-teacher/verify-payment — legacy: confirm matching fee payment ─
@@ -427,7 +507,7 @@ router.post("/shadow-teacher/:matchId/thread/:candidateId", requireAuth, async (
   res.status(201).json({ ...message, body });
 });
 
-// ── POST /shadow-teacher/:matchId/commit — parent selects a teacher, create Razorpay order ─
+// ── POST /shadow-teacher/:matchId/commit — parent selects a teacher (FREE — matching fee already paid at request) ─
 const CommitBody = z.object({ selectedProfessionalId: z.number().int().positive() });
 
 router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
@@ -457,11 +537,11 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
         isNull(shadowMatchCandidatesTable.removedAt),
       ),
     );
-  if (!candidate) { res.status(404).json({ error: "Selected professional is not a candidate for this match" }); return; }
+  if (!candidate) { res.status(404).json({ error: "Selected professional is not an active candidate for this match" }); return; }
 
-  // Block if teacher has no pricing
+  // Load teacher — block if no pricing set
   const [teacher] = await db
-    .select({ pricingMinINR: professionalProfilesTable.pricingMinINR, fullName: professionalProfilesTable.fullName })
+    .select({ pricingMinINR: professionalProfilesTable.pricingMinINR, fullName: professionalProfilesTable.fullName, phone: professionalProfilesTable.phone, email: professionalProfilesTable.email })
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.id, selectedProfessionalId));
   if (!teacher || teacher.pricingMinINR == null) {
@@ -472,110 +552,13 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
     return;
   }
 
-  const settings = await getSettings();
-  const razorpay = getRazorpay();
-  if (!razorpay) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
-
-  const amount = settings.matchingFeeInr * 100;
-  const order = await razorpay.orders.create({
-    amount,
-    currency: "INR",
-    receipt: `stcommit_${matchId}_${Date.now()}`,
-    notes: { matchId: String(matchId), professionalId: String(selectedProfessionalId) },
-  });
-
-  await db
-    .update(shadowTeacherMatchesTable)
-    .set({
-      status: "pending_commitment",
-      selectedProfessionalId,
-      providerOrderId: order.id as string,
-      matchingFeeInr: settings.matchingFeeInr,
-      updatedAt: new Date(),
-    })
-    .where(eq(shadowTeacherMatchesTable.id, matchId));
-
-  res.json({
-    orderId: order.id,
-    amount,
-    currency: "INR",
-    keyId: process.env["RAZORPAY_KEY_ID"]!,
-    teacherFirstName: teacher.fullName?.split(" ")[0] ?? "Teacher",
-  });
-});
-
-// ── POST /shadow-teacher/:matchId/verify-commitment — HMAC verify, create engagement ─
-const VerifyCommitmentBody = z.object({
-  razorpayOrderId: z.string(),
-  razorpayPaymentId: z.string(),
-  razorpaySignature: z.string(),
-});
-
-router.post("/shadow-teacher/:matchId/verify-commitment", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
-  const matchId = parseInt(req.params["matchId"] as string, 10);
-  if (isNaN(matchId)) { res.status(400).json({ error: "Invalid matchId" }); return; }
-
-  const parsed = VerifyCommitmentBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-
-  const keySecret = process.env["RAZORPAY_KEY_SECRET"];
-  if (!keySecret) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
-
-  const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = parsed.data;
-
-  const [match] = await db
-    .select()
-    .from(shadowTeacherMatchesTable)
-    .where(and(eq(shadowTeacherMatchesTable.id, matchId), eq(shadowTeacherMatchesTable.parentId, req.userId!)));
-  if (!match) { res.status(404).json({ error: "Match not found" }); return; }
-  if (match.status !== "pending_commitment") { res.status(400).json({ error: "Match is not awaiting commitment payment" }); return; }
-  if (match.providerOrderId !== razorpayOrderId) { res.status(400).json({ error: "Order ID mismatch" }); return; }
-
-  const expectedSig = crypto.createHmac("sha256", keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");
-  if (expectedSig !== razorpaySignature) { res.status(400).json({ error: "Payment signature verification failed" }); return; }
-
-  const proId = match.selectedProfessionalId!;
-  const [teacher] = await db
-    .select({ pricingMinINR: professionalProfilesTable.pricingMinINR, fullName: professionalProfilesTable.fullName, phone: professionalProfilesTable.phone, email: professionalProfilesTable.email })
-    .from(professionalProfilesTable)
-    .where(eq(professionalProfilesTable.id, proId));
-  if (!teacher) { res.status(404).json({ error: "Teacher not found" }); return; }
-
-  // Safety net: teacher's pricing was cleared after commit but before engagement creation.
-  // Auto-refund the matching fee (which was already captured) and reset the match so the
-  // parent can re-commit to a different teacher. The pre-payment check in /commit makes
-  // this path unreachable in normal operation.
-  if (teacher.pricingMinINR == null) {
-    const razorpay = getRazorpay();
-    if (razorpay && match.providerPaymentId && match.matchingFeeInr > 0) {
-      try {
-        await (razorpay.payments as unknown as { refund: (id: string, opts: object) => Promise<unknown> })
-          .refund(match.providerPaymentId, {
-            amount: match.matchingFeeInr * 100,
-            notes: { reason: "Teacher pricing unavailable at engagement creation" },
-          });
-      } catch (refundErr) {
-        console.error("[verify-commitment] Auto-refund failed:", refundErr);
-      }
-    }
-    await db
-      .update(shadowTeacherMatchesTable)
-      .set({ status: "shortlisted", selectedProfessionalId: null, providerOrderId: null, providerPaymentId: null, matchingFeeInr: 0, updatedAt: new Date() })
-      .where(eq(shadowTeacherMatchesTable.id, matchId));
-    res.status(409).json({
-      error: "engagement_blocked_no_pricing",
-      message: "This teacher's pricing is no longer available. Your matching fee has been refunded and you can select a different teacher.",
-    });
-    return;
-  }
-
-  // Create engagement
+  // Create engagement — no Razorpay call; matching fee was already captured at request time
   const today = new Date().toISOString().split("T")[0]!;
   const [engagement] = await db
     .insert(shadowTeacherEngagementsTable)
     .values({
       parentId: match.parentId,
-      professionalId: proId,
+      professionalId: selectedProfessionalId,
       childId: match.childId ?? null,
       matchRequestId: match.id,
       startDate: today,
@@ -585,24 +568,202 @@ router.post("/shadow-teacher/:matchId/verify-commitment", requireAuth, requireRo
     })
     .returning();
 
-  // Update match status
+  // Transition match to committed — permanently refund-ineligible from this point
   await db
     .update(shadowTeacherMatchesTable)
     .set({
       status: "committed",
-      providerPaymentId: razorpayPaymentId,
+      selectedProfessionalId,
       matchedAt: new Date(),
-      matchedProfessionalId: proId,
+      matchedProfessionalId: selectedProfessionalId,
       updatedAt: new Date(),
     })
     .where(eq(shadowTeacherMatchesTable.id, matchId));
 
   res.json({
     engagementId: engagement!.id,
-    professionalFullName: teacher.fullName,
+    teacherFullName: teacher.fullName,
     phone: teacher.phone,
     email: teacher.email,
   });
+});
+
+// ── POST /shadow-teacher/:matchId/verify-commitment — 410 Gone (commit is now free) ─
+router.post("/shadow-teacher/:matchId/verify-commitment", requireAuth, requireRole("parent"), async (_req: Request, res: Response): Promise<void> => {
+  res.status(410).json({
+    error: "gone",
+    message: "This step is no longer required. Commitment is now free — POST /:matchId/commit creates the engagement directly.",
+  });
+});
+
+// ── POST /shadow-teacher/:matchId/mark-not-interested — parent dismisses a candidate, triggers auto-refill ─
+const MarkNotInterestedBody = z.object({ candidateId: z.number().int().positive() });
+
+router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  if (isNaN(matchId)) { res.status(400).json({ error: "Invalid matchId" }); return; }
+
+  const parsed = MarkNotInterestedBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const { candidateId } = parsed.data;
+
+  const [match] = await db
+    .select()
+    .from(shadowTeacherMatchesTable)
+    .where(and(eq(shadowTeacherMatchesTable.id, matchId), eq(shadowTeacherMatchesTable.parentId, req.userId!)));
+  if (!match) { res.status(404).json({ error: "Match not found" }); return; }
+  if (match.status !== "shortlisted") { res.status(400).json({ error: "Can only dismiss candidates in shortlisted status" }); return; }
+
+  // Soft-remove the candidate
+  const [removed] = await db
+    .update(shadowMatchCandidatesTable)
+    .set({ removedAt: new Date(), removedByUserId: req.userId! })
+    .where(
+      and(
+        eq(shadowMatchCandidatesTable.id, candidateId),
+        eq(shadowMatchCandidatesTable.matchId, matchId),
+        isNull(shadowMatchCandidatesTable.removedAt),
+      ),
+    )
+    .returning();
+  if (!removed) { res.status(404).json({ error: "Candidate not found or already dismissed" }); return; }
+
+  // Count remaining active candidates
+  const [activeRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(shadowMatchCandidatesTable)
+    .where(and(eq(shadowMatchCandidatesTable.matchId, matchId), isNull(shadowMatchCandidatesTable.removedAt)));
+  const activeCount = activeRow?.count ?? 0;
+
+  // Auto-refill if an active slot is free: surface next-best teacher not already in this match (including removed)
+  if (activeCount < 3) {
+    const everShown = await db
+      .select({ professionalId: shadowMatchCandidatesTable.professionalId })
+      .from(shadowMatchCandidatesTable)
+      .where(eq(shadowMatchCandidatesTable.matchId, matchId));
+    const excludeIds = everShown.map((r) => r.professionalId);
+
+    const candidates = await db
+      .select()
+      .from(professionalProfilesTable)
+      .where(
+        and(
+          eq(professionalProfilesTable.specialty, "shadow_teacher"),
+          eq(professionalProfilesTable.verificationStatus, "verified"),
+          isNotNull(professionalProfilesTable.pricingMinINR),
+          excludeIds.length > 0
+            ? sql`${professionalProfilesTable.id} != ALL(${sql.raw(`ARRAY[${excludeIds.join(",")}]::int[]`)})`
+            : sql`true`,
+        ),
+      );
+
+    if (candidates.length > 0) {
+      const settings = await getSettings();
+      const tiers = parseTiers(settings.tiersJson);
+      const snap: MatchSnapshot = {
+        childCity: match.childCity ?? null,
+        childLat: null,
+        childLng: null,
+        childLanguages: match.childLanguages ?? null,
+        childBudgetMinInr: match.childBudgetMinInr ?? null,
+        childBudgetMaxInr: match.childBudgetMaxInr ?? null,
+        childPreferredModes: match.childPreferredModes ?? null,
+      };
+
+      const [maxRankRow] = await db
+        .select({ maxRank: sql<number>`max(rank)` })
+        .from(shadowMatchCandidatesTable)
+        .where(eq(shadowMatchCandidatesTable.matchId, matchId));
+      const nextRank = (maxRankRow?.maxRank ?? 0) + 1;
+
+      const ranked = rankCandidates(snap, candidates, tiers, 1);
+      if (ranked.length > 0) {
+        await db.insert(shadowMatchCandidatesTable).values({
+          matchId,
+          professionalId: ranked[0]!.professionalId,
+          score: ranked[0]!.score,
+          rank: nextRank,
+          addedBy: "auto",
+        });
+        // Increment high-water-mark counter — never decrements
+        await db
+          .update(shadowTeacherMatchesTable)
+          .set({ distinctTeachersShown: sql`${shadowTeacherMatchesTable.distinctTeachersShown} + 1`, updatedAt: new Date() })
+          .where(eq(shadowTeacherMatchesTable.id, matchId));
+      }
+    }
+  }
+
+  res.json({ success: true, activeCount });
+});
+
+// ── POST /shadow-teacher/:matchId/refund — parent-initiated refund (3-condition server gate) ─
+router.post("/shadow-teacher/:matchId/refund", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  if (isNaN(matchId)) { res.status(400).json({ error: "Invalid matchId" }); return; }
+
+  const [match] = await db
+    .select()
+    .from(shadowTeacherMatchesTable)
+    .where(and(eq(shadowTeacherMatchesTable.id, matchId), eq(shadowTeacherMatchesTable.parentId, req.userId!)));
+  if (!match) { res.status(404).json({ error: "Match not found" }); return; }
+
+  // ── Condition 1: must still be shortlisted (not committed, not already refunded/cancelled) ──
+  if (match.status !== "shortlisted") {
+    res.status(409).json({ error: "refund_not_eligible", reason: "already_committed_or_closed" });
+    return;
+  }
+
+  // ── Condition 2: fewer than 3 distinct teachers were ever shown ──
+  if (match.distinctTeachersShown >= 3) {
+    res.status(409).json({ error: "refund_not_eligible", reason: "three_or_more_teachers_shown" });
+    return;
+  }
+
+  // ── Condition 3: 60+ days since the matching fee was paid ──
+  if (!match.feePaidAt) {
+    res.status(409).json({ error: "refund_not_eligible", reason: "fee_payment_not_recorded" });
+    return;
+  }
+  const daysSincePaid = (Date.now() - new Date(match.feePaidAt).getTime()) / 86_400_000;
+  if (daysSincePaid < 60) {
+    res.status(409).json({
+      error: "refund_not_eligible",
+      reason: "window_not_elapsed",
+      daysRemaining: Math.ceil(60 - daysSincePaid),
+    });
+    return;
+  }
+
+  if (!match.providerPaymentId || match.matchingFeeInr <= 0) {
+    res.status(409).json({ error: "refund_not_eligible", reason: "no_payment_to_refund" });
+    return;
+  }
+
+  const razorpay = getRazorpay();
+  if (!razorpay) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
+
+  // Attempt Razorpay refund — if it throws, do NOT update the DB (parent can retry)
+  try {
+    await (razorpay.payments as unknown as { refund: (id: string, opts: object) => Promise<unknown> })
+      .refund(match.providerPaymentId, {
+        amount: match.matchingFeeInr * 100,
+        notes: { reason: "Parent-initiated refund: 60-day window, fewer than 3 teachers shown" },
+      });
+  } catch (err) {
+    console.error("[refund] Razorpay refund call failed — DB NOT updated, status stays shortlisted:", err);
+    res.status(500).json({ error: "Refund could not be processed. Please try again or contact support." });
+    return;
+  }
+
+  // Razorpay confirmed — NOW persist the refunded state
+  await db
+    .update(shadowTeacherMatchesTable)
+    .set({ status: "refunded", refundedAt: new Date(), updatedAt: new Date() })
+    .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  res.json({ refunded: true, amount: match.matchingFeeInr });
 });
 
 // ── GET /shadow-teacher/requests (admin) — list all requests with candidates ─
@@ -757,6 +918,14 @@ router.post("/shadow-teacher/:id/candidates", requireAuth, requireRole("admin"),
     .values({ matchId, professionalId, rank: nextRank, addedBy: "admin" })
     .onConflictDoNothing()
     .returning();
+
+  if (candidate) {
+    // Increment high-water-mark counter for each newly surfaced teacher
+    await db
+      .update(shadowTeacherMatchesTable)
+      .set({ distinctTeachersShown: sql`${shadowTeacherMatchesTable.distinctTeachersShown} + 1`, updatedAt: new Date() })
+      .where(eq(shadowTeacherMatchesTable.id, matchId));
+  }
 
   res.status(201).json(candidate);
 });
