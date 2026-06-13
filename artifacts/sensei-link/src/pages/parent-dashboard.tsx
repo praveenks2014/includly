@@ -1329,8 +1329,6 @@ export default function ParentDashboard({ initialTab = "home" }: { initialTab?: 
   const [, setLocation] = useLocation();
   const { data: me } = useGetMe();
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-
   const firstName = me?.fullName?.split(" ")[0] ?? user?.firstName ?? "there";
   const city = me?.location ?? null;
 
@@ -1342,133 +1340,18 @@ export default function ParentDashboard({ initialTab = "home" }: { initialTab?: 
 
   function handleTabChange(tab: Tab) {
     setActiveTab(tab);
-    setDrawerOpen(false);
-    window.scrollTo(0, 0);
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F7FA] flex">
-      {/* Mobile drawer overlay */}
-      {drawerOpen && (
-        <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
-      )}
-
-      {/* ── SIDEBAR ────────────────────────────────────────────────────────── */}
-      <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-[240px] bg-white border-r border-gray-100 flex flex-col transition-transform duration-200 md:top-16 md:translate-x-0 md:z-30 ${drawerOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
-        aria-label="Parent dashboard sidebar"
-      >
-        {/* Avatar + close (mobile) */}
-        <div className="p-5 border-b border-gray-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-[#2EC4A5] flex items-center justify-center text-white font-bold text-sm shrink-0">
-            {initials(me?.fullName ?? user?.fullName)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm text-[#1A2340] truncate">{me?.fullName ?? user?.fullName ?? "Parent"}</p>
-            {city && <p className="text-xs text-gray-500 flex items-center gap-1 truncate"><MapPin size={10} />{city}</p>}
-          </div>
-          <button onClick={() => setDrawerOpen(false)} className="md:hidden p-1 text-gray-400 hover:text-gray-600"><X size={18} /></button>
-        </div>
-
-        {/* Nav */}
-        <nav className="flex-1 py-2 overflow-y-auto" aria-label="Dashboard navigation">
-          {NAV_ITEMS.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => handleTabChange(item.id)}
-              aria-label={item.label}
-              aria-current={activeTab === item.id ? "page" : undefined}
-              className={`w-full flex items-center gap-3 px-5 py-3 text-sm font-medium transition-colors text-left ${
-                activeTab === item.id
-                  ? "bg-[#2EC4A5]/10 text-[#2EC4A5] border-r-2 border-[#2EC4A5]"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              }`}
-            >
-              {item.icon}
-              <span className="flex-1">{item.label}</span>
-              {item.id === "notifications" && unreadCount > 0 && (
-                <span className="text-[10px] font-bold bg-[#FF6B6B] text-white rounded-full w-5 h-5 flex items-center justify-center shrink-0">{unreadCount}</span>
-              )}
-            </button>
-          ))}
-
-          <div className="mx-3 my-2 border-t border-gray-100" />
-          <Link href="/support">
-            <div className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors">
-              <BookOpen size={18} />
-              Resources
-            </div>
-          </Link>
-          <button
-            onClick={() => setLocation("/account")}
-            className="w-full flex items-center gap-3 px-5 py-3 text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors text-left"
-          >
-            <Settings size={18} />
-            Account Settings
-          </button>
-        </nav>
-
-        <div className="p-4 border-t border-gray-100 space-y-1">
-          <a href="/support" className="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-600 transition-colors px-1">
-            <HelpCircle size={14} /> Need Help?
-          </a>
-          <p className="text-xs text-gray-300 px-1">Includly · Parent</p>
-        </div>
-      </aside>
-
-      {/* ── MAIN CONTENT ───────────────────────────────────────────────────── */}
-      <div className="flex-1 md:ml-[240px] flex flex-col min-w-0">
-        {/* Mobile top bar */}
-        <div className="md:hidden sticky top-16 z-30 bg-white border-b border-gray-100 px-4 h-12 flex items-center gap-3 shadow-sm">
-          <button
-            onClick={() => setDrawerOpen(true)}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
-            aria-label="Open navigation"
-          >
-            <Menu size={20} />
-          </button>
-          <span className="font-semibold text-[#1A2340] text-sm">
-            {NAV_ITEMS.find((n) => n.id === activeTab)?.label ?? "Dashboard"}
-          </span>
-          {unreadCount > 0 && (
-            <button onClick={() => handleTabChange("notifications")} className="ml-auto relative">
-              <Bell size={20} className="text-gray-600" />
-              <span className="absolute -top-1 -right-1 text-[9px] font-bold bg-[#FF6B6B] text-white rounded-full w-4 h-4 flex items-center justify-center">{unreadCount}</span>
-            </button>
-          )}
-        </div>
-
-        <main className="flex-1 px-4 sm:px-6 py-6 pb-24 md:pb-6 max-w-[900px] w-full mx-auto">
-          {activeTab === "home"           && <HomeTab parentName={firstName} city={city} onTabChange={handleTabChange} />}
-          {activeTab === "find"           && <FindTab />}
-          {activeTab === "bookings"       && <BookingsTab />}
-          {activeTab === "shadow-teacher" && <ShadowTeacherTab />}
-          {activeTab === "messages"       && <MessagesTab />}
-          {activeTab === "notifications"  && <NotificationsTab />}
-        </main>
-      </div>
-
-      {/* ── MOBILE BOTTOM TAB BAR ──────────────────────────────────────────── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-100 z-40 flex">
-        {MOBILE_BOTTOM.map((id) => {
-          const item = NAV_ITEMS.find((n) => n.id === id)!;
-          return (
-            <button
-              key={id}
-              onClick={() => handleTabChange(id)}
-              className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors relative ${
-                activeTab === id ? "text-[#2EC4A5]" : "text-gray-400 hover:text-gray-600"
-              }`}
-            >
-              {item.icon}
-              <span className="text-[10px] leading-none">{item.label.split(" ")[0]}</span>
-              {id === "notifications" && unreadCount > 0 && (
-                <span className="absolute top-1 right-[calc(50%-14px)] text-[9px] font-bold bg-[#FF6B6B] text-white rounded-full w-4 h-4 flex items-center justify-center">{unreadCount}</span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
+    <div className="bg-[#F5F7FA]">
+      <main className="px-4 sm:px-6 py-6 max-w-[900px] w-full mx-auto">
+        {activeTab === "home"           && <HomeTab parentName={firstName} city={city} onTabChange={handleTabChange} />}
+        {activeTab === "find"           && <FindTab />}
+        {activeTab === "bookings"       && <BookingsTab />}
+        {activeTab === "shadow-teacher" && <ShadowTeacherTab />}
+        {activeTab === "messages"       && <MessagesTab />}
+        {activeTab === "notifications"  && <NotificationsTab />}
+      </main>
     </div>
   );
 }

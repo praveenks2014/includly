@@ -105,7 +105,6 @@ export default function CentreDashboard({ initialTab = "overview" }: { initialTa
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<SidebarTab>(initialTab);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -258,93 +257,41 @@ export default function CentreDashboard({ initialTab = "overview" }: { initialTa
   const statusCfg = centre ? STATUS_CONFIG[centre.status] : null;
 
   return (
-    <div className="min-h-screen bg-[#F5F7FA] flex">
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+    <div className="bg-[#F5F7FA]">
+      {centre && (centre.status === "draft" || centre.status === "rejected") && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-6 py-2 flex items-center justify-between gap-4">
+          <p className="text-xs text-amber-700 font-medium">
+            {centre.status === "draft"
+              ? "Your centre profile is in draft — submit for review when ready."
+              : "Your submission was rejected. Edit your profile and resubmit."}
+          </p>
+          <Button
+            size="sm"
+            onClick={handleSubmitForReview}
+            disabled={submitting}
+            className="shrink-0 bg-teal-600 hover:bg-teal-700 text-white text-xs gap-1.5"
+          >
+            {submitting ? <Loader2 size={12} className="animate-spin" /> : <ChevronRight size={12} />}
+            Submit for Review
+          </Button>
+        </div>
       )}
-
-      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-60 bg-[#1A2340] text-white flex flex-col transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
-        <div className="px-5 py-6 border-b border-white/10">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-teal-500 flex items-center justify-center">
-              <Building2 size={16} className="text-white" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-bold truncate">{centre?.name ?? "My Centre"}</p>
-              <p className="text-xs text-white/40">Centre Dashboard</p>
-            </div>
-          </div>
-          {statusCfg && (
-            <div className={`mt-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${statusCfg.color}`}>
-              {statusCfg.icon}
-              {statusCfg.label}
-            </div>
-          )}
-        </div>
-
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {NAV.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all focus-visible:ring-2 focus-visible:ring-teal-400 ${
-                activeTab === item.id ? "bg-teal-500 text-white" : "text-white/60 hover:text-white hover:bg-white/10"
-              }`}
-            >
-              {item.icon}
-              {item.label}
-              {activeTab === item.id && <ChevronRight size={14} className="ml-auto" />}
-            </button>
-          ))}
-        </nav>
-
-        <div className="px-3 py-4 border-t border-white/10">
-          <button onClick={() => setLocation("/dashboard")} className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-white/40 hover:text-white/70 transition-colors">
-            <ChevronLeft size={14} /> Back to Dashboard
-          </button>
-        </div>
-      </aside>
-
-      <div className="flex-1 min-w-0 flex flex-col">
-        <header className="bg-white border-b border-gray-100 px-4 sm:px-6 h-14 flex items-center gap-4 sticky top-0 z-30 shadow-sm">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-gray-100">
-            <Menu size={20} />
-          </button>
-          <h1 className="font-serif text-lg font-bold text-[#1A2340]">
-            {NAV.find((n) => n.id === activeTab)?.label}
-          </h1>
-          <div className="ml-auto flex items-center gap-2">
-            {centre && (centre.status === "draft" || centre.status === "rejected") && (
-              <Button
-                size="sm"
-                onClick={handleSubmitForReview}
-                disabled={submitting}
-                className="bg-teal-600 hover:bg-teal-700 text-white text-xs gap-1.5"
-              >
-                {submitting ? <Loader2 size={12} className="animate-spin" /> : <ChevronRight size={12} />}
-                Submit for Review
-              </Button>
-            )}
-          </div>
-        </header>
-
-        <div className="flex-1 px-4 sm:px-6 py-6 overflow-auto">
-          {activeTab === "overview" && centre && (
-            <OverviewTab centre={centre} therapists={therapists} services={services} onSubmit={handleSubmitForReview} submitting={submitting} />
-          )}
-          {activeTab === "therapists" && centre && (
-            <TherapistsTab centreId={centre.id} therapists={therapists} onRefresh={refetchTherapists} />
-          )}
-          {activeTab === "services" && centre && (
-            <ServicesTab centreId={centre.id} services={services} onRefresh={refetchServices} />
-          )}
-          {activeTab === "cancellation" && centre && (
-            <CancellationPolicyTab centreId={centre.id} policy={policy ?? null} onRefresh={refetchPolicy} />
-          )}
-          {activeTab === "settings" && centre && (
-            <ProfileSettingsTab centre={centre} form={form} setForm={setForm} onSave={handleSaveProfile} saving={saving} />
-          )}
-        </div>
+      <div className="px-4 sm:px-6 py-6">
+        {activeTab === "overview" && centre && (
+          <OverviewTab centre={centre} therapists={therapists} services={services} onSubmit={handleSubmitForReview} submitting={submitting} />
+        )}
+        {activeTab === "therapists" && centre && (
+          <TherapistsTab centreId={centre.id} therapists={therapists} onRefresh={refetchTherapists} />
+        )}
+        {activeTab === "services" && centre && (
+          <ServicesTab centreId={centre.id} services={services} onRefresh={refetchServices} />
+        )}
+        {activeTab === "cancellation" && centre && (
+          <CancellationPolicyTab centreId={centre.id} policy={policy ?? null} onRefresh={refetchPolicy} />
+        )}
+        {activeTab === "settings" && centre && (
+          <ProfileSettingsTab centre={centre} form={form} setForm={setForm} onSave={handleSaveProfile} saving={saving} />
+        )}
       </div>
     </div>
   );

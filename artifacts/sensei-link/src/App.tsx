@@ -228,6 +228,29 @@ function Router() {
           {(params) => <StaticRedirect to={`/p/${params.id}`} />}
         </Route>
 
+        {/* Pre-N1 prefixed paths → new shell roots */}
+        <Route path="/parent">
+          <StaticRedirect to="/home" />
+        </Route>
+        <Route path="/parent/:rest*">
+          <StaticRedirect to="/home" />
+        </Route>
+        <Route path="/pro">
+          <StaticRedirect to="/pro/today" />
+        </Route>
+        <Route path="/pro/dashboard">
+          <StaticRedirect to="/pro/today" />
+        </Route>
+        <Route path="/pro/home">
+          <StaticRedirect to="/pro/today" />
+        </Route>
+        <Route path="/centre">
+          <StaticRedirect to="/centre/overview" />
+        </Route>
+        <Route path="/centre/dashboard">
+          <StaticRedirect to="/centre/overview" />
+        </Route>
+
         {/* ── Public pages ── */}
         <Route path="/" component={HomePage} />
         <Route path="/sign-in/*?" component={SignInPage} />

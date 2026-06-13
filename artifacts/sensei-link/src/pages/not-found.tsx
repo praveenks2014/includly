@@ -1,21 +1,31 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { AlertCircle } from "lucide-react";
+import { Link } from "wouter";
+import { useGetMe } from "@workspace/api-client-react";
+import { SHELL_ROOT, type Role } from "@/nav/config";
+import { AlertTriangle, Home } from "lucide-react";
 
 export default function NotFound() {
-  return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50">
-      <Card className="w-full max-w-md mx-4">
-        <CardContent className="pt-6">
-          <div className="flex mb-4 gap-2">
-            <AlertCircle className="h-8 w-8 text-red-500" />
-            <h1 className="text-2xl font-bold text-gray-900">404 Page Not Found</h1>
-          </div>
+  const { data: me } = useGetMe();
 
-          <p className="mt-4 text-sm text-gray-600">
-            Did you forget to add the page to the router?
-          </p>
-        </CardContent>
-      </Card>
+  const role = me?.role as Role | undefined;
+  const homeHref = role ? (SHELL_ROOT[role] ?? "/") : "/";
+  const homeLabel = role ? "Go to my home" : "Go to homepage";
+
+  return (
+    <div className="flex min-h-[70vh] flex-col items-center justify-center px-6 py-20 text-center">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50">
+        <AlertTriangle className="h-7 w-7 text-amber-500" />
+      </div>
+      <h1 className="text-2xl font-bold text-gray-900">Page not found</h1>
+      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+        This page doesn't exist or may have moved. Check the URL or head back.
+      </p>
+      <Link
+        href={homeHref}
+        className="mt-6 inline-flex items-center gap-2 rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-teal-700"
+      >
+        <Home size={16} />
+        {homeLabel}
+      </Link>
     </div>
   );
 }
