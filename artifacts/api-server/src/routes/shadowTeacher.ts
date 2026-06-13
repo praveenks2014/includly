@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, isNull, sql } from "drizzle-orm";
+import { eq, and, desc, isNull, isNotNull, sql } from "drizzle-orm";
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import {
@@ -105,6 +105,7 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
       and(
         eq(professionalProfilesTable.specialty, "shadow_teacher"),
         eq(professionalProfilesTable.verificationStatus, "verified"),
+        isNotNull(professionalProfilesTable.pricingMinINR),
       ),
     );
 
@@ -465,10 +466,11 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
     return;
   }
 
+  const settings = await getSettings();
   const razorpay = getRazorpay();
   if (!razorpay) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
 
-  const amount = teacher.pricingMinINR * 100;
+  const amount = settings.matchingFeeInr * 100;
   const order = await razorpay.orders.create({
     amount,
     currency: "INR",
@@ -482,7 +484,7 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
       status: "pending_commitment",
       selectedProfessionalId,
       providerOrderId: order.id as string,
-      matchingFeeInr: teacher.pricingMinINR,
+      matchingFeeInr: settings.matchingFeeInr,
       updatedAt: new Date(),
     })
     .where(eq(shadowTeacherMatchesTable.id, matchId));
@@ -532,6 +534,34 @@ router.post("/shadow-teacher/:matchId/verify-commitment", requireAuth, requireRo
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.id, proId));
   if (!teacher) { res.status(404).json({ error: "Teacher not found" }); return; }
+
+  // Safety net: teacher's pricing was cleared after commit but before engagement creation.
+  // Auto-refund the matching fee (which was already captured) and reset the match so the
+  // parent can re-commit to a different teacher. The pre-payment check in /commit makes
+  // this path unreachable in normal operation.
+  if (teacher.pricingMinINR == null) {
+    const razorpay = getRazorpay();
+    if (razorpay && match.providerPaymentId && match.matchingFeeInr > 0) {
+      try {
+        await (razorpay.payments as unknown as { refund: (id: string, opts: object) => Promise<unknown> })
+          .refund(match.providerPaymentId, {
+            amount: match.matchingFeeInr * 100,
+            notes: { reason: "Teacher pricing unavailable at engagement creation" },
+          });
+      } catch (refundErr) {
+        console.error("[verify-commitment] Auto-refund failed:", refundErr);
+      }
+    }
+    await db
+      .update(shadowTeacherMatchesTable)
+      .set({ status: "shortlisted", selectedProfessionalId: null, providerOrderId: null, providerPaymentId: null, matchingFeeInr: 0, updatedAt: new Date() })
+      .where(eq(shadowTeacherMatchesTable.id, matchId));
+    res.status(409).json({
+      error: "engagement_blocked_no_pricing",
+      message: "This teacher's pricing is no longer available. Your matching fee has been refunded and you can select a different teacher.",
+    });
+    return;
+  }
 
   // Create engagement
   const today = new Date().toISOString().split("T")[0]!;
@@ -694,8 +724,18 @@ router.post("/shadow-teacher/:id/candidates", requireAuth, requireRole("admin"),
   const [match] = await db.select({ id: shadowTeacherMatchesTable.id }).from(shadowTeacherMatchesTable).where(eq(shadowTeacherMatchesTable.id, matchId));
   if (!match) { res.status(404).json({ error: "Match not found" }); return; }
 
-  const [pro] = await db.select({ id: professionalProfilesTable.id }).from(professionalProfilesTable).where(eq(professionalProfilesTable.id, professionalId));
+  const [pro] = await db
+    .select({ id: professionalProfilesTable.id, pricingMinINR: professionalProfilesTable.pricingMinINR })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, professionalId));
   if (!pro) { res.status(404).json({ error: "Professional not found" }); return; }
+  if (pro.pricingMinINR == null) {
+    res.status(409).json({
+      error: "professional_no_pricing",
+      message: "This professional has not set their monthly fee. Set pricingMinINR on their profile before adding them as a candidate.",
+    });
+    return;
+  }
 
   // Get current max rank
   const existing = await db
