@@ -1,11 +1,36 @@
-// N1 stub — always passes through.
-// V2 Phase 1 replaces this with a real check: GET /api/children →
-// if the array is empty, replace-navigate to /onboarding/child (skippable once).
+import { useEffect } from "react";
+import { useLocation } from "wouter";
+import { Loader2 } from "lucide-react";
+import { useSelectedChild, CHILD_PROFILE_SKIP_KEY } from "@/contexts/SelectedChildContext";
 
 interface RequireChildProfileProps {
   children: React.ReactNode;
 }
 
 export function RequireChildProfile({ children }: RequireChildProfileProps) {
+  const { childProfiles, childrenLoading } = useSelectedChild();
+  const [, setLocation] = useLocation();
+
+  const skipped = sessionStorage.getItem(CHILD_PROFILE_SKIP_KEY) === "1";
+  const hasNoChildren = !childrenLoading && childProfiles.length === 0;
+
+  useEffect(() => {
+    if (hasNoChildren && !skipped) {
+      setLocation("/onboarding/child", { replace: true });
+    }
+  }, [hasNoChildren, skipped, setLocation]);
+
+  if (childrenLoading) {
+    return (
+      <div className="flex h-dvh items-center justify-center">
+        <Loader2 className="animate-spin text-teal-600" size={24} />
+      </div>
+    );
+  }
+
+  if (hasNoChildren && !skipped) {
+    return null;
+  }
+
   return <>{children}</>;
 }

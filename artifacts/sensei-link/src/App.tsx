@@ -36,6 +36,7 @@ import ForumPage from "@/pages/forum";
 import ParentDashboard from "@/pages/parent-dashboard";
 import ProfessionalDashboard from "@/pages/professional-dashboard";
 import CentreDashboard from "@/pages/centre-dashboard";
+import ChildOnboardingPage from "@/pages/onboarding-child";
 
 const DEV_CLERK_KEY = "pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA";
 
@@ -272,12 +273,7 @@ function Router() {
           <RequireAuth><OnboardPage /></RequireAuth>
         </Route>
         <Route path="/onboarding/child">
-          <RequireAuth>
-            <StubPage
-              title="Child profile coming soon"
-              description="You'll set up your child's profile here in the next update."
-            />
-          </RequireAuth>
+          <RequireAuth><ChildOnboardingPage /></RequireAuth>
         </Route>
         <Route path="/onboarding">
           <RequireAuth><ChooseRolePage /></RequireAuth>

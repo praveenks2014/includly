@@ -14,7 +14,7 @@ import type {
 
 export const getGetMyChildrenQueryKey = () => ["/children"] as const;
 
-export function useGetMyChildren(options?: { query?: UseQueryOptions<ChildResponseType[]> }) {
+export function useGetMyChildren(options?: { query?: Omit<UseQueryOptions<ChildResponseType[]>, "queryKey" | "queryFn"> }) {
   return useQuery<ChildResponseType[]>({
     queryKey: getGetMyChildrenQueryKey(),
     queryFn: () => customFetch<ChildResponseType[]>("/api/children"),
