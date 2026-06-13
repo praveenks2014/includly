@@ -183,6 +183,7 @@ export const GetMyProfessionalProfileResponse = zod.object({
   email: zod.string().nullish(),
   pricingMinINR: zod.number().nullish(),
   pricingMaxINR: zod.number().nullish(),
+  languages: zod.array(zod.string()).nullish(),
   upiId: zod
     .string()
     .nullish()
@@ -310,6 +311,7 @@ export const UpdateProfessionalProfileBody = zod.object({
     .optional(),
   inclusiveExperience: zod.boolean().optional(),
   specializationTags: zod.array(zod.string()).optional(),
+  languages: zod.array(zod.string()).optional(),
   avatarUrl: zod.string().optional(),
 });
 

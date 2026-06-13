@@ -30,3 +30,5 @@ export * from "./engagementSalaryPayments";
 export * from "./engagementDailyLogs";
 export * from "./parentNeedsRequests";
 export * from "./therapyCentres";
+export * from "./shadowMatchCandidates";
+export * from "./shadowMatchChat";

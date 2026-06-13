@@ -93,6 +93,31 @@ export async function notifyCommunityReply(postAuthorUserId: number, professiona
   });
 }
 
+export async function notifyMatchShortlisted(
+  teacherUserIds: number[],
+): Promise<void> {
+  await Promise.allSettled(
+    teacherUserIds.map((uid) =>
+      sendPushNotification(uid, {
+        title: "A family is interested in you",
+        body: "A parent has shortlisted you for their child. Log in to view details and chat.",
+        url: "/dashboard",
+      }),
+    ),
+  );
+}
+
+export async function notifyMatchChatMessage(
+  recipientUserId: number,
+  senderLabel: string,
+): Promise<void> {
+  await sendPushNotification(recipientUserId, {
+    title: "New match-chat message",
+    body: `${senderLabel} sent you a message about the shadow teacher match.`,
+    url: "/dashboard",
+  });
+}
+
 export async function notifyParentsOnProfileUpdate(parentUserIds: number[]): Promise<void> {
   await Promise.allSettled(
     parentUserIds.map(async (parentId) => {

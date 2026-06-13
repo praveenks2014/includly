@@ -412,6 +412,7 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
     offersHomeVisits: profile?.offersHomeVisits ?? false,
     willingToTravel: profile?.willingToTravel ?? false,
     travelRadiusKm: profile?.travelRadiusKm ?? 0,
+    languages: (profile as (typeof profile & { languages?: string[] | null }))?.languages ?? [] as string[],
   });
 
   useEffect(() => {
@@ -430,6 +431,7 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
         offersHomeVisits: profile.offersHomeVisits ?? false,
         willingToTravel: profile.willingToTravel ?? false,
         travelRadiusKm: profile.travelRadiusKm ?? 0,
+        languages: (profile as (typeof profile & { languages?: string[] | null }))?.languages ?? [],
       });
     }
   }, [profile, editing]);
@@ -451,6 +453,7 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
           offersHomeVisits: form.offersHomeVisits,
           willingToTravel: form.willingToTravel,
           travelRadiusKm: Number(form.travelRadiusKm) || undefined,
+          languages: form.languages.filter(Boolean),
         },
       });
       queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
@@ -644,6 +647,52 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Languages */}
+          <div className="space-y-4 pt-4 border-t border-gray-50">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Languages</p>
+            <p className="text-xs text-gray-400">Languages you can work in (used when matching you with families).</p>
+            <div className="flex flex-wrap gap-2 min-h-[32px]">
+              {form.languages.map((lang, i) => (
+                <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#2EC4A5]/10 text-[#2EC4A5] rounded-full text-xs font-medium">
+                  {lang}
+                  <button type="button" onClick={() => setForm((f) => ({ ...f, languages: f.languages.filter((_, j) => j !== i) }))} className="hover:text-[#26a88d]" aria-label={`Remove ${lang}`}>×</button>
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                id="lang-input"
+                placeholder="e.g. English, Hindi, Tamil…"
+                className="rounded-lg focus-visible:ring-[#2EC4A5] text-sm"
+                aria-label="Add language"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === ",") {
+                    e.preventDefault();
+                    const val = (e.currentTarget.value ?? "").trim().replace(/,$/, "");
+                    if (val && !form.languages.includes(val)) {
+                      setForm((f) => ({ ...f, languages: [...f.languages, val] }));
+                    }
+                    e.currentTarget.value = "";
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-lg bg-[#2EC4A5]/10 text-[#2EC4A5] text-xs font-medium hover:bg-[#2EC4A5]/20"
+                onClick={() => {
+                  const input = document.getElementById("lang-input") as HTMLInputElement | null;
+                  const val = input?.value.trim() ?? "";
+                  if (val && !form.languages.includes(val)) {
+                    setForm((f) => ({ ...f, languages: [...f.languages, val] }));
+                    if (input) input.value = "";
+                  }
+                }}
+              >
+                Add
+              </button>
+            </div>
           </div>
 
           {/* Contact */}

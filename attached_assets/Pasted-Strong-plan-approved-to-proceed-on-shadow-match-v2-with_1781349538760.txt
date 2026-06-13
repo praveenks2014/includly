@@ -1,0 +1,38 @@
+Strong plan — approved to proceed on shadow-match-v2, with these fixes
+BEFORE you write code. Still no DB push / no deploy until I approve the
+final migration SQL.
+
+1. Language scoring bug: the scoring table compares childLanguages
+against the teacher's specializationTags. That's wrong — specialization
+tags are therapy types (ABA, sensory), not languages. Score language
+match against the teacher's actual `languages` field (the audit confirms
+it exists on the profile). Confirm you've switched the field.
+
+2. Home-visit scoring: don't infer home-visit preference by
+keyword-sniffing extraNotes. The child profile has a structured
+preferred_modes array (home/centre/online). Snapshot preferred_modes
+onto the match request like the other child fields, and score home-visit
+fit against that structured value.
+
+3. monthlyFeeInr default: do NOT default the engagement's monthlyFeeInr
+to pricingMinINR ?? 0. A ₹0 monthly fee is a silent revenue hole that
+Chunk 2's recurring billing will sit on top of. If the teacher has no
+pricing set, handle it explicitly — block commitment or require the fee
+to be set — and tell me how you're handling the monthly-fee amount
+rather than silently using the minimum. What's your proposed behaviour?
+
+4. Notifications gap: I know full notifications are Chunk 2 / separate,
+but there are zero notifications in the system today, which means a
+shortlisted teacher and a waiting parent both sit in silence — and a
+silent on-platform channel makes going offline MORE tempting, which
+undercuts the whole anti-circumvention design. Tell me: can you add a
+minimal IN-APP notification (using the existing notification bell) for
+"you've been shortlisted" and "new match-chat message" within this
+chunk? If it's too big, say so and I'll accept the gap knowingly — but I
+want it flagged, not silently skipped.
+
+On masking: the redaction list is fine. I understand it won't catch
+spelled-out numbers or letter-spaced emails — that's an accepted limit,
+don't over-engineer it.
+
+Answer points 3 and 4 before coding. 1 and 2 just confirm and proceed.

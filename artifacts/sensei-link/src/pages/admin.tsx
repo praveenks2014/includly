@@ -66,6 +66,16 @@ interface AdminBookingRow {
 }
 
 // ── Shadow match row ───────────────────────────────────────────────────────────
+interface AdminMatchCandidate {
+  id: number;
+  professionalId: number;
+  proName: string | null;
+  score: number | null;
+  rank: number;
+  addedBy: string;
+  removedAt: string | null;
+}
+
 interface AdminMatchRow {
   id: number;
   status: string;
@@ -75,9 +85,15 @@ interface AdminMatchRow {
   matchingFeeInr: number;
   childDetails: string | null;
   requirements: string | null;
+  childCity: string | null;
+  childConditions: string[] | null;
+  childBudgetMinInr: number | null;
+  childBudgetMaxInr: number | null;
+  extraNotes: string | null;
   adminNotes: string | null;
   matchedAt: string | null;
   createdAt: string;
+  candidates: AdminMatchCandidate[];
 }
 
 interface ProfDocuments {
@@ -1887,6 +1903,19 @@ function AdminBookingsTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: SHADOW TEACHER MATCHING (Flow A)
 // ═══════════════════════════════════════════════════════════════════════════════
+const MATCH_STATUS_COLORS: Record<string, string> = {
+  pending_payment: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  pending: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  queued: "bg-blue-50 text-blue-700 border-blue-200",
+  shortlisted: "bg-blue-50 text-blue-700 border-blue-200",
+  pending_commitment: "bg-purple-50 text-purple-700 border-purple-200",
+  committed: "bg-green-50 text-green-700 border-green-200",
+  matched: "bg-green-50 text-green-700 border-green-200",
+  cancelled: "bg-gray-50 text-gray-500 border-gray-200",
+  refunded: "bg-gray-50 text-gray-500 border-gray-200",
+  payment_failed: "bg-red-50 text-red-600 border-red-200",
+};
+
 function AdminShadowTeacherTab() {
   const { toast } = useToast();
   const [assignModal, setAssignModal] = useState<AdminMatchRow | null>(null);
@@ -1894,6 +1923,11 @@ function AdminShadowTeacherTab() {
   const [adminNotes, setAdminNotes] = useState("");
   const [assigning, setAssigning] = useState(false);
   const [cancelling, setCancelling] = useState<number | null>(null);
+  const [addingCandidateFor, setAddingCandidateFor] = useState<number | null>(null);
+  const [addCandidateProId, setAddCandidateProId] = useState("");
+  const [addingCandidate, setAddingCandidate] = useState(false);
+  const [removingCandidate, setRemovingCandidate] = useState<number | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
   const { data: rows, isLoading, refetch } = useQuery<AdminMatchRow[]>({
     queryKey: ["admin-shadow-teacher"],
@@ -1904,15 +1938,6 @@ function AdminShadowTeacherTab() {
     staleTime: 30_000,
   });
 
-  const STATUS_COLORS_MATCH: Record<string, string> = {
-    pending_payment: "bg-yellow-50 text-yellow-700 border-yellow-200",
-    queued: "bg-blue-50 text-blue-700 border-blue-200",
-    matched: "bg-green-50 text-green-700 border-green-200",
-    cancelled: "bg-gray-50 text-gray-500 border-gray-200",
-    refunded: "bg-gray-50 text-gray-500 border-gray-200",
-    payment_failed: "bg-red-50 text-red-600 border-red-200",
-  };
-
   async function handleAssign() {
     if (!assignModal || !proId.trim()) return;
     setAssigning(true);
@@ -1922,13 +1947,13 @@ function AdminShadowTeacherTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ professionalId: parseInt(proId, 10), adminNotes: adminNotes.trim() || undefined }),
       });
-      const data = await res.json();
+      const data = await res.json() as { error?: string };
       if (!res.ok) { toast({ title: data.error ?? "Assignment failed", variant: "destructive" }); return; }
       toast({ title: "Shadow teacher assigned ✓" });
       setAssignModal(null);
       setProId("");
       setAdminNotes("");
-      refetch();
+      void refetch();
     } catch { toast({ title: "Network error", variant: "destructive" }); }
     finally { setAssigning(false); }
   }
@@ -1937,13 +1962,47 @@ function AdminShadowTeacherTab() {
     setCancelling(id);
     try {
       const res = await fetchWithAuth(`/api/shadow-teacher/${id}/cancel`, { method: "PATCH" });
-      const data = await res.json();
+      const data = await res.json() as { error?: string; refundInitiated?: boolean };
       if (!res.ok) { toast({ title: data.error ?? "Cancel failed", variant: "destructive" }); return; }
       toast({ title: data.refundInitiated ? "Cancelled & refund initiated ✓" : "Cancelled ✓" });
-      refetch();
+      void refetch();
     } catch { toast({ title: "Network error", variant: "destructive" }); }
     finally { setCancelling(null); }
   }
+
+  async function handleAddCandidate(matchId: number) {
+    if (!addCandidateProId.trim()) return;
+    setAddingCandidate(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ professionalId: parseInt(addCandidateProId, 10) }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { toast({ title: data.error ?? "Could not add candidate", variant: "destructive" }); return; }
+      toast({ title: "Candidate added ✓" });
+      setAddingCandidateFor(null);
+      setAddCandidateProId("");
+      void refetch();
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setAddingCandidate(false); }
+  }
+
+  async function handleRemoveCandidate(matchId: number, candidateId: number) {
+    setRemovingCandidate(candidateId);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}`, { method: "DELETE" });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { toast({ title: data.error ?? "Could not remove candidate", variant: "destructive" }); return; }
+      toast({ title: "Candidate removed ✓" });
+      void refetch();
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setRemovingCandidate(null); }
+  }
+
+  const canAssign = (status: string) => !["cancelled", "refunded", "committed"].includes(status);
+  const canCancel = (status: string) => !["cancelled", "refunded", "committed"].includes(status);
 
   return (
     <div className="space-y-5 max-w-6xl">
@@ -1956,72 +2015,147 @@ function AdminShadowTeacherTab() {
           <p className="text-gray-400 text-sm">No shadow teacher match requests yet.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-[0_4px_24px_rgba(26,35,64,0.08)] overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Parent</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">Child / Requirements</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">Fee / Match</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {(rows ?? []).map((m) => (
-                <tr key={m.id} className="hover:bg-gray-50/50">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-[#1A2340]">{m.parentName ?? "—"}</p>
+        <div className="space-y-3">
+          {(rows ?? []).map((m) => {
+            const activeCandidates = (m.candidates ?? []).filter((c) => !c.removedAt);
+            const isExpanded = expandedRows.has(m.id);
+            return (
+              <div key={m.id} className="bg-white rounded-xl shadow-[0_2px_12px_rgba(26,35,64,0.07)] overflow-hidden">
+                {/* Main row */}
+                <div className="flex items-start gap-4 px-5 py-4">
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-[#1A2340] text-sm">{m.parentName ?? "—"}</p>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${MATCH_STATUS_COLORS[m.status] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                        {m.status.replace(/_/g, " ")}
+                      </span>
+                      <span className="text-[10px] text-gray-400">#{m.id}</span>
+                    </div>
                     <p className="text-xs text-gray-400">{m.parentEmail ?? ""}</p>
-                  </td>
-                  <td className="px-4 py-3 hidden sm:table-cell max-w-[200px]">
-                    <p className="text-xs text-gray-600 truncate">{m.childDetails ?? "—"}</p>
-                    <p className="text-[10px] text-gray-400 truncate mt-0.5">{m.requirements ?? ""}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-1 rounded-full border font-medium ${STATUS_COLORS_MATCH[m.status] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
-                      {m.status.replace(/_/g, " ")}
-                    </span>
-                    {m.matchedProName && (
-                      <p className="text-[10px] text-green-600 mt-1">{m.matchedProName}</p>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 hidden md:table-cell">
-                    <p className="text-sm font-semibold text-[#1A2340]">₹{m.matchingFeeInr?.toLocaleString("en-IN")}</p>
-                    {m.matchedAt && <p className="text-[10px] text-gray-400">Matched: {new Date(m.matchedAt).toLocaleDateString("en-IN")}</p>}
-                    {m.adminNotes && <p className="text-[10px] text-gray-400 mt-0.5 italic">{m.adminNotes}</p>}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-1.5">
-                      {m.status === "queued" && (
-                        <>
-                          <Button
-                            size="sm"
-                            className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-xs h-7 px-2.5"
-                            onClick={() => { setAssignModal(m); setProId(""); setAdminNotes(""); }}
-                          >
-                            Assign
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-xs h-7 px-2 border-red-200 text-red-600 hover:bg-red-50"
-                            disabled={cancelling === m.id}
-                            onClick={() => handleCancel(m.id)}
-                          >
-                            {cancelling === m.id ? <Loader2 size={11} className="animate-spin" /> : "Cancel"}
-                          </Button>
-                        </>
+                    <div className="flex flex-wrap gap-3 text-[11px] text-gray-500 mt-1">
+                      {m.childCity && <span>📍 {m.childCity}</span>}
+                      {m.childConditions?.length ? <span>🏥 {m.childConditions.join(", ")}</span> : null}
+                      {(m.childBudgetMinInr || m.childBudgetMaxInr) && (
+                        <span>💰 ₹{m.childBudgetMinInr?.toLocaleString("en-IN") ?? "?"} – ₹{m.childBudgetMaxInr?.toLocaleString("en-IN") ?? "?"}/mo</span>
+                      )}
+                      {m.matchedProName && <span className="text-green-600 font-medium">✓ {m.matchedProName}</span>}
+                    </div>
+                    {m.extraNotes && <p className="text-[11px] text-gray-400 italic mt-1">"{m.extraNotes}"</p>}
+                    {m.adminNotes && <p className="text-[11px] text-purple-600 mt-1">Admin: {m.adminNotes}</p>}
+                  </div>
+
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <p className="text-[10px] text-gray-400">{new Date(m.createdAt).toLocaleDateString("en-IN")}</p>
+                    <div className="flex gap-1.5 flex-wrap justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-[10px] h-6 px-2 text-gray-500"
+                        onClick={() => setExpandedRows((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(m.id)) next.delete(m.id); else next.add(m.id);
+                          return next;
+                        })}
+                      >
+                        {isExpanded ? "Hide" : `Candidates (${activeCandidates.length})`}
+                      </Button>
+                      {canAssign(m.status) && (
+                        <Button
+                          size="sm"
+                          className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-[10px] h-6 px-2"
+                          onClick={() => { setAssignModal(m); setProId(""); setAdminNotes(""); }}
+                        >
+                          Assign
+                        </Button>
+                      )}
+                      {canCancel(m.status) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-[10px] h-6 px-2 border-red-200 text-red-600 hover:bg-red-50"
+                          disabled={cancelling === m.id}
+                          onClick={() => void handleCancel(m.id)}
+                        >
+                          {cancelling === m.id ? <Loader2 size={10} className="animate-spin" /> : "Cancel"}
+                        </Button>
                       )}
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+
+                {/* Expanded: Candidates section */}
+                {isExpanded && (
+                  <div className="border-t border-gray-100 px-5 py-4 bg-gray-50/50 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Shortlisted Candidates</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-[10px] h-6 px-2 text-[#2EC4A5] border-[#2EC4A5]"
+                        onClick={() => setAddingCandidateFor(m.id === addingCandidateFor ? null : m.id)}
+                      >
+                        + Add
+                      </Button>
+                    </div>
+
+                    {addingCandidateFor === m.id && (
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <Label className="text-[10px] text-gray-500 mb-1 block">Professional profile ID</Label>
+                          <Input
+                            type="number"
+                            placeholder="e.g. 42"
+                            value={addCandidateProId}
+                            onChange={(e) => setAddCandidateProId(e.target.value)}
+                            className="h-7 text-xs focus-visible:ring-[#2EC4A5]"
+                          />
+                        </div>
+                        <Button
+                          size="sm"
+                          className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white h-7 text-xs"
+                          disabled={addingCandidate || !addCandidateProId.trim()}
+                          onClick={() => void handleAddCandidate(m.id)}
+                        >
+                          {addingCandidate ? <Loader2 size={11} className="animate-spin" /> : "Add"}
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs text-gray-400" onClick={() => setAddingCandidateFor(null)}>✕</Button>
+                      </div>
+                    )}
+
+                    {activeCandidates.length === 0 ? (
+                      <p className="text-xs text-gray-400">No candidates yet. Use "+ Add" to shortlist a teacher manually.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {activeCandidates.map((c) => (
+                          <div key={c.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-gray-100">
+                            <div>
+                              <p className="text-xs font-medium text-[#1A2340]">{c.proName ?? `Pro #${c.professionalId}`}</p>
+                              <p className="text-[10px] text-gray-400">
+                                Rank #{c.rank} · {c.score != null ? `${Math.round(c.score)}/100` : "no score"} · {c.addedBy === "admin" ? "Admin pick" : "Auto-matched"}
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-[10px] h-6 px-2 text-red-500 hover:bg-red-50"
+                              disabled={removingCandidate === c.id}
+                              onClick={() => void handleRemoveCandidate(m.id, c.id)}
+                            >
+                              {removingCandidate === c.id ? <Loader2 size={10} className="animate-spin" /> : "Remove"}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
+      {/* Assign modal */}
       <Dialog open={!!assignModal} onOpenChange={() => setAssignModal(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -2032,10 +2166,13 @@ function AdminShadowTeacherTab() {
               <p className="text-xs text-gray-500 mb-1">Parent</p>
               <p className="text-sm font-medium text-[#1A2340]">{assignModal?.parentName}</p>
             </div>
-            {assignModal?.childDetails && (
+            {assignModal?.childCity && (
               <div>
-                <p className="text-xs text-gray-500 mb-1">Child details</p>
-                <p className="text-sm text-gray-600">{assignModal.childDetails}</p>
+                <p className="text-xs text-gray-500 mb-1">City · Budget</p>
+                <p className="text-sm text-gray-600">
+                  {assignModal.childCity}
+                  {(assignModal.childBudgetMinInr || assignModal.childBudgetMaxInr) && ` · ₹${assignModal.childBudgetMinInr?.toLocaleString("en-IN")}–${assignModal.childBudgetMaxInr?.toLocaleString("en-IN")}/mo`}
+                </p>
               </div>
             )}
             <div>
@@ -2047,7 +2184,7 @@ function AdminShadowTeacherTab() {
                 onChange={(e) => setProId(e.target.value)}
                 className="focus-visible:ring-[#2EC4A5]"
               />
-              <p className="text-[10px] text-gray-400 mt-1">You can find the ID in the Professionals tab.</p>
+              <p className="text-[10px] text-gray-400 mt-1">Find the ID in the Professionals tab.</p>
             </div>
             <div>
               <Label className="text-xs text-gray-600 mb-1 block">Admin notes (optional)</Label>
@@ -2065,7 +2202,7 @@ function AdminShadowTeacherTab() {
             <Button
               className="bg-[#2EC4A5] hover:bg-[#26a88d]"
               disabled={assigning || !proId.trim()}
-              onClick={handleAssign}
+              onClick={() => void handleAssign()}
             >
               {assigning ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
               Assign Professional

@@ -29,6 +29,8 @@ export interface UpdateProfessionalProfileBody {
   clinicAddress?: string;
   /** Whether this specialist offers home-visit sessions */
   offersHomeVisits?: boolean;
+  /** Languages the teacher can work in (used for match scoring) */
+  languages?: string[];
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
   upiId?: string;
 }

@@ -68,6 +68,7 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   offersHomeVisits: boolean("offers_home_visits").notNull().default(false),
   coachingSubType: coachingSubTypeEnum("coaching_sub_type"),
   inclusiveExperience: boolean("inclusive_experience").notNull().default(false),
+  languages: text("languages").array(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

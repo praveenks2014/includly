@@ -1,4 +1,5 @@
 - [V2 booking status enum](v2-status-enum.md) — all 10 V2 statuses must be kept in sync across DB enum, api.schemas.ts, STATUS_LABELS/COLORS in sessions.tsx and professional-dashboard.tsx
+- [Shadow match redesign pattern](shadow-match-redesign.md) — new flow: no upfront fee; free match → shortlisted → chat (masked) → commit (first month Razorpay) → engagement; migration at 0014_shadow_match_redesign.sql
 - [OTP visibility rules](otp-visibility.md) — startOtp revealed at paid_held+session_started; endOtp only at session_started; never expose before payment
 - [ChatModal send bug pattern](chat-modal-send-bug.md) — guard send() AND disable the button on the same conditions; never let button appear active when a silent early-return guard exists in the handler
 - [SelectedChildContext pattern](selected-child-context.md) — single source of truth for active child; localStorage is only persistence; sessionStorage skip key gates the soft-wall guard

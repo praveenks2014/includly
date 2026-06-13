@@ -1,0 +1,61 @@
+Shadow-teacher matching redesign — CHUNK 1 of 2 (matching + chat +
+commitment fee + admin override). Recurring salary automation is CHUNK 2,
+a SEPARATE later build — do not touch salary payments in this chunk.
+
+First confirm main is clean, then create a branch called
+shadow-match-v2 and work only there. Show me your full plan before
+writing any code. This is net-new, payment-adjacent work — no DB push and
+no deploy until I approve the plan, and again before anything runs against
+the database.
+
+Context from the existing audit: matching is currently manual admin
+assignment; the request only has two free-text fields; there is NO chat
+between parents and shadow teachers anywhere; the matching fee is charged
+UPFRONT today. We are changing all of that.
+
+Target flow:
+1. Parent requests a shadow-teacher match. The request form is PRE-FILLED
+from the selected child's profile (city, conditions, budget band,
+languages, goals from the children table) plus any extra free-text. No
+upfront payment at this step.
+2. AUTO-MATCH: a scoring function ranks shadow teachers and returns the
+top 3. Score on structured criteria: city/distance, budget vs the
+teacher's pricing range, experience/tier fit (use the existing tiersJson
+bands — which are currently cosmetic), language match, home-visit
+willingness, verified status, rating. Show the parent the scored top-3
+INSTANTLY (no admin gate to display them).
+3. ADMIN OVERRIDE: admin can view any request's auto-generated top-3 and
+add or remove candidates from the list before/after the parent sees it.
+Keep the existing manual-assign capability as a fallback.
+4. MATCH CHAT (net-new): the parent can chat with the matched candidates
+to decide. This chat is scoped to the MATCH, not to a booking and not to
+the contact-unlock system (shadow teachers are excluded from unlocks).
+Build it as its own channel.
+5. ANTI-CIRCUMVENTION on the match chat (this is required, treat as
+friction not a guarantee):
+   - Mask/redact phone numbers, email addresses, and obvious
+     "contact me on…" patterns in messages BEFORE the commitment fee is
+     paid.
+   - Withhold each candidate's full identity/contact before commitment —
+     show first name + scored profile only, not full name/phone/email.
+6. COMMITMENT FEE: when the parent picks a teacher and starts the
+engagement, THEN charge the matching fee (Razorpay one-time order, same
+HMAC-verify pattern already used elsewhere — NOT a subscription). On
+successful payment, create the engagement (reuse the existing
+shadow_teacher_engagements flow) and reveal full contact to both sides.
+
+Before writing code, give me:
+- The new/changed schema (structured fields on the match request; the
+  match-chat tables; how candidates/top-3 are stored) and confirm all
+  additions are nullable/safe.
+- The scoring function design — exact inputs, weights, and how it handles
+  missing data (e.g. a teacher with no languages set).
+- Every file and route you'll touch, flagging payment-related ones.
+- How the match-chat channel is built and where the contact-masking /
+  identity-withholding is enforced (server-side, not just UI).
+- Exactly when and how the commitment fee is charged, and confirm the
+  engagement is only created AFTER payment verification.
+- Confirm you are NOT building or modifying recurring salary payments in
+  this chunk.
+
+No code yet. Plan first.
