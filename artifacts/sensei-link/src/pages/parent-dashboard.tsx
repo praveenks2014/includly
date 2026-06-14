@@ -1086,6 +1086,7 @@ function ShadowTeacherTab() {
   });
 
   const [logNote, setLogNote] = useState("");
+  const [logExtraSupport, setLogExtraSupport] = useState("");
   const [logMood, setLogMood] = useState("");
   const [postingLog, setPostingLog] = useState(false);
   const [lifecycleType, setLifecycleType] = useState<"stop" | "pause" | "buyout" | "">("");
@@ -1106,13 +1107,14 @@ function ShadowTeacherTab() {
           logDate: new Date().toISOString().slice(0, 10),
           content: {
             eventsForTeacher: [logMood, logNote.trim()].filter(Boolean).join(" — "),
+            extraSupportAreas: logExtraSupport.trim() || undefined,
           },
         }),
       });
       queryClient.invalidateQueries({ queryKey: ["engagement-logs", active.id] });
-      setLogNote(""); setLogMood("");
-      toast({ title: "Log posted ✓" });
-    } catch { toast({ title: "Failed to post log", variant: "destructive" }); }
+      setLogNote(""); setLogExtraSupport(""); setLogMood("");
+      toast({ title: "Update posted ✓" });
+    } catch { toast({ title: "Failed to post update", variant: "destructive" }); }
     finally { setPostingLog(false); }
   }
 
@@ -1256,9 +1258,12 @@ function ShadowTeacherTab() {
       {stTab === "logs" && (
         <div className="space-y-4">
           <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
-            <p className="text-sm font-bold text-[#1A2340]">Post Today's Observation</p>
             <div>
-              <p className="text-xs text-gray-500 mb-2">How was today's session?</p>
+              <p className="text-sm font-bold text-[#1A2340]">Today's Update</p>
+              <p className="text-xs text-gray-400 mt-0.5">Anything the teacher should know today?</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-2">Child's mood at home today <span className="text-gray-400">(optional)</span></p>
               <div className="flex gap-2 flex-wrap">
                 {MOODS.map(m => (
                   <button key={m} onClick={() => setLogMood(logMood === m ? "" : m)}
@@ -1268,12 +1273,21 @@ function ShadowTeacherTab() {
                 ))}
               </div>
             </div>
-            <textarea value={logNote} onChange={(e) => setLogNote(e.target.value)} rows={3}
-              placeholder="Describe how the session went today…"
-              className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Events at home</p>
+              <textarea value={logNote} onChange={(e) => setLogNote(e.target.value)} rows={3}
+                placeholder="Didn't sleep well, was upset at breakfast…"
+                className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Areas needing extra support <span className="text-gray-400">(optional)</span></p>
+              <textarea value={logExtraSupport} onChange={(e) => setLogExtraSupport(e.target.value)} rows={2}
+                placeholder="Please help with transitions today"
+                className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
+            </div>
             <Button onClick={handlePostLog} disabled={postingLog || !logNote.trim()}
               className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-sm">
-              {postingLog ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Post Log
+              {postingLog ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Post Update
             </Button>
           </div>
           {logs.length === 0 ? (
