@@ -1,0 +1,51 @@
+Phase A — four independent bug fixes from the audit. Confirm main is
+clean, then work on a branch called phase-a-fixes. These are unrelated
+fixes — keep them clearly separated. Show me your plan, then the actual
+changed code for each, before I approve merging. No DB push or deploy
+until I review.
+
+FIX 1 — Daily logs payload mismatch (highest priority — this feature is
+fully broken):
+The frontend sends content: { responses, template, mood, notes } but the
+backend Zod schema expects content: { taughtToday, behaviorMood,
+feedback, reteachAtHome } (teacher) and { eventsForTeacher,
+extraSupportAreas } (parent). Every daily-log submission currently fails
+validation. Fix the frontend to send the exact structured fields the
+backend expects, for BOTH the teacher template (taughtToday,
+behaviorMood, feedback, reteachAtHome) and the parent template
+(eventsForTeacher, extraSupportAreas). Confirm a teacher log AND a parent
+log both submit successfully and appear in the shared feed. Tell me
+whether you changed the frontend to match the backend, or vice versa, and
+why.
+
+FIX 2 — Notice/buyout lifecycle wiring (two bugs):
+(a) The frontend sends requestType but the backend Zod schema expects
+type — lifecycle requests fail silently. Align them (tell me which side
+you changed).
+(b) The backend supports both "notice" (30-day) and "buyout" (15-day)
+methods, but the UI only lets the user trigger notice — there's no
+selector. Add a UI control so the user can choose notice vs buyout when
+raising a stop/change request. Confirm both a notice request and a buyout
+request can be raised end-to-end and the backend records the correct
+method.
+
+FIX 3 — Salary commission default:
+Change salary_platform_cut_pct from 10 to 5 in admin settings (default
+5%). This is a config value, not code logic. Confirm it's 5%, that it's
+still admin-editable from the admin dashboard, and that the salary
+payment route reads the updated value (a new salary payment should record
+platform_cut_inr at 5%, not 10%).
+
+FIX 4 — Child profile edit screen (currently missing):
+PUT /api/children/:id and the useUpdateChild hook already exist, but
+there is NO UI path for a parent to edit a child after creation. Add a
+way for a parent to view and edit an existing child's profile — reusing
+the existing onboarding-child wizard in an edit mode, or a dedicated edit
+screen — reachable from the child switcher or the dashboard. It must let
+the parent edit budget, city, conditions, languages, modes, gender, and
+the other profile fields, and save via the existing PUT route. Confirm
+edits save and persist after refresh.
+
+For each fix, before I approve: tell me which files changed and show me
+the actual changed lines (not a summary). Confirm these four fixes don't
+interfere with each other. No DB push, no deploy until I review.

@@ -1,0 +1,59 @@
+Audit only — no code, no changes. I'm planning to expand shadow-teacher
+matching into a richer, tier-based system with structured (non-text-box)
+inputs. Report findings only — no plan, no code.
+
+FEE MODEL (note for context, confirm current state):
+- Matching fee stays a FLAT ₹500 (NOT a percentage). Confirm it's
+  currently flat ₹500 and admin-configurable.
+- Salary commission: I want admin to configure it as a PERCENTAGE of
+  salary, default 5%. The audit mentioned salaryPlatformCutPct (default
+  10%). Confirm this exists, is admin-editable, and what changing the
+  default to 5% would involve. No other fee changes.
+
+CURRENT STATE TO REPORT:
+
+1. TIERS: list current tiersJson tiers, their salary ranges, and
+requirements (experience/ABA/BCBA/English). Confirm whether ANY logic
+uses tiers today (scoring/fee/salary) or they're purely cosmetic.
+
+2. PARENT shadow-teacher intake: exactly what's collected today, and in
+what input format (text box, chips, dropdown?). Confirm whether these are
+collected at all: school timing/hours-needed, gender preference,
+help-types required, condition-specific needs, expected tier. I believe
+most are free-text or absent.
+
+3. TEACHER onboarding: what's collected (location, travel, languages,
+experience, pricing) and in what input format. Confirm whether these
+exist: "willing to shadow" toggle, help-types they offer, types/ages of
+kids handled, availability hours, condition experience, auto-tier
+categorisation with suggested salary.
+
+4. SCORING: confirm the current 6 criteria and weights. For EACH of these
+NEW criteria I'm considering, tell me what data already exists vs is
+net-new, and whether it could be a hard filter or a score:
+   - tier / qualification level
+   - condition-specific experience (e.g. has worked with autism, ADHD)
+   - school-hours / availability overlap (parent needed-hours vs teacher
+     available-hours)
+   - gender preference
+   - help-types match (child's needed supports vs teacher's offered supports)
+   - age-group experience
+
+5. INPUT MECHANISMS: what reusable structured-input components already
+exist in the codebase (chip multi-select, toggles, sliders, card-pickers,
+any time/availability grid)? I want to replace text boxes with tap/
+toggle/chip/slider inputs and a VISUAL WEEKLY TIME-GRID for availability
+on both parent and teacher sides. Tell me what exists to reuse vs what's
+net-new to build.
+
+6. ALREADY-BUILT pieces to REUSE not rebuild — confirm each exists/works:
+   (a) notice-period + stop/change lifecycle (30-day notice + buyout)
+   (b) in-app monthly salary payment with admin-% deduction
+   (c) daily logs (teacher + parent templates) — and is the
+       frontend/backend payload mismatch still a live bug?
+
+7. CHILD PROFILE EDIT: is there a screen for parents to view/edit a
+child's profile after creation? How is the budget field used for shadow
+teachers vs per-session therapists today?
+
+Findings only. No plan, no code yet.
