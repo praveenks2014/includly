@@ -1363,11 +1363,21 @@ function ShadowTeacherTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN PARENT DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function ParentDashboard({ initialTab = "home" }: { initialTab?: Tab }) {
+export default function ParentDashboard() {
   const { user } = useUser();
-  const [, setLocation] = useLocation();
+  const [loc, setLocation] = useLocation();
   const { data: me } = useGetMe();
-  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
+
+  const activeTab: Tab = (() => {
+    if (loc.startsWith("/explore"))        return "find";
+    if (loc.startsWith("/bookings"))       return "bookings";
+    if (loc.startsWith("/inbox"))          return "messages";
+    if (loc.startsWith("/shadow-teacher")) return "shadow-teacher";
+    return "home";
+  })();
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  useEffect(() => { setShowNotifications(false); }, [loc]);
   const firstName = me?.fullName?.split(" ")[0] ?? user?.firstName ?? "there";
   const city = me?.location ?? null;
 
@@ -1378,6 +1388,8 @@ export default function ParentDashboard({ initialTab = "home" }: { initialTab?: 
   const unreadCount = (notifications ?? []).filter((n) => !n.read).length;
 
   function handleTabChange(tab: Tab) {
+    if (tab === "notifications") { setShowNotifications(true); return; }
+    setShowNotifications(false);
     const routes: Partial<Record<Tab, string>> = {
       home: "/home",
       find: "/explore",
@@ -1387,18 +1399,22 @@ export default function ParentDashboard({ initialTab = "home" }: { initialTab?: 
     };
     const route = routes[tab];
     if (route) setLocation(route);
-    else setActiveTab(tab);
   }
 
   return (
     <div className="bg-[#F5F7FA]">
       <main className="px-4 sm:px-6 py-6 max-w-[900px] w-full mx-auto">
-        {activeTab === "home"           && <HomeTab parentName={firstName} city={city} onTabChange={handleTabChange} />}
-        {activeTab === "find"           && <FindTab />}
-        {activeTab === "bookings"       && <BookingsTab />}
-        {activeTab === "shadow-teacher" && <ShadowTeacherTab />}
-        {activeTab === "messages"       && <MessagesTab />}
-        {activeTab === "notifications"  && <NotificationsTab />}
+        {showNotifications ? (
+          <NotificationsTab />
+        ) : (
+          <>
+            {activeTab === "home"           && <HomeTab parentName={firstName} city={city} onTabChange={handleTabChange} />}
+            {activeTab === "find"           && <FindTab />}
+            {activeTab === "bookings"       && <BookingsTab />}
+            {activeTab === "shadow-teacher" && <ShadowTeacherTab />}
+            {activeTab === "messages"       && <MessagesTab />}
+          </>
+        )}
       </main>
     </div>
   );

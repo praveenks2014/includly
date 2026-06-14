@@ -324,7 +324,7 @@ function Router() {
             <RequireRole allow={["parent"]}>
               <RequireChildProfile>
                 <AppShell>
-                  <ParentDashboard initialTab="home" />
+                  <ParentDashboard />
                 </AppShell>
               </RequireChildProfile>
             </RequireRole>
@@ -334,7 +334,7 @@ function Router() {
           <RequireAuth>
             <RequireRole allow={["parent"]}>
               <AppShell>
-                <ParentDashboard initialTab="find" />
+                <ParentDashboard />
               </AppShell>
             </RequireRole>
           </RequireAuth>
@@ -343,7 +343,7 @@ function Router() {
           <RequireAuth>
             <RequireRole allow={["parent"]}>
               <AppShell>
-                <ParentDashboard initialTab="bookings" />
+                <ParentDashboard />
               </AppShell>
             </RequireRole>
           </RequireAuth>
@@ -364,7 +364,7 @@ function Router() {
           <RequireAuth>
             <RequireRole allow={["parent"]}>
               <AppShell>
-                <ParentDashboard initialTab="messages" />
+                <ParentDashboard />
               </AppShell>
             </RequireRole>
           </RequireAuth>
@@ -374,7 +374,7 @@ function Router() {
             <RequireRole allow={["parent"]}>
               <RequireChildProfile>
                 <AppShell>
-                  <ParentDashboard initialTab="shadow-teacher" />
+                  <ParentDashboard />
                 </AppShell>
               </RequireChildProfile>
             </RequireRole>
