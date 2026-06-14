@@ -16,6 +16,7 @@ type WizardData = {
   name: string;
   dob: string;
   gender: string;
+  city: string;
   diagnosisStatus: string;
   conditions: string[];
   schoolType: string;
@@ -36,6 +37,7 @@ const DEFAULT: WizardData = {
   name: "",
   dob: "",
   gender: "",
+  city: "",
   diagnosisStatus: "",
   conditions: [],
   schoolType: "",
@@ -182,6 +184,7 @@ export default function ChildOnboardingPage() {
       name:                 (c.name as string) ?? "",
       dob:                  (c.dob as string) ?? "",
       gender:               (c.gender as string) ?? "",
+      city:                 (c.city as string) ?? "",
       diagnosisStatus:      (c.diagnosisStatus as string) ?? "",
       conditions:           (c.conditions as string[]) ?? [],
       schoolType:           (c.schoolType as string) ?? "",
@@ -243,6 +246,7 @@ export default function ChildOnboardingPage() {
       name: data.name.trim(),
       ...(data.dob && { dob: data.dob }),
       ...(data.gender && { gender: data.gender }),
+      ...(data.city.trim() && { city: data.city.trim() }),
       ...(data.diagnosisStatus && { diagnosisStatus: data.diagnosisStatus }),
       ...(data.conditions.length > 0 && { conditions: data.conditions }),
       ...(data.schoolType && { schoolType: data.schoolType }),
@@ -313,6 +317,14 @@ export default function ChildOnboardingPage() {
                   <Chip key={g} label={g} selected={data.gender === g} onClick={() => update("gender", data.gender === g ? "" : g)} />
                 ))}
               </div>
+            </Field>
+
+            <Field label="City">
+              <TextInput
+                value={data.city}
+                onChange={(v) => update("city", v)}
+                placeholder="e.g. Hyderabad"
+              />
             </Field>
           </div>
         );
