@@ -9,6 +9,7 @@ import {
   useSearchProfessionals,
   useCreateRating,
   useGetWalletBalance,
+  useGetMyChildren,
   getGetMeQueryKey,
 } from "@workspace/api-client-react";
 import type { ProfessionalSearchResult, SessionBookingWithDetails } from "@workspace/api-client-react";
@@ -568,6 +569,8 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
   const { data: dashData } = useGetParentDashboard();
   const { data: sessions } = useGetMySessions();
   const { data: walletData } = useGetWalletBalance();
+  const { data: myChildren = [] } = useGetMyChildren();
+  const primaryChild = (myChildren as Array<{ id: number; name: string }>)[0];
 
   const { data: recsData } = useSearchProfessionals(
     { city: city ?? undefined, limit: 4 },
@@ -636,6 +639,22 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
           </div>
         ))}
       </div>
+
+      {/* Child profile quick-edit */}
+      {primaryChild && (
+        <Link href={`/children/${primaryChild.id}/edit`}>
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center gap-3 hover:shadow-md transition-shadow cursor-pointer">
+            <div className="w-9 h-9 bg-violet-50 rounded-xl flex items-center justify-center shrink-0">
+              <User size={16} className="text-violet-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900">{primaryChild.name}'s profile</p>
+              <p className="text-xs text-gray-400 mt-0.5">Update conditions, goals, availability & budget</p>
+            </div>
+            <span className="text-xs text-teal-600 font-semibold whitespace-nowrap">Edit →</span>
+          </div>
+        </Link>
+      )}
 
       {/* Shadow Teacher Matching */}
       <Link href="/shadow-teacher">
@@ -1032,12 +1051,12 @@ function ShadowTeacherTab() {
   interface DailyLog {
     id: number;
     logDate: string;
-    template: string;
-    responses: Record<string, string>;
-    mood: string | null;
-    notes: string | null;
-    postedBy: string;
+    authorRole: string;
+    authorUserId: number;
+    content: string;
     createdAt: string;
+    updatedAt: string;
+    authorName: string | null;
   }
   interface SalaryPayment {
     id: number;
@@ -1083,7 +1102,12 @@ function ShadowTeacherTab() {
       await fetchWithAuth(`/api/engagements/${active.id}/daily-logs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ template: "parent", responses: { general: logNote }, mood: logMood || null, notes: null }),
+        body: JSON.stringify({
+          logDate: new Date().toISOString().slice(0, 10),
+          content: {
+            eventsForTeacher: [logMood, logNote.trim()].filter(Boolean).join(" — "),
+          },
+        }),
       });
       queryClient.invalidateQueries({ queryKey: ["engagement-logs", active.id] });
       setLogNote(""); setLogMood("");
@@ -1152,7 +1176,13 @@ function ShadowTeacherTab() {
       await fetchWithAuth(`/api/engagements/${active.id}/lifecycle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestType: lifecycleType, notes: lifecycleNotes || null }),
+        body: JSON.stringify(
+          lifecycleType === "buyout"
+            ? { type: "stop", method: "buyout", reason: lifecycleNotes || undefined }
+            : lifecycleType === "pause"
+              ? { type: "change", reason: lifecycleNotes || undefined }
+              : { type: "stop", method: "notice", reason: lifecycleNotes || undefined }
+        ),
       });
       queryClient.invalidateQueries({ queryKey: ["parent-engagements"] });
       setLifecycleType(""); setLifecycleNotes("");
@@ -1255,11 +1285,11 @@ function ShadowTeacherTab() {
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xs font-semibold text-[#1A2340]">{new Date(log.logDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</span>
                     {log.mood && <span className="text-xs text-gray-500">{log.mood}</span>}
-                    <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full border font-semibold ${log.template === "teacher" ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-[#2EC4A5]/10 text-[#2EC4A5] border-[#2EC4A5]/20"}`}>
-                      {log.template === "teacher" ? "Teacher" : "Parent"}
+                    <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full border font-semibold ${log.authorRole === "teacher" ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-[#2EC4A5]/10 text-[#2EC4A5] border-[#2EC4A5]/20"}`}>
+                      {log.authorRole === "teacher" ? "Teacher" : "Parent"}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600">{(log.responses as Record<string, string>)["general"] ?? Object.values(log.responses as Record<string, string>)[0] ?? ""}</p>
+                  <p className="text-sm text-gray-600">{(() => { try { return Object.values(JSON.parse(log.content) as Record<string,string>)[0] ?? ""; } catch { return ""; } })()}</p>
                 </div>
               ))}
             </div>
@@ -1305,10 +1335,15 @@ function ShadowTeacherTab() {
         <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
           <p className="text-sm font-bold text-[#1A2340]">Request a Change</p>
           <div className="grid grid-cols-3 gap-2">
-            {([["stop", "End Engagement"], ["pause", "Pause"], ["buyout", "Early Exit"]] as [string, string][]).map(([t, label]) => (
+            {([
+              ["stop",   "End Engagement", "30-day notice period"],
+              ["pause",  "Pause",          "Request a change"],
+              ["buyout", "Early Exit",      "15-day buyout"],
+            ] as [string, string, string][]).map(([t, label, sub]) => (
               <button key={t} onClick={() => setLifecycleType(lifecycleType === t ? "" : t as typeof lifecycleType)}
-                className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-colors ${lifecycleType === t ? "border-[#FF6B6B] bg-[#FF6B6B]/10 text-[#FF6B6B]" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}>
-                {label}
+                className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-colors text-left ${lifecycleType === t ? "border-[#FF6B6B] bg-[#FF6B6B]/10 text-[#FF6B6B]" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}>
+                <div>{label}</div>
+                <div className="text-[10px] font-normal opacity-60 mt-0.5">{sub}</div>
               </button>
             ))}
           </div>

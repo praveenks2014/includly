@@ -1,9 +1,14 @@
-import { useState, type ReactNode } from "react";
-import { useLocation } from "wouter";
+import { useState, useEffect, type ReactNode } from "react";
+import { useLocation, useParams } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Plus, X, Check } from "lucide-react";
 import { CHILD_PROFILE_SKIP_KEY } from "@/contexts/SelectedChildContext";
-import { useCreateChild, type CreateChildPayload } from "@workspace/api-client-react";
+import {
+  useCreateChild,
+  useUpdateChild,
+  useGetChild,
+  type CreateChildPayload,
+} from "@workspace/api-client-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -153,12 +158,46 @@ function TextArea({ value, onChange, placeholder, rows = 3 }: {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function ChildOnboardingPage() {
+  const params = useParams<{ id?: string }>();
+  const editChildId = params.id ? parseInt(params.id, 10) : undefined;
+
   const [step, setStep] = useState(1);
   const [data, setData] = useState<WizardData>(DEFAULT);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const createChild = useCreateChild();
+  const updateChild = useUpdateChild();
+  const { data: existingChild } = useGetChild(editChildId ?? 0, { query: { enabled: !!editChildId } });
+
+  useEffect(() => {
+    if (!existingChild || !editChildId) return;
+    const c = existingChild as Record<string, unknown>;
+    const budgetMin = c.budgetMinInr as number | null;
+    const budgetMax = c.budgetMaxInr as number | null;
+    const matchedPreset = BUDGET_PRESETS.find(
+      (p) => p.min === budgetMin && p.max === budgetMax,
+    );
+    setData({
+      name:                 (c.name as string) ?? "",
+      dob:                  (c.dob as string) ?? "",
+      gender:               (c.gender as string) ?? "",
+      diagnosisStatus:      (c.diagnosisStatus as string) ?? "",
+      conditions:           (c.conditions as string[]) ?? [],
+      schoolType:           (c.schoolType as string) ?? "",
+      grade:                (c.grade as string) ?? "",
+      existingTherapies:    (c.existingTherapies as { type: string; frequency: string }[]) ?? [],
+      goalsAreas:           (c.goalsAreas as string[]) ?? [],
+      preferredModes:       (c.preferredModes as string[]) ?? [],
+      availableTimeWindows: (c.availableTimeWindows as string[]) ?? [],
+      languages:            (c.languages as string[]) ?? [],
+      budgetKey:            matchedPreset?.key ?? "",
+      budgetMinInr:         budgetMin,
+      budgetMaxInr:         budgetMax,
+      careNotes:            (c.careNotes as WizardData["careNotes"]) ?? DEFAULT.careNotes,
+      consent:              (c.consent as WizardData["consent"]) ?? DEFAULT.consent,
+    });
+  }, [existingChild, editChildId]);
 
   function update<K extends keyof WizardData>(key: K, value: WizardData[K]) {
     setData((prev) => ({ ...prev, [key]: value }));
@@ -222,10 +261,17 @@ export default function ChildOnboardingPage() {
     };
 
     try {
-      await createChild.mutateAsync(payload);
-      queryClient.invalidateQueries({ queryKey: ["/children"] });
-      sessionStorage.removeItem(CHILD_PROFILE_SKIP_KEY);
-      setLocation("/home", { replace: true });
+      if (editChildId) {
+        await updateChild.mutateAsync({ id: editChildId, data: payload });
+        queryClient.invalidateQueries({ queryKey: ["/children"] });
+        queryClient.invalidateQueries({ queryKey: [`/children/${editChildId}`] });
+        setLocation("/home", { replace: true });
+      } else {
+        await createChild.mutateAsync(payload);
+        queryClient.invalidateQueries({ queryKey: ["/children"] });
+        sessionStorage.removeItem(CHILD_PROFILE_SKIP_KEY);
+        setLocation("/home", { replace: true });
+      }
     } catch (e: unknown) {
       setSaveError((e as Error)?.message ?? "Something went wrong. Please try again.");
     }
@@ -243,9 +289,9 @@ export default function ChildOnboardingPage() {
         return (
           <div className="space-y-5">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Let's start with the basics</h2>
+              <h2 className="text-xl font-bold text-gray-900">{editChildId ? "Edit child profile" : "Let's start with the basics"}</h2>
               <p className="mt-1 text-sm text-gray-500">
-                This helps us personalise everything — you can always update it later.
+                {editChildId ? "Update details below — changes save on the last step." : "This helps us personalise everything — you can always update it later."}
               </p>
             </div>
 
@@ -531,7 +577,7 @@ export default function ChildOnboardingPage() {
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-6 pb-2">
         <button
-          onClick={() => (step > 1 ? setStep((s) => s - 1) : handleSkip())}
+          onClick={() => step > 1 ? setStep((s) => s - 1) : editChildId ? setLocation("/home") : handleSkip()}
           className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100"
         >
           <ArrowLeft size={20} />
@@ -548,12 +594,14 @@ export default function ChildOnboardingPage() {
           ))}
         </div>
 
-        <button
-          onClick={handleSkip}
-          className="text-xs text-gray-400 hover:text-gray-600"
-        >
-          Skip for now
-        </button>
+        {!editChildId && (
+          <button
+            onClick={handleSkip}
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            Skip for now
+          </button>
+        )}
       </div>
 
       <p className="px-5 text-xs text-gray-400">Step {step} of 6</p>
@@ -576,14 +624,14 @@ export default function ChildOnboardingPage() {
         ) : (
           <button
             onClick={handleSubmit}
-            disabled={!canSubmit || createChild.isPending}
+            disabled={!canSubmit || createChild.isPending || updateChild.isPending}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-40 hover:bg-teal-700 active:bg-teal-800 transition-colors"
           >
-            {createChild.isPending ? "Saving…" : `Save ${data.name.trim() || "profile"} →`}
+            {(createChild.isPending || updateChild.isPending) ? "Saving…" : editChildId ? `Update ${data.name.trim() || "profile"} →` : `Save ${data.name.trim() || "profile"} →`}
           </button>
         )}
 
-        {step === 6 && (
+        {step === 6 && !editChildId && (
           <button
             onClick={handleSkip}
             className="mt-3 w-full text-center text-xs text-gray-400 hover:text-gray-600"

@@ -293,6 +293,13 @@ function Router() {
         <Route path="/onboarding/child">
           <RequireAuth><ChildOnboardingPage /></RequireAuth>
         </Route>
+        <Route path="/children/:id/edit">
+          <RequireAuth>
+            <RequireRole allow={["parent"]}>
+              <ChildOnboardingPage />
+            </RequireRole>
+          </RequireAuth>
+        </Route>
         <Route path="/onboarding">
           <RequireAuth><ChooseRolePage /></RequireAuth>
         </Route>

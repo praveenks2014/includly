@@ -1749,12 +1749,12 @@ function EngagementTab() {
   interface DailyLog {
     id: number;
     logDate: string;
-    template: string;
-    responses: Record<string, string>;
-    mood: string | null;
-    notes: string | null;
-    postedBy: string;
+    authorRole: string;
+    authorUserId: number;
+    content: string;
     createdAt: string;
+    updatedAt: string;
+    authorName: string | null;
   }
 
   const { data: engagements = [], isLoading } = useQuery<STEngagement[]>({
@@ -1771,15 +1771,14 @@ function EngagementTab() {
   });
 
   const TEMPLATE_QUESTIONS = [
-    { key: "goals_covered",  label: "IEP Goals Covered Today" },
-    { key: "behaviour",      label: "Behaviour & Participation" },
-    { key: "progress",       label: "Progress & Observations" },
-    { key: "next_steps",     label: "Plan for Next Session" },
+    { key: "taughtToday",   label: "IEP Goals Covered Today" },
+    { key: "behaviorMood",  label: "Behaviour & Participation" },
+    { key: "feedback",      label: "Progress & Observations" },
+    { key: "reteachAtHome", label: "Plan for Next Session" },
   ];
 
   const [logResponses, setLogResponses] = useState<Record<string, string>>({});
   const [logMood, setLogMood] = useState("");
-  const [logNote, setLogNote] = useState("");
   const [postingLog, setPostingLog] = useState(false);
   const [lifecycleType, setLifecycleType] = useState<"stop" | "pause" | "">("");
   const [lifecycleNotes, setLifecycleNotes] = useState("");
@@ -1793,10 +1792,18 @@ function EngagementTab() {
       await fetchWithAuth(`/api/engagements/${active.id}/daily-logs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ template: "teacher", responses: logResponses, mood: logMood || null, notes: logNote || null }),
+        body: JSON.stringify({
+          logDate: new Date().toISOString().slice(0, 10),
+          content: {
+            taughtToday:   logResponses["taughtToday"]  ?? "",
+            behaviorMood:  [logMood, logResponses["behaviorMood"]].filter(Boolean).join(" — ") || "",
+            feedback:      logResponses["feedback"]      ?? "",
+            reteachAtHome: logResponses["reteachAtHome"] ?? "",
+          },
+        }),
       });
       queryClient.invalidateQueries({ queryKey: ["pro-engagement-logs", active.id] });
-      setLogResponses({}); setLogMood(""); setLogNote("");
+      setLogResponses({}); setLogMood("");
       toast({ title: "Daily log submitted ✓" });
     } catch { toast({ title: "Failed to submit log", variant: "destructive" }); }
     finally { setPostingLog(false); }
@@ -1809,7 +1816,10 @@ function EngagementTab() {
       await fetchWithAuth(`/api/engagements/${active.id}/lifecycle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestType: lifecycleType, notes: lifecycleNotes || null }),
+        body: JSON.stringify({
+          type: lifecycleType === "pause" ? "change" : lifecycleType,
+          reason: lifecycleNotes || undefined,
+        }),
       });
       queryClient.invalidateQueries({ queryKey: ["pro-engagements"] });
       setLifecycleType(""); setLifecycleNotes("");
@@ -1836,7 +1846,7 @@ function EngagementTab() {
 
   const MOODS = ["😊 Excellent", "🙂 Good", "😐 Average", "😔 Challenging"];
   const todayStr = new Date().toISOString().slice(0, 10);
-  const todayLogged = logs.some(l => l.logDate === todayStr && l.template === "teacher");
+  const todayLogged = logs.some(l => l.logDate === todayStr && l.authorRole === "teacher");
 
   return (
     <div className="space-y-5">
@@ -1888,10 +1898,10 @@ function EngagementTab() {
                   <div key={log.id} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg">
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-[#1A2340]">{new Date(log.logDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</p>
-                      <p className="text-xs text-gray-400 truncate">{log.mood ?? Object.values(log.responses as Record<string, string>)[0] ?? ""}</p>
+                      <p className="text-xs text-gray-400 truncate">{(() => { try { return Object.values(JSON.parse(log.content) as Record<string,string>)[0] ?? ""; } catch { return ""; } })()}</p>
                     </div>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${log.template === "teacher" ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-[#2EC4A5]/10 text-[#2EC4A5] border-[#2EC4A5]/20"}`}>
-                      {log.template === "teacher" ? "You" : "Parent"}
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${log.authorRole === "teacher" ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-[#2EC4A5]/10 text-[#2EC4A5] border-[#2EC4A5]/20"}`}>
+                      {log.authorRole === "teacher" ? "You" : "Parent"}
                     </span>
                   </div>
                 ))}
@@ -1932,12 +1942,6 @@ function EngagementTab() {
                 </button>
               ))}
             </div>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Additional notes (optional)</p>
-            <textarea value={logNote} onChange={(e) => setLogNote(e.target.value)} rows={2}
-              placeholder="Any other observations…"
-              className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
           </div>
           <Button onClick={handlePostLog} disabled={postingLog}
             className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-sm">

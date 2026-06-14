@@ -21,7 +21,7 @@ function addDays(dateStr: string, days: number): string {
 
 async function getSettings() {
   const [s] = await db.select().from(adminSettingsTable).limit(1);
-  return s ?? { noticePeriodDays: 30, parentBuyoutDays: 15, salaryPlatformCutPct: 10 };
+  return s ?? { noticePeriodDays: 30, parentBuyoutDays: 15, salaryPlatformCutPct: 5 };
 }
 
 async function getEngagementWithAccess(engagementId: number, userId: number, userRole: string) {
