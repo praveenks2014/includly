@@ -386,7 +386,7 @@ function Router() {
           <RequireAuth>
             <RequireRole allow={["professional"]}>
               <AppShell>
-                <ProfessionalDashboard initialTab="home" />
+                <ProfessionalDashboard />
               </AppShell>
             </RequireRole>
           </RequireAuth>
@@ -395,7 +395,7 @@ function Router() {
           <RequireAuth>
             <RequireRole allow={["professional"]}>
               <AppShell>
-                <ProfessionalDashboard initialTab="availability" />
+                <ProfessionalDashboard />
               </AppShell>
             </RequireRole>
           </RequireAuth>
@@ -416,7 +416,7 @@ function Router() {
           <RequireAuth>
             <RequireRole allow={["professional"]}>
               <AppShell>
-                <ProfessionalDashboard initialTab="messages" />
+                <ProfessionalDashboard />
               </AppShell>
             </RequireRole>
           </RequireAuth>
@@ -425,7 +425,7 @@ function Router() {
           <RequireAuth>
             <RequireRole allow={["professional"]}>
               <AppShell>
-                <ProfessionalDashboard initialTab="earnings" />
+                <ProfessionalDashboard />
               </AppShell>
             </RequireRole>
           </RequireAuth>
@@ -436,7 +436,7 @@ function Router() {
           <RequireAuth>
             <RequireRole allow={["centre_admin"]}>
               <AppShell>
-                <CentreDashboard initialTab="overview" />
+                <CentreDashboard />
               </AppShell>
             </RequireRole>
           </RequireAuth>
@@ -445,7 +445,7 @@ function Router() {
           <RequireAuth>
             <RequireRole allow={["centre_admin"]}>
               <AppShell>
-                <CentreDashboard initialTab="overview" />
+                <CentreDashboard />
               </AppShell>
             </RequireRole>
           </RequireAuth>
@@ -454,7 +454,7 @@ function Router() {
           <RequireAuth>
             <RequireRole allow={["centre_admin"]}>
               <AppShell>
-                <CentreDashboard initialTab="therapists" />
+                <CentreDashboard />
               </AppShell>
             </RequireRole>
           </RequireAuth>
@@ -463,7 +463,7 @@ function Router() {
           <RequireAuth>
             <RequireRole allow={["centre_admin"]}>
               <AppShell>
-                <CentreDashboard initialTab="services" />
+                <CentreDashboard />
               </AppShell>
             </RequireRole>
           </RequireAuth>
@@ -472,7 +472,7 @@ function Router() {
           <RequireAuth>
             <RequireRole allow={["centre_admin"]}>
               <AppShell>
-                <CentreDashboard initialTab="overview" />
+                <CentreDashboard />
               </AppShell>
             </RequireRole>
           </RequireAuth>

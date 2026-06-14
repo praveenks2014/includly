@@ -1978,12 +1978,24 @@ function EngagementTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN: PROFESSIONAL DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function ProfessionalDashboard({ initialTab = "home" }: { initialTab?: ProTab }) {
+export default function ProfessionalDashboard() {
   const { user } = useUser();
-  const [, setLocation] = useLocation();
+  const [loc] = useLocation();
   const { data: me } = useGetMe();
   const { data: profile, isLoading: profileLoading } = useGetMyProfessionalProfile();
-  const [activeTab, setActiveTab] = useState<ProTab>(initialTab);
+
+  const [activeTab, setActiveTab] = useState<ProTab>(() => {
+    if (loc.startsWith("/pro/calendar"))  return "availability";
+    if (loc.startsWith("/pro/inbox"))     return "messages";
+    if (loc.startsWith("/pro/earnings"))  return "earnings";
+    return "home";
+  });
+  useEffect(() => {
+    if (loc.startsWith("/pro/calendar"))       setActiveTab("availability");
+    else if (loc.startsWith("/pro/inbox"))     setActiveTab("messages");
+    else if (loc.startsWith("/pro/earnings"))  setActiveTab("earnings");
+    else if (loc.startsWith("/pro/today"))     setActiveTab("home");
+  }, [loc]);
   const firstName = me?.fullName?.split(" ")[0] ?? user?.firstName ?? "there";
   const profileTyped = profile as ProfessionalProfile | undefined;
 
@@ -2007,12 +2019,6 @@ export default function ProfessionalDashboard({ initialTab = "home" }: { initial
 
   function handleTabChange(tab: ProTab) {
     setActiveTab(tab);
-  }
-
-  function handleNavClick(id: ProTab) {
-    if (id === "notifications" || true) {
-      handleTabChange(id);
-    }
   }
 
   return (

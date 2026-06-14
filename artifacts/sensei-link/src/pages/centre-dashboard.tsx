@@ -98,13 +98,17 @@ const STATUS_CONFIG: Record<CentreStatus, { label: string; color: string; icon: 
   suspended: { label: "Suspended", color: "bg-orange-50 text-orange-700 border-orange-200", icon: <AlertCircle size={12} /> },
 };
 
-export default function CentreDashboard({ initialTab = "overview" }: { initialTab?: SidebarTab }) {
-  const [, setLocation] = useLocation();
+export default function CentreDashboard() {
+  const [loc, setLocation] = useLocation();
   const { toast } = useToast();
   const { data: me, isLoading: meLoading } = useGetMe();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<SidebarTab>(initialTab);
+  const activeTab: SidebarTab = (() => {
+    if (loc.startsWith("/centre/roster"))   return "therapists";
+    if (loc.startsWith("/centre/services")) return "services";
+    return "overview";
+  })();
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -245,14 +249,6 @@ export default function CentreDashboard({ initialTab = "overview" }: { initialTa
   if (!centre && !showWizard) {
     return <SetupWizard onComplete={async () => { await refetchCentre(); }} />;
   }
-
-  const NAV: { id: SidebarTab; label: string; icon: React.ReactNode }[] = [
-    { id: "overview", label: "Overview", icon: <Building2 size={18} /> },
-    { id: "therapists", label: "Therapists", icon: <Users size={18} /> },
-    { id: "services", label: "Services", icon: <Package size={18} /> },
-    { id: "cancellation", label: "Cancellation Policy", icon: <Shield size={18} /> },
-    { id: "settings", label: "Centre Profile", icon: <Settings size={18} /> },
-  ];
 
   const statusCfg = centre ? STATUS_CONFIG[centre.status] : null;
 
