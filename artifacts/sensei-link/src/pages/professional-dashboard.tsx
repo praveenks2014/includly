@@ -35,10 +35,12 @@ import {
   Clock, AlertCircle, Eye, Phone, Mail, MapPin, Star, Unlock,
   Edit3, Save, HelpCircle, BadgeCheck, FileText, ChevronRight,
   Menu, X, Plus, Trash2, TrendingUp, Check, MessageSquare, Send, ChevronLeft,
+  Users,
 } from "lucide-react";
+import { ShadowMatchChatDrawer } from "@/components/ShadowMatchChatDrawer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type ProTab = "home" | "profile" | "availability" | "bookings" | "earnings" | "certifications" | "verification" | "notifications" | "messages" | "engagement";
+type ProTab = "home" | "profile" | "availability" | "bookings" | "earnings" | "certifications" | "verification" | "notifications" | "messages" | "engagement" | "enquiries";
 
 interface Notification { id: number; title: string; body: string; read: boolean; createdAt: string; }
 interface CertDoc { id: number; documentType: string; fileKey: string; uploadedAt: string; }
@@ -1975,6 +1977,157 @@ function EngagementTab() {
   );
 }
 
+// ─── Enquiries Tab (shadow teachers) ─────────────────────────────────────────
+
+interface Candidacy {
+  candidateId:      number;
+  matchId:          number;
+  matchStatus:      string;
+  isSelected:       boolean;
+  childCity:        string | null;
+  childConditions:  string[];
+  childBudgetMinInr:   number | null;
+  childBudgetMaxInr:   number | null;
+  childPreferredModes: string[];
+  childGoalsAreas:     string | null;
+  threadId:        number | null;
+  messageCount:    number;
+  lastMessageAt:   string | null;
+  createdAt:       string;
+}
+
+const MATCH_STATUS_LABEL: Record<string, string> = {
+  shortlisted:     "Shortlisted",
+  committed:       "Committed",
+  cancelled:       "Cancelled",
+  pending_payment: "Pending payment",
+  completed:       "Completed",
+};
+const MATCH_STATUS_COLOR: Record<string, string> = {
+  shortlisted:     "bg-teal-50 text-teal-700 border-teal-200",
+  committed:       "bg-green-50 text-green-700 border-green-200",
+  cancelled:       "bg-gray-50 text-gray-500 border-gray-200",
+  pending_payment: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  completed:       "bg-blue-50 text-blue-700 border-blue-200",
+};
+
+function CandidacyCard({ candidacy: c, onOpen }: { candidacy: Candidacy; onOpen: () => void }) {
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-[0_4px_24px_rgba(26,35,64,0.06)]">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex flex-wrap gap-1.5 flex-1">
+          {c.childConditions.length > 0
+            ? c.childConditions.map((cond) => (
+                <span key={cond} className="text-xs bg-[#2EC4A5]/10 text-[#2EC4A5] px-2 py-0.5 rounded-full font-medium">
+                  {cond.replace(/_/g, " ")}
+                </span>
+              ))
+            : <span className="text-xs text-gray-400 italic">No conditions listed</span>
+          }
+        </div>
+        <span className={`shrink-0 text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${MATCH_STATUS_COLOR[c.matchStatus] ?? "bg-gray-50 text-gray-500 border-gray-200"}`}>
+          {c.isSelected ? "✓ You were selected" : (MATCH_STATUS_LABEL[c.matchStatus] ?? c.matchStatus)}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-gray-500 mb-4">
+        {c.childCity && <span>📍 {c.childCity}</span>}
+        {(c.childBudgetMinInr || c.childBudgetMaxInr) && (
+          <span>
+            💰 ₹{c.childBudgetMinInr?.toLocaleString("en-IN") ?? "?"} – ₹{c.childBudgetMaxInr?.toLocaleString("en-IN") ?? "?"}/mo
+          </span>
+        )}
+        {c.childPreferredModes.length > 0 && (
+          <span>🎓 {c.childPreferredModes.join(", ")}</span>
+        )}
+        {c.childGoalsAreas && (
+          <span className="col-span-2 line-clamp-2">🎯 {c.childGoalsAreas}</span>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between pt-3 border-t border-gray-50">
+        {c.messageCount > 0 ? (
+          <span className="flex items-center gap-1.5 text-xs text-[#2EC4A5] font-medium">
+            <span className="w-2 h-2 rounded-full bg-[#2EC4A5] inline-block" />
+            {c.messageCount} message{c.messageCount !== 1 ? "s" : ""}
+          </span>
+        ) : (
+          <span className="text-xs text-gray-400">No messages yet</span>
+        )}
+        <Button
+          size="sm"
+          onClick={onOpen}
+          className="bg-[#1A2340] hover:bg-[#2a3660] text-white text-xs h-8 px-4 rounded-xl"
+        >
+          <MessageSquare size={12} className="mr-1.5" />
+          Open Chat
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function EnquiriesTab() {
+  const { data: me } = useGetMe();
+  const [candidacies, setCandidacies] = useState<Candidacy[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Candidacy | null>(null);
+
+  useEffect(() => {
+    fetchWithAuth("/api/shadow-teacher/my-candidacies")
+      .then(r => r.json())
+      .then((data: unknown) => { if (Array.isArray(data)) setCandidacies(data as Candidacy[]); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 size={24} className="animate-spin text-[#2EC4A5]" />
+      </div>
+    );
+  }
+
+  if (candidacies.length === 0) {
+    return (
+      <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center shadow-sm">
+        <Users size={36} className="mx-auto mb-3 text-gray-300" />
+        <p className="font-semibold text-gray-600">No match requests yet</p>
+        <p className="text-sm text-gray-400 mt-1 max-w-xs mx-auto">
+          Once a parent shortlists you as a shadow teacher candidate, their request will appear here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="space-y-4">
+        <div className="mb-2">
+          <h2 className="text-lg font-serif font-semibold text-[#1A2340]">Match Requests</h2>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Parents who have shortlisted you as a shadow teacher candidate.
+          </p>
+        </div>
+        {candidacies.map((c) => (
+          <CandidacyCard key={c.candidateId} candidacy={c} onOpen={() => setSelected(c)} />
+        ))}
+      </div>
+      {selected && (
+        <ShadowMatchChatDrawer
+          matchId={selected.matchId}
+          candidateId={selected.candidateId}
+          candidateName={selected.childCity ? `Parent — ${selected.childCity}` : "Parent"}
+          committed={selected.isSelected}
+          myUserId={(me as { id?: number } | undefined)?.id ?? 0}
+          onClose={() => setSelected(null)}
+        />
+      )}
+    </>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN: PROFESSIONAL DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1985,16 +2138,18 @@ export default function ProfessionalDashboard() {
   const { data: profile, isLoading: profileLoading } = useGetMyProfessionalProfile();
 
   const [activeTab, setActiveTab] = useState<ProTab>(() => {
-    if (loc.startsWith("/pro/calendar"))  return "availability";
-    if (loc.startsWith("/pro/inbox"))     return "messages";
-    if (loc.startsWith("/pro/earnings"))  return "earnings";
+    if (loc.startsWith("/pro/calendar"))   return "availability";
+    if (loc.startsWith("/pro/inbox"))      return "messages";
+    if (loc.startsWith("/pro/earnings"))   return "earnings";
+    if (loc.startsWith("/pro/enquiries"))  return "enquiries";
     return "home";
   });
   useEffect(() => {
-    if (loc.startsWith("/pro/calendar"))       setActiveTab("availability");
-    else if (loc.startsWith("/pro/inbox"))     setActiveTab("messages");
-    else if (loc.startsWith("/pro/earnings"))  setActiveTab("earnings");
-    else if (loc.startsWith("/pro/today"))     setActiveTab("home");
+    if (loc.startsWith("/pro/calendar"))        setActiveTab("availability");
+    else if (loc.startsWith("/pro/inbox"))      setActiveTab("messages");
+    else if (loc.startsWith("/pro/earnings"))   setActiveTab("earnings");
+    else if (loc.startsWith("/pro/enquiries"))  setActiveTab("enquiries");
+    else if (loc.startsWith("/pro/today"))      setActiveTab("home");
   }, [loc]);
   const firstName = me?.fullName?.split(" ")[0] ?? user?.firstName ?? "there";
   const profileTyped = profile as ProfessionalProfile | undefined;
@@ -2034,6 +2189,7 @@ export default function ProfessionalDashboard() {
         {activeTab === "engagement"    && <EngagementTab />}
         {activeTab === "messages"      && <MessagesTab />}
         {activeTab === "notifications" && <NotificationsTab />}
+        {activeTab === "enquiries"     && <EnquiriesTab />}
       </main>
     </div>
   );

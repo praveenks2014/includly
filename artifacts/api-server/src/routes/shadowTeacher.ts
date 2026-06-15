@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, isNull, isNotNull, sql } from "drizzle-orm";
+import { eq, and, desc, isNull, isNotNull, sql, count, max, inArray } from "drizzle-orm";
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import {
@@ -373,6 +373,92 @@ router.get("/shadow-teacher/my-request", requireAuth, requireRole("parent"), asy
   }).filter(Boolean);
 
   res.json({ ...match, candidates });
+});
+
+// ── GET /shadow-teacher/my-candidacies — teacher sees matches they've been shortlisted for ─
+router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const [pro] = await db
+    .select({ id: professionalProfilesTable.id })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.userId, req.userId!));
+
+  if (!pro) { res.status(404).json({ error: "Professional profile not found" }); return; }
+
+  const candidates = await db
+    .select({
+      candidateId: shadowMatchCandidatesTable.id,
+      matchId:     shadowMatchCandidatesTable.matchId,
+      createdAt:   shadowMatchCandidatesTable.createdAt,
+      matchStatus:            shadowTeacherMatchesTable.status,
+      selectedProfessionalId: shadowTeacherMatchesTable.selectedProfessionalId,
+      childCity:           shadowTeacherMatchesTable.childCity,
+      childConditions:     shadowTeacherMatchesTable.childConditions,
+      childBudgetMinInr:   shadowTeacherMatchesTable.childBudgetMinInr,
+      childBudgetMaxInr:   shadowTeacherMatchesTable.childBudgetMaxInr,
+      childPreferredModes: shadowTeacherMatchesTable.childPreferredModes,
+      childGoalsAreas:     shadowTeacherMatchesTable.childGoalsAreas,
+    })
+    .from(shadowMatchCandidatesTable)
+    .innerJoin(shadowTeacherMatchesTable, eq(shadowMatchCandidatesTable.matchId, shadowTeacherMatchesTable.id))
+    .where(
+      and(
+        eq(shadowMatchCandidatesTable.professionalId, pro.id),
+        isNull(shadowMatchCandidatesTable.removedAt),
+      ),
+    )
+    .orderBy(desc(shadowMatchCandidatesTable.createdAt));
+
+  if (candidates.length === 0) { res.json([]); return; }
+
+  const matchIds = candidates.map(c => c.matchId);
+  const threads = await db
+    .select({ matchId: shadowMatchThreadsTable.matchId, threadId: shadowMatchThreadsTable.id })
+    .from(shadowMatchThreadsTable)
+    .where(
+      and(
+        eq(shadowMatchThreadsTable.professionalId, pro.id),
+        inArray(shadowMatchThreadsTable.matchId, matchIds),
+      ),
+    );
+
+  const threadIds = threads.map(t => t.threadId);
+  const msgCounts = threadIds.length > 0
+    ? await db
+        .select({
+          threadId:      shadowMatchMessagesTable.threadId,
+          messageCount:  count(shadowMatchMessagesTable.id),
+          lastMessageAt: max(shadowMatchMessagesTable.createdAt),
+        })
+        .from(shadowMatchMessagesTable)
+        .where(inArray(shadowMatchMessagesTable.threadId, threadIds))
+        .groupBy(shadowMatchMessagesTable.threadId)
+    : [];
+
+  const threadByMatchId  = new Map(threads.map(t => [t.matchId, t]));
+  const countByThreadId  = new Map(msgCounts.map(m => [m.threadId, m]));
+
+  const result = candidates.map(c => {
+    const thread = threadByMatchId.get(c.matchId);
+    const counts = thread ? countByThreadId.get(thread.threadId) : undefined;
+    return {
+      candidateId:      c.candidateId,
+      matchId:          c.matchId,
+      matchStatus:      c.matchStatus,
+      isSelected:       c.selectedProfessionalId === pro.id,
+      childCity:        c.childCity,
+      childConditions:  c.childConditions ?? [],
+      childBudgetMinInr:   c.childBudgetMinInr  !== null ? Number(c.childBudgetMinInr)  : null,
+      childBudgetMaxInr:   c.childBudgetMaxInr  !== null ? Number(c.childBudgetMaxInr)  : null,
+      childPreferredModes: c.childPreferredModes ?? [],
+      childGoalsAreas:     c.childGoalsAreas    ?? null,
+      threadId:        thread?.threadId ?? null,
+      messageCount:    counts ? Number(counts.messageCount) : 0,
+      lastMessageAt:   counts?.lastMessageAt ?? null,
+      createdAt:       c.createdAt,
+    };
+  });
+
+  res.json(result);
 });
 
 // ── GET /shadow-teacher/:matchId/thread/:candidateId — get/create thread, return messages ─

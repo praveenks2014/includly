@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { useGetMe } from "@workspace/api-client-react";
+import { useGetMe, useGetMyProfessionalProfile } from "@workspace/api-client-react";
 import { NAV, type Role } from "@/nav/config";
 
 export function BottomNav() {
@@ -7,8 +7,15 @@ export function BottomNav() {
   const { data: me } = useGetMe();
   const role = me?.role as Role | undefined;
 
+  const { data: proProfile } = useGetMyProfessionalProfile({
+    query: { enabled: role === "professional" },
+  });
+
   if (!role || role === "admin") return null;
-  const tabs = NAV[role];
+  const allTabs = NAV[role];
+  const tabs = allTabs.filter(
+    (item) => !item.specialtyFilter || proProfile?.specialty === item.specialtyFilter,
+  );
 
   return (
     <nav

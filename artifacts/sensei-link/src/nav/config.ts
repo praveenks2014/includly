@@ -9,6 +9,7 @@ import {
   Users,
   Wallet,
   Layers,
+  Inbox,
 } from "lucide-react";
 
 export type Role = "parent" | "professional" | "centre_admin" | "admin";
@@ -21,6 +22,7 @@ export interface NavItem {
   path: string;
   match: (loc: string) => boolean;
   badge?: BadgeKey;
+  specialtyFilter?: string;
 }
 
 function tab(
@@ -28,6 +30,7 @@ function tab(
   icon: LucideIcon,
   path: string,
   badge?: BadgeKey,
+  specialtyFilter?: string,
 ): NavItem {
   return {
     label,
@@ -35,6 +38,7 @@ function tab(
     path,
     match: (loc) => loc === path || loc.startsWith(path + "/"),
     badge,
+    specialtyFilter,
   };
 }
 
@@ -52,6 +56,7 @@ export const NAV: Record<Exclude<Role, "admin">, NavItem[]> = {
     tab("Clients", Users, "/pro/clients"),
     tab("Inbox", MessageSquare, "/pro/inbox", "unreadMessages"),
     tab("Earnings", Wallet, "/pro/earnings"),
+    tab("Enquiries", Inbox, "/pro/enquiries", undefined, "shadow_teacher"),
   ],
   centre_admin: [
     tab("Overview", LayoutDashboard, "/centre/overview"),

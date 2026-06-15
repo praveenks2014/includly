@@ -430,6 +430,15 @@ function Router() {
             </RequireRole>
           </RequireAuth>
         </Route>
+        <Route path="/pro/enquiries">
+          <RequireAuth>
+            <RequireRole allow={["professional"]}>
+              <AppShell>
+                <ProfessionalDashboard />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
 
         {/* ── Centre shell ── */}
         <Route path="/centre/overview">
