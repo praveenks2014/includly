@@ -287,11 +287,24 @@ router.post("/shadow-teacher/verify-payment", requireAuth, requireRole("parent")
 });
 
 // ── GET /shadow-teacher/my-request — parent views their latest match + candidates ─
+// Optional ?childId=N scopes the lookup to a specific child. Without it the
+// most-recent match across all children is returned (backwards-compat).
 router.get("/shadow-teacher/my-request", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const childIdParam = req.query["childId"];
+  const childId = childIdParam ? parseInt(String(childIdParam), 10) : null;
+
+  const whereClause =
+    childId && !isNaN(childId)
+      ? and(
+          eq(shadowTeacherMatchesTable.parentId, req.userId!),
+          eq(shadowTeacherMatchesTable.childId, childId),
+        )
+      : eq(shadowTeacherMatchesTable.parentId, req.userId!);
+
   const matches = await db
     .select()
     .from(shadowTeacherMatchesTable)
-    .where(eq(shadowTeacherMatchesTable.parentId, req.userId!))
+    .where(whereClause)
     .orderBy(desc(shadowTeacherMatchesTable.createdAt))
     .limit(1);
 

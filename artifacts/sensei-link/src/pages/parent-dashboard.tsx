@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { StarRating } from "@/components/StarRating";
 import { ShadowTeacherRequestWidget } from "@/components/ShadowTeacherRequestWidget";
+import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { fetchWithAuth } from "@/lib/api";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import { useToast } from "@/hooks/use-toast";
@@ -1035,6 +1036,7 @@ function NotificationsTab() {
 function ShadowTeacherTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { selectedChildId } = useSelectedChild();
 
   interface STEngagement {
     id: number;
@@ -1198,7 +1200,7 @@ function ShadowTeacherTab() {
   }
 
   if (!active) {
-    return <ShadowTeacherRequestWidget />;
+    return <ShadowTeacherRequestWidget key={selectedChildId ?? "no-child"} />;
   }
 
   const MOODS = ["😊 Great", "🙂 Good", "😐 Okay", "😔 Difficult"];

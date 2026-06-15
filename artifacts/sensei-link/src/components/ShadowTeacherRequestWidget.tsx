@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { fetchWithAuth, getApiBase } from "@/lib/api";
 import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
+import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import {
   UserCheck, Loader2, CheckCircle2, Clock, IndianRupee,
   AlertCircle, RefreshCw, MessageSquare, Star, MapPin, Languages,
@@ -81,17 +82,21 @@ interface MatchWithCandidates {
   candidates: Candidate[];
 }
 
-function useMyMatch() {
+function useMyMatch(childId: number | null) {
   return useQuery<MatchWithCandidates | null>({
-    queryKey: ["shadow-teacher-my-request"],
+    queryKey: ["shadow-teacher-my-request", childId],
     queryFn: async () => {
-      const res = await fetchWithAuth("/api/shadow-teacher/my-request");
+      const url = childId
+        ? `/api/shadow-teacher/my-request?childId=${childId}`
+        : "/api/shadow-teacher/my-request";
+      const res = await fetchWithAuth(url);
       const data = await res.json() as MatchWithCandidates | null;
       if (Array.isArray(data) && data.length === 0) return null;
       return (data as MatchWithCandidates) ?? null;
     },
     staleTime: 20_000,
     refetchInterval: 30_000,
+    enabled: childId !== null,
   });
 }
 
@@ -279,12 +284,18 @@ export function ShadowTeacherRequestWidget() {
   const queryClient = useQueryClient();
   const { data: me } = useGetMe();
 
-  const { data: match, isLoading: loadingMatch, refetch } = useMyMatch();
-  const { data: children = [], isLoading: loadingChildren } = useChildren();
+  // Global child context is the single source of truth for which child is active.
+  const { selectedChildId, childrenLoading } = useSelectedChild();
+
+  const { data: match, isLoading: loadingMatch, refetch } = useMyMatch(selectedChildId);
+  const { data: children = [], isLoading: loadingChildrenLocal } = useChildren();
   const { data: pricing } = useMatchingFee();
   const matchingFee = pricing?.matchingFeeInr ?? 500;
 
-  const [selectedChildId, setSelectedChildId] = useState<number | "">("");
+  // Use children from the local hook for full field coverage (city, conditions, etc.)
+  // selectedChildId comes from context — no internal child-selection state.
+  const loadingChildren = childrenLoading || loadingChildrenLocal;
+
   const [extraNotes, setExtraNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [choosingId, setChoosingId] = useState<number | null>(null);
@@ -295,10 +306,11 @@ export function ShadowTeacherRequestWidget() {
   const committed = status === "committed";
 
   // ── handleSubmit — calls /request, opens Razorpay modal, then verifies ──
-  // Works for both new submissions AND resuming a pending_payment (uses match.childId fallback)
+  // selectedChildId comes from global SelectedChildContext.
+  // Falls back to match.childId when resuming an existing pending_payment.
   async function handleSubmit() {
-    const effectiveChildId = selectedChildId || match?.childId || null;
-    if (!effectiveChildId) { toast({ title: "Please select a child profile", variant: "destructive" }); return; }
+    const effectiveChildId = selectedChildId ?? match?.childId ?? null;
+    if (!effectiveChildId) { toast({ title: "Please select a child profile from the child switcher above", variant: "destructive" }); return; }
     setSubmitting(true);
     try {
       const loaded = await loadRazorpayScript();
@@ -484,18 +496,13 @@ export function ShadowTeacherRequestWidget() {
           </div>
         ) : (
           <div className="space-y-4">
-            <div>
-              <Label className="text-sm mb-1.5 block">Which child is this for?</Label>
-              <select
-                value={selectedChildId}
-                onChange={(e) => setSelectedChildId(e.target.value ? Number(e.target.value) : "")}
-                className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">— Select a child —</option>
-                {children.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}{c.city ? ` · ${c.city}` : ""}</option>
-                ))}
-              </select>
+            {/* Selected child display — controlled by the global child switcher, not a local dropdown */}
+            <div className="bg-primary/5 border border-primary/20 rounded-xl p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground mb-0.5">Finding a shadow teacher for</p>
+              <p className="text-sm font-medium text-foreground">{selectedChild?.name ?? "—"}</p>
+              {children.length > 1 && (
+                <p className="text-[11px] text-muted-foreground mt-1">To request for a different child, switch at the top of the page.</p>
+              )}
             </div>
 
             {selectedChild && (
@@ -527,7 +534,7 @@ export function ShadowTeacherRequestWidget() {
         <Button
           className="w-full gap-2"
           onClick={handleSubmit}
-          disabled={submitting || !selectedChildId || children.length === 0}
+          disabled={submitting || selectedChildId === null || children.length === 0}
         >
           {submitting ? <Loader2 size={14} className="animate-spin" /> : <IndianRupee size={14} />}
           {submitting ? "Opening payment…" : `Find My Shadow Teacher — ₹${matchingFee.toLocaleString("en-IN")}`}
