@@ -1073,7 +1073,10 @@ function ShadowTeacherTab() {
     queryFn: () => fetchWithAuth("/api/engagements").then(r => r.json()),
   });
 
-  const active = engagements.find(e => e.status === "active" || e.status === "notice_period");
+  const active = engagements.find(e =>
+    (e.status === "active" || e.status === "notice_period") &&
+    e.childId === selectedChildId
+  );
 
   const { data: logs = [] } = useQuery<DailyLog[]>({
     queryKey: ["engagement-logs", active?.id],
