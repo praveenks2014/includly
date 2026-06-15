@@ -84,21 +84,27 @@ router.patch("/admin/professionals/:id/approve", ...adminGuard, async (req, res)
     return;
   }
 
-  const [profile] = await db
-    .update(professionalProfilesTable)
-    .set({ verificationStatus: "verified", isVerified: true })
-    .where(eq(professionalProfilesTable.id, id))
-    .returning();
+  const profile = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(professionalProfilesTable)
+      .set({ verificationStatus: "verified", isVerified: true })
+      .where(eq(professionalProfilesTable.id, id))
+      .returning();
+
+    if (!row) return null;
+
+    await tx
+      .update(identityVerificationsTable)
+      .set({ status: "verified" })
+      .where(eq(identityVerificationsTable.professionalId, id));
+
+    return row;
+  });
 
   if (!profile) {
     res.status(404).json({ error: "Professional not found" });
     return;
   }
-
-  await db
-    .update(identityVerificationsTable)
-    .set({ status: "approved" })
-    .where(eq(identityVerificationsTable.professionalId, id));
 
   res.json(profile);
 });

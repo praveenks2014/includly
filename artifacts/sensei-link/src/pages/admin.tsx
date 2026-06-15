@@ -778,11 +778,11 @@ function ProfessionalsTab() {
                         <Button
                           size="sm"
                           onClick={() => openReview(prof)}
-                          className="text-xs h-7 bg-[#1A2340] hover:bg-[#2a3660] focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
-                          aria-label={`Review ${prof.fullName ?? prof.userName}`}
+                          className={`text-xs h-7 focus-visible:ring-2 focus-visible:ring-[#2EC4A5] ${prof.verificationStatus === "verified" ? "bg-gray-100 hover:bg-gray-200 text-gray-600" : "bg-[#1A2340] hover:bg-[#2a3660]"}`}
+                          aria-label={`${prof.verificationStatus === "verified" ? "View" : "Review"} ${prof.fullName ?? prof.userName}`}
                         >
                           <Eye size={12} className="mr-1" />
-                          Review
+                          {prof.verificationStatus === "verified" ? "View" : "Review"}
                         </Button>
                       </div>
                     </td>
@@ -886,15 +886,17 @@ function ProfessionalsTab() {
                   {isRejecting ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />}
                   Reject
                 </Button>
-                <Button
-                  className="gap-1 bg-green-600 hover:bg-green-700 focus-visible:ring-2 focus-visible:ring-green-500"
-                  onClick={() => handleApprove(reviewProf.id)}
-                  disabled={isRejecting || isApproving}
-                  aria-label="Approve application"
-                >
-                  {isApproving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
-                  Approve
-                </Button>
+                {reviewProf.verificationStatus !== "verified" && (
+                  <Button
+                    className="gap-1 bg-green-600 hover:bg-green-700 focus-visible:ring-2 focus-visible:ring-green-500"
+                    onClick={() => handleApprove(reviewProf.id)}
+                    disabled={isRejecting || isApproving}
+                    aria-label="Approve application"
+                  >
+                    {isApproving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+                    Approve
+                  </Button>
+                )}
               </>
             )}
           </DialogFooter>
