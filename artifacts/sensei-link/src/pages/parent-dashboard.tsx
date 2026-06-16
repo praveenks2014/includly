@@ -28,7 +28,7 @@ import {
   Clock, Video, Navigation, ArrowRight, HelpCircle,
   Phone, Mail, MessageSquarePlus, Check, X, Wallet,
   TrendingUp, Gift, Copy, Sparkles, Menu, MessageCircle,
-  User, IndianRupee,
+  User, IndianRupee, Plus,
 } from "lucide-react";
 
 type Tab = "home" | "find" | "bookings" | "messages" | "notifications" | "shadow-teacher";
@@ -1060,6 +1060,13 @@ function ShadowTeacherTab() {
     updatedAt: string;
     authorName: string | null;
   }
+  interface ChildGoal {
+    id: number;
+    label: string;
+    category: string | null;
+    isActive: boolean;
+    createdByUserId: number;
+  }
   interface SalaryPayment {
     id: number;
     month: string;
@@ -1090,6 +1097,12 @@ function ShadowTeacherTab() {
     enabled: !!active,
   });
 
+  const { data: childGoals = [] } = useQuery<ChildGoal[]>({
+    queryKey: ["child-goals", active?.childId],
+    queryFn: () => fetchWithAuth(`/api/children/${active!.childId}/goals`).then(r => r.json()),
+    enabled: !!active?.childId,
+  });
+
   const [logNote, setLogNote] = useState("");
   const [logExtraSupport, setLogExtraSupport] = useState("");
   const [logMood, setLogMood] = useState("");
@@ -1099,7 +1112,11 @@ function ShadowTeacherTab() {
   const [postingLifecycle, setPostingLifecycle] = useState(false);
   const [payingMonth, setPayingMonth] = useState("");
   const [payingInProgress, setPayingInProgress] = useState(false);
-  const [stTab, setStTab] = useState<"overview" | "logs" | "payments" | "lifecycle">("overview");
+  const [stTab, setStTab] = useState<"overview" | "logs" | "goals" | "trends" | "payments" | "lifecycle">("overview");
+  const [addingGoal, setAddingGoal] = useState(false);
+  const [newGoalLabel, setNewGoalLabel] = useState("");
+  const [newGoalCategory, setNewGoalCategory] = useState("");
+  const [savingGoal, setSavingGoal] = useState(false);
 
   async function handlePostLog() {
     if (!active || !logNote.trim()) return;
@@ -1198,6 +1215,34 @@ function ShadowTeacherTab() {
     finally { setPostingLifecycle(false); }
   }
 
+  async function handleAddGoal() {
+    if (!active?.childId || !newGoalLabel.trim()) return;
+    setSavingGoal(true);
+    try {
+      await fetchWithAuth(`/api/children/${active.childId}/goals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: newGoalLabel.trim(), category: newGoalCategory.trim() || undefined, engagementId: active.id }),
+      });
+      await queryClient.invalidateQueries({ queryKey: ["child-goals", active.childId] });
+      setNewGoalLabel(""); setNewGoalCategory(""); setAddingGoal(false);
+      toast({ title: "Goal added ✓" });
+    } catch { toast({ title: "Failed to add goal", variant: "destructive" }); }
+    finally { setSavingGoal(false); }
+  }
+
+  async function handleToggleParentGoal(goalId: number, isActive: boolean) {
+    if (!active?.childId) return;
+    try {
+      await fetchWithAuth(`/api/children/${active.childId}/goals/${goalId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !isActive }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["child-goals", active.childId] });
+    } catch { toast({ title: "Failed to update goal", variant: "destructive" }); }
+  }
+
   if (isLoading) {
     return <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-14 bg-white rounded-xl animate-pulse shadow-sm" />)}</div>;
   }
@@ -1205,6 +1250,19 @@ function ShadowTeacherTab() {
   if (!active) {
     return <ShadowTeacherRequestWidget key={selectedChildId ?? "no-child"} />;
   }
+
+  const P_RANK: Record<string, number> = { independent: 5, visual_prompt: 4, verbal_prompt: 3, modeling: 2, physical_assist: 1 };
+  const P_BG: Record<string, string> = { independent: "bg-green-400", visual_prompt: "bg-yellow-400", verbal_prompt: "bg-amber-400", modeling: "bg-orange-400", physical_assist: "bg-red-400" };
+  const _ptLogs = [...logs].filter(l => l.authorRole === "teacher").sort((a, b) => a.logDate.localeCompare(b.logDate)).map(l => { let c: Record<string, unknown> = {}; try { c = JSON.parse(l.content) as Record<string, unknown>; } catch {} return { date: l.logDate.slice(5), c }; });
+  const ptGoalMap: Record<string, { label: string; pts: { date: string; rank: number; level: string }[] }> = {};
+  _ptLogs.forEach(({ date, c }) => { ((c["goalRatings"] as { goalId: number; label: string; level: string }[] | undefined) ?? []).forEach(gr => { const k = String(gr.goalId); if (!ptGoalMap[k]) ptGoalMap[k] = { label: gr.label, pts: [] }; ptGoalMap[k].pts.push({ date, rank: P_RANK[gr.level] ?? 3, level: gr.level }); }); });
+  const ptBehavMap: Record<string, { date: string; count: number }[]> = {};
+  _ptLogs.forEach(({ date, c }) => { ((c["behaviorCounts"] as { label: string; count: number }[] | undefined) ?? []).filter(b => b.count > 0).forEach(b => { if (!ptBehavMap[b.label]) ptBehavMap[b.label] = []; ptBehavMap[b.label].push({ date, count: b.count }); }); });
+  const ptDurData = _ptLogs.flatMap(({ date, c }) => { const tot = ((c["durations"] as { label: string; minutes: number }[] | undefined) ?? []).reduce((s, d) => s + d.minutes, 0); return tot > 0 ? [{ date, minutes: tot }] : []; });
+  const ptGoalEntries = Object.entries(ptGoalMap);
+  const ptBehavEntries = Object.entries(ptBehavMap);
+  const hasPtTrendData = ptGoalEntries.length > 0 || ptBehavEntries.length > 0 || ptDurData.length > 0;
+  const ptMaxMins = ptDurData.length > 0 ? Math.max(...ptDurData.map(d => d.minutes), 1) : 1;
 
   const MOODS = ["😊 Great", "🙂 Good", "😐 Okay", "😔 Difficult"];
 
@@ -1235,7 +1293,7 @@ function ShadowTeacherTab() {
 
       {/* Sub-tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
-        {([["overview", "Overview"], ["logs", "Daily Logs"], ["payments", "Payments"], ["lifecycle", "Manage"]] as [string, string][]).map(([id, label]) => (
+        {([["overview", "Overview"], ["logs", "Daily Logs"], ["goals", "Goals"], ["trends", "Trends"], ["payments", "Payments"], ["lifecycle", "Manage"]] as [string, string][]).map(([id, label]) => (
           <button key={id} onClick={() => setStTab(id as typeof stTab)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${stTab === id ? "bg-white text-[#1A2340] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
             {label}
@@ -1303,6 +1361,8 @@ function ShadowTeacherTab() {
                 let parsed: Record<string, unknown> = {};
                 try { parsed = JSON.parse(log.content) as Record<string, unknown>; } catch {}
                 const goalRatings = parsed["goalRatings"] as { goalId: number; label: string; level: string }[] | undefined;
+                const bcs = parsed["behaviorCounts"] as { label: string; count: number }[] | undefined;
+                const durs = parsed["durations"] as { label: string; minutes: number }[] | undefined;
                 const photoKey = parsed["photoKey"] as string | undefined;
                 const summary = log.authorRole === "teacher"
                   ? String(parsed["behaviorMood"] ?? parsed["taughtToday"] ?? "")
@@ -1315,16 +1375,22 @@ function ShadowTeacherTab() {
                   physical_assist:{ label: "Physical",    cls: "bg-red-100 text-red-700" },
                 };
                 return (
-                  <div key={log.id} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
-                    <div className="flex items-center gap-2 mb-2">
+                  <div key={log.id} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-2">
+                    <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-[#1A2340]">{new Date(log.logDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</span>
                       <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full border font-semibold ${log.authorRole === "teacher" ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-[#2EC4A5]/10 text-[#2EC4A5] border-[#2EC4A5]/20"}`}>
                         {log.authorRole === "teacher" ? "Teacher" : "You"}
                       </span>
                     </div>
-                    {summary && <p className="text-sm text-gray-600 mb-2">{summary}</p>}
+                    {summary && <p className="text-sm text-gray-600">{summary}</p>}
+                    {log.authorRole === "parent" && !!parsed["extraSupportAreas"] && (
+                      <p className="text-xs text-gray-500 bg-amber-50 border border-amber-100 rounded-lg px-3 py-1.5">Extra support needed: {String(parsed["extraSupportAreas"])}</p>
+                    )}
+                    {log.authorRole === "teacher" && !!parsed["reteachAtHome"] && (
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-1.5">🏠 Reteach at home: {String(parsed["reteachAtHome"])}</p>
+                    )}
                     {goalRatings && goalRatings.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mb-2">
+                      <div className="flex flex-wrap gap-1">
                         {goalRatings.map((gr, i) => {
                           const chip = LEVEL_CHIP[gr.level] ?? { label: gr.level, cls: "bg-gray-100 text-gray-600" };
                           return (
@@ -1335,8 +1401,18 @@ function ShadowTeacherTab() {
                         })}
                       </div>
                     )}
+                    {bcs && bcs.filter(b => b.count > 0).length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {bcs.filter(b => b.count > 0).map((b, i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">{b.label}: {b.count}×</span>)}
+                      </div>
+                    )}
+                    {durs && durs.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {durs.map((d, i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 font-semibold">⏱ {d.label}: {d.minutes}m</span>)}
+                      </div>
+                    )}
                     {photoKey && (
-                      <a href={`/api/storage/private/${encodeURIComponent(photoKey)}`} target="_blank" rel="noopener noreferrer"
+                      <a href={`/api/storage/objects/${photoKey.replace(/^\/objects\//, "")}`} target="_blank" rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-xs text-[#2EC4A5] hover:underline font-medium">
                         📷 View photo
                       </a>
@@ -1407,6 +1483,122 @@ function ShadowTeacherTab() {
             {postingLifecycle ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Submit Request
           </Button>
         </div>
+      )}
+
+      {/* ── Goals ── */}
+      {stTab === "goals" && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-[#1A2340]">Goals for {active.childName ?? "your child"}</p>
+                <p className="text-xs text-gray-400 mt-0.5">You set the goals — your teacher tracks progress each session.</p>
+              </div>
+              <button onClick={() => setAddingGoal(!addingGoal)}
+                className="flex items-center gap-1 text-xs text-[#2EC4A5] font-semibold hover:underline shrink-0 ml-3">
+                <Plus size={13} />{addingGoal ? "Cancel" : "Add Goal"}
+              </button>
+            </div>
+            {addingGoal && (
+              <div className="p-3 bg-gray-50 rounded-lg space-y-2">
+                <input value={newGoalLabel} onChange={e => setNewGoalLabel(e.target.value)}
+                  placeholder="Goal (e.g. Writes own name)"
+                  className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]" />
+                <input value={newGoalCategory} onChange={e => setNewGoalCategory(e.target.value)}
+                  placeholder="Category (optional — e.g. Writing, Math)"
+                  className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]" />
+                <Button size="sm" onClick={() => void handleAddGoal()} disabled={savingGoal || !newGoalLabel.trim()}
+                  className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-xs w-full">
+                  {savingGoal ? <Loader2 size={12} className="animate-spin mr-1" /> : null}Add Goal
+                </Button>
+              </div>
+            )}
+            {childGoals.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-4">No goals set yet. Tap "Add Goal" to create the first one.</p>
+            ) : (
+              <div className="space-y-2">
+                {childGoals.map(g => (
+                  <div key={g.id} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-medium truncate ${g.isActive ? "text-[#1A2340]" : "text-gray-400 line-through"}`}>{g.label}</p>
+                      {g.category && <p className="text-xs text-gray-400">{g.category}</p>}
+                    </div>
+                    <button onClick={() => void handleToggleParentGoal(g.id, g.isActive)}
+                      className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold border transition-colors ${g.isActive ? "bg-green-50 text-green-600 border-green-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200" : "bg-gray-100 text-gray-400 border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200"}`}>
+                      {g.isActive ? "Active" : "Inactive"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Trends ── */}
+      {stTab === "trends" && (
+        hasPtTrendData ? (
+          <div className="space-y-4">
+            {ptGoalEntries.map(([gid, { label, pts }]) => {
+              const trend = pts.length > 1 ? pts[pts.length - 1].rank - pts[0].rank : 0;
+              return (
+                <div key={gid} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-bold text-[#1A2340]">{label}</p>
+                    {pts.length > 1 && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${trend > 0 ? "bg-green-100 text-green-700" : trend < 0 ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500"}`}>{trend > 0 ? "↑ Improving" : trend < 0 ? "↓ More support" : "Steady"}</span>}
+                  </div>
+                  <div className="flex items-end gap-1.5 overflow-x-auto pb-1" style={{ minHeight: 52 }}>
+                    {pts.map((pt, i) => (
+                      <div key={i} className="flex flex-col items-center gap-0.5 shrink-0">
+                        <div className={`w-7 rounded-sm ${P_BG[pt.level] ?? "bg-gray-300"}`} style={{ height: `${(pt.rank / 5) * 40}px` }} />
+                        <span className="text-[9px] text-gray-400">{pt.date}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-between mt-1">
+                    <span className="text-[9px] text-gray-300">← needs support</span>
+                    <span className="text-[9px] text-gray-300">independent →</span>
+                  </div>
+                </div>
+              );
+            })}
+            {ptBehavEntries.map(([bLabel, pts]) => {
+              const maxC = Math.max(...pts.map(p => p.count), 1);
+              return (
+                <div key={bLabel} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
+                  <p className="text-sm font-bold text-[#1A2340] mb-3">{bLabel} <span className="text-xs font-normal text-gray-400">incidents</span></p>
+                  <div className="flex items-end gap-1.5 overflow-x-auto pb-1" style={{ minHeight: 52 }}>
+                    {pts.map((pt, i) => (
+                      <div key={i} className="flex flex-col items-center gap-0.5 shrink-0">
+                        <span className="text-[9px] text-gray-500 font-medium">{pt.count}</span>
+                        <div className="w-7 bg-amber-400 rounded-sm" style={{ height: `${Math.max((pt.count / maxC) * 40, 3)}px` }} />
+                        <span className="text-[9px] text-gray-400">{pt.date}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {ptDurData.length > 0 && (
+              <div className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
+                <p className="text-sm font-bold text-[#1A2340] mb-3">Focus duration <span className="text-xs font-normal text-gray-400">min</span></p>
+                <div className="flex items-end gap-1.5 overflow-x-auto pb-1" style={{ minHeight: 52 }}>
+                  {ptDurData.map((pt, i) => (
+                    <div key={i} className="flex flex-col items-center gap-0.5 shrink-0">
+                      <span className="text-[9px] text-gray-500 font-medium">{pt.minutes}</span>
+                      <div className="w-7 bg-teal-400 rounded-sm" style={{ height: `${Math.max((pt.minutes / ptMaxMins) * 40, 3)}px` }} />
+                      <span className="text-[9px] text-gray-400">{pt.date}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl p-8 text-center shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
+            <p className="text-sm text-gray-400">No trend data yet — your teacher's daily logs with goal ratings will appear here as charts.</p>
+          </div>
+        )
       )}
     </div>
   );

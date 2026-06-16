@@ -1766,7 +1766,7 @@ function EngagementTab() {
 
   // ── Engagement selection ───────────────────────────────────────────────────
   const [selectedEngId, setSelectedEngId] = useState<number | null>(null);
-  const [engTab, setEngTab] = useState<"overview" | "child" | "log" | "lifecycle">("overview");
+  const [engTab, setEngTab] = useState<"overview" | "child" | "log" | "trends" | "lifecycle">("overview");
   const [chatOpen, setChatOpen] = useState(false);
 
   const { data: engagements = [], isLoading } = useQuery<STEngagement[]>({
@@ -1984,6 +1984,19 @@ function EngagementTab() {
     );
   }
 
+  const TREND_RANK: Record<string, number> = { independent: 5, visual_prompt: 4, verbal_prompt: 3, modeling: 2, physical_assist: 1 };
+  const TREND_BG: Record<string, string> = { independent: "bg-green-400", visual_prompt: "bg-yellow-400", verbal_prompt: "bg-amber-400", modeling: "bg-orange-400", physical_assist: "bg-red-400" };
+  const _tLogs = [...logs].filter(l => l.authorRole === "teacher").sort((a, b) => a.logDate.localeCompare(b.logDate)).map(l => { let c: Record<string, unknown> = {}; try { c = JSON.parse(l.content) as Record<string, unknown>; } catch {} return { date: l.logDate.slice(5), c }; });
+  const trendGoalMap: Record<string, { label: string; pts: { date: string; rank: number; level: string }[] }> = {};
+  _tLogs.forEach(({ date, c }) => { ((c["goalRatings"] as { goalId: number; label: string; level: string }[] | undefined) ?? []).forEach(gr => { const k = String(gr.goalId); if (!trendGoalMap[k]) trendGoalMap[k] = { label: gr.label, pts: [] }; trendGoalMap[k].pts.push({ date, rank: TREND_RANK[gr.level] ?? 3, level: gr.level }); }); });
+  const trendBehavMap: Record<string, { date: string; count: number }[]> = {};
+  _tLogs.forEach(({ date, c }) => { ((c["behaviorCounts"] as { label: string; count: number }[] | undefined) ?? []).filter(b => b.count > 0).forEach(b => { if (!trendBehavMap[b.label]) trendBehavMap[b.label] = []; trendBehavMap[b.label].push({ date, count: b.count }); }); });
+  const trendDurData = _tLogs.flatMap(({ date, c }) => { const tot = ((c["durations"] as { label: string; minutes: number }[] | undefined) ?? []).reduce((s, d) => s + d.minutes, 0); return tot > 0 ? [{ date, minutes: tot }] : []; });
+  const trendGoalEntries = Object.entries(trendGoalMap);
+  const trendBehavEntries = Object.entries(trendBehavMap);
+  const hasTrendData = trendGoalEntries.length > 0 || trendBehavEntries.length > 0 || trendDurData.length > 0;
+  const trendMaxMins = trendDurData.length > 0 ? Math.max(...trendDurData.map(d => d.minutes), 1) : 1;
+
   const todayStr = new Date().toISOString().slice(0, 10);
   const todayLogged = logs.some(l => l.logDate === todayStr && l.authorRole === "teacher");
   const mediaConsent = active.childConsent?.media === true;
@@ -2040,7 +2053,7 @@ function EngagementTab() {
 
       {/* Sub-tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
-        {([["overview", "Overview"], ["child", "Child & Goals"], ["log", "Daily Log"], ["lifecycle", "Manage"]] as [string, string][]).map(([id, label]) => (
+        {([["overview", "Overview"], ["child", "Child & Goals"], ["log", "Daily Log"], ["trends", "Trends"], ["lifecycle", "Manage"]] as [string, string][]).map(([id, label]) => (
           <button key={id} onClick={() => setEngTab(id as typeof engTab)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${engTab === id ? "bg-white text-[#1A2340] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
             {label}
@@ -2065,7 +2078,7 @@ function EngagementTab() {
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-[#1A2340]">{new Date(log.logDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</p>
                       <p className="text-xs text-gray-400 truncate">
-                        {(() => { try { const c = JSON.parse(log.content) as Record<string, unknown>; return String(c["behaviorMood"] ?? c["taughtToday"] ?? c["eventsForTeacher"] ?? ""); } catch { return ""; } })()}
+                        {(() => { try { const c = JSON.parse(log.content) as Record<string, unknown>; const _grs = c["goalRatings"] as { label: string }[] | undefined; return String(c["behaviorMood"] ?? c["taughtToday"] ?? c["eventsForTeacher"] ?? (_grs?.length ? `${_grs.length} goal${_grs.length > 1 ? "s" : ""} logged` : "")); } catch { return ""; } })()}
                       </p>
                     </div>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold shrink-0 ${log.authorRole === "teacher" ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-[#2EC4A5]/10 text-[#2EC4A5] border-[#2EC4A5]/20"}`}>
@@ -2169,8 +2182,8 @@ function EngagementTab() {
                       <p className="text-xs font-semibold text-[#1A2340] mb-1">
                         {new Date(log.logDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
                       </p>
-                      {c["eventsForTeacher"] && <p className="text-xs text-gray-600">{String(c["eventsForTeacher"])}</p>}
-                      {c["extraSupportAreas"] && <p className="text-xs text-gray-400 mt-1">Support needed: {String(c["extraSupportAreas"])}</p>}
+                      {!!c["eventsForTeacher"] && <p className="text-xs text-gray-600">{String(c["eventsForTeacher"])}</p>}
+                      {!!c["extraSupportAreas"] && <p className="text-xs text-gray-400 mt-1">Support needed: {String(c["extraSupportAreas"])}</p>}
                     </div>
                   );
                 })}
@@ -2378,6 +2391,118 @@ function EngagementTab() {
             {postingLifecycle ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Submit Request
           </Button>
         </div>
+      )}
+
+      {/* ── Teacher Log History ── */}
+      {engTab === "log" && logs.filter(l => l.authorRole === "teacher").length > 0 && (
+        <div className="space-y-3">
+          <p className="text-sm font-bold text-[#1A2340] px-1">Past Submissions</p>
+          {logs.filter(l => l.authorRole === "teacher").slice(0, 10).map(log => {
+            let lc: Record<string, unknown> = {};
+            try { lc = JSON.parse(log.content) as Record<string, unknown>; } catch {}
+            const lgrs = lc["goalRatings"] as { goalId: number; label: string; level: string }[] | undefined;
+            const lbcs = lc["behaviorCounts"] as { label: string; count: number }[] | undefined;
+            const ldurs = lc["durations"] as { label: string; minutes: number }[] | undefined;
+            const LC: Record<string, { label: string; cls: string }> = {
+              independent:    { label: "Independent", cls: "bg-green-100 text-green-700" },
+              visual_prompt:  { label: "Visual ✓",    cls: "bg-yellow-100 text-yellow-700" },
+              verbal_prompt:  { label: "Verbal",      cls: "bg-amber-100 text-amber-700" },
+              modeling:       { label: "Modeling",    cls: "bg-orange-100 text-orange-700" },
+              physical_assist:{ label: "Physical",    cls: "bg-red-100 text-red-700" },
+            };
+            return (
+              <div key={log.id} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-[#1A2340]">{new Date(log.logDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</span>
+                  <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full border font-semibold bg-blue-50 text-blue-600 border-blue-200">You</span>
+                </div>
+                {!!lc["behaviorMood"] && <p className="text-sm text-gray-700">{String(lc["behaviorMood"])}</p>}
+                {!!lc["reteachAtHome"] && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-1.5">🏠 Reteach at home: {String(lc["reteachAtHome"])}</p>}
+                {lgrs && lgrs.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {lgrs.map((gr, i) => { const chip = LC[gr.level] ?? { label: gr.level, cls: "bg-gray-100 text-gray-600" }; return <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${chip.cls}`}>{gr.label}: {chip.label}</span>; })}
+                  </div>
+                )}
+                {lbcs && lbcs.filter(b => b.count > 0).length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {lbcs.filter(b => b.count > 0).map((b, i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">{b.label}: {b.count}×</span>)}
+                  </div>
+                )}
+                {ldurs && ldurs.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {ldurs.map((d, i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 font-semibold">⏱ {d.label}: {d.minutes}m</span>)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Trends ── */}
+      {engTab === "trends" && (
+        hasTrendData ? (
+          <div className="space-y-4">
+            {trendGoalEntries.map(([gid, { label, pts }]) => {
+              const trend = pts.length > 1 ? pts[pts.length - 1].rank - pts[0].rank : 0;
+              return (
+                <div key={gid} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-bold text-[#1A2340]">{label}</p>
+                    {pts.length > 1 && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${trend > 0 ? "bg-green-100 text-green-700" : trend < 0 ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500"}`}>{trend > 0 ? "↑ Improving" : trend < 0 ? "↓ More support" : "Steady"}</span>}
+                  </div>
+                  <div className="flex items-end gap-1.5 overflow-x-auto pb-1" style={{ minHeight: 52 }}>
+                    {pts.map((pt, i) => (
+                      <div key={i} className="flex flex-col items-center gap-0.5 shrink-0">
+                        <div className={`w-7 rounded-sm ${TREND_BG[pt.level] ?? "bg-gray-300"}`} style={{ height: `${(pt.rank / 5) * 40}px` }} />
+                        <span className="text-[9px] text-gray-400">{pt.date}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-between mt-1">
+                    <span className="text-[9px] text-gray-300">← needs support</span>
+                    <span className="text-[9px] text-gray-300">independent →</span>
+                  </div>
+                </div>
+              );
+            })}
+            {trendBehavEntries.map(([bLabel, pts]) => {
+              const maxC = Math.max(...pts.map(p => p.count), 1);
+              return (
+                <div key={bLabel} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
+                  <p className="text-sm font-bold text-[#1A2340] mb-3">{bLabel} <span className="text-xs font-normal text-gray-400">incidents</span></p>
+                  <div className="flex items-end gap-1.5 overflow-x-auto pb-1" style={{ minHeight: 52 }}>
+                    {pts.map((pt, i) => (
+                      <div key={i} className="flex flex-col items-center gap-0.5 shrink-0">
+                        <span className="text-[9px] text-gray-500 font-medium">{pt.count}</span>
+                        <div className="w-7 bg-amber-400 rounded-sm" style={{ height: `${Math.max((pt.count / maxC) * 40, 3)}px` }} />
+                        <span className="text-[9px] text-gray-400">{pt.date}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {trendDurData.length > 0 && (
+              <div className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
+                <p className="text-sm font-bold text-[#1A2340] mb-3">Focus duration <span className="text-xs font-normal text-gray-400">min</span></p>
+                <div className="flex items-end gap-1.5 overflow-x-auto pb-1" style={{ minHeight: 52 }}>
+                  {trendDurData.map((pt, i) => (
+                    <div key={i} className="flex flex-col items-center gap-0.5 shrink-0">
+                      <span className="text-[9px] text-gray-500 font-medium">{pt.minutes}</span>
+                      <div className="w-7 bg-teal-400 rounded-sm" style={{ height: `${Math.max((pt.minutes / trendMaxMins) * 40, 3)}px` }} />
+                      <span className="text-[9px] text-gray-400">{pt.date}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl p-8 text-center shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
+            <p className="text-sm text-gray-400">No trend data yet — submit daily logs with goal ratings to see progress charts here.</p>
+          </div>
+        )
       )}
 
       {/* Chat drawer */}

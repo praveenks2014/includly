@@ -1,0 +1,46 @@
+Broad build — the daily-logs / progress-tracking system has several
+issues plus two enhancements. Diagnose Phase 1's root cause first (show me
+what it was), then fix it and build Phases 2 and 3 in the same pass. Show
+me the changed code. This auto-deploys to dev; no manual production deploy.
+
+PHASE 1 — FIX log content not displaying + photo 404 (bugs):
+1a. Daily log content not showing: when a parent OR teacher submits a log,
+only the DATE shows — the actual content (parent's events/support text;
+teacher's session notes, goalRatings, behaviorCounts, durations) does NOT
+display to either side. First diagnose: is content saved correctly to the
+DB, or is it a display/parse failure (the display does
+JSON.parse(log.content) — is content a string or object, and are the
+right fields being read)? Tell me the root cause, then fix so BOTH the
+parent format (eventsForTeacher, extraSupportAreas) AND teacher format
+(taughtToday, goalRatings, behaviorCounts, durations) fully display to
+both sides.
+1b. Photo 404: viewing a teacher photo throws "Cannot GET
+/api/storage/private/%2Fobjects%2Fuploads%2F..." — the %2F is an encoded
+slash and the path looks doubled (/objects/uploads/). Diagnose the
+mismatch between how photoKey is STORED at upload vs REQUESTED at view
+(path-prefix or URL-encoding problem), and fix so shared photos load.
+
+PHASE 2 — GOALS OWNERSHIP: parent owns goals, teacher can suggest/add.
+Currently goal-setting is teacher-centric. Change so the PARENT can set
+and manage goals/milestones for their child (add, edit, mark
+active/inactive) — these are the child's development goals. The teacher
+can ALSO add/suggest goals (not blocked), but the parent is the primary
+owner. Both teacher and parent log/track against these goals. Make sure
+the parent has a clear UI to set goals (not just the teacher). Keep the
+existing child_goals table; this is mainly UI + access (parent can
+create/edit goals for their own child).
+
+PHASE 3 — METRICS TRENDS ACROSS DAYS: the logged metrics (goal prompt
+levels, behavior counts, focus durations) should be viewable as a TREND
+over time, not just per-day entries. Add a simple trends view (per goal:
+the prompt-level progression over recent logs; per behavior: count over
+time; durations over time). Lightweight charts (SVG/CSS bars or lines).
+Visible to BOTH parent and teacher for the engagement. This depends on
+Phase 1's data displaying correctly — build it to read the same log
+content.
+
+DO NOT build payouts/salary-received in this prompt — that's a separate
+chunk I'm designing.
+
+Show me: Phase 1 root cause + fix, Phase 2 changes, Phase 3 trends. I'll
+test all three together on dev.
