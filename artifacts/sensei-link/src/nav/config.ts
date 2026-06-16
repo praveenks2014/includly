@@ -10,6 +10,7 @@ import {
   Wallet,
   Layers,
   Inbox,
+  BookOpen,
 } from "lucide-react";
 
 export type Role = "parent" | "professional" | "centre_admin" | "admin";
@@ -57,6 +58,7 @@ export const NAV: Record<Exclude<Role, "admin">, NavItem[]> = {
     tab("Inbox", MessageSquare, "/pro/inbox", "unreadMessages"),
     tab("Earnings", Wallet, "/pro/earnings"),
     tab("Enquiries", Inbox, "/pro/enquiries", undefined, "shadow_teacher"),
+    tab("Engagement", BookOpen, "/pro/engagement", undefined, "shadow_teacher"),
   ],
   centre_admin: [
     tab("Overview", LayoutDashboard, "/centre/overview"),

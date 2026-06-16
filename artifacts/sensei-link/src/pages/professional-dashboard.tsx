@@ -83,20 +83,6 @@ function calcEndTime(start: string, mins: number) {
   return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
-// ─── Nav ──────────────────────────────────────────────────────────────────────
-const NAV_ITEMS: { id: ProTab; label: string; icon: React.ReactNode }[] = [
-  { id: "home",         label: "Home",             icon: <Home size={18} /> },
-  { id: "profile",      label: "My Profile",       icon: <User size={18} /> },
-  { id: "availability", label: "Availability",     icon: <CalendarClock size={18} /> },
-  { id: "bookings",     label: "Bookings",         icon: <CalendarCheck size={18} /> },
-  { id: "earnings",     label: "My Earnings",      icon: <IndianRupee size={18} /> },
-  { id: "certifications",label: "Certifications",  icon: <Award size={18} /> },
-  { id: "verification", label: "ID Verification",  icon: <ShieldCheck size={18} /> },
-  { id: "engagement",   label: "Engagement",       icon: <IndianRupee size={18} /> },
-  { id: "messages",     label: "Messages",         icon: <MessageSquare size={18} /> },
-  { id: "notifications",label: "Notifications",    icon: <Bell size={18} /> },
-];
-const MOBILE_BOTTOM: ProTab[] = ["home", "profile", "bookings", "engagement", "messages"];
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: HOME
@@ -2570,18 +2556,20 @@ export default function ProfessionalDashboard() {
   const { data: profile, isLoading: profileLoading } = useGetMyProfessionalProfile();
 
   const [activeTab, setActiveTab] = useState<ProTab>(() => {
-    if (loc.startsWith("/pro/calendar"))   return "availability";
-    if (loc.startsWith("/pro/inbox"))      return "messages";
-    if (loc.startsWith("/pro/earnings"))   return "earnings";
-    if (loc.startsWith("/pro/enquiries"))  return "enquiries";
+    if (loc.startsWith("/pro/calendar"))    return "availability";
+    if (loc.startsWith("/pro/inbox"))       return "messages";
+    if (loc.startsWith("/pro/earnings"))    return "earnings";
+    if (loc.startsWith("/pro/enquiries"))   return "enquiries";
+    if (loc.startsWith("/pro/engagement"))  return "engagement";
     return "home";
   });
   useEffect(() => {
-    if (loc.startsWith("/pro/calendar"))        setActiveTab("availability");
-    else if (loc.startsWith("/pro/inbox"))      setActiveTab("messages");
-    else if (loc.startsWith("/pro/earnings"))   setActiveTab("earnings");
-    else if (loc.startsWith("/pro/enquiries"))  setActiveTab("enquiries");
-    else if (loc.startsWith("/pro/today"))      setActiveTab("home");
+    if (loc.startsWith("/pro/calendar"))             setActiveTab("availability");
+    else if (loc.startsWith("/pro/inbox"))           setActiveTab("messages");
+    else if (loc.startsWith("/pro/earnings"))        setActiveTab("earnings");
+    else if (loc.startsWith("/pro/enquiries"))       setActiveTab("enquiries");
+    else if (loc.startsWith("/pro/engagement"))      setActiveTab("engagement");
+    else if (loc.startsWith("/pro/today"))           setActiveTab("home");
   }, [loc]);
   const firstName = me?.fullName?.split(" ")[0] ?? user?.firstName ?? "there";
   const profileTyped = profile as ProfessionalProfile | undefined;
