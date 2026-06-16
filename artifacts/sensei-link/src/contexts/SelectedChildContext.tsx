@@ -8,6 +8,7 @@ const STORAGE_KEY = "includly:selectedChildId";
 interface SelectedChildContextValue {
   childProfiles: ChildResponseType[];
   childrenLoading: boolean;
+  childrenFetching: boolean;
   selectedChildId: number | null;
   selectedChild: ChildResponseType | undefined;
   setSelectedChildId: (id: number) => void;
@@ -16,13 +17,14 @@ interface SelectedChildContextValue {
 const SelectedChildContext = createContext<SelectedChildContextValue>({
   childProfiles: [],
   childrenLoading: false,
+  childrenFetching: false,
   selectedChildId: null,
   selectedChild: undefined,
   setSelectedChildId: () => {},
 });
 
 export function SelectedChildProvider({ children }: { children: ReactNode }) {
-  const { data: childProfiles = [], isLoading: childrenLoading } = useGetMyChildren();
+  const { data: childProfiles = [], isLoading: childrenLoading, isFetching: childrenFetching } = useGetMyChildren();
 
   const [selectedId, setSelectedId] = useState<number | null>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -53,6 +55,7 @@ export function SelectedChildProvider({ children }: { children: ReactNode }) {
       value={{
         childProfiles,
         childrenLoading,
+        childrenFetching,
         selectedChildId: selectedId,
         selectedChild,
         setSelectedChildId,

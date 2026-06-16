@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useLocation, useParams } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Plus, X, Check } from "lucide-react";
@@ -166,6 +166,8 @@ export default function ChildOnboardingPage() {
   const [step, setStep] = useState(1);
   const [data, setData] = useState<WizardData>(DEFAULT);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveAttempted, setSaveAttempted] = useState(false);
+  const consentRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const createChild = useCreateChild();
@@ -542,7 +544,14 @@ export default function ChildOnboardingPage() {
               />
             </Field>
 
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+            <div
+              ref={consentRef}
+              className={`rounded-xl border p-4 space-y-3 transition-colors ${
+                saveAttempted && !data.consent.intakeShare
+                  ? "border-red-400 bg-red-50 ring-2 ring-red-300"
+                  : "border-gray-200 bg-gray-50"
+              }`}
+            >
               <p className="text-sm font-semibold text-gray-800">Permissions</p>
               {([
                 { key: "intakeShare" as const, label: "Share this profile with matched specialists", required: true },
@@ -553,7 +562,10 @@ export default function ChildOnboardingPage() {
                   <input
                     type="checkbox"
                     checked={data.consent[key]}
-                    onChange={(e) => update("consent", { ...data.consent, [key]: e.target.checked })}
+                    onChange={(e) => {
+                      update("consent", { ...data.consent, [key]: e.target.checked });
+                      if (key === "intakeShare" && e.target.checked) setSaveAttempted(false);
+                    }}
                     className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
                   />
                   <span className="text-sm text-gray-700">
@@ -562,11 +574,6 @@ export default function ChildOnboardingPage() {
                   </span>
                 </label>
               ))}
-              {!data.consent.intakeShare && (
-                <p className="text-xs text-amber-700">
-                  Please enable profile sharing to save {childName}'s profile.
-                </p>
-              )}
             </div>
 
             {saveError && (
@@ -625,6 +632,11 @@ export default function ChildOnboardingPage() {
 
       {/* Footer */}
       <div className="sticky bottom-0 border-t border-gray-100 bg-white px-5 py-4">
+        {step === 6 && saveAttempted && !canSubmit && (
+          <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700">
+            Tick "Share this profile with matched specialists" above to save.
+          </div>
+        )}
         {step < 6 ? (
           <button
             onClick={() => setStep((s) => s + 1)}
@@ -635,8 +647,15 @@ export default function ChildOnboardingPage() {
           </button>
         ) : (
           <button
-            onClick={handleSubmit}
-            disabled={!canSubmit || createChild.isPending || updateChild.isPending}
+            onClick={() => {
+              if (!canSubmit) {
+                setSaveAttempted(true);
+                consentRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+              } else {
+                void handleSubmit();
+              }
+            }}
+            disabled={createChild.isPending || updateChild.isPending}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white disabled:opacity-40 hover:bg-teal-700 active:bg-teal-800 transition-colors"
           >
             {(createChild.isPending || updateChild.isPending) ? "Saving…" : editChildId ? `Update ${data.name.trim() || "profile"} →` : `Save ${data.name.trim() || "profile"} →`}

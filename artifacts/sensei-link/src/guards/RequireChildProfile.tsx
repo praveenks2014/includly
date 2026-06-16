@@ -8,11 +8,12 @@ interface RequireChildProfileProps {
 }
 
 export function RequireChildProfile({ children }: RequireChildProfileProps) {
-  const { childProfiles, childrenLoading } = useSelectedChild();
+  const { childProfiles, childrenLoading, childrenFetching } = useSelectedChild();
   const [, setLocation] = useLocation();
 
   const skipped = sessionStorage.getItem(CHILD_PROFILE_SKIP_KEY) === "1";
-  const hasNoChildren = !childrenLoading && childProfiles.length === 0;
+  const stillLoading = childrenLoading || childrenFetching;
+  const hasNoChildren = !stillLoading && childProfiles.length === 0;
 
   useEffect(() => {
     if (hasNoChildren && !skipped) {
@@ -20,7 +21,7 @@ export function RequireChildProfile({ children }: RequireChildProfileProps) {
     }
   }, [hasNoChildren, skipped, setLocation]);
 
-  if (childrenLoading) {
+  if (stillLoading) {
     return (
       <div className="flex h-dvh items-center justify-center">
         <Loader2 className="animate-spin text-teal-600" size={24} />
