@@ -1,0 +1,62 @@
+PLAN FIRST — Plan mode, no code yet. Design the Razorpay Route
+(payment-split) implementation and show me the full plan for approval
+before building. This is payment-critical and touches every payment, so I
+want to review the design first.
+
+GOAL: Every applicable payment a parent makes is SPLIT via Razorpay Route
+— a configurable commission % goes to the platform (my account), the
+remainder goes to the TEACHER's Razorpay linked account. (TEACHER, not
+parent.)
+
+DESIGN DECISIONS (already made — build to these):
+1. Route is enabled on the account. Use Razorpay Route / linked accounts /
+transfers.
+2. Teacher KYC + bank details collected at TEACHER ONBOARDING → create a
+Razorpay linked account for the teacher then. The teacher is not
+"payout-ready" until their linked account is KYC-verified by Razorpay.
+3. A parent CANNOT pay for an engagement/payment involving a teacher
+whose linked account is NOT yet KYC-verified — block the payment with a
+clear message ("This teacher is completing payout setup and can't be paid
+yet"). This means NO holding/escrow of the teacher's share is needed —
+every payment that proceeds splits to an already-verified account.
+
+PLAN MUST COVER:
+A. TEACHER ONBOARDING / LINKED ACCOUNT:
+- What bank/KYC fields to collect, how to create the Razorpay linked
+account, and how to track its verification status (pending/verified/
+rejected) on the professional profile.
+- A clear teacher-facing status: "payout setup pending/verified/rejected,"
+and that they can't receive engagements/payments until verified.
+- Where the linked-account id and KYC status are stored (schema changes).
+
+B. THE SPLIT, PER PAYMENT TYPE (do NOT apply one blanket % to everything
+— each type has its own rule):
+- Monthly SALARY: split — platform commission % + teacher's share. The
+commission % is admin-configurable (this is the existing
+salaryPlatformCutPct, default 5%).
+- Tell me clearly for EACH other payment type whether it splits or is
+100% platform: the ₹500 MATCHING FEE (I believe 100% platform, no split),
+the TRIAL FEE (I believe 100% to teacher), the ₹49 SESSION BOOKING FEE,
+and any others. List every payment type in the system and propose its
+split rule — I'll confirm.
+- The commission %(s) must be admin-configurable. Confirm where (admin
+settings) and whether it's one % or per-type %.
+
+C. PAYMENT-TIME ENFORCEMENT:
+- Before creating any split payment, check the teacher's linked account is
+verified; if not, block with the clear message (per decision 3).
+- How the Route transfer/split is structured in the Razorpay order call.
+
+D. EDGE CASES:
+- Teacher KYC rejected or pending — teacher and parent UX.
+- The existing trial-credit-to-first-month logic (already built) — how the
+split interacts with a discounted/₹0 first month.
+- Refunds on a split payment (e.g. the matching-fee refund logic) — how
+Route handles refunding a split.
+
+E. MIGRATION + FILES: list schema changes (linked account id, KYC status),
+every payment route touched, and the migration SQL — additive only.
+
+Show me the full plan including the per-payment-type split table and the
+schema changes. NO code, NO migration until I approve. And note: I will
+test this in Razorpay TEST mode only — do not use live keys for testing.
