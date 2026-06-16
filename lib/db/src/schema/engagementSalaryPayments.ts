@@ -12,6 +12,7 @@ export const engagementSalaryPaymentsTable = pgTable("engagement_salary_payments
   grossInr: integer("gross_inr").notNull(),
   platformCutInr: integer("platform_cut_inr").notNull(),
   netInr: integer("net_inr").notNull(),
+  trialCreditInr: integer("trial_credit_inr").notNull().default(0),
   razorpayOrderId: text("razorpay_order_id"),
   razorpayPaymentId: text("razorpay_payment_id"),
   status: salaryPaymentStatusEnum("status").notNull().default("pending"),

@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, pgEnum, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -24,6 +24,8 @@ export const shadowTeacherEngagementsTable = pgTable("shadow_teacher_engagements
   nextBillingDate: text("next_billing_date"),
   billedThroughDate: text("billed_through_date"),
   notes: text("notes"),
+  trialCreditInr: integer("trial_credit_inr").notNull().default(0),
+  trialCreditApplied: boolean("trial_credit_applied").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

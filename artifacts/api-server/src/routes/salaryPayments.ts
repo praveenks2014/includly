@@ -63,9 +63,14 @@ router.post("/engagements/:id/pay-salary", requireAuth, requireRole("parent"), a
 
   const { month } = parsed.data;
 
-  // Check if already paid for this month
+  // Check if already paid (or pending) for this month — include trialCreditInr
+  // so retries can reuse the amount already pinned to the pending record
   const [existing] = await db
-    .select({ id: engagementSalaryPaymentsTable.id, status: engagementSalaryPaymentsTable.status })
+    .select({
+      id:             engagementSalaryPaymentsTable.id,
+      status:         engagementSalaryPaymentsTable.status,
+      trialCreditInr: engagementSalaryPaymentsTable.trialCreditInr,
+    })
     .from(engagementSalaryPaymentsTable)
     .where(and(eq(engagementSalaryPaymentsTable.engagementId, id), eq(engagementSalaryPaymentsTable.month, month)))
     .limit(1);
@@ -80,23 +85,81 @@ router.post("/engagements/:id/pay-salary", requireAuth, requireRole("parent"), a
   const platformCut = Math.round(gross * (settings.salaryPlatformCutPct / 100));
   const net = gross - platformCut;
 
+  // ── Trial credit: computed once on first attempt, reused on retry ────────────
+  // On a failed/abandoned payment the parent retries → `existing` is the pending
+  // record from the first attempt, already carrying trialCreditInr.
+  // We read credit from that stored value so every order for this month is for the
+  // same chargeableGross — no second subtraction is possible across retries.
+  const trialCredit: number = existing
+    ? (existing.trialCreditInr ?? 0)                               // retry: reuse pinned amount
+    : (!eng.trialCreditApplied && eng.trialCreditInr > 0           // first attempt: compute fresh
+        ? eng.trialCreditInr : 0);
+
+  const chargeableGross = Math.max(0, gross - trialCredit);
+
+  // ── ₹0 path: credit covers the full month — skip Razorpay ──────────────────
+  if (chargeableGross === 0) {
+    if (trialCredit > 0) {
+      await db.update(shadowTeacherEngagementsTable)
+        .set({ trialCreditApplied: true, updatedAt: new Date() })
+        .where(eq(shadowTeacherEngagementsTable.id, id));
+    }
+    let paymentRecord;
+    if (existing) {
+      [paymentRecord] = await db
+        .update(engagementSalaryPaymentsTable)
+        .set({ status: "paid", paidAt: new Date(), trialCreditInr: trialCredit, updatedAt: new Date() })
+        .where(eq(engagementSalaryPaymentsTable.id, existing.id))
+        .returning();
+    } else {
+      [paymentRecord] = await db
+        .insert(engagementSalaryPaymentsTable)
+        .values({
+          engagementId: id,
+          month,
+          grossInr: gross,
+          platformCutInr: platformCut,
+          netInr: net,
+          trialCreditInr: trialCredit,
+          razorpayOrderId: null,
+          razorpayPaymentId: null,
+          status: "paid",
+          paidAt: new Date(),
+        })
+        .returning();
+    }
+    res.status(201).json({
+      paymentId: paymentRecord!.id,
+      orderId: null,
+      amount: 0,
+      grossInr: gross,
+      netInr: net,
+      trialCreditInr: trialCredit,
+      keyId: null,
+    });
+    return;
+  }
+
+  // ── Normal Razorpay path ──────────────────────────────────────────────────────
   const razorpay = getRazorpay();
   if (!razorpay) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
 
   const order = await razorpay.orders.create({
-    amount: gross * 100,
+    amount: chargeableGross * 100,    // gross minus trial credit
     currency: "INR",
-    notes: { engagementId: String(id), month, type: "salary" },
+    notes: { engagementId: String(id), month, type: "salary", trialCredit: String(trialCredit) },
   });
 
   let paymentRecord;
   if (existing) {
+    // Retry: update existing pending record with new Razorpay order
     [paymentRecord] = await db
       .update(engagementSalaryPaymentsTable)
       .set({ razorpayOrderId: order.id as string, status: "pending", updatedAt: new Date() })
       .where(eq(engagementSalaryPaymentsTable.id, existing.id))
       .returning();
   } else {
+    // First attempt: insert and pin the credit amount to this payment record
     [paymentRecord] = await db
       .insert(engagementSalaryPaymentsTable)
       .values({
@@ -105,6 +168,7 @@ router.post("/engagements/:id/pay-salary", requireAuth, requireRole("parent"), a
         grossInr: gross,
         platformCutInr: platformCut,
         netInr: net,
+        trialCreditInr: trialCredit,          // pinned here; reused on all retries
         razorpayOrderId: order.id as string,
         status: "pending",
       })
@@ -114,10 +178,11 @@ router.post("/engagements/:id/pay-salary", requireAuth, requireRole("parent"), a
   res.json({
     paymentId: paymentRecord!.id,
     orderId: order.id,
-    amount: gross,
+    amount: chargeableGross,                   // what the parent actually pays
     grossInr: gross,
     platformCutInr: platformCut,
     netInr: net,
+    trialCreditInr: trialCredit,
     keyId: process.env["RAZORPAY_KEY_ID"],
   });
 });
@@ -154,6 +219,14 @@ router.post("/engagements/:id/verify-salary-payment", requireAuth, requireRole("
     .set({ razorpayPaymentId, status: "paid", paidAt: new Date(), updatedAt: new Date() })
     .where(eq(engagementSalaryPaymentsTable.id, paymentId))
     .returning();
+
+  // Mark the trial credit consumed — keyed off the amount stored in the payment
+  // record (not re-read from eng) so the flag flips exactly once
+  if (updated!.trialCreditInr > 0) {
+    await db.update(shadowTeacherEngagementsTable)
+      .set({ trialCreditApplied: true, updatedAt: new Date() })
+      .where(eq(shadowTeacherEngagementsTable.id, id));
+  }
 
   res.json(updated);
 });

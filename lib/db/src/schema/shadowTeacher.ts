@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, pgEnum, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -16,6 +16,8 @@ export const shadowMatchStatusEnum = pgEnum("shadow_match_status", [
   "shortlisted",
   "pending_commitment",
   "committed",
+  "trial_pending",
+  "trial_done",
 ]);
 
 export const shadowTeacherMatchesTable = pgTable("shadow_teacher_matches", {
@@ -44,6 +46,9 @@ export const shadowTeacherMatchesTable = pgTable("shadow_teacher_matches", {
   selectedProfessionalId: integer("selected_professional_id").references(() => professionalProfilesTable.id, { onDelete: "set null" }),
   feePaidAt: timestamp("fee_paid_at", { withTimezone: true }),
   distinctTeachersShown: integer("distinct_teachers_shown").notNull().default(0),
+  trialFeePaidInr: integer("trial_fee_paid_inr"),
+  preMeetingRequested: boolean("pre_meeting_requested").notNull().default(false),
+  preMeetingNote: text("pre_meeting_note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

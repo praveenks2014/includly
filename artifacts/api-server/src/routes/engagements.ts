@@ -3,6 +3,7 @@ import { eq, and, desc } from "drizzle-orm";
 import {
   db,
   shadowTeacherEngagementsTable,
+  shadowTeacherMatchesTable,
   engagementLogsTable,
   professionalProfilesTable,
   usersTable,
@@ -17,11 +18,12 @@ const router: IRouter = Router();
 
 const CreateEngagementBody = z.object({
   professionalId: z.number().int().positive(),
-  childId: z.number().int().positive().optional(),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  hoursPerWeek: z.number().int().min(1).max(40),
-  monthlyFeeInr: z.number().int().min(0),
-  notes: z.string().optional(),
+  childId:        z.number().int().positive().optional(),
+  matchRequestId: z.number().int().positive().optional(),
+  startDate:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  hoursPerWeek:   z.number().int().min(1).max(40),
+  monthlyFeeInr:  z.number().int().min(0),
+  notes:          z.string().optional(),
 });
 
 const LogWeekBody = z.object({
@@ -115,9 +117,25 @@ router.post("/engagements", requireAuth, requireRole("parent"), async (req, res)
   const parsed = CreateEngagementBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { professionalId, childId, startDate, hoursPerWeek, monthlyFeeInr, notes } = parsed.data;
+  const { professionalId, childId, matchRequestId, startDate, hoursPerWeek, monthlyFeeInr, notes } = parsed.data;
 
   const nextBillingDate = addMonths(startDate, 1);
+
+  // ── Auto carry-over: trial fee paid on the match → first-month salary credit ─
+  // Automatically reads match.trialFeePaidInr and sets engagement.trialCreditInr.
+  // No admin action needed. Ownership check (parentId = req.userId) prevents spoofing.
+  let trialCreditInr = 0;
+  if (matchRequestId) {
+    const [match] = await db
+      .select({ trialFeePaidInr: shadowTeacherMatchesTable.trialFeePaidInr })
+      .from(shadowTeacherMatchesTable)
+      .where(and(
+        eq(shadowTeacherMatchesTable.id, matchRequestId),
+        eq(shadowTeacherMatchesTable.parentId, req.userId!),
+      ))
+      .limit(1);
+    trialCreditInr = match?.trialFeePaidInr ?? 0;
+  }
 
   const [engagement] = await db
     .insert(shadowTeacherEngagementsTable)
@@ -125,11 +143,13 @@ router.post("/engagements", requireAuth, requireRole("parent"), async (req, res)
       parentId: req.userId!,
       professionalId,
       childId: childId ?? null,
+      matchRequestId: matchRequestId ?? null,
       startDate,
       hoursPerWeek,
       monthlyFeeInr,
       notes: notes ?? null,
       nextBillingDate,
+      trialCreditInr,
       status: "active",
     })
     .returning();
@@ -232,45 +252,35 @@ router.get("/engagements/:id/logs", requireAuth, async (req, res): Promise<void>
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const rows = await db
-    .select({
-      id: engagementLogsTable.id,
-      weekStartDate: engagementLogsTable.weekStartDate,
-      hoursLogged: engagementLogsTable.hoursLogged,
-      notes: engagementLogsTable.notes,
-      loggedByUserId: engagementLogsTable.loggedByUserId,
-      loggedByName: usersTable.fullName,
-      createdAt: engagementLogsTable.createdAt,
-    })
+    .select()
     .from(engagementLogsTable)
-    .leftJoin(usersTable, eq(engagementLogsTable.loggedByUserId, usersTable.id))
     .where(eq(engagementLogsTable.engagementId, id))
-    .orderBy(desc(engagementLogsTable.weekStartDate));
+    .orderBy(desc(engagementLogsTable.createdAt));
 
   res.json(rows);
 });
 
-router.post("/engagements/:id/logs", requireAuth, requireRole("professional", "admin"), async (req, res): Promise<void> => {
+router.post("/engagements/:id/logs", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params["id"] as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const parsed = LogWeekBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { weekStartDate, hoursLogged, notes } = LogWeekBody.parse(req.body);
 
-  const [log] = await db
+  const [row] = await db
     .insert(engagementLogsTable)
-    .values({ engagementId: id, loggedByUserId: req.userId!, ...parsed.data })
+    .values({ engagementId: id, weekStartDate, hoursLogged, notes: notes ?? null, loggedByUserId: req.userId! })
     .returning();
 
-  res.status(201).json(log);
+  res.status(201).json(row);
 });
 
 async function isProfessionalOwner(professionalId: number, userId: number): Promise<boolean> {
-  const [p] = await db
+  const [prof] = await db
     .select({ id: professionalProfilesTable.id })
     .from(professionalProfilesTable)
     .where(and(eq(professionalProfilesTable.id, professionalId), eq(professionalProfilesTable.userId, userId)))
     .limit(1);
-  return !!p;
+  return !!prof;
 }
 
 export default router;
