@@ -1,0 +1,41 @@
+PLAN MODE — report only, no changes. Before I start testing Chunk 2, I
+need to confirm the status of earlier fixes that may or may not have
+actually landed on dev. For EACH, tell me: is it currently in the
+deployed dev code, yes or no, and show me the relevant lines so I can
+confirm.
+
+1. ENGAGEMENT-SCOPING FIX (parent-dashboard.tsx ~line 1076): the active-
+engagement lookup was supposed to be changed to filter by childId:
+   engagements.find(e => (e.status === "active" || e.status ===
+   "notice_period") && e.childId === selectedChildId)
+Is this filter actually in the current code? Show me the line. And confirm
+selectedChildId and e.childId are the SAME TYPE (both numbers) so the ===
+actually matches and doesn't silently fail.
+
+2. SIBLING ENGAGEMENT-SCOPING: when you fixed line 1076, did you also
+check for OTHER places that read "the active engagement" without filtering
+by childId (daily logs, engagement card, salary, lifecycle)? List any
+that still assume one engagement per parent and aren't childId-scoped —
+those would show the wrong child's data in multi-child testing.
+
+3. ENUM-APPROVE FIX (admin approve professional): the approve endpoint was
+setting identity_verifications.status = "approved" (invalid enum value),
+causing "approved failed" every time and leaving identity docs stuck at
+pending. Confirm: is it now setting "verified" (valid value)? Is it
+wrapped in a transaction? Were the existing half-committed records (
+profile verified but identity doc still pending) healed? And does the
+admin Review/Approve button now have a status guard so it doesn't show on
+already-approved profiles?
+
+4. CONTACTUNLOCKSTABLE CRASH (professionals.ts ~line 151): the orphaned
+contactUnlocksTable reference that caused a 500 on profile save — is it
+fully removed, and did you confirm there are no OTHER orphaned references
+to it elsewhere?
+
+5. PRE-EXISTING TYPESCRIPT ERRORS: you mentioned existing errors in
+centres.ts, sessionsV2.ts, professionals.ts. Briefly — what are they, and
+do any of them risk runtime crashes (like the contactUnlocksTable one
+did), or are they harmless type-only issues?
+
+Just report status for each — no fixes yet. If any is NOT done, I'll
+decide whether to fix it before or after Chunk 2 testing.
