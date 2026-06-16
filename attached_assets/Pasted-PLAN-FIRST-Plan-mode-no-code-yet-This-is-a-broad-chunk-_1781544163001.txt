@@ -1,0 +1,78 @@
+PLAN FIRST — Plan mode, no code yet. This is a broad chunk covering the
+full post-match teacher experience plus a paid trial. Lay out the plan
+for ALL FOUR parts below. For 2A/2B/2C, plan them ready to build. For 2D
+(trial — payment-critical), plan it but present the payment/refund
+mechanics for my explicit approval before any code.
+
+CONTEXT: Parent pays ₹500 upfront → match options shown → parent & teacher
+chat → price negotiation (parent offers, teacher accepts/counters, either
+can edit until accepted) → price agreed → PAID TRIAL DAY → commit. There
+are currently NO per-child goals in the system.
+
+2A — TEACHER POST-MATCH ENGAGEMENT WORKSPACE
+Today the teacher has no post-commit engagement view. Build the teacher's
+side of an active engagement, mirroring what the parent already sees:
+- View the parent's daily logs (events at home / extra-support areas) for
+  the committed child
+- View/continue the message thread for that engagement
+- See the child's context and goals (from 2B)
+Confirm this is scoped to the correct engagement AND childId (we've had
+repeated bugs where engagement/match queries weren't filtered by childId
+— this must filter by childId so a teacher with two engagements sees the
+right child's data).
+
+2B — GOAL-BASED DAILY PERFORMANCE LOGGING (must take under 2 minutes)
+Based on established special-ed practice (IEP goal-based progress
+monitoring, prompting-scale data, sampling not exhaustive logging):
+- First, since no per-child goals exist yet: add a lightweight way for
+  the teacher and/or parent to set a few goals per child (e.g. 3-5 short
+  goals). Keep it simple — a goal is a short text label, optionally a
+  category. This is a prerequisite for logging.
+- Daily log: for each goal, a ONE-TAP prompting-scale rating —
+  Independent / Needed prompt / Not yet (the proven fast method). Plus a
+  short behaviour/mood note and an optional "reteach at home" flag (these
+  fields already exist in the daily-logs system — reuse them).
+- SAMPLING: the teacher logs against a couple of goals per day, not all —
+  the design must stay under 2 minutes. Don't force a rating on every
+  goal every day.
+- Logs are visible only to the associated parent (existing pattern).
+Tell me: does this reuse the existing engagement_daily_logs table/flow,
+and how do goals get stored (new table)?
+
+2C — PHOTO / WORK CAPTURE (consent-gated)
+Optional: teacher can attach a photo of the child's homework/classwork/
+notes to a log, shared to the parent (the "permanent product" method).
+CRITICAL: this involves images of a child — it MUST be gated by the
+child profile's media consent toggle (media defaults to false). If media
+consent is OFF, photo capture is disabled/hidden. Confirm how you'll
+enforce the consent check, and where photos are stored.
+
+2D — PAID TRIAL DAY + OPTIONAL PRE-MEETING (PAYMENT — plan only, don't
+build until I approve the money mechanics)
+Sequence: after price is agreed, before commit, there's a PAID TRIAL.
+- Optional pre-meeting: the parent CAN request an intro meeting (not
+  mandatory) before the trial. Plan how this is represented (a request +
+  scheduling note; does NOT need video infra — keep it simple).
+- Trial payment rules I'm specifying (do NOT guess these):
+  * Trial fee is a SEPARATE, modest fee — distinct from the ₹500 matching
+    fee and the monthly salary.
+  * If the parent COMMITS after the trial → the trial fee is CREDITED
+    toward the first month's salary.
+  * If the parent does NOT commit after the trial → the trial fee is KEPT
+    by the teacher (non-refundable — it paid for the trial day).
+    [I'm confirming this is the intended rule for the no-commit case.]
+- Present, for MY approval before coding: (a) when/how the trial fee is
+  charged (Razorpay, like the existing flows), (b) exactly how the
+  "credit toward first month" is applied at commit, (c) the no-commit
+  disposition, (d) what new status states the match/engagement needs for
+  "trial pending / trial done / committed". Do NOT write the trial
+  payment code until I approve these mechanics.
+
+SAFEGUARDING NOTE for 2D: the trial means a teacher meets a child before
+full commit — same trust requirements as engagement (verified teacher,
+on-platform record). Flag anything here that needs care.
+
+Show me the full plan for all four parts. 2A/2B/2C planned ready to build;
+2D's payment mechanics presented as options/specifics for my approval
+first. This will auto-deploy to dev when built — I'll test there; no
+manual production deploy. Don't write code until I approve the plan.

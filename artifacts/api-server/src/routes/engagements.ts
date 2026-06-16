@@ -7,6 +7,7 @@ import {
   professionalProfilesTable,
   usersTable,
   childrenTable,
+  shadowMatchCandidatesTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { createLedgerHeld } from "../lib/ledger";
@@ -76,24 +77,35 @@ router.get("/engagements", requireAuth, async (req, res): Promise<void> => {
 
   const rows = await db
     .select({
-      id: shadowTeacherEngagementsTable.id,
-      parentId: shadowTeacherEngagementsTable.parentId,
-      professionalId: shadowTeacherEngagementsTable.professionalId,
-      childId: shadowTeacherEngagementsTable.childId,
-      startDate: shadowTeacherEngagementsTable.startDate,
-      hoursPerWeek: shadowTeacherEngagementsTable.hoursPerWeek,
-      monthlyFeeInr: shadowTeacherEngagementsTable.monthlyFeeInr,
-      status: shadowTeacherEngagementsTable.status,
-      nextBillingDate: shadowTeacherEngagementsTable.nextBillingDate,
-      billedThroughDate: shadowTeacherEngagementsTable.billedThroughDate,
-      notes: shadowTeacherEngagementsTable.notes,
-      createdAt: shadowTeacherEngagementsTable.createdAt,
-      parentName: usersTable.fullName,
-      childName: childrenTable.name,
+      id:               shadowTeacherEngagementsTable.id,
+      parentId:         shadowTeacherEngagementsTable.parentId,
+      professionalId:   shadowTeacherEngagementsTable.professionalId,
+      childId:          shadowTeacherEngagementsTable.childId,
+      matchRequestId:   shadowTeacherEngagementsTable.matchRequestId,
+      tier:             shadowTeacherEngagementsTable.tier,
+      startDate:        shadowTeacherEngagementsTable.startDate,
+      monthlyFeeInr:    shadowTeacherEngagementsTable.monthlyFeeInr,
+      status:           shadowTeacherEngagementsTable.status,
+      notes:            shadowTeacherEngagementsTable.notes,
+      createdAt:        shadowTeacherEngagementsTable.createdAt,
+      parentName:       usersTable.fullName,
+      childName:        childrenTable.name,
+      childConditions:  childrenTable.conditions,
+      childLanguages:   childrenTable.languages,
+      childCity:        childrenTable.city,
+      childConsent:     childrenTable.consent,
+      candidateId:      shadowMatchCandidatesTable.id,
     })
     .from(shadowTeacherEngagementsTable)
     .leftJoin(usersTable, eq(shadowTeacherEngagementsTable.parentId, usersTable.id))
     .leftJoin(childrenTable, eq(shadowTeacherEngagementsTable.childId, childrenTable.id))
+    .leftJoin(
+      shadowMatchCandidatesTable,
+      and(
+        eq(shadowMatchCandidatesTable.matchId, shadowTeacherEngagementsTable.matchRequestId),
+        eq(shadowMatchCandidatesTable.professionalId, prof.id),
+      ),
+    )
     .where(eq(shadowTeacherEngagementsTable.professionalId, prof.id))
     .orderBy(desc(shadowTeacherEngagementsTable.createdAt));
   res.json(rows);

@@ -1,0 +1,93 @@
+Build the broad Chunk 2 (2A/2B/2C now; 2D show me migration + salary code
+before applying). This auto-deploys to dev — I'll test there; no manual
+production deploy.
+
+IMPORTANT FRAMING: 2B's logging is being UPGRADED with richer tracking
+methods, but it builds on the EXISTING system — the child_goals table,
+the engagement_daily_logs flow, the existing ShadowMatchChatDrawer (with
+its server-side contact masking), childId scoping, and the media consent
+gate. Do NOT build a new standalone page and do NOT rebuild chat from
+scratch — extend what exists. The teacher workspace lives inside the
+professional dashboard EngagementTab.
+
+2A — TEACHER POST-MATCH ENGAGEMENT WORKSPACE (as previously planned)
+Extend EngagementTab: multi-engagement switcher (load sub-tab data only
+after the teacher selects an engagement; engagement_id maps 1:1 to a
+child so no extra childId filter needed once selected), a "Child & Goals"
+sub-tab (child snapshot + goals list + parent's recent 5 daily logs), and
+a Chat button in the engagement header that opens the EXISTING
+ShadowMatchChatDrawer (keep its masking — do not alter it).
+- DEFINITELY enforce (not "should"): GET /api/engagements must verify the
+requesting teacher owns the returned engagements via their professional
+profile id.
+
+2B — GOAL-BASED DAILY LOGGING, UPGRADED (must stay under 2 minutes)
+Keep the approved design (child_goals table; goal sampling — teacher ticks
+only the goals observed today; valid with zero goal ratings as long as
+there's a note; goalRatings stored as JSON extension in the log content;
+parent sees colored chips). UPGRADE the rating richness as follows:
+
+- PROMPT HIERARCHY (replace the 3-level scale with 5 levels): for each
+ticked goal, ONE-TAP selection of independence level —
+Independent / Visual prompt / Verbal prompt / Modeling / Physical assist.
+Still one tap per goal — just 5 options instead of 3. Store the level on
+each goalRating, e.g. { goalId, label, level: "verbal_prompt" }.
+
+- OPTIONAL behavior counters (collapsed by default, NOT required): a
+collapsible "Behaviors (optional)" section with tap +/- counters for a
+few target behaviors (e.g. Hand raising, Peer interactions, Sensory
+breaks). If untouched, nothing is logged. Store as
+behaviorCounts: [{ label, count }] in the log content JSON when used.
+
+- OPTIONAL duration (collapsed by default, NOT required): a simple
+"Focus/Regulation duration (optional)" input (minutes) — e.g. Sustained
+focus: 15 min. Store as durations: [{ label, minutes }] when used.
+
+CRITICAL — the FAST PATH must stay fast: the default visible form is just
+(a) tick a couple of goals + one-tap level each, (b) a short mood/behaviour
+note, (c) optional "reteach at home" + note. Counters and duration are
+COLLAPSED/optional and never block submission. A teacher must be able to
+complete a basic log in under 2 minutes without expanding anything.
+
+- Goal management: lightweight create/list/edit of a few per-child goals
+(short label + optional category), gated by having an active engagement
+with that child. Both teacher and parent can add goals.
+
+- SHARE TO CHAT (from Gemini's idea): after logging, an optional "Share to
+chat" button that posts a short, formatted milestone snippet into the
+EXISTING match/engagement thread (e.g. "Milestone update: completed math
+with a verbal prompt"). It posts through the existing chat thread so
+masking still applies — do NOT bypass the chat system or its masking.
+
+- Keep all log content backwards compatible (new fields are additive in
+the JSON; existing logs without them still render).
+
+2C — PHOTO / WORK CAPTURE (consent-gated, as planned)
+Reuse the existing GCS upload flow; store photoKey in the log content
+JSON. ENFORCE consent on the SERVER: POST .../daily-logs must REJECT any
+photoKey if child.consent.media !== true (not just hiding the button).
+Also hide/replace the attach button in the UI when consent is off. The
+same access check that gates the log gates the photo.
+
+2D — PAID TRIAL DAY (PLAN/REVIEW — do NOT apply migration or write the
+payment changes until I approve):
+Per my earlier decisions: trial fee = fixed admin_settings amount; NO
+platform cut (teacher keeps 100%); re-mask teacher contact on no-commit;
+add CLEAN enum values trial_pending + trial_done (do NOT repurpose
+pending_commitment). Money rule: charged on "Request Trial Day" after
+price agreed (Razorpay test mode); if commit → credited to first month
+(max(0, monthlyFee − credit); ₹0 + no order if credit ≥ fee); if no
+commit → kept by teacher, non-refundable, record retained. The
+first-month credit must be keyed to whether the credit was ALREADY
+applied (a flag/record), NOT "payment count = 1", so it can't
+double-apply.
+SHOW ME FIRST, before applying: (1) the full migration SQL — the new
+child_goals table, the new enum values, trial_fee_paid_inr on matches,
+trial_credit_inr on engagements, pre_meeting columns — confirm all
+additive, nothing dropped, enum values don't collide; (2) the exact
+changed salary-route code for the credit logic. I'll review both before
+anything runs.
+
+Build 2A/2B/2C now and show me the changed code. For 2D, show me the
+migration + salary-route change for approval before applying. Confirm the
+existing chat masking and childId scoping are untouched.

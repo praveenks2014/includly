@@ -35,7 +35,7 @@ import {
   Clock, AlertCircle, Eye, Phone, Mail, MapPin, Star, Unlock,
   Edit3, Save, HelpCircle, BadgeCheck, FileText, ChevronRight,
   Menu, X, Plus, Trash2, TrendingUp, Check, MessageSquare, Send, ChevronLeft,
-  Users,
+  Users, Minus, Camera, Share2,
 } from "lucide-react";
 import { ShadowMatchChatDrawer } from "@/components/ShadowMatchChatDrawer";
 
@@ -1735,6 +1735,8 @@ function MessagesTab() {
 function EngagementTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: me } = useGetMe();
+  const myUserId = (me as { id?: number } | undefined)?.id ?? 0;
 
   interface STEngagement {
     id: number;
@@ -1747,7 +1749,14 @@ function EngagementTab() {
     notes: string | null;
     parentName: string | null;
     childName: string | null;
+    matchRequestId: number | null;
+    candidateId: number | null;
+    childConditions: string[] | null;
+    childLanguages: string[] | null;
+    childCity: string | null;
+    childConsent: { media?: boolean } | null;
   }
+
   interface DailyLog {
     id: number;
     logDate: string;
@@ -1759,56 +1768,199 @@ function EngagementTab() {
     authorName: string | null;
   }
 
+  interface ChildGoal {
+    id: number;
+    childId: number;
+    engagementId: number | null;
+    createdByUserId: number;
+    label: string;
+    category: string | null;
+    isActive: boolean;
+  }
+
+  // ── Engagement selection ───────────────────────────────────────────────────
+  const [selectedEngId, setSelectedEngId] = useState<number | null>(null);
+  const [engTab, setEngTab] = useState<"overview" | "child" | "log" | "lifecycle">("overview");
+  const [chatOpen, setChatOpen] = useState(false);
+
   const { data: engagements = [], isLoading } = useQuery<STEngagement[]>({
     queryKey: ["pro-engagements"],
     queryFn: () => fetchWithAuth("/api/engagements").then(r => r.json()),
   });
 
-  const active = engagements.find(e => e.status === "active" || e.status === "notice_period");
+  const activeList = engagements.filter(e => e.status === "active" || e.status === "notice_period");
+  const active = (selectedEngId ? engagements.find(e => e.id === selectedEngId) : null) ?? activeList[0] ?? null;
 
+  // ── Logs ───────────────────────────────────────────────────────────────────
   const { data: logs = [] } = useQuery<DailyLog[]>({
     queryKey: ["pro-engagement-logs", active?.id],
     queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/daily-logs`).then(r => r.json()),
     enabled: !!active,
   });
 
-  const TEMPLATE_QUESTIONS = [
-    { key: "taughtToday",   label: "IEP Goals Covered Today" },
-    { key: "behaviorMood",  label: "Behaviour & Participation" },
-    { key: "feedback",      label: "Progress & Observations" },
-    { key: "reteachAtHome", label: "Plan for Next Session" },
-  ];
+  // ── Goals ─────────────────────────────────────────────────────────────────
+  const { data: goals = [], refetch: refetchGoals } = useQuery<ChildGoal[]>({
+    queryKey: ["child-goals", active?.childId],
+    queryFn: () => fetchWithAuth(`/api/children/${active!.childId}/goals`).then(r => r.json()),
+    enabled: !!active?.childId && (engTab === "child" || engTab === "log"),
+  });
 
-  const [logResponses, setLogResponses] = useState<Record<string, string>>({});
-  const [logMood, setLogMood] = useState("");
+  // ── Goal management state ──────────────────────────────────────────────────
+  const [newGoalLabel, setNewGoalLabel] = useState("");
+  const [newGoalCategory, setNewGoalCategory] = useState("");
+  const [addingGoal, setAddingGoal] = useState(false);
+  const [savingGoal, setSavingGoal] = useState(false);
+
+  async function handleAddGoal() {
+    if (!active?.childId || !newGoalLabel.trim()) return;
+    setSavingGoal(true);
+    try {
+      await fetchWithAuth(`/api/children/${active.childId}/goals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label: newGoalLabel.trim(),
+          category: newGoalCategory.trim() || undefined,
+          engagementId: active.id,
+        }),
+      });
+      void refetchGoals();
+      setNewGoalLabel(""); setNewGoalCategory(""); setAddingGoal(false);
+      toast({ title: "Goal added ✓" });
+    } catch { toast({ title: "Failed to add goal", variant: "destructive" }); }
+    finally { setSavingGoal(false); }
+  }
+
+  async function handleToggleGoal(goalId: number, isActive: boolean) {
+    if (!active?.childId) return;
+    await fetchWithAuth(`/api/children/${active.childId}/goals/${goalId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: !isActive }),
+    });
+    void refetchGoals();
+  }
+
+  // ── Daily log form state ───────────────────────────────────────────────────
+  const PROMPT_LEVELS = [
+    { id: "independent",    label: "Independent",  color: "bg-green-100 text-green-700 border-green-300" },
+    { id: "visual_prompt",  label: "Visual ✓",     color: "bg-yellow-100 text-yellow-700 border-yellow-300" },
+    { id: "verbal_prompt",  label: "Verbal",        color: "bg-amber-100 text-amber-700 border-amber-300" },
+    { id: "modeling",       label: "Modeling",      color: "bg-orange-100 text-orange-700 border-orange-300" },
+    { id: "physical_assist", label: "Physical",     color: "bg-red-100 text-red-700 border-red-300" },
+  ] as const;
+
+  const DEFAULT_BEHAVIORS = ["Hand raising", "Peer interactions", "Sensory breaks"];
+
+  const [tickedGoals, setTickedGoals] = useState<Set<number>>(new Set());
+  const [goalLevels, setGoalLevels] = useState<Record<number, string>>({});
+  const [logMoodNote, setLogMoodNote] = useState("");
+  const [reteachNote, setReteachNote] = useState("");
+  const [behaviorOpen, setBehaviorOpen] = useState(false);
+  const [behaviorCounts, setBehaviorCounts] = useState<{ label: string; count: number }[]>(
+    DEFAULT_BEHAVIORS.map(l => ({ label: l, count: 0 }))
+  );
+  const [durationOpen, setDurationOpen] = useState(false);
+  const [focusMinutes, setFocusMinutes] = useState("");
+  const [photoKey, setPhotoKey] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [postingLog, setPostingLog] = useState(false);
+  const [logSubmitted, setLogSubmitted] = useState<{ matchId: number; candidateId: number; snippet: string } | null>(null);
+  const [sharingToChat, setSharingToChat] = useState(false);
+
+  // ── Lifecycle state ────────────────────────────────────────────────────────
   const [lifecycleType, setLifecycleType] = useState<"stop" | "pause" | "">("");
   const [lifecycleNotes, setLifecycleNotes] = useState("");
   const [postingLifecycle, setPostingLifecycle] = useState(false);
-  const [engTab, setEngTab] = useState<"overview" | "log" | "lifecycle">("overview");
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const res = await fetchWithAuth("/api/storage/uploads/request-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type || "image/jpeg" }),
+      });
+      const { uploadURL, objectPath } = await res.json() as { uploadURL: string; objectPath: string };
+      await fetch(uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+      setPhotoKey(objectPath);
+      toast({ title: "Photo uploaded ✓" });
+    } catch { toast({ title: "Photo upload failed", variant: "destructive" }); }
+    finally { setUploadingPhoto(false); }
+  }
+
+  function resetLogForm() {
+    setTickedGoals(new Set()); setGoalLevels({}); setLogMoodNote(""); setReteachNote("");
+    setBehaviorOpen(false); setBehaviorCounts(DEFAULT_BEHAVIORS.map(l => ({ label: l, count: 0 })));
+    setDurationOpen(false); setFocusMinutes(""); setPhotoKey(null); setLogSubmitted(null);
+  }
 
   async function handlePostLog() {
     if (!active) return;
     setPostingLog(true);
     try {
-      await fetchWithAuth(`/api/engagements/${active.id}/daily-logs`, {
+      const goalRatings = Array.from(tickedGoals).map(gid => {
+        const goal = goals.find(g => g.id === gid);
+        return { goalId: gid, label: goal?.label ?? "", level: goalLevels[gid] ?? "verbal_prompt" };
+      });
+      const usedCounts = behaviorCounts.filter(b => b.count > 0);
+      const parsedMins = parseInt(focusMinutes, 10);
+      const durations = focusMinutes && !isNaN(parsedMins) ? [{ label: "Sustained focus", minutes: parsedMins }] : [];
+
+      const snippet = goalRatings.length > 0
+        ? `Milestone update: ${goalRatings.map(gr => `${gr.label} (${gr.level.replace(/_/g, " ")})`).join(", ")}.`
+        : logMoodNote.trim()
+          ? `Session update: ${logMoodNote.trim().slice(0, 80)}`
+          : "Session log posted.";
+
+      const res = await fetchWithAuth(`/api/engagements/${active.id}/daily-logs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           logDate: new Date().toISOString().slice(0, 10),
           content: {
-            taughtToday:   logResponses["taughtToday"]  ?? "",
-            behaviorMood:  [logMood, logResponses["behaviorMood"]].filter(Boolean).join(" — ") || "",
-            feedback:      logResponses["feedback"]      ?? "",
-            reteachAtHome: logResponses["reteachAtHome"] ?? "",
+            behaviorMood:   logMoodNote.trim()        || undefined,
+            reteachAtHome:  reteachNote.trim()        || undefined,
+            goalRatings:    goalRatings.length > 0    ? goalRatings  : undefined,
+            behaviorCounts: usedCounts.length > 0     ? usedCounts   : undefined,
+            durations:      durations.length > 0      ? durations    : undefined,
+            photoKey:       photoKey                  ?? undefined,
           },
         }),
       });
+
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        toast({ title: d.error ?? "Failed to submit log", variant: "destructive" });
+        return;
+      }
+
       queryClient.invalidateQueries({ queryKey: ["pro-engagement-logs", active.id] });
-      setLogResponses({}); setLogMood("");
       toast({ title: "Daily log submitted ✓" });
+
+      if (active.matchRequestId && active.candidateId) {
+        setLogSubmitted({ matchId: active.matchRequestId, candidateId: active.candidateId, snippet });
+      } else {
+        resetLogForm();
+      }
     } catch { toast({ title: "Failed to submit log", variant: "destructive" }); }
     finally { setPostingLog(false); }
+  }
+
+  async function handleShareToChat() {
+    if (!logSubmitted) return;
+    setSharingToChat(true);
+    try {
+      await fetchWithAuth(`/api/shadow-teacher/${logSubmitted.matchId}/thread/${logSubmitted.candidateId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: logSubmitted.snippet }),
+      });
+      toast({ title: "Shared to parent chat ✓" });
+    } catch { toast({ title: "Share failed", variant: "destructive" }); }
+    finally { setSharingToChat(false); resetLogForm(); }
   }
 
   async function handleLifecycleRequest() {
@@ -1846,12 +1998,31 @@ function EngagementTab() {
     );
   }
 
-  const MOODS = ["😊 Excellent", "🙂 Good", "😐 Average", "😔 Challenging"];
   const todayStr = new Date().toISOString().slice(0, 10);
   const todayLogged = logs.some(l => l.logDate === todayStr && l.authorRole === "teacher");
+  const mediaConsent = active.childConsent?.media === true;
+  const activeGoals = goals.filter(g => g.isActive);
 
   return (
     <div className="space-y-5">
+      {/* Multi-engagement switcher */}
+      {engagements.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {engagements.map(e => (
+            <button key={e.id}
+              onClick={() => { setSelectedEngId(e.id); setEngTab("overview"); resetLogForm(); }}
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                active.id === e.id
+                  ? "bg-[#1A2340] text-white border-[#1A2340]"
+                  : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+              }`}>
+              {e.childName ?? `Eng #${e.id}`}
+              <span className="ml-1.5 opacity-60">{e.status.replace(/_/g, " ")}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Header card */}
       <div className="bg-gradient-to-br from-[#1A2340] to-[#2d3a5c] rounded-2xl p-5 text-white">
         <div className="flex items-start justify-between">
@@ -1859,25 +2030,31 @@ function EngagementTab() {
             <p className="text-xs font-semibold uppercase tracking-wide opacity-60">Active Engagement</p>
             <p className="text-xl font-bold mt-1">{active.childName ?? `Child #${active.childId}`}</p>
             {active.parentName && <p className="text-sm opacity-70 mt-0.5">Parent: {active.parentName}</p>}
+            {active.childCity && <p className="text-sm opacity-50 mt-0.5">{active.childCity}</p>}
           </div>
-          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/15 uppercase tracking-wide">
-            {active.status.replace("_", " ")}
-          </span>
+          <div className="flex flex-col items-end gap-2">
+            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/15 uppercase tracking-wide">
+              {active.status.replace(/_/g, " ")}
+            </span>
+            {active.matchRequestId && active.candidateId && (
+              <button onClick={() => setChatOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-xs font-medium transition-colors">
+                <MessageSquare size={11} />Chat
+              </button>
+            )}
+          </div>
         </div>
-        <div className="mt-4 flex items-center gap-4 text-sm">
+        <div className="mt-4 flex items-center gap-4 text-sm flex-wrap">
           <div><span className="opacity-60">My Salary</span><br /><strong>₹{Number(active.monthlyFeeInr).toLocaleString("en-IN")}/mo</strong></div>
           <div className="w-px h-8 bg-white/15" />
           <div><span className="opacity-60">Since</span><br /><strong>{new Date(active.startDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</strong></div>
-          {active.tier && <>
-            <div className="w-px h-8 bg-white/15" />
-            <div><span className="opacity-60">Tier</span><br /><strong>{active.tier}</strong></div>
-          </>}
+          {active.tier && <><div className="w-px h-8 bg-white/15" /><div><span className="opacity-60">Tier</span><br /><strong>{active.tier}</strong></div></>}
         </div>
       </div>
 
       {/* Sub-tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
-        {([["overview", "Overview"], ["log", "Daily Log"], ["lifecycle", "Manage"]] as [string, string][]).map(([id, label]) => (
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
+        {([["overview", "Overview"], ["child", "Child & Goals"], ["log", "Daily Log"], ["lifecycle", "Manage"]] as [string, string][]).map(([id, label]) => (
           <button key={id} onClick={() => setEngTab(id as typeof engTab)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${engTab === id ? "bg-white text-[#1A2340] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
             {label}
@@ -1885,6 +2062,7 @@ function EngagementTab() {
         ))}
       </div>
 
+      {/* ── Overview ── */}
       {engTab === "overview" && (
         <div className="space-y-4">
           <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
@@ -1893,16 +2071,18 @@ function EngagementTab() {
               <span className="text-xs text-gray-400">{logs.length} total</span>
             </div>
             {logs.length === 0 ? (
-              <p className="text-xs text-gray-400">No logs yet. Submit today's log in the Daily Log tab.</p>
+              <p className="text-xs text-gray-400">No logs yet. Use the Daily Log tab to submit today's update.</p>
             ) : (
               <div className="space-y-2">
-                {[...logs].reverse().slice(0, 5).map(log => (
+                {logs.slice(0, 5).map(log => (
                   <div key={log.id} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg">
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-[#1A2340]">{new Date(log.logDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</p>
-                      <p className="text-xs text-gray-400 truncate">{(() => { try { return Object.values(JSON.parse(log.content) as Record<string,string>)[0] ?? ""; } catch { return ""; } })()}</p>
+                      <p className="text-xs text-gray-400 truncate">
+                        {(() => { try { const c = JSON.parse(log.content) as Record<string, unknown>; return String(c["behaviorMood"] ?? c["taughtToday"] ?? c["eventsForTeacher"] ?? ""); } catch { return ""; } })()}
+                      </p>
                     </div>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${log.authorRole === "teacher" ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-[#2EC4A5]/10 text-[#2EC4A5] border-[#2EC4A5]/20"}`}>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold shrink-0 ${log.authorRole === "teacher" ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-[#2EC4A5]/10 text-[#2EC4A5] border-[#2EC4A5]/20"}`}>
                       {log.authorRole === "teacher" ? "You" : "Parent"}
                     </span>
                   </div>
@@ -1919,39 +2099,279 @@ function EngagementTab() {
         </div>
       )}
 
-      {engTab === "log" && (
-        <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-bold text-[#1A2340]">Today's Log</p>
-            {todayLogged && <span className="text-xs text-green-600 font-semibold">Already submitted</span>}
-          </div>
-          {TEMPLATE_QUESTIONS.map(q => (
-            <div key={q.key}>
-              <p className="text-xs font-semibold text-[#1A2340] mb-1">{q.label}</p>
-              <textarea value={logResponses[q.key] ?? ""}
-                onChange={(e) => setLogResponses(prev => ({ ...prev, [q.key]: e.target.value }))}
-                rows={2} placeholder={`Describe ${q.label.toLowerCase()}…`}
-                className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
+      {/* ── Child & Goals ── */}
+      {engTab === "child" && (
+        <div className="space-y-4">
+          {(active.childConditions?.length || active.childLanguages?.length) ? (
+            <div className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
+              <p className="text-sm font-bold text-[#1A2340]">Child Profile</p>
+              {active.childConditions && active.childConditions.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-400 mb-1">Conditions</p>
+                  <div className="flex flex-wrap gap-1">
+                    {active.childConditions.map(c => <span key={c} className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">{c}</span>)}
+                  </div>
+                </div>
+              )}
+              {active.childLanguages && active.childLanguages.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-400 mb-1">Languages</p>
+                  <div className="flex flex-wrap gap-1">
+                    {active.childLanguages.map(l => <span key={l} className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{l}</span>)}
+                  </div>
+                </div>
+              )}
             </div>
-          ))}
-          <div>
-            <p className="text-xs text-gray-500 mb-2">Child's mood today</p>
-            <div className="flex gap-2 flex-wrap">
-              {MOODS.map(m => (
-                <button key={m} onClick={() => setLogMood(logMood === m ? "" : m)}
-                  className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${logMood === m ? "border-[#2EC4A5] bg-[#2EC4A5]/10 text-[#2EC4A5]" : "border-gray-200 hover:border-gray-300"}`}>
-                  {m}
-                </button>
-              ))}
+          ) : null}
+
+          <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold text-[#1A2340]">Goals</p>
+              <button onClick={() => setAddingGoal(!addingGoal)}
+                className="flex items-center gap-1 text-xs text-[#2EC4A5] font-semibold hover:underline">
+                <Plus size={13} />{addingGoal ? "Cancel" : "Add Goal"}
+              </button>
             </div>
+            {addingGoal && (
+              <div className="p-3 bg-gray-50 rounded-lg space-y-2">
+                <input value={newGoalLabel} onChange={e => setNewGoalLabel(e.target.value)}
+                  placeholder="Goal (e.g. Writes own name)"
+                  className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]" />
+                <input value={newGoalCategory} onChange={e => setNewGoalCategory(e.target.value)}
+                  placeholder="Category (e.g. Writing, Math) — optional"
+                  className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]" />
+                <Button size="sm" onClick={() => void handleAddGoal()} disabled={savingGoal || !newGoalLabel.trim()}
+                  className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-xs">
+                  {savingGoal ? <Loader2 size={12} className="animate-spin mr-1" /> : null}Save Goal
+                </Button>
+              </div>
+            )}
+            {goals.length === 0 ? (
+              <p className="text-xs text-gray-400">No goals yet. Add IEP or learning goals above.</p>
+            ) : (
+              <div className="space-y-2">
+                {goals.map(g => (
+                  <div key={g.id} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-medium truncate ${g.isActive ? "text-[#1A2340]" : "text-gray-400 line-through"}`}>{g.label}</p>
+                      {g.category && <p className="text-xs text-gray-400">{g.category}</p>}
+                    </div>
+                    <button onClick={() => void handleToggleGoal(g.id, g.isActive)}
+                      className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold border transition-colors ${
+                        g.isActive ? "bg-green-50 text-green-600 border-green-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200"
+                                   : "bg-gray-100 text-gray-400 border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200"
+                      }`}>
+                      {g.isActive ? "Active" : "Inactive"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <Button onClick={handlePostLog} disabled={postingLog}
-            className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-sm">
-            {postingLog ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Submit Today's Log
-          </Button>
+
+          <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
+            <p className="text-sm font-bold text-[#1A2340]">Parent's Recent Updates</p>
+            {logs.filter(l => l.authorRole === "parent").length === 0 ? (
+              <p className="text-xs text-gray-400">Parent hasn't posted any home updates yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {logs.filter(l => l.authorRole === "parent").slice(0, 5).map(log => {
+                  let c: Record<string, unknown> = {};
+                  try { c = JSON.parse(log.content) as Record<string, unknown>; } catch {}
+                  return (
+                    <div key={log.id} className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs font-semibold text-[#1A2340] mb-1">
+                        {new Date(log.logDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
+                      </p>
+                      {c["eventsForTeacher"] && <p className="text-xs text-gray-600">{String(c["eventsForTeacher"])}</p>}
+                      {c["extraSupportAreas"] && <p className="text-xs text-gray-400 mt-1">Support needed: {String(c["extraSupportAreas"])}</p>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
+      {/* ── Daily Log ── */}
+      {engTab === "log" && (
+        <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-5">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-bold text-[#1A2340]">Today's Log</p>
+            {todayLogged && !logSubmitted && <span className="text-xs text-green-600 font-semibold">Already submitted today</span>}
+          </div>
+
+          {/* Post-submit share CTA */}
+          {logSubmitted && (
+            <div className="p-4 bg-green-50 border border-green-200 rounded-xl space-y-3">
+              <div className="flex items-center gap-2">
+                <Check size={16} className="text-green-600 shrink-0" />
+                <p className="text-sm font-semibold text-green-800">Log submitted!</p>
+              </div>
+              <p className="text-xs text-gray-600">Optionally share a milestone snippet to the parent chat:</p>
+              <p className="text-xs italic text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-2">"{logSubmitted.snippet}"</p>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => void handleShareToChat()} disabled={sharingToChat}
+                  className="bg-[#1A2340] hover:bg-[#2d3a5c] text-white text-xs">
+                  {sharingToChat ? <Loader2 size={12} className="animate-spin mr-1" /> : <Share2 size={12} className="mr-1" />}
+                  Share to chat
+                </Button>
+                <Button size="sm" variant="outline" onClick={resetLogForm} className="text-xs border-gray-200">
+                  Done
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!logSubmitted && (
+            <>
+              {/* Goals sampling */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-[#1A2340]">
+                  Goals observed today
+                  <span className="text-gray-400 font-normal ml-1">(tick each goal + pick level)</span>
+                </p>
+                {activeGoals.length === 0 ? (
+                  <div className="p-3 bg-gray-50 rounded-lg text-xs text-gray-400">
+                    No active goals. Add goals in the{" "}
+                    <button onClick={() => setEngTab("child")} className="text-[#2EC4A5] underline font-medium">Child & Goals tab</button>.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {activeGoals.map(g => {
+                      const ticked = tickedGoals.has(g.id);
+                      return (
+                        <div key={g.id} className={`rounded-xl border p-3 transition-colors ${ticked ? "border-[#2EC4A5] bg-[#2EC4A5]/5" : "border-gray-200"}`}>
+                          <button className="flex items-center gap-2.5 w-full text-left"
+                            onClick={() => setTickedGoals(prev => {
+                              const next = new Set(prev);
+                              if (next.has(g.id)) next.delete(g.id); else next.add(g.id);
+                              return next;
+                            })}>
+                            <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${ticked ? "bg-[#2EC4A5] border-[#2EC4A5]" : "border-gray-300 bg-white"}`}>
+                              {ticked && <Check size={10} className="text-white" />}
+                            </span>
+                            <span className="text-sm font-medium text-[#1A2340]">{g.label}</span>
+                            {g.category && <span className="text-[10px] text-gray-400 ml-auto">{g.category}</span>}
+                          </button>
+                          {ticked && (
+                            <div className="mt-2.5 flex flex-wrap gap-1.5 pl-6">
+                              {PROMPT_LEVELS.map(pl => (
+                                <button key={pl.id}
+                                  onClick={() => setGoalLevels(prev => ({ ...prev, [g.id]: pl.id }))}
+                                  className={`text-[10px] px-2.5 py-1 rounded-full border font-semibold transition-all ${
+                                    goalLevels[g.id] === pl.id
+                                      ? pl.color + " ring-1 ring-offset-1 ring-current shadow-sm"
+                                      : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
+                                  }`}>
+                                  {pl.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Mood / session note */}
+              <div>
+                <p className="text-xs font-semibold text-[#1A2340] mb-1.5">Session note</p>
+                <textarea value={logMoodNote} onChange={e => setLogMoodNote(e.target.value)} rows={3}
+                  placeholder="Child's mood, energy, any wins or challenges today…"
+                  className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
+              </div>
+
+              {/* Reteach at home */}
+              <div>
+                <p className="text-xs font-semibold text-[#1A2340] mb-1.5">
+                  Reteach at home <span className="text-gray-400 font-normal">(optional)</span>
+                </p>
+                <textarea value={reteachNote} onChange={e => setReteachNote(e.target.value)} rows={2}
+                  placeholder="e.g. Practice counting 1–10, read page 3 of worksheet…"
+                  className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
+              </div>
+
+              {/* Behaviour counters — collapsed */}
+              <div>
+                <button onClick={() => setBehaviorOpen(!behaviorOpen)}
+                  className="flex items-center gap-1.5 text-xs text-gray-500 font-semibold hover:text-gray-700 transition-colors">
+                  <ChevronRight size={13} className={`transition-transform duration-150 ${behaviorOpen ? "rotate-90" : ""}`} />
+                  Behaviours (optional)
+                </button>
+                {behaviorOpen && (
+                  <div className="mt-3 space-y-2 pl-4">
+                    {behaviorCounts.map((b, i) => (
+                      <div key={b.label} className="flex items-center gap-3">
+                        <span className="text-xs text-gray-600 flex-1">{b.label}</span>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setBehaviorCounts(prev => prev.map((x, xi) => xi === i ? { ...x, count: Math.max(0, x.count - 1) } : x))}
+                            className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
+                            <Minus size={11} />
+                          </button>
+                          <span className="text-sm font-bold w-5 text-center text-[#1A2340]">{b.count}</span>
+                          <button onClick={() => setBehaviorCounts(prev => prev.map((x, xi) => xi === i ? { ...x, count: x.count + 1 } : x))}
+                            className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
+                            <Plus size={11} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Duration — collapsed */}
+              <div>
+                <button onClick={() => setDurationOpen(!durationOpen)}
+                  className="flex items-center gap-1.5 text-xs text-gray-500 font-semibold hover:text-gray-700 transition-colors">
+                  <ChevronRight size={13} className={`transition-transform duration-150 ${durationOpen ? "rotate-90" : ""}`} />
+                  Focus duration (optional)
+                </button>
+                {durationOpen && (
+                  <div className="mt-3 pl-4 flex items-center gap-2">
+                    <span className="text-xs text-gray-600">Sustained focus</span>
+                    <input type="number" min="0" max="480" value={focusMinutes}
+                      onChange={e => setFocusMinutes(e.target.value)} placeholder="0"
+                      className="w-16 rounded-lg border border-gray-200 p-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]" />
+                    <span className="text-xs text-gray-400">min</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Photo — consent gated */}
+              {mediaConsent && (
+                <div>
+                  <p className="text-xs font-semibold text-[#1A2340] mb-1.5">
+                    Attach photo <span className="text-gray-400 font-normal">(optional)</span>
+                  </p>
+                  {photoKey ? (
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-green-600 font-semibold">✓ Photo attached</span>
+                      <button onClick={() => setPhotoKey(null)} className="text-xs text-red-400 hover:underline">Remove</button>
+                    </div>
+                  ) : (
+                    <label className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-gray-500 cursor-pointer hover:border-[#2EC4A5] hover:text-[#2EC4A5] transition-colors ${uploadingPhoto ? "opacity-50 pointer-events-none" : ""}`}>
+                      <Camera size={13} />{uploadingPhoto ? "Uploading…" : "Attach photo"}
+                      <input type="file" accept="image/*" className="hidden" onChange={e => void handlePhotoUpload(e)} />
+                    </label>
+                  )}
+                </div>
+              )}
+
+              <Button onClick={() => void handlePostLog()} disabled={postingLog}
+                className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-sm">
+                {postingLog ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Submit Today's Log
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Manage / Lifecycle ── */}
       {engTab === "lifecycle" && (
         <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
           <p className="text-sm font-bold text-[#1A2340]">Request Engagement Change</p>
@@ -1964,14 +2384,26 @@ function EngagementTab() {
               </button>
             ))}
           </div>
-          <textarea value={lifecycleNotes} onChange={(e) => setLifecycleNotes(e.target.value)} rows={3}
+          <textarea value={lifecycleNotes} onChange={e => setLifecycleNotes(e.target.value)} rows={3}
             placeholder="Please explain why you are making this request…"
             className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
-          <Button onClick={handleLifecycleRequest} disabled={postingLifecycle || !lifecycleType}
+          <Button onClick={() => void handleLifecycleRequest()} disabled={postingLifecycle || !lifecycleType}
             className="w-full bg-[#FF6B6B] hover:bg-[#e85a5a] text-white text-sm">
             {postingLifecycle ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Submit Request
           </Button>
         </div>
+      )}
+
+      {/* Chat drawer */}
+      {chatOpen && active.matchRequestId && active.candidateId && (
+        <ShadowMatchChatDrawer
+          matchId={active.matchRequestId}
+          candidateId={active.candidateId}
+          candidateName={active.parentName ?? "Parent"}
+          committed={true}
+          myUserId={myUserId}
+          onClose={() => setChatOpen(false)}
+        />
       )}
     </div>
   );

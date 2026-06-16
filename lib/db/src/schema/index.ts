@@ -32,3 +32,4 @@ export * from "./parentNeedsRequests";
 export * from "./therapyCentres";
 export * from "./shadowMatchCandidates";
 export * from "./shadowMatchChat";
+export * from "./childGoals";

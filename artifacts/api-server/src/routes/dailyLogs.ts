@@ -6,6 +6,7 @@ import {
   engagementDailyLogsTable,
   professionalProfilesTable,
   usersTable,
+  childrenTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { z } from "zod";
@@ -30,15 +31,35 @@ async function getEngagementAccess(engagementId: number, userId: number, userRol
   return { eng: null, role: null };
 }
 
+const GoalRatingSchema = z.object({
+  goalId: z.number().int().positive(),
+  label: z.string().max(200),
+  level: z.enum(["independent", "visual_prompt", "verbal_prompt", "modeling", "physical_assist"]),
+});
+
+const BehaviorCountItemSchema = z.object({
+  label: z.string().max(100),
+  count: z.number().int().min(0),
+});
+
+const DurationItemSchema = z.object({
+  label: z.string().max(100),
+  minutes: z.number().int().min(0).max(480),
+});
+
 const TeacherLogContentSchema = z.object({
-  taughtToday: z.string().max(2000).optional(),
-  behaviorMood: z.string().max(2000).optional(),
-  feedback: z.string().max(2000).optional(),
-  reteachAtHome: z.string().max(2000).optional(),
+  taughtToday:    z.string().max(2000).optional(),
+  behaviorMood:   z.string().max(2000).optional(),
+  feedback:       z.string().max(2000).optional(),
+  reteachAtHome:  z.string().max(2000).optional(),
+  goalRatings:    z.array(GoalRatingSchema).optional(),
+  behaviorCounts: z.array(BehaviorCountItemSchema).optional(),
+  durations:      z.array(DurationItemSchema).optional(),
+  photoKey:       z.string().max(500).optional(),
 });
 
 const ParentLogContentSchema = z.object({
-  eventsForTeacher: z.string().max(2000).optional(),
+  eventsForTeacher:  z.string().max(2000).optional(),
   extraSupportAreas: z.string().max(2000).optional(),
 });
 
@@ -56,15 +77,15 @@ router.get("/engagements/:id/daily-logs", requireAuth, async (req, res): Promise
 
   const rows = await db
     .select({
-      id: engagementDailyLogsTable.id,
-      engagementId: engagementDailyLogsTable.engagementId,
-      authorRole: engagementDailyLogsTable.authorRole,
-      authorUserId: engagementDailyLogsTable.authorUserId,
-      logDate: engagementDailyLogsTable.logDate,
-      content: engagementDailyLogsTable.content,
-      createdAt: engagementDailyLogsTable.createdAt,
-      updatedAt: engagementDailyLogsTable.updatedAt,
-      authorName: usersTable.fullName,
+      id:            engagementDailyLogsTable.id,
+      engagementId:  engagementDailyLogsTable.engagementId,
+      authorRole:    engagementDailyLogsTable.authorRole,
+      authorUserId:  engagementDailyLogsTable.authorUserId,
+      logDate:       engagementDailyLogsTable.logDate,
+      content:       engagementDailyLogsTable.content,
+      createdAt:     engagementDailyLogsTable.createdAt,
+      updatedAt:     engagementDailyLogsTable.updatedAt,
+      authorName:    usersTable.fullName,
     })
     .from(engagementDailyLogsTable)
     .leftJoin(usersTable, eq(engagementDailyLogsTable.authorUserId, usersTable.id))
@@ -87,7 +108,26 @@ router.post("/engagements/:id/daily-logs", requireAuth, async (req, res): Promis
 
   const { logDate, content } = parsed.data;
 
-  // Check if already submitted today by this role (allow only one per role per day)
+  // 2C: server-side media consent gate — reject photoKey if child hasn't granted media consent
+  const rawContent = content as Record<string, unknown>;
+  if (rawContent["photoKey"]) {
+    if (!eng.childId) {
+      res.status(400).json({ error: "Engagement has no child linked; cannot attach photo" });
+      return;
+    }
+    const [child] = await db
+      .select({ consent: childrenTable.consent })
+      .from(childrenTable)
+      .where(eq(childrenTable.id, eng.childId))
+      .limit(1);
+    const consent = child?.consent as { media?: boolean } | null;
+    if (!consent?.media) {
+      res.status(403).json({ error: "Photo not permitted: parent has not granted media consent" });
+      return;
+    }
+  }
+
+  // Allow only one log per author per day (same-day edit)
   const [existing] = await db
     .select({ id: engagementDailyLogsTable.id })
     .from(engagementDailyLogsTable)
@@ -101,7 +141,6 @@ router.post("/engagements/:id/daily-logs", requireAuth, async (req, res): Promis
     .limit(1);
 
   if (existing) {
-    // Update existing log (same-day edit)
     const [updated] = await db
       .update(engagementDailyLogsTable)
       .set({ content: JSON.stringify(content), updatedAt: new Date() })
@@ -114,11 +153,11 @@ router.post("/engagements/:id/daily-logs", requireAuth, async (req, res): Promis
   const [log] = await db
     .insert(engagementDailyLogsTable)
     .values({
-      engagementId: id,
-      authorUserId: req.userId!,
-      authorRole: role === "teacher" ? "teacher" : "parent",
+      engagementId:  id,
+      authorUserId:  req.userId!,
+      authorRole:    role === "teacher" ? "teacher" : "parent",
       logDate,
-      content: JSON.stringify(content),
+      content:       JSON.stringify(content),
     })
     .returning();
 
@@ -142,12 +181,26 @@ router.patch("/engagements/:id/daily-logs/:logId", requireAuth, async (req, res)
   if (!log) { res.status(404).json({ error: "Log not found" }); return; }
   if (log.authorUserId !== req.userId!) { res.status(403).json({ error: "You can only edit your own logs" }); return; }
 
-  // Same-day edit only
   const today = new Date().toISOString().slice(0, 10);
   if (log.logDate !== today) { res.status(409).json({ error: "Logs can only be edited on the same day" }); return; }
 
   const parsed = PostDailyLogBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  // 2C: consent gate on edit too
+  const rawContent = parsed.data.content as Record<string, unknown>;
+  if (rawContent["photoKey"] && eng.childId) {
+    const [child] = await db
+      .select({ consent: childrenTable.consent })
+      .from(childrenTable)
+      .where(eq(childrenTable.id, eng.childId))
+      .limit(1);
+    const consent = child?.consent as { media?: boolean } | null;
+    if (!consent?.media) {
+      res.status(403).json({ error: "Photo not permitted: parent has not granted media consent" });
+      return;
+    }
+  }
 
   const [updated] = await db
     .update(engagementDailyLogsTable)

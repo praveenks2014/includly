@@ -1299,18 +1299,51 @@ function ShadowTeacherTab() {
             <p className="text-center text-sm text-gray-400 py-8">No logs yet. Post the first one above.</p>
           ) : (
             <div className="space-y-3">
-              {[...logs].reverse().map(log => (
-                <div key={log.id} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-semibold text-[#1A2340]">{new Date(log.logDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</span>
-                    {log.mood && <span className="text-xs text-gray-500">{log.mood}</span>}
-                    <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full border font-semibold ${log.authorRole === "teacher" ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-[#2EC4A5]/10 text-[#2EC4A5] border-[#2EC4A5]/20"}`}>
-                      {log.authorRole === "teacher" ? "Teacher" : "Parent"}
-                    </span>
+              {[...logs].reverse().map(log => {
+                let parsed: Record<string, unknown> = {};
+                try { parsed = JSON.parse(log.content) as Record<string, unknown>; } catch {}
+                const goalRatings = parsed["goalRatings"] as { goalId: number; label: string; level: string }[] | undefined;
+                const photoKey = parsed["photoKey"] as string | undefined;
+                const summary = log.authorRole === "teacher"
+                  ? String(parsed["behaviorMood"] ?? parsed["taughtToday"] ?? "")
+                  : String(parsed["eventsForTeacher"] ?? "");
+                const LEVEL_CHIP: Record<string, { label: string; cls: string }> = {
+                  independent:    { label: "Independent", cls: "bg-green-100 text-green-700" },
+                  visual_prompt:  { label: "Visual ✓",    cls: "bg-yellow-100 text-yellow-700" },
+                  verbal_prompt:  { label: "Verbal",      cls: "bg-amber-100 text-amber-700" },
+                  modeling:       { label: "Modeling",    cls: "bg-orange-100 text-orange-700" },
+                  physical_assist:{ label: "Physical",    cls: "bg-red-100 text-red-700" },
+                };
+                return (
+                  <div key={log.id} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-semibold text-[#1A2340]">{new Date(log.logDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</span>
+                      <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full border font-semibold ${log.authorRole === "teacher" ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-[#2EC4A5]/10 text-[#2EC4A5] border-[#2EC4A5]/20"}`}>
+                        {log.authorRole === "teacher" ? "Teacher" : "You"}
+                      </span>
+                    </div>
+                    {summary && <p className="text-sm text-gray-600 mb-2">{summary}</p>}
+                    {goalRatings && goalRatings.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {goalRatings.map((gr, i) => {
+                          const chip = LEVEL_CHIP[gr.level] ?? { label: gr.level, cls: "bg-gray-100 text-gray-600" };
+                          return (
+                            <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${chip.cls}`}>
+                              {gr.label}: {chip.label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {photoKey && (
+                      <a href={`/api/storage/private/${encodeURIComponent(photoKey)}`} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-[#2EC4A5] hover:underline font-medium">
+                        📷 View photo
+                      </a>
+                    )}
                   </div>
-                  <p className="text-sm text-gray-600">{(() => { try { return Object.values(JSON.parse(log.content) as Record<string,string>)[0] ?? ""; } catch { return ""; } })()}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

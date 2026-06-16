@@ -28,6 +28,7 @@ import dailyLogsRouter from "./dailyLogs";
 import salaryPaymentsRouter from "./salaryPayments";
 import parentNeedsRouter from "./parentNeeds";
 import centresRouter from "./centres";
+import goalsRouter from "./goals";
 
 const router: IRouter = Router();
 
@@ -60,5 +61,6 @@ router.use(dailyLogsRouter);
 router.use(salaryPaymentsRouter);
 router.use(parentNeedsRouter);
 router.use(centresRouter);
+router.use(goalsRouter);
 
 export default router;
