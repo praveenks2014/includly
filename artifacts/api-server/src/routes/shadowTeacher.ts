@@ -795,6 +795,8 @@ const VerifyTrialPaymentBody = z.object({
   razorpayPaymentId: z.string(),
   razorpaySignature: z.string(),
   selectedProfessionalId: z.number().int().positive(),
+  preMeetingRequested: z.boolean().default(false),
+  preMeetingNote: z.string().max(500).nullable().default(null),
 });
 
 router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
@@ -807,7 +809,7 @@ router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requir
   const keySecret = process.env["RAZORPAY_KEY_SECRET"];
   if (!keySecret) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
 
-  const { razorpayOrderId, razorpayPaymentId, razorpaySignature, selectedProfessionalId } = parsed.data;
+  const { razorpayOrderId, razorpayPaymentId, razorpaySignature, selectedProfessionalId, preMeetingRequested, preMeetingNote } = parsed.data;
 
   const [match] = await db
     .select()
@@ -820,6 +822,19 @@ router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requir
   const expectedSig = crypto.createHmac("sha256", keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");
   if (expectedSig !== razorpaySignature) { res.status(400).json({ error: "Payment signature verification failed" }); return; }
 
+  // Re-validate active candidacy at verify time (guards against stale/removed candidate)
+  const [activeCand] = await db
+    .select({ id: shadowMatchCandidatesTable.id })
+    .from(shadowMatchCandidatesTable)
+    .where(
+      and(
+        eq(shadowMatchCandidatesTable.matchId, matchId),
+        eq(shadowMatchCandidatesTable.professionalId, selectedProfessionalId),
+        isNull(shadowMatchCandidatesTable.removedAt),
+      ),
+    );
+  if (!activeCand) { res.status(409).json({ error: "Selected professional is no longer an active candidate for this match" }); return; }
+
   const settings = await getSettings();
   const trialFeeInr = (settings as Record<string, unknown>)["trialFeeInr"] as number ?? 500;
 
@@ -830,6 +845,8 @@ router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requir
       trialProviderPaymentId: razorpayPaymentId,
       trialFeePaidInr: trialFeeInr,
       selectedProfessionalId,
+      preMeetingRequested,
+      preMeetingNote: preMeetingRequested ? (preMeetingNote ?? null) : null,
       updatedAt: new Date(),
     })
     .where(eq(shadowTeacherMatchesTable.id, matchId));
@@ -852,10 +869,23 @@ router.post("/shadow-teacher/:matchId/mark-trial-done", requireAuth, async (req:
   let isPro = false;
   if (!isParent && match.selectedProfessionalId) {
     const [pro] = await db
-      .select({ userId: professionalProfilesTable.userId })
+      .select({ id: professionalProfilesTable.id, userId: professionalProfilesTable.userId })
       .from(professionalProfilesTable)
       .where(eq(professionalProfilesTable.id, match.selectedProfessionalId));
-    isPro = pro?.userId === req.userId!;
+    if (pro?.userId === req.userId!) {
+      // Also confirm the professional still has an active candidacy for this match
+      const [cand] = await db
+        .select({ id: shadowMatchCandidatesTable.id })
+        .from(shadowMatchCandidatesTable)
+        .where(
+          and(
+            eq(shadowMatchCandidatesTable.matchId, matchId),
+            eq(shadowMatchCandidatesTable.professionalId, match.selectedProfessionalId),
+            isNull(shadowMatchCandidatesTable.removedAt),
+          ),
+        );
+      isPro = !!cand;
+    }
   }
   if (!isParent && !isPro) { res.status(403).json({ error: "Access denied" }); return; }
 

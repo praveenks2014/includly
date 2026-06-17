@@ -12,6 +12,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { fetchWithAuth, getApiBase } from "@/lib/api";
 import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
@@ -322,6 +323,12 @@ export function ShadowTeacherRequestWidget() {
   const [markingTrialDone, setMarkingTrialDone] = useState(false);
   const [noCommitting, setNoCommitting] = useState(false);
 
+  // Trial booking modal state
+  const [trialModalOpen, setTrialModalOpen] = useState(false);
+  const [trialModalProfId, setTrialModalProfId] = useState<number | null>(null);
+  const [trialPreMeetingChecked, setTrialPreMeetingChecked] = useState(false);
+  const [trialPreMeetingNote, setTrialPreMeetingNote] = useState("");
+
   const status = match?.status ?? null;
   const isActive = status && !["cancelled", "refunded"].includes(status);
   const committed = status === "committed";
@@ -462,8 +469,10 @@ export function ShadowTeacherRequestWidget() {
   }
 
   // ── handleRequestTrial — pay trial fee → trial_pending ──────────────────
-  async function handleRequestTrial(professionalId: number) {
+  // Called from the modal's confirm button with pre-meeting preferences.
+  async function handleRequestTrial(professionalId: number, preMeetingRequested: boolean, preMeetingNote: string | null) {
     if (!match) return;
+    setTrialModalOpen(false);
     setRequestingTrial(true);
     try {
       const loaded = await loadRazorpayScript();
@@ -502,6 +511,8 @@ export function ShadowTeacherRequestWidget() {
                   razorpayPaymentId: response.razorpay_payment_id,
                   razorpaySignature: response.razorpay_signature,
                   selectedProfessionalId: professionalId,
+                  preMeetingRequested,
+                  preMeetingNote,
                 }),
               });
               if (!vRes.ok) {
@@ -841,7 +852,12 @@ export function ShadowTeacherRequestWidget() {
                   await handleChoose(proId);
                 }}
                 onNotInterested={async (candidateId) => { await handleNotInterested(candidateId); }}
-                onRequestTrial={requestingTrial ? undefined : handleRequestTrial}
+                onRequestTrial={requestingTrial ? undefined : (proId) => {
+                  setTrialModalProfId(proId);
+                  setTrialPreMeetingChecked(false);
+                  setTrialPreMeetingNote("");
+                  setTrialModalOpen(true);
+                }}
               />
             ))}
           </div>
@@ -869,6 +885,77 @@ export function ShadowTeacherRequestWidget() {
             </Button>
           </div>
         )}
+
+        <Dialog open={trialModalOpen} onOpenChange={setTrialModalOpen}>
+          <DialogContent className="max-w-sm rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-[#1A2340]">Book a Trial Day</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm text-orange-800">
+                A one-time <strong>₹{trialFee.toLocaleString("en-IN")}</strong> trial fee will be charged.
+                If you commit afterwards, this amount is credited against the first month&apos;s salary.
+                The fee is <strong>non-refundable</strong> if you walk away.
+              </div>
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="pre-meeting-check"
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-[#2EC4A5] cursor-pointer"
+                  checked={trialPreMeetingChecked}
+                  onChange={(e) => {
+                    setTrialPreMeetingChecked(e.target.checked);
+                    if (!e.target.checked) setTrialPreMeetingNote("");
+                  }}
+                />
+                <label htmlFor="pre-meeting-check" className="text-sm text-gray-700 cursor-pointer leading-snug">
+                  I&apos;d like a brief call or meeting with this teacher <em>before</em> the trial day
+                </label>
+              </div>
+              {trialPreMeetingChecked && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-gray-600">
+                    Anything specific to discuss? <span className="font-normal text-gray-400">(optional)</span>
+                  </Label>
+                  <Textarea
+                    className="text-sm rounded-xl resize-none"
+                    rows={3}
+                    maxLength={500}
+                    placeholder="e.g. I'd like to understand their approach to behaviour management…"
+                    value={trialPreMeetingNote}
+                    onChange={(e) => setTrialPreMeetingNote(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+            <DialogFooter className="flex gap-2 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 rounded-xl"
+                onClick={() => setTrialModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white rounded-xl gap-1"
+                disabled={requestingTrial}
+                onClick={() => {
+                  if (!trialModalProfId) return;
+                  handleRequestTrial(
+                    trialModalProfId,
+                    trialPreMeetingChecked,
+                    trialPreMeetingChecked && trialPreMeetingNote.trim() ? trialPreMeetingNote.trim() : null,
+                  );
+                }}
+              >
+                <IndianRupee size={13} />
+                Pay {"\u20B9"}{trialFee.toLocaleString("en-IN")} {"&"} Book Trial
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }

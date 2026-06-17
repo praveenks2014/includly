@@ -2595,6 +2595,16 @@ function CandidacyCard({ candidacy: c, onOpen }: { candidacy: Candidacy; onOpen:
         )}
       </div>
 
+      {c.matchStatus === "trial_pending" && c.isSelected && c.preMeetingRequested && (
+        <div className="mb-2 p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-1">
+          <p className="text-xs font-semibold text-blue-800">📅 Parent requested a pre-meeting</p>
+          {c.preMeetingNote ? (
+            <p className="text-xs text-blue-700 italic">"{c.preMeetingNote}"</p>
+          ) : (
+            <p className="text-xs text-blue-600">Please contact the parent to arrange a brief call before the trial day.</p>
+          )}
+        </div>
+      )}
       {c.matchStatus === "trial_pending" && c.isSelected && (
         <MarkTrialDoneButton matchId={c.matchId} />
       )}
