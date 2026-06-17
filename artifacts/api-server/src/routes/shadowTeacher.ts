@@ -1117,10 +1117,14 @@ router.get("/shadow-teacher/requests", requireAuth, requireRole("admin"), async 
       adminNotes: shadowTeacherMatchesTable.adminNotes,
       matchedAt: shadowTeacherMatchesTable.matchedAt,
       createdAt: shadowTeacherMatchesTable.createdAt,
+      trialFeePaidInr: shadowTeacherMatchesTable.trialFeePaidInr,
+      trialProviderPaymentId: shadowTeacherMatchesTable.trialProviderPaymentId,
+      trialCreditApplied: shadowTeacherEngagementsTable.trialCreditApplied,
     })
     .from(shadowTeacherMatchesTable)
     .leftJoin(usersTable, eq(shadowTeacherMatchesTable.parentId, usersTable.id))
     .leftJoin(professionalProfilesTable, eq(shadowTeacherMatchesTable.matchedProfessionalId, professionalProfilesTable.id))
+    .leftJoin(shadowTeacherEngagementsTable, eq(shadowTeacherEngagementsTable.matchRequestId, shadowTeacherMatchesTable.id))
     .orderBy(desc(shadowTeacherMatchesTable.createdAt));
 
   // Attach candidates per request

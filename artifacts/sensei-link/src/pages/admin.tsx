@@ -93,6 +93,9 @@ interface AdminMatchRow {
   adminNotes: string | null;
   matchedAt: string | null;
   createdAt: string;
+  trialFeePaidInr: number | null;
+  trialProviderPaymentId: string | null;
+  trialCreditApplied: boolean | null;
   candidates: AdminMatchCandidate[];
 }
 
@@ -1930,6 +1933,23 @@ const MATCH_STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-gray-50 text-gray-500 border-gray-200",
   refunded: "bg-gray-50 text-gray-500 border-gray-200",
   payment_failed: "bg-red-50 text-red-600 border-red-200",
+  trial_pending: "bg-orange-50 text-orange-700 border-orange-200",
+  trial_done: "bg-teal-50 text-teal-700 border-teal-200",
+};
+
+const MATCH_STATUS_LABELS: Record<string, string> = {
+  pending_payment: "Pending Payment",
+  pending: "Pending",
+  queued: "Queued",
+  shortlisted: "Shortlisted",
+  pending_commitment: "Pending Commitment",
+  committed: "Committed",
+  matched: "Matched",
+  cancelled: "Cancelled",
+  refunded: "Refunded",
+  payment_failed: "Payment Failed",
+  trial_pending: "Trial Day Scheduled",
+  trial_done: "Trial Day Completed",
 };
 
 function AdminShadowTeacherTab() {
@@ -2043,7 +2063,7 @@ function AdminShadowTeacherTab() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-[#1A2340] text-sm">{m.parentName ?? "—"}</p>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${MATCH_STATUS_COLORS[m.status] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
-                        {m.status.replace(/_/g, " ")}
+                        {MATCH_STATUS_LABELS[m.status] ?? m.status.replace(/_/g, " ")}
                       </span>
                       <span className="text-[10px] text-gray-400">#{m.id}</span>
                     </div>
@@ -2098,6 +2118,41 @@ function AdminShadowTeacherTab() {
                     </div>
                   </div>
                 </div>
+
+                {/* Expanded: Trial payment section */}
+                {isExpanded && m.trialFeePaidInr != null && (
+                  <div className="border-t border-orange-100 px-5 py-4 bg-orange-50/40 space-y-3">
+                    <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide">Trial Day Payment</p>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-[11px]">
+                      <div>
+                        <p className="text-gray-400 mb-0.5">Status</p>
+                        <span className={`inline-block px-2 py-0.5 rounded-full border font-medium text-[10px] ${MATCH_STATUS_COLORS[m.status] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                          {MATCH_STATUS_LABELS[m.status] ?? m.status.replace(/_/g, " ")}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-gray-400 mb-0.5">Trial Fee Paid</p>
+                        <p className="font-semibold text-[#1A2340]">₹{m.trialFeePaidInr.toLocaleString("en-IN")}</p>
+                      </div>
+                      {m.trialProviderPaymentId && (
+                        <div className="col-span-2">
+                          <p className="text-gray-400 mb-0.5">Razorpay Payment ID</p>
+                          <p className="font-mono text-[10px] text-gray-700 break-all">{m.trialProviderPaymentId}</p>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-gray-400 mb-0.5">Trial Credit Applied</p>
+                        {m.trialCreditApplied == null ? (
+                          <p className="text-gray-400 italic">No engagement yet</p>
+                        ) : m.trialCreditApplied ? (
+                          <p className="text-green-600 font-medium">✓ Applied to first month</p>
+                        ) : (
+                          <p className="text-orange-600">Pending application</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Expanded: Candidates section */}
                 {isExpanded && (
