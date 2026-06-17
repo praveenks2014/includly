@@ -118,6 +118,14 @@ export async function notifyMatchChatMessage(
   });
 }
 
+export async function notifyParentOnTrialDone(parentUserId: number): Promise<void> {
+  await sendPushNotification(parentUserId, {
+    title: "Trial day complete!",
+    body: "Your trial day is complete — open the app to decide whether to commit.",
+    url: "/shadow-teacher",
+  });
+}
+
 export async function notifyParentsOnProfileUpdate(parentUserIds: number[]): Promise<void> {
   await Promise.allSettled(
     parentUserIds.map(async (parentId) => {

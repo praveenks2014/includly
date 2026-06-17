@@ -17,7 +17,7 @@ import {
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { z } from "zod/v4";
 import { rankCandidates, maskBody, type MatchSnapshot, type TierDef } from "../lib/shadowTeacherScoring";
-import { notifyMatchShortlisted, notifyMatchChatMessage } from "../lib/notificationService";
+import { notifyMatchShortlisted, notifyMatchChatMessage, notifyParentOnTrialDone } from "../lib/notificationService";
 
 const router: IRouter = Router();
 
@@ -893,6 +893,12 @@ router.post("/shadow-teacher/:matchId/mark-trial-done", requireAuth, async (req:
     .update(shadowTeacherMatchesTable)
     .set({ status: "trial_done", updatedAt: new Date() })
     .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  // Notify the parent so they come back to make their commit/walk-away decision.
+  // Only fire if it was the professional who marked it done (parent already knows).
+  if (isPro) {
+    void notifyParentOnTrialDone(match.parentId).catch(() => {});
+  }
 
   res.json({ matchId, status: "trial_done" });
 });
