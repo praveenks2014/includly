@@ -635,6 +635,7 @@ export const UpdateAdminSettingsBody = zod.object({
   noticePeriodDays: zod.number().optional(),
   parentBuyoutDays: zod.number().optional(),
   tiersJson: zod.string().optional(),
+  trialFeeInr: zod.number().optional(),
 });
 
 export const UpdateAdminSettingsResponse = zod.object({

@@ -47,6 +47,8 @@ export const shadowTeacherMatchesTable = pgTable("shadow_teacher_matches", {
   feePaidAt: timestamp("fee_paid_at", { withTimezone: true }),
   distinctTeachersShown: integer("distinct_teachers_shown").notNull().default(0),
   trialFeePaidInr: integer("trial_fee_paid_inr"),
+  trialProviderOrderId: text("trial_provider_order_id"),
+  trialProviderPaymentId: text("trial_provider_payment_id"),
   preMeetingRequested: boolean("pre_meeting_requested").notNull().default(false),
   preMeetingNote: text("pre_meeting_note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

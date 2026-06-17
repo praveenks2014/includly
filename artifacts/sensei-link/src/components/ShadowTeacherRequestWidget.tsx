@@ -113,11 +113,11 @@ function useChildren() {
 }
 
 function useMatchingFee() {
-  return useQuery<{ matchingFeeInr: number }>({
+  return useQuery<{ matchingFeeInr: number; trialFeeInr: number }>({
     queryKey: ["shadow-teacher-pricing"],
     queryFn: async () => {
       const res = await fetch(`${getApiBase()}/shadow-teacher/pricing`);
-      return res.json() as Promise<{ matchingFeeInr: number }>;
+      return res.json() as Promise<{ matchingFeeInr: number; trialFeeInr: number }>;
     },
     staleTime: 5 * 60_000,
   });
@@ -134,6 +134,8 @@ const STATUS_COLORS: Record<string, string> = {
   refunded: "bg-gray-100 text-gray-600",
   payment_failed: "bg-red-100 text-red-700",
   pending_payment: "bg-yellow-100 text-yellow-700",
+  trial_pending: "bg-orange-100 text-orange-700",
+  trial_done: "bg-teal-100 text-teal-700",
 };
 
 function ScoreBadge({ score }: { score: number | null }) {
@@ -154,6 +156,8 @@ function CandidateCard({
   selected,
   onChoose,
   onNotInterested,
+  onRequestTrial,
+  trialMode,
 }: {
   candidate: Candidate;
   matchId: number;
@@ -162,6 +166,8 @@ function CandidateCard({
   selected: boolean;
   onChoose: (professionalId: number) => void;
   onNotInterested?: (candidateId: number) => void;
+  onRequestTrial?: (professionalId: number) => void;
+  trialMode?: boolean;
 }) {
   const [chatOpen, setChatOpen] = useState(false);
   const p = candidate.profile;
@@ -242,7 +248,7 @@ function CandidateCard({
             <MessageSquare size={12} />
             Chat
           </Button>
-          {!committed && (
+          {!committed && !trialMode && (
             <Button
               size="sm"
               className="gap-1 text-xs flex-1 bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl"
@@ -253,7 +259,18 @@ function CandidateCard({
             </Button>
           )}
         </div>
-        {!committed && !selected && onNotInterested && (
+        {!committed && !trialMode && onRequestTrial && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-xs border-orange-300 text-orange-700 hover:bg-orange-50 rounded-xl mt-1 gap-1"
+            onClick={() => onRequestTrial(candidate.professionalId)}
+          >
+            <Star size={11} />
+            Request Trial Day — ₹500
+          </Button>
+        )}
+        {!committed && !trialMode && !selected && onNotInterested && (
           <Button
             variant="ghost"
             size="sm"
@@ -291,6 +308,7 @@ export function ShadowTeacherRequestWidget() {
   const { data: children = [], isLoading: loadingChildrenLocal } = useChildren();
   const { data: pricing } = useMatchingFee();
   const matchingFee = pricing?.matchingFeeInr ?? 500;
+  const trialFee = pricing?.trialFeeInr ?? 500;
 
   // Use children from the local hook for full field coverage (city, conditions, etc.)
   // selectedChildId comes from context — no internal child-selection state.
@@ -300,6 +318,9 @@ export function ShadowTeacherRequestWidget() {
   const [submitting, setSubmitting] = useState(false);
   const [choosingId, setChoosingId] = useState<number | null>(null);
   const [refunding, setRefunding] = useState(false);
+  const [requestingTrial, setRequestingTrial] = useState(false);
+  const [markingTrialDone, setMarkingTrialDone] = useState(false);
+  const [noCommitting, setNoCommitting] = useState(false);
 
   const status = match?.status ?? null;
   const isActive = status && !["cancelled", "refunded"].includes(status);
@@ -440,6 +461,116 @@ export function ShadowTeacherRequestWidget() {
     }
   }
 
+  // ── handleRequestTrial — pay trial fee → trial_pending ──────────────────
+  async function handleRequestTrial(professionalId: number) {
+    if (!match) return;
+    setRequestingTrial(true);
+    try {
+      const loaded = await loadRazorpayScript();
+      if (!loaded) { toast({ title: "Payment gateway unavailable", variant: "destructive" }); return; }
+
+      const res = await fetchWithAuth(`/api/shadow-teacher/${match.id}/request-trial`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectedProfessionalId: professionalId }),
+      });
+      const data = await res.json() as { error?: string; message?: string; matchId?: number; orderId?: string; amount?: number; keyId?: string };
+      if (!res.ok) {
+        toast({ title: data.message ?? data.error ?? "Could not initiate trial", variant: "destructive" });
+        return;
+      }
+      if (!data.orderId || !data.amount || !data.keyId) {
+        toast({ title: "Invalid payment response", variant: "destructive" });
+        return;
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const rzp = new window.Razorpay({
+          key: data.keyId!,
+          amount: data.amount!,
+          currency: "INR",
+          order_id: data.orderId!,
+          name: "Includly",
+          description: "Shadow teacher trial day fee",
+          handler: async (response: RazorpayPaymentResponse) => {
+            try {
+              const vRes = await fetchWithAuth(`/api/shadow-teacher/${match.id}/verify-trial-payment`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySignature: response.razorpay_signature,
+                  selectedProfessionalId: professionalId,
+                }),
+              });
+              if (!vRes.ok) {
+                const vd = await vRes.json() as { error?: string };
+                toast({ title: vd.error ?? "Payment verification failed", variant: "destructive" });
+                reject(new Error("verify"));
+                return;
+              }
+              toast({ title: "Trial day booked!", description: "Coordinate with the teacher to schedule the trial day." });
+              queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+              await refetch();
+              resolve();
+            } catch { reject(new Error("verify")); }
+          },
+          modal: { ondismiss: () => reject(new Error("dismissed")) },
+        });
+        rzp.open();
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg !== "dismissed") toast({ title: "Trial request failed", description: msg, variant: "destructive" });
+      await refetch();
+    } finally {
+      setRequestingTrial(false);
+    }
+  }
+
+  // ── handleMarkTrialDone — parent marks trial as complete ─────────────────
+  async function handleMarkTrialDone() {
+    if (!match) return;
+    setMarkingTrialDone(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${match.id}/mark-trial-done`, { method: "POST" });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        toast({ title: d.error ?? "Could not mark trial done", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Trial marked complete!", description: "You can now commit to this teacher or walk away." });
+      queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+      await refetch();
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setMarkingTrialDone(false);
+    }
+  }
+
+  // ── handleNoCommit — parent walks away after trial ───────────────────────
+  async function handleNoCommit() {
+    if (!match) return;
+    setNoCommitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${match.id}/no-commit`, { method: "POST" });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        toast({ title: d.error ?? "Could not process walk-away", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Request closed", description: "The trial fee is non-refundable. You can submit a new request any time." });
+      queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+      await refetch();
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setNoCommitting(false);
+    }
+  }
+
   // ── handleRefund — server re-checks all 3 conditions before initiating ──
   async function handleRefund() {
     if (!match) return;
@@ -573,6 +704,106 @@ export function ShadowTeacherRequestWidget() {
     );
   }
 
+  // ── Trial pending: trial day scheduled ───────────────────────────────────
+  if (status === "trial_pending" && match) {
+    const myId = me?.id ?? 0;
+    const trialCandidate = match.candidates.find((c) => c.professionalId === match.selectedProfessionalId);
+    const trialName = trialCandidate
+      ? (trialCandidate.profile.firstName ?? `Teacher #${trialCandidate.rank}`)
+      : "your selected teacher";
+    return (
+      <div className="space-y-4">
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Star size={18} className="text-orange-500" />
+            <p className="font-semibold text-orange-800">Trial day in progress with {trialName}</p>
+          </div>
+          <p className="text-sm text-orange-700">
+            Once the trial day is complete, mark it done to decide whether to commit or walk away.
+            The trial fee of ₹{trialFee.toLocaleString("en-IN")} will be credited against your first month if you commit.
+          </p>
+          <Button
+            className="w-full gap-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl"
+            onClick={handleMarkTrialDone}
+            disabled={markingTrialDone}
+          >
+            {markingTrialDone ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+            {markingTrialDone ? "Marking…" : "Mark Trial Day Done"}
+          </Button>
+        </div>
+        {trialCandidate && (
+          <CandidateCard
+            candidate={trialCandidate}
+            matchId={match.id}
+            committed={false}
+            myUserId={myId}
+            selected
+            onChoose={() => {}}
+            trialMode
+          />
+        )}
+      </div>
+    );
+  }
+
+  // ── Trial done: commit or walk away ───────────────────────────────────────
+  if (status === "trial_done" && match) {
+    const myId = me?.id ?? 0;
+    const trialCandidate = match.candidates.find((c) => c.professionalId === match.selectedProfessionalId);
+    const trialName = trialCandidate
+      ? (trialCandidate.profile.firstName ?? `Teacher #${trialCandidate.rank}`)
+      : "this teacher";
+    return (
+      <div className="space-y-4">
+        <div className="bg-teal-50 border border-teal-200 rounded-2xl p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={18} className="text-teal-600" />
+            <p className="font-semibold text-teal-800">Trial day complete — what would you like to do?</p>
+          </div>
+          <p className="text-sm text-teal-700">
+            If you commit to {trialName}, your trial fee of ₹{trialFee.toLocaleString("en-IN")} will be credited against the first month's salary.
+            Walking away closes this request — no refund on the trial fee.
+          </p>
+          <div className="flex gap-3">
+            <Button
+              className="flex-1 gap-2 bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl"
+              onClick={async () => {
+                if (!match.selectedProfessionalId) return;
+                setChoosingId(match.selectedProfessionalId);
+                await handleChoose(match.selectedProfessionalId);
+                setChoosingId(null);
+              }}
+              disabled={choosingId !== null}
+            >
+              {choosingId ? <Loader2 size={14} className="animate-spin" /> : <ChevronRight size={14} />}
+              Commit to {trialName}
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1 gap-2 border-red-300 text-red-600 hover:bg-red-50 rounded-xl"
+              onClick={handleNoCommit}
+              disabled={noCommitting}
+            >
+              {noCommitting ? <Loader2 size={14} className="animate-spin" /> : null}
+              {noCommitting ? "Processing…" : "Not a fit — walk away"}
+            </Button>
+          </div>
+        </div>
+        {trialCandidate && (
+          <CandidateCard
+            candidate={trialCandidate}
+            matchId={match.id}
+            committed={false}
+            myUserId={myId}
+            selected
+            onChoose={() => {}}
+            trialMode
+          />
+        )}
+      </div>
+    );
+  }
+
   // ── Shortlisted: show candidates ─────────────────────────────────────────
   if (status === "shortlisted" && match) {
     const myId = me?.id ?? 0;
@@ -610,6 +841,7 @@ export function ShadowTeacherRequestWidget() {
                   await handleChoose(proId);
                 }}
                 onNotInterested={async (candidateId) => { await handleNotInterested(candidateId); }}
+                onRequestTrial={requestingTrial ? undefined : handleRequestTrial}
               />
             ))}
           </div>

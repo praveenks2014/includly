@@ -26,6 +26,8 @@ export const adminSettingsTable = pgTable("admin_settings", {
   noticePeriodDays: integer("notice_period_days").notNull().default(30),
   parentBuyoutDays: integer("parent_buyout_days").notNull().default(15),
   tiersJson: text("tiers_json"),
+  // Trial day flow — fee charged to parent for a one-day trial with a shortlisted teacher
+  trialFeeInr: integer("trial_fee_inr").notNull().default(500),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -1116,6 +1116,7 @@ function SettingsTab() {
 
   const [matchingFeeInr, setMatchingFeeInr] = useState<number | "">("");
   const [matchingFeeRefundable, setMatchingFeeRefundable] = useState(true);
+  const [trialFeeInr, setTrialFeeInr] = useState<number | "">("");
   const [salaryPlatformCutPct, setSalaryPlatformCutPct] = useState<number | "">("");
   const [noticePeriodDays, setNoticePeriodDays] = useState<number | "">("");
   const [parentBuyoutDays, setParentBuyoutDays] = useState<number | "">("");
@@ -1133,6 +1134,7 @@ function SettingsTab() {
     setMonetisationEnabled(settings.monetisationEnabled ?? false);
     setMatchingFeeInr((settings as Record<string, unknown>)["matchingFeeInr"] as number ?? 500);
     setMatchingFeeRefundable(((settings as Record<string, unknown>)["matchingFeeRefundable"] as boolean) ?? true);
+    setTrialFeeInr((settings as Record<string, unknown>)["trialFeeInr"] as number ?? 500);
     setSalaryPlatformCutPct((settings as Record<string, unknown>)["salaryPlatformCutPct"] as number ?? 10);
     setNoticePeriodDays((settings as Record<string, unknown>)["noticePeriodDays"] as number ?? 30);
     setParentBuyoutDays((settings as Record<string, unknown>)["parentBuyoutDays"] as number ?? 15);
@@ -1154,6 +1156,7 @@ function SettingsTab() {
           monetisationEnabled,
           matchingFeeInr: Number(matchingFeeInr) || 500,
           matchingFeeRefundable,
+          trialFeeInr: Number(trialFeeInr) || 500,
           salaryPlatformCutPct: Number(salaryPlatformCutPct) || 10,
           noticePeriodDays: Number(noticePeriodDays) || 30,
           parentBuyoutDays: Number(parentBuyoutDays) || 15,
@@ -1263,6 +1266,17 @@ function SettingsTab() {
                 <span className="text-sm text-gray-600">{matchingFeeRefundable ? "Yes, refundable" : "Non-refundable"}</span>
               </div>
             </div>
+          </div>
+          <hr className="border-gray-100" />
+          <div>
+            <Label className="text-sm font-semibold text-[#1A2340]">Trial Day Fee (₹)</Label>
+            <p className="text-xs text-gray-400 mb-1.5">
+              Optional trial: parent pays this fee to arrange a one-day trial with a shortlisted teacher.
+              Non-refundable, but credited against the first month's salary if the parent commits.
+            </p>
+            <Input type="number" min={0} max={10000} value={trialFeeInr}
+              onChange={(e) => setTrialFeeInr(e.target.value === "" ? "" : Number(e.target.value))}
+              className="rounded-lg focus-visible:ring-[#2EC4A5] max-w-xs" />
           </div>
         </div>
 

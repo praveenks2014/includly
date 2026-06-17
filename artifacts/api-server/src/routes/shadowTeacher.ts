@@ -30,7 +30,7 @@ function getRazorpay() {
 
 async function getSettings() {
   const [s] = await db.select().from(adminSettingsTable).limit(1);
-  return s ?? { matchingFeeInr: 500, matchingFeeRefundable: true, tiersJson: null };
+  return s ?? { matchingFeeInr: 500, matchingFeeRefundable: true, tiersJson: null, trialFeeInr: 500 };
 }
 
 function parseTiers(tiersJson: string | null): TierDef[] {
@@ -60,10 +60,10 @@ function maskProfile(
   };
 }
 
-// ── GET /shadow-teacher/pricing — public: returns current matching fee ────────
+// ── GET /shadow-teacher/pricing — public: returns matching fee + trial fee ────
 router.get("/shadow-teacher/pricing", async (_req: Request, res: Response): Promise<void> => {
   const s = await getSettings();
-  res.json({ matchingFeeInr: s.matchingFeeInr });
+  res.json({ matchingFeeInr: s.matchingFeeInr, trialFeeInr: (s as Record<string, unknown>)["trialFeeInr"] as number ?? 500 });
 });
 
 // ── POST /shadow-teacher/request — parent submits (deposit-at-request model) ─
@@ -391,12 +391,14 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       createdAt:   shadowMatchCandidatesTable.createdAt,
       matchStatus:            shadowTeacherMatchesTable.status,
       selectedProfessionalId: shadowTeacherMatchesTable.selectedProfessionalId,
-      childCity:           shadowTeacherMatchesTable.childCity,
-      childConditions:     shadowTeacherMatchesTable.childConditions,
-      childBudgetMinInr:   shadowTeacherMatchesTable.childBudgetMinInr,
-      childBudgetMaxInr:   shadowTeacherMatchesTable.childBudgetMaxInr,
-      childPreferredModes: shadowTeacherMatchesTable.childPreferredModes,
-      childGoalsAreas:     shadowTeacherMatchesTable.childGoalsAreas,
+      childCity:              shadowTeacherMatchesTable.childCity,
+      childConditions:        shadowTeacherMatchesTable.childConditions,
+      childBudgetMinInr:      shadowTeacherMatchesTable.childBudgetMinInr,
+      childBudgetMaxInr:      shadowTeacherMatchesTable.childBudgetMaxInr,
+      childPreferredModes:    shadowTeacherMatchesTable.childPreferredModes,
+      childGoalsAreas:        shadowTeacherMatchesTable.childGoalsAreas,
+      preMeetingRequested:    shadowTeacherMatchesTable.preMeetingRequested,
+      preMeetingNote:         shadowTeacherMatchesTable.preMeetingNote,
     })
     .from(shadowMatchCandidatesTable)
     .innerJoin(shadowTeacherMatchesTable, eq(shadowMatchCandidatesTable.matchId, shadowTeacherMatchesTable.id))
@@ -450,7 +452,9 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       childBudgetMinInr:   c.childBudgetMinInr  !== null ? Number(c.childBudgetMinInr)  : null,
       childBudgetMaxInr:   c.childBudgetMaxInr  !== null ? Number(c.childBudgetMaxInr)  : null,
       childPreferredModes: c.childPreferredModes ?? [],
-      childGoalsAreas:     c.childGoalsAreas    ?? null,
+      childGoalsAreas:        c.childGoalsAreas       ?? null,
+      preMeetingRequested:    c.preMeetingRequested   ?? false,
+      preMeetingNote:         c.preMeetingNote        ?? null,
       threadId:        thread?.threadId ?? null,
       messageCount:    counts ? Number(counts.messageCount) : 0,
       lastMessageAt:   counts?.lastMessageAt ?? null,
@@ -538,7 +542,7 @@ router.post("/shadow-teacher/:matchId/thread/:candidateId", requireAuth, async (
   const [match] = await db.select().from(shadowTeacherMatchesTable).where(eq(shadowTeacherMatchesTable.id, matchId));
   if (!match) { res.status(404).json({ error: "Match not found" }); return; }
 
-  if (!["shortlisted", "pending_commitment", "committed"].includes(match.status)) {
+  if (!["shortlisted", "pending_commitment", "committed", "trial_pending", "trial_done"].includes(match.status)) {
     res.status(400).json({ error: "Chat is not available for this match status" });
     return;
   }
@@ -623,7 +627,7 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
     .from(shadowTeacherMatchesTable)
     .where(and(eq(shadowTeacherMatchesTable.id, matchId), eq(shadowTeacherMatchesTable.parentId, req.userId!)));
   if (!match) { res.status(404).json({ error: "Match not found" }); return; }
-  if (match.status !== "shortlisted") { res.status(400).json({ error: "Commitment is only allowed from shortlisted status" }); return; }
+  if (!["shortlisted", "trial_done"].includes(match.status)) { res.status(400).json({ error: "Commitment is only allowed from shortlisted or trial_done status" }); return; }
 
   // Verify the professional is an active candidate
   const [candidate] = await db
@@ -651,7 +655,8 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
     return;
   }
 
-  // Create engagement — no Razorpay call; matching fee was already captured at request time
+  // Create engagement — no Razorpay call; matching fee was already captured at request time.
+  // If a trial fee was paid, carry it forward as a credit on the first salary payment.
   const today = new Date().toISOString().split("T")[0]!;
   const [engagement] = await db
     .insert(shadowTeacherEngagementsTable)
@@ -663,6 +668,7 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
       startDate: today,
       hoursPerWeek: 0,
       monthlyFeeInr: teacher.pricingMinINR!,
+      trialCreditInr: match.trialFeePaidInr ?? 0,
       status: "active",
     })
     .returning();
@@ -693,6 +699,194 @@ router.post("/shadow-teacher/:matchId/verify-commitment", requireAuth, requireRo
     error: "gone",
     message: "This step is no longer required. Commitment is now free — POST /:matchId/commit creates the engagement directly.",
   });
+});
+
+// ── POST /shadow-teacher/:matchId/request-trial ──────────────────────────────
+// Parent requests an optional trial day with one shortlisted candidate.
+// Creates a Razorpay order for the admin-configured trial fee (default ₹500).
+// Verificationstatus check: professional_profiles.verification_status is authoritative —
+// admin approval sets BOTH professional_profiles and identity_verifications atomically.
+const RequestTrialBody = z.object({
+  selectedProfessionalId: z.number().int().positive(),
+});
+
+router.post("/shadow-teacher/:matchId/request-trial", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  if (isNaN(matchId)) { res.status(400).json({ error: "Invalid matchId" }); return; }
+
+  const parsed = RequestTrialBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { selectedProfessionalId } = parsed.data;
+
+  const [match] = await db
+    .select()
+    .from(shadowTeacherMatchesTable)
+    .where(and(eq(shadowTeacherMatchesTable.id, matchId), eq(shadowTeacherMatchesTable.parentId, req.userId!)));
+  if (!match) { res.status(404).json({ error: "Match not found" }); return; }
+  if (match.status !== "shortlisted") { res.status(400).json({ error: "Trial can only be requested from shortlisted status" }); return; }
+
+  // Verify the professional is an active candidate for this match
+  const [candidate] = await db
+    .select()
+    .from(shadowMatchCandidatesTable)
+    .where(
+      and(
+        eq(shadowMatchCandidatesTable.matchId, matchId),
+        eq(shadowMatchCandidatesTable.professionalId, selectedProfessionalId),
+        isNull(shadowMatchCandidatesTable.removedAt),
+      ),
+    );
+  if (!candidate) { res.status(404).json({ error: "Selected professional is not an active candidate for this match" }); return; }
+
+  // Guard: only verified teachers can be trialled
+  const [teacher] = await db
+    .select({ verificationStatus: professionalProfilesTable.verificationStatus })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, selectedProfessionalId));
+  if (!teacher || teacher.verificationStatus !== "verified") {
+    res.status(409).json({ error: "trial_blocked_unverified", message: "This teacher is not yet verified. Only verified teachers can be trialled." });
+    return;
+  }
+
+  const settings = await getSettings();
+  const trialFeeInr = (settings as Record<string, unknown>)["trialFeeInr"] as number ?? 500;
+
+  // If a trial order was already created for this match, re-return it (allows modal reopen)
+  if (match.trialProviderOrderId) {
+    res.json({
+      matchId: match.id,
+      orderId: match.trialProviderOrderId,
+      amount: trialFeeInr * 100,
+      keyId: process.env["RAZORPAY_KEY_ID"]!,
+      resuming: true,
+    });
+    return;
+  }
+
+  const razorpay = getRazorpay();
+  if (!razorpay) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
+
+  const amount = trialFeeInr * 100;
+  const order = await razorpay.orders.create({
+    amount,
+    currency: "INR",
+    receipt: `trial_${matchId}_${Date.now()}`,
+    notes: { matchId: String(matchId), selectedProfessionalId: String(selectedProfessionalId) },
+  });
+
+  await db
+    .update(shadowTeacherMatchesTable)
+    .set({ trialProviderOrderId: order.id as string, updatedAt: new Date() })
+    .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  res.json({
+    matchId: match.id,
+    orderId: order.id,
+    amount,
+    keyId: process.env["RAZORPAY_KEY_ID"]!,
+  });
+});
+
+// ── POST /shadow-teacher/:matchId/verify-trial-payment ───────────────────────
+// HMAC-verify the trial fee payment and transition shortlisted → trial_pending.
+// Shape mirrors verify-request-payment exactly.
+const VerifyTrialPaymentBody = z.object({
+  razorpayOrderId: z.string(),
+  razorpayPaymentId: z.string(),
+  razorpaySignature: z.string(),
+  selectedProfessionalId: z.number().int().positive(),
+});
+
+router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  if (isNaN(matchId)) { res.status(400).json({ error: "Invalid matchId" }); return; }
+
+  const parsed = VerifyTrialPaymentBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const keySecret = process.env["RAZORPAY_KEY_SECRET"];
+  if (!keySecret) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
+
+  const { razorpayOrderId, razorpayPaymentId, razorpaySignature, selectedProfessionalId } = parsed.data;
+
+  const [match] = await db
+    .select()
+    .from(shadowTeacherMatchesTable)
+    .where(and(eq(shadowTeacherMatchesTable.id, matchId), eq(shadowTeacherMatchesTable.parentId, req.userId!)));
+  if (!match) { res.status(404).json({ error: "Match not found" }); return; }
+  if (match.status !== "shortlisted") { res.status(400).json({ error: "Match is not awaiting trial payment" }); return; }
+  if (match.trialProviderOrderId !== razorpayOrderId) { res.status(400).json({ error: "Order ID mismatch" }); return; }
+
+  const expectedSig = crypto.createHmac("sha256", keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");
+  if (expectedSig !== razorpaySignature) { res.status(400).json({ error: "Payment signature verification failed" }); return; }
+
+  const settings = await getSettings();
+  const trialFeeInr = (settings as Record<string, unknown>)["trialFeeInr"] as number ?? 500;
+
+  await db
+    .update(shadowTeacherMatchesTable)
+    .set({
+      status: "trial_pending",
+      trialProviderPaymentId: razorpayPaymentId,
+      trialFeePaidInr: trialFeeInr,
+      selectedProfessionalId,
+      updatedAt: new Date(),
+    })
+    .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  res.json({ matchId, status: "trial_pending" });
+});
+
+// ── POST /shadow-teacher/:matchId/mark-trial-done ────────────────────────────
+// Either the parent OR the selected teacher can mark the trial day complete.
+// Transitions trial_pending → trial_done.
+router.post("/shadow-teacher/:matchId/mark-trial-done", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  if (isNaN(matchId)) { res.status(400).json({ error: "Invalid matchId" }); return; }
+
+  const [match] = await db.select().from(shadowTeacherMatchesTable).where(eq(shadowTeacherMatchesTable.id, matchId));
+  if (!match) { res.status(404).json({ error: "Match not found" }); return; }
+  if (match.status !== "trial_pending") { res.status(400).json({ error: "Trial is not in progress" }); return; }
+
+  const isParent = match.parentId === req.userId!;
+  let isPro = false;
+  if (!isParent && match.selectedProfessionalId) {
+    const [pro] = await db
+      .select({ userId: professionalProfilesTable.userId })
+      .from(professionalProfilesTable)
+      .where(eq(professionalProfilesTable.id, match.selectedProfessionalId));
+    isPro = pro?.userId === req.userId!;
+  }
+  if (!isParent && !isPro) { res.status(403).json({ error: "Access denied" }); return; }
+
+  await db
+    .update(shadowTeacherMatchesTable)
+    .set({ status: "trial_done", updatedAt: new Date() })
+    .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  res.json({ matchId, status: "trial_done" });
+});
+
+// ── POST /shadow-teacher/:matchId/no-commit ──────────────────────────────────
+// Parent walks away after the trial. Trial fee is non-refundable.
+// Transitions trial_done → cancelled (re-masks contact automatically via status).
+router.post("/shadow-teacher/:matchId/no-commit", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  if (isNaN(matchId)) { res.status(400).json({ error: "Invalid matchId" }); return; }
+
+  const [match] = await db
+    .select()
+    .from(shadowTeacherMatchesTable)
+    .where(and(eq(shadowTeacherMatchesTable.id, matchId), eq(shadowTeacherMatchesTable.parentId, req.userId!)));
+  if (!match) { res.status(404).json({ error: "Match not found" }); return; }
+  if (match.status !== "trial_done") { res.status(400).json({ error: "Can only walk away after trial is marked done" }); return; }
+
+  await db
+    .update(shadowTeacherMatchesTable)
+    .set({ status: "cancelled", cancelledAt: new Date(), updatedAt: new Date() })
+    .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  res.json({ matchId, status: "cancelled" });
 });
 
 // ── POST /shadow-teacher/:matchId/mark-not-interested — parent dismisses a candidate, triggers auto-refill ─

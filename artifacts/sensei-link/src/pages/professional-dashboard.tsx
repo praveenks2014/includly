@@ -2523,20 +2523,23 @@ function EngagementTab() {
 // ─── Enquiries Tab (shadow teachers) ─────────────────────────────────────────
 
 interface Candidacy {
-  candidateId:      number;
-  matchId:          number;
-  matchStatus:      string;
-  isSelected:       boolean;
-  childCity:        string | null;
-  childConditions:  string[];
+  candidateId:         number;
+  matchId:             number;
+  matchStatus:         string;
+  isSelected:          boolean;
+  selectedProfessionalId: number | null;
+  childCity:           string | null;
+  childConditions:     string[];
   childBudgetMinInr:   number | null;
   childBudgetMaxInr:   number | null;
   childPreferredModes: string[];
   childGoalsAreas:     string | null;
-  threadId:        number | null;
-  messageCount:    number;
-  lastMessageAt:   string | null;
-  createdAt:       string;
+  preMeetingRequested: boolean;
+  preMeetingNote:      string | null;
+  threadId:            number | null;
+  messageCount:        number;
+  lastMessageAt:       string | null;
+  createdAt:           string;
 }
 
 const MATCH_STATUS_LABEL: Record<string, string> = {
@@ -2545,6 +2548,8 @@ const MATCH_STATUS_LABEL: Record<string, string> = {
   cancelled:       "Cancelled",
   pending_payment: "Pending payment",
   completed:       "Completed",
+  trial_pending:   "Trial day in progress",
+  trial_done:      "Trial complete",
 };
 const MATCH_STATUS_COLOR: Record<string, string> = {
   shortlisted:     "bg-teal-50 text-teal-700 border-teal-200",
@@ -2552,6 +2557,8 @@ const MATCH_STATUS_COLOR: Record<string, string> = {
   cancelled:       "bg-gray-50 text-gray-500 border-gray-200",
   pending_payment: "bg-yellow-50 text-yellow-700 border-yellow-200",
   completed:       "bg-blue-50 text-blue-700 border-blue-200",
+  trial_pending:   "bg-orange-50 text-orange-700 border-orange-200",
+  trial_done:      "bg-purple-50 text-purple-700 border-purple-200",
 };
 
 function CandidacyCard({ candidacy: c, onOpen }: { candidacy: Candidacy; onOpen: () => void }) {
@@ -2588,6 +2595,10 @@ function CandidacyCard({ candidacy: c, onOpen }: { candidacy: Candidacy; onOpen:
         )}
       </div>
 
+      {c.matchStatus === "trial_pending" && c.isSelected && (
+        <MarkTrialDoneButton matchId={c.matchId} />
+      )}
+
       <div className="flex items-center justify-between pt-3 border-t border-gray-50">
         {c.messageCount > 0 ? (
           <span className="flex items-center gap-1.5 text-xs text-[#2EC4A5] font-medium">
@@ -2606,6 +2617,45 @@ function CandidacyCard({ candidacy: c, onOpen }: { candidacy: Candidacy; onOpen:
           Open Chat
         </Button>
       </div>
+    </div>
+  );
+}
+
+function MarkTrialDoneButton({ matchId }: { matchId: number }) {
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+
+  async function handleMark() {
+    setLoading(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/mark-trial-done`, { method: "POST" });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        toast({ title: d.error ?? "Could not mark trial done", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Trial marked complete", description: "The parent will now decide whether to commit." });
+      window.location.reload();
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-xl space-y-2">
+      <p className="text-xs font-semibold text-orange-800">Trial day in progress</p>
+      <p className="text-xs text-orange-600">Once you've completed the trial, mark it as done.</p>
+      <Button
+        size="sm"
+        className="w-full bg-orange-500 hover:bg-orange-600 text-white text-xs h-8 rounded-xl gap-1"
+        onClick={handleMark}
+        disabled={loading}
+      >
+        {loading ? <Loader2 size={12} className="animate-spin" /> : null}
+        {loading ? "Marking…" : "Mark Trial Day Done"}
+      </Button>
     </div>
   );
 }
