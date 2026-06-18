@@ -12,6 +12,7 @@ import {
   sessionNotesTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
+import { generateOtp } from "../lib/otp";
 import { sendPushNotification } from "../lib/notificationService";
 import { createLedgerHeld, releaseWithCommission, refundToWallet, findLedgerByBooking } from "../lib/ledger";
 import { convertReferralIfNeeded } from "./referrals";
@@ -29,10 +30,6 @@ function getRazorpay() {
   const keySecret = process.env["RAZORPAY_KEY_SECRET"];
   if (!keyId || !keySecret) return null;
   return new Razorpay({ key_id: keyId, key_secret: keySecret });
-}
-
-function generateOtp(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
 }
 
 function getSessionCommission(specialty: string): number {

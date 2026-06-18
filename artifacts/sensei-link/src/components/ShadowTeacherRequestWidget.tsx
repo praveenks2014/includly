@@ -80,6 +80,8 @@ interface MatchWithCandidates {
   childConditions: string[] | null;
   childBudgetMinInr: number | null;
   childBudgetMaxInr: number | null;
+  trialStartOtp: string | null;
+  trialEndOtp: string | null;
   candidates: Candidate[];
 }
 
@@ -136,6 +138,7 @@ const STATUS_COLORS: Record<string, string> = {
   payment_failed: "bg-red-100 text-red-700",
   pending_payment: "bg-yellow-100 text-yellow-700",
   trial_pending: "bg-orange-100 text-orange-700",
+  trial_started: "bg-indigo-100 text-indigo-700",
   trial_done: "bg-teal-100 text-teal-700",
 };
 
@@ -724,22 +727,86 @@ export function ShadowTeacherRequestWidget() {
       : "your selected teacher";
     return (
       <div className="space-y-4">
+        {match.trialStartOtp && (
+          <div className="bg-indigo-50 border-2 border-indigo-300 rounded-2xl p-5 text-center space-y-2">
+            <p className="text-xs font-semibold text-indigo-600 uppercase tracking-widest">Trial Start Code</p>
+            <p className="text-5xl font-mono font-bold tracking-[0.25em] text-indigo-900 select-all">
+              {match.trialStartOtp}
+            </p>
+            <p className="text-xs text-indigo-600">Show this to {trialName} — they will enter it to begin the trial</p>
+          </div>
+        )}
         <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5 space-y-3">
           <div className="flex items-center gap-2">
             <Star size={18} className="text-orange-500" />
-            <p className="font-semibold text-orange-800">Trial day in progress with {trialName}</p>
+            <p className="font-semibold text-orange-800">Trial day with {trialName} is awaiting start</p>
           </div>
           <p className="text-sm text-orange-700">
-            Once the trial day is complete, mark it done to decide whether to commit or walk away.
-            The trial fee of ₹{trialFee.toLocaleString("en-IN")} will be credited against your first month if you commit.
+            Share the code above with {trialName}. Once they enter it, the trial day officially begins.
+            The fee of ₹{trialFee.toLocaleString("en-IN")} will be credited to the first month if you commit.
           </p>
           <Button
-            className="w-full gap-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl"
+            variant="outline"
+            size="sm"
+            className="w-full gap-2 border-orange-300 text-orange-700 hover:bg-orange-100 rounded-xl"
             onClick={handleMarkTrialDone}
             disabled={markingTrialDone}
           >
-            {markingTrialDone ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-            {markingTrialDone ? "Marking…" : "Mark Trial Day Done"}
+            {markingTrialDone ? <Loader2 size={14} className="animate-spin" /> : null}
+            {markingTrialDone ? "Marking…" : "Mark trial done manually (fallback)"}
+          </Button>
+        </div>
+        {trialCandidate && (
+          <CandidateCard
+            candidate={trialCandidate}
+            matchId={match.id}
+            committed={false}
+            myUserId={myId}
+            selected
+            onChoose={() => {}}
+            trialMode
+          />
+        )}
+      </div>
+    );
+  }
+
+  // ── Trial started: teacher entered start OTP — show end OTP ──────────────
+  if (status === "trial_started" && match) {
+    const myId = me?.id ?? 0;
+    const trialCandidate = match.candidates.find((c) => c.professionalId === match.selectedProfessionalId);
+    const trialName = trialCandidate
+      ? (trialCandidate.profile.firstName ?? `Teacher #${trialCandidate.rank}`)
+      : "your selected teacher";
+    return (
+      <div className="space-y-4">
+        {match.trialEndOtp && (
+          <div className="bg-indigo-50 border-2 border-indigo-300 rounded-2xl p-5 text-center space-y-2">
+            <p className="text-xs font-semibold text-indigo-600 uppercase tracking-widest">Trial End Code</p>
+            <p className="text-5xl font-mono font-bold tracking-[0.25em] text-indigo-900 select-all">
+              {match.trialEndOtp}
+            </p>
+            <p className="text-xs text-indigo-600">When the trial day is over, show this to {trialName} to close it</p>
+          </div>
+        )}
+        <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Star size={18} className="text-indigo-500" />
+            <p className="font-semibold text-indigo-800">Trial day is underway with {trialName}</p>
+          </div>
+          <p className="text-sm text-indigo-700">
+            The trial has officially started. At the end of the day, share the code above with {trialName} —
+            they will enter it to complete the trial. You&apos;ll then decide whether to commit or walk away.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full gap-2 border-indigo-300 text-indigo-700 hover:bg-indigo-100 rounded-xl"
+            onClick={handleMarkTrialDone}
+            disabled={markingTrialDone}
+          >
+            {markingTrialDone ? <Loader2 size={14} className="animate-spin" /> : null}
+            {markingTrialDone ? "Marking…" : "Mark trial done manually (fallback)"}
           </Button>
         </div>
         {trialCandidate && (

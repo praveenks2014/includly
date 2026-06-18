@@ -18,6 +18,7 @@ import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { z } from "zod/v4";
 import { rankCandidates, maskBody, type MatchSnapshot, type TierDef } from "../lib/shadowTeacherScoring";
 import { notifyMatchShortlisted, notifyMatchChatMessage, notifyParentOnTrialDone } from "../lib/notificationService";
+import { generateOtp } from "../lib/otp";
 
 const router: IRouter = Router();
 
@@ -542,7 +543,7 @@ router.post("/shadow-teacher/:matchId/thread/:candidateId", requireAuth, async (
   const [match] = await db.select().from(shadowTeacherMatchesTable).where(eq(shadowTeacherMatchesTable.id, matchId));
   if (!match) { res.status(404).json({ error: "Match not found" }); return; }
 
-  if (!["shortlisted", "pending_commitment", "committed", "trial_pending", "trial_done"].includes(match.status)) {
+  if (!["shortlisted", "pending_commitment", "committed", "trial_pending", "trial_started", "trial_done"].includes(match.status)) {
     res.status(400).json({ error: "Chat is not available for this match status" });
     return;
   }
@@ -838,6 +839,8 @@ router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requir
   const settings = await getSettings();
   const trialFeeInr = (settings as Record<string, unknown>)["trialFeeInr"] as number ?? 500;
 
+  const trialStartOtp = generateOtp();
+
   await db
     .update(shadowTeacherMatchesTable)
     .set({
@@ -847,6 +850,7 @@ router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requir
       selectedProfessionalId,
       preMeetingRequested,
       preMeetingNote: preMeetingRequested ? (preMeetingNote ?? null) : null,
+      trialStartOtp,
       updatedAt: new Date(),
     })
     .where(eq(shadowTeacherMatchesTable.id, matchId));
@@ -863,7 +867,7 @@ router.post("/shadow-teacher/:matchId/mark-trial-done", requireAuth, async (req:
 
   const [match] = await db.select().from(shadowTeacherMatchesTable).where(eq(shadowTeacherMatchesTable.id, matchId));
   if (!match) { res.status(404).json({ error: "Match not found" }); return; }
-  if (match.status !== "trial_pending") { res.status(400).json({ error: "Trial is not in progress" }); return; }
+  if (!["trial_pending", "trial_started"].includes(match.status)) { res.status(400).json({ error: "Trial is not in progress" }); return; }
 
   const isParent = match.parentId === req.userId!;
   let isPro = false;
@@ -899,6 +903,97 @@ router.post("/shadow-teacher/:matchId/mark-trial-done", requireAuth, async (req:
   if (isPro) {
     void notifyParentOnTrialDone(match.parentId).catch(() => {});
   }
+
+  res.json({ matchId, status: "trial_done" });
+});
+
+// ── POST /shadow-teacher/:matchId/verify-trial-start-otp — teacher confirms trial has begun ─
+// Validates the start OTP the parent shows the teacher. Transitions trial_pending → trial_started.
+// Generates trial_end_otp for the parent to see.
+router.post("/shadow-teacher/:matchId/verify-trial-start-otp", requireAuth, requireRole("professional", "admin"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  if (isNaN(matchId)) { res.status(400).json({ error: "Invalid matchId" }); return; }
+
+  const otp = typeof req.body?.otp === "string" ? req.body.otp.trim() : "";
+  if (!otp) { res.status(400).json({ error: "OTP is required" }); return; }
+
+  const [match] = await db.select().from(shadowTeacherMatchesTable).where(eq(shadowTeacherMatchesTable.id, matchId));
+  if (!match) { res.status(404).json({ error: "Match not found" }); return; }
+  if (match.status !== "trial_pending") { res.status(400).json({ error: "Trial has not been started or is already in progress" }); return; }
+
+  if (!match.selectedProfessionalId) { res.status(400).json({ error: "No teacher selected for this match" }); return; }
+  const [pro] = await db
+    .select({ id: professionalProfilesTable.id, userId: professionalProfilesTable.userId })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, match.selectedProfessionalId));
+  if (!pro || pro.userId !== req.userId!) { res.status(403).json({ error: "Access denied" }); return; }
+
+  const [cand] = await db
+    .select({ id: shadowMatchCandidatesTable.id })
+    .from(shadowMatchCandidatesTable)
+    .where(and(
+      eq(shadowMatchCandidatesTable.matchId, matchId),
+      eq(shadowMatchCandidatesTable.professionalId, match.selectedProfessionalId),
+      isNull(shadowMatchCandidatesTable.removedAt),
+    ));
+  if (!cand) { res.status(409).json({ error: "Your candidacy for this match is no longer active" }); return; }
+
+  if (!match.trialStartOtp || match.trialStartOtp !== otp) {
+    res.status(400).json({ error: "Incorrect start OTP" });
+    return;
+  }
+
+  const trialEndOtp = generateOtp();
+
+  await db
+    .update(shadowTeacherMatchesTable)
+    .set({ status: "trial_started", trialEndOtp, updatedAt: new Date() })
+    .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  res.json({ matchId, status: "trial_started" });
+});
+
+// ── POST /shadow-teacher/:matchId/verify-trial-end-otp — teacher confirms trial is complete ─
+// Validates the end OTP the parent shows the teacher. Transitions trial_started → trial_done.
+router.post("/shadow-teacher/:matchId/verify-trial-end-otp", requireAuth, requireRole("professional", "admin"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  if (isNaN(matchId)) { res.status(400).json({ error: "Invalid matchId" }); return; }
+
+  const otp = typeof req.body?.otp === "string" ? req.body.otp.trim() : "";
+  if (!otp) { res.status(400).json({ error: "OTP is required" }); return; }
+
+  const [match] = await db.select().from(shadowTeacherMatchesTable).where(eq(shadowTeacherMatchesTable.id, matchId));
+  if (!match) { res.status(404).json({ error: "Match not found" }); return; }
+  if (match.status !== "trial_started") { res.status(400).json({ error: "Trial has not started yet or is already marked done" }); return; }
+
+  if (!match.selectedProfessionalId) { res.status(400).json({ error: "No teacher selected for this match" }); return; }
+  const [pro] = await db
+    .select({ id: professionalProfilesTable.id, userId: professionalProfilesTable.userId })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, match.selectedProfessionalId));
+  if (!pro || pro.userId !== req.userId!) { res.status(403).json({ error: "Access denied" }); return; }
+
+  const [cand] = await db
+    .select({ id: shadowMatchCandidatesTable.id })
+    .from(shadowMatchCandidatesTable)
+    .where(and(
+      eq(shadowMatchCandidatesTable.matchId, matchId),
+      eq(shadowMatchCandidatesTable.professionalId, match.selectedProfessionalId),
+      isNull(shadowMatchCandidatesTable.removedAt),
+    ));
+  if (!cand) { res.status(409).json({ error: "Your candidacy for this match is no longer active" }); return; }
+
+  if (!match.trialEndOtp || match.trialEndOtp !== otp) {
+    res.status(400).json({ error: "Incorrect end OTP" });
+    return;
+  }
+
+  await db
+    .update(shadowTeacherMatchesTable)
+    .set({ status: "trial_done", updatedAt: new Date() })
+    .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  void notifyParentOnTrialDone(match.parentId).catch(() => {});
 
   res.json({ matchId, status: "trial_done" });
 });

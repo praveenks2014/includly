@@ -2548,7 +2548,8 @@ const MATCH_STATUS_LABEL: Record<string, string> = {
   cancelled:       "Cancelled",
   pending_payment: "Pending payment",
   completed:       "Completed",
-  trial_pending:   "Trial day in progress",
+  trial_pending:   "Trial day pending",
+  trial_started:   "Trial day underway",
   trial_done:      "Trial complete",
 };
 const MATCH_STATUS_COLOR: Record<string, string> = {
@@ -2558,6 +2559,7 @@ const MATCH_STATUS_COLOR: Record<string, string> = {
   pending_payment: "bg-yellow-50 text-yellow-700 border-yellow-200",
   completed:       "bg-blue-50 text-blue-700 border-blue-200",
   trial_pending:   "bg-orange-50 text-orange-700 border-orange-200",
+  trial_started:   "bg-indigo-50 text-indigo-700 border-indigo-200",
   trial_done:      "bg-purple-50 text-purple-700 border-purple-200",
 };
 
@@ -2606,7 +2608,10 @@ function CandidacyCard({ candidacy: c, onOpen }: { candidacy: Candidacy; onOpen:
         </div>
       )}
       {c.matchStatus === "trial_pending" && c.isSelected && (
-        <MarkTrialDoneButton matchId={c.matchId} />
+        <TrialOtpEntry matchId={c.matchId} type="start" />
+      )}
+      {c.matchStatus === "trial_started" && c.isSelected && (
+        <TrialOtpEntry matchId={c.matchId} type="end" />
       )}
 
       <div className="flex items-center justify-between pt-3 border-t border-gray-50">
@@ -2631,20 +2636,41 @@ function CandidacyCard({ candidacy: c, onOpen }: { candidacy: Candidacy; onOpen:
   );
 }
 
-function MarkTrialDoneButton({ matchId }: { matchId: number }) {
+function TrialOtpEntry({ matchId, type }: { matchId: number; type: "start" | "end" }) {
+  const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  async function handleMark() {
+  const isStart = type === "start";
+  const endpoint = isStart
+    ? `/api/shadow-teacher/${matchId}/verify-trial-start-otp`
+    : `/api/shadow-teacher/${matchId}/verify-trial-end-otp`;
+
+  async function handleSubmit() {
+    const code = otp.trim();
+    if (code.length !== 6) {
+      toast({ title: "Enter the 6-digit code", variant: "destructive" });
+      return;
+    }
     setLoading(true);
     try {
-      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/mark-trial-done`, { method: "POST" });
+      const res = await fetchWithAuth(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ otp: code }),
+      });
       if (!res.ok) {
         const d = await res.json() as { error?: string };
-        toast({ title: d.error ?? "Could not mark trial done", variant: "destructive" });
+        toast({ title: d.error ?? "Incorrect code — try again", variant: "destructive" });
+        setOtp("");
         return;
       }
-      toast({ title: "Trial marked complete", description: "The parent will now decide whether to commit." });
+      toast({
+        title: isStart ? "Trial day started!" : "Trial day complete!",
+        description: isStart
+          ? "The parent will now see the end code."
+          : "The parent will now decide whether to commit.",
+      });
       window.location.reload();
     } catch {
       toast({ title: "Network error", variant: "destructive" });
@@ -2654,18 +2680,37 @@ function MarkTrialDoneButton({ matchId }: { matchId: number }) {
   }
 
   return (
-    <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-xl space-y-2">
-      <p className="text-xs font-semibold text-orange-800">Trial day in progress</p>
-      <p className="text-xs text-orange-600">Once you've completed the trial, mark it as done.</p>
-      <Button
-        size="sm"
-        className="w-full bg-orange-500 hover:bg-orange-600 text-white text-xs h-8 rounded-xl gap-1"
-        onClick={handleMark}
-        disabled={loading}
-      >
-        {loading ? <Loader2 size={12} className="animate-spin" /> : null}
-        {loading ? "Marking…" : "Mark Trial Day Done"}
-      </Button>
+    <div className={`mt-3 p-3 rounded-xl space-y-2 ${isStart ? "bg-orange-50 border border-orange-200" : "bg-indigo-50 border border-indigo-200"}`}>
+      <p className={`text-xs font-semibold ${isStart ? "text-orange-800" : "text-indigo-800"}`}>
+        {isStart ? "Enter parent's start code to begin the trial" : "Enter parent's end code to complete the trial"}
+      </p>
+      <p className={`text-xs ${isStart ? "text-orange-600" : "text-indigo-600"}`}>
+        Ask the parent to open their app and share the {isStart ? "start" : "end"} code with you.
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          inputMode="numeric"
+          maxLength={6}
+          placeholder="_ _ _ _ _ _"
+          value={otp}
+          onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+          className={`flex-1 h-9 text-center text-lg font-mono tracking-widest border rounded-xl px-3 outline-none focus:ring-2 ${
+            isStart
+              ? "border-orange-300 focus:ring-orange-300 bg-white"
+              : "border-indigo-300 focus:ring-indigo-300 bg-white"
+          }`}
+          onKeyDown={(e) => { if (e.key === "Enter") void handleSubmit(); }}
+        />
+        <Button
+          size="sm"
+          className={`h-9 px-4 rounded-xl text-xs text-white ${isStart ? "bg-orange-500 hover:bg-orange-600" : "bg-indigo-600 hover:bg-indigo-700"}`}
+          onClick={handleSubmit}
+          disabled={loading || otp.length !== 6}
+        >
+          {loading ? <Loader2 size={12} className="animate-spin" /> : (isStart ? "Start" : "End")}
+        </Button>
+      </div>
     </div>
   );
 }

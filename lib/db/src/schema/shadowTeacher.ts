@@ -17,6 +17,7 @@ export const shadowMatchStatusEnum = pgEnum("shadow_match_status", [
   "pending_commitment",
   "committed",
   "trial_pending",
+  "trial_started",
   "trial_done",
 ]);
 
@@ -51,6 +52,8 @@ export const shadowTeacherMatchesTable = pgTable("shadow_teacher_matches", {
   trialProviderPaymentId: text("trial_provider_payment_id"),
   preMeetingRequested: boolean("pre_meeting_requested").notNull().default(false),
   preMeetingNote: text("pre_meeting_note"),
+  trialStartOtp: text("trial_start_otp"),
+  trialEndOtp: text("trial_end_otp"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
