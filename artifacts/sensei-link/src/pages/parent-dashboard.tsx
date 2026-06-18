@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { useUser } from "@clerk/react";
+import { useUser, useAuth } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useGetMe,
@@ -1037,6 +1037,7 @@ function ShadowTeacherTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { selectedChildId } = useSelectedChild();
+  const { getToken } = useAuth();
 
   interface STEngagement {
     id: number;
@@ -1414,11 +1415,17 @@ function ShadowTeacherTab() {
                     {photoKey && (
                       <button
                         onClick={async () => {
-                          const res = await fetchWithAuth(`/api/storage/objects/${photoKey.replace(/^\/objects\//, "")}`);
-                          if (!res.ok) return;
+                          const token = await getToken();
+                          console.log("[photo] Clerk token:", token ? `${token.slice(0, 20)}…` : null);
+                          const path = `/api/storage/objects/${photoKey.replace(/^\/objects\//, "")}`;
+                          const res = await fetch(path, {
+                            headers: token ? { Authorization: `Bearer ${token}` } : {},
+                            credentials: "include",
+                          });
+                          if (!res.ok) { console.error("[photo] fetch failed", res.status); return; }
                           const blob = await res.blob();
-                          const url = URL.createObjectURL(blob);
-                          window.open(url, "_blank", "noopener");
+                          const objectUrl = URL.createObjectURL(blob);
+                          window.open(objectUrl, "_blank", "noopener");
                         }}
                         className="inline-flex items-center gap-1 text-xs text-[#2EC4A5] hover:underline font-medium cursor-pointer"
                       >
