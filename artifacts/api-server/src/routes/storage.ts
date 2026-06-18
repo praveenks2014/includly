@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
@@ -13,6 +13,8 @@ import {
   identityVerificationsTable,
   professionalProfilesTable,
   pendingUploadsTable,
+  engagementDailyLogsTable,
+  shadowTeacherEngagementsTable,
 } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -167,6 +169,31 @@ router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Resp
             .limit(1);
 
           isOwner = idVerifMatch.length > 0;
+        }
+      }
+
+      if (!isOwner) {
+        // Check engagement daily-log photo ownership:
+        // the user must be the parent or teacher (professional) of the engagement
+        // whose log content references this objectPath as photoKey.
+        const [logEng] = await db
+          .select({
+            parentId:       shadowTeacherEngagementsTable.parentId,
+            professionalId: shadowTeacherEngagementsTable.professionalId,
+          })
+          .from(engagementDailyLogsTable)
+          .innerJoin(
+            shadowTeacherEngagementsTable,
+            eq(engagementDailyLogsTable.engagementId, shadowTeacherEngagementsTable.id),
+          )
+          .where(
+            sql`${engagementDailyLogsTable.content}::jsonb @> ${JSON.stringify({ photoKey: objectPath })}::jsonb`,
+          )
+          .limit(1);
+
+        if (logEng) {
+          if (logEng.parentId === userId) isOwner = true;
+          else if (profile && logEng.professionalId === profile.id) isOwner = true;
         }
       }
 

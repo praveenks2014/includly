@@ -1,0 +1,50 @@
+AUDIT ONLY — Plan mode, no changes. Four bugs found during testing.
+Diagnose the root cause of each precisely. No fixes until I review.
+
+BUG 1 — Trial OTP not showing / OTP entry not working:
+The trial OTP handshake is reported as "fully implemented" but:
+(a) The parent does NOT see the Trial Start Code (6-digit OTP card) after
+paying the trial fee — the trial_pending state shows but no OTP card.
+(b) The teacher's OTP input + "Start" button either doesn't appear or
+doesn't work when the parent's code is entered.
+Diagnose: is trial_start_otp actually being GENERATED and STORED on the
+match row when verify-trial-payment fires? Check the actual DB value for
+a recent trial_pending match. And is the parent dashboard correctly
+READING and DISPLAYING trial_start_otp from the match response? Show me
+where the OTP is generated, stored, and displayed — and where in that
+chain it's failing.
+
+BUG 2 — Parent's own log not visible to parent:
+After a parent submits a daily log (Today's Update), the log is NOT
+visible to the parent in the engagement view. This was supposed to be
+fixed in the Phase 1 log-display bug fix. Check:
+(a) Is the log actually being SAVED to the DB with the correct content?
+(b) Is GET /api/engagements/:id/daily-logs returning the parent's logs?
+(c) Is the parent dashboard correctly parsing and displaying the log
+content (the JSON.parse issue we fixed — has it regressed)? Show me the
+actual log row content in the DB and what the API returns.
+
+BUG 3 — Lifecycle buttons (End Engagement, Request Change, Early Exit):
+When these are clicked, what actually happens? For each:
+(a) Does the API call succeed (what HTTP status is returned)?
+(b) Does a lifecycle request row appear in engagement_lifecycle_requests?
+(c) Is it visible in the admin panel's lifecycle queue?
+If they error, show me the error. If they succeed but nothing visible
+happens, confirm the admin queue shows the request. Also confirm: Early
+Exit currently has NO buyout payment and NO notification (this is a known
+unbuilt gap — just confirm it's the expected incomplete state, not a new
+bug).
+
+BUG 4 — Photo unauthorized error:
+Viewing a photo uploaded by the shadow teacher returns
+{"error":"Unauthorized"}. The photo was uploaded by the teacher
+and should be viewable by the parent (and the teacher). Diagnose:
+(a) Which endpoint serves the photo — GET /api/storage/private/:key?
+(b) What auth check does it perform, and why is it failing? Is it
+checking the wrong userId, the wrong role, or is the photoKey path
+malformed (the %2F URL-encoding issue we saw before)?
+(c) Is the photoKey stored correctly in the log content JSON?
+(d) Does the teacher themselves get the same Unauthorized error, or
+only the parent?
+
+Report root cause for all four. No code changes yet.

@@ -1,0 +1,53 @@
+Fix four bugs diagnosed in the audit. Show me the changed code for each
+before anything deploys. These auto-deploy to dev; no manual production
+deploy.
+
+BUG 1 — Trial OTP columns missing on production:
+Apply migration 0019_trial_otp.sql to PRODUCTION (the trial_start_otp
+and trial_end_otp columns on shadow_teacher_matches). Use psql
+$DATABASE_URL -f (auto-commit mode, same as previous migrations). Confirm
+both columns exist on production after applying. Then create a test
+trial_pending match in DEV so the OTP flow can actually be tested.
+
+BUG 2 — Zod union ordering strips parent log fields:
+In PostDailyLogBody, the content union tries TeacherLogContentSchema
+first — because all its fields are optional, it matches anything and
+strips eventsForTeacher/extraSupportAreas as unknown keys. Every parent
+log row has content = {} as a result.
+Fix: either (a) put ParentLogContentSchema FIRST in the union, or (b)
+use z.discriminatedUnion on a distinguishing field (e.g. authorRole from
+the request body, or a required field unique to each schema). Pick the
+approach that correctly validates both schemas without one swallowing the
+other. Also: the existing parent log rows with content = {} cannot be
+recovered — that's fine, they're test data. Going forward, new parent
+logs must save eventsForTeacher and extraSupportAreas correctly.
+
+BUG 3 — Admin lifecycle panel: wrong URL + field mismatch:
+3a. Admin.tsx line 1475 calls /api/admin/engagements/${id}/lifecycle but
+the route is mounted at /engagements/:id/lifecycle (no admin prefix).
+Fix the URL to match the actual route.
+3b. The LifecycleReq interface in admin.tsx expects requestType,
+requestedBy, requestedAt, notes — but the API returns type, raisedByName,
+raisedAt, reason. Fix the interface and all display references to match
+the actual API response shape. Confirm the admin lifecycle panel now shows
+the 5 pending lifecycle requests already in the DB.
+
+BUG 4 — Photo unauthorized error (two stacked issues):
+4a. The GET /storage/objects/*path endpoint uses requireAuth which expects
+a Bearer token — but <img src="..."> tags never send Authorization
+headers, so photos always get 401. Fix: serve daily-log photos via a
+SIGNED URL (generate a time-limited signed GCS URL server-side and return
+it in the daily log response) rather than proxying through an
+auth-protected endpoint. The frontend requests the signed URL (which
+requires auth) and uses it directly in the <img src>. This is the
+correct pattern for private file serving.
+4b. The ownership check only covers professional_certifications and
+identity_verifications — it has no awareness of daily-log photos.
+Fix: add an ownership check for daily-log photos — confirm the requesting
+user is either (a) the parent of the engagement the log belongs to, or
+(b) the professional of that engagement. Both teacher and parent should be
+able to view photos from their shared engagement logs.
+
+Show me the changed code for 2, 3, and 4. For Bug 1, show me the
+migration being applied and confirm the columns exist after. Do all four
+in one pass.

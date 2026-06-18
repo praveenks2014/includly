@@ -1412,10 +1412,18 @@ function ShadowTeacherTab() {
                       </div>
                     )}
                     {photoKey && (
-                      <a href={`/api/storage/objects/${photoKey.replace(/^\/objects\//, "")}`} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-[#2EC4A5] hover:underline font-medium">
+                      <button
+                        onClick={async () => {
+                          const res = await fetchWithAuth(`/api/storage/objects/${photoKey.replace(/^\/objects\//, "")}`);
+                          if (!res.ok) return;
+                          const blob = await res.blob();
+                          const url = URL.createObjectURL(blob);
+                          window.open(url, "_blank", "noopener");
+                        }}
+                        className="inline-flex items-center gap-1 text-xs text-[#2EC4A5] hover:underline font-medium cursor-pointer"
+                      >
                         📷 View photo
-                      </a>
+                      </button>
                     )}
                   </div>
                 );

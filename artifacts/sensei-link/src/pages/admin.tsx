@@ -1419,8 +1419,10 @@ interface AdminEngagement {
   createdAt: string; parentName: string | null; professionalName: string | null; childName: string | null;
 }
 interface LifecycleReq {
-  id: number; engagementId: number; requestType: string; requestedBy: string;
-  requestedAt: string; status: string; notes: string | null; adminNotes: string | null;
+  id: number; engagementId: number; type: string; method: string | null;
+  raisedByRole: string; raisedByName: string | null; status: string;
+  reason: string | null; adminNotes: string | null; effectiveEndDate: string | null;
+  raisedAt: string;
 }
 interface AdminSalaryPayment {
   id: number; engagementId: number; month: string; grossInr: string;
@@ -1472,7 +1474,7 @@ function AdminEngagementsTab() {
   async function loadLifecycle(id: number) {
     setSelectedEng(id); setLoadingLifecycle(true);
     try {
-      const data = await fetchWithAuth(`/api/admin/engagements/${id}/lifecycle`).then(r => r.json());
+      const data = await fetchWithAuth(`/api/engagements/${id}/lifecycle`).then(r => r.json());
       setLifecycle(data);
     } catch { setLifecycle([]); }
     finally { setLoadingLifecycle(false); }
@@ -1560,8 +1562,8 @@ function AdminEngagementsTab() {
                       {lifecycle.map(lc => (
                         <div key={lc.id} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg">
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-[#1A2340] capitalize">{lc.requestType.replace(/_/g, " ")} · by {lc.requestedBy}</p>
-                            <p className="text-xs text-gray-400 truncate">{lc.notes ?? "No notes"}</p>
+                            <p className="text-xs font-semibold text-[#1A2340] capitalize">{lc.type}{lc.method ? ` (${lc.method})` : ""} · by {lc.raisedByName ?? lc.raisedByRole}</p>
+                            <p className="text-xs text-gray-400 truncate">{lc.reason ?? (lc.effectiveEndDate ? `Ends: ${lc.effectiveEndDate}` : "No reason given")}</p>
                           </div>
                           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${lc.status === "pending" ? "bg-yellow-50 text-yellow-700 border-yellow-200" : lc.status === "approved" ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
                             {lc.status}

@@ -65,7 +65,6 @@ const ParentLogContentSchema = z.object({
 
 const PostDailyLogBody = z.object({
   logDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  content: z.union([TeacherLogContentSchema, ParentLogContentSchema]),
 });
 
 router.get("/engagements/:id/daily-logs", requireAuth, async (req, res): Promise<void> => {
@@ -106,7 +105,12 @@ router.post("/engagements/:id/daily-logs", requireAuth, async (req, res): Promis
   const parsed = PostDailyLogBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { logDate, content } = parsed.data;
+  const contentSchema = role === "teacher" ? TeacherLogContentSchema : ParentLogContentSchema;
+  const contentParsed = contentSchema.safeParse(req.body?.["content"]);
+  if (!contentParsed.success) { res.status(400).json({ error: contentParsed.error.message }); return; }
+
+  const { logDate } = parsed.data;
+  const content = contentParsed.data;
 
   // 2C: server-side media consent gate — reject photoKey if child hasn't granted media consent
   const rawContent = content as Record<string, unknown>;
@@ -184,11 +188,12 @@ router.patch("/engagements/:id/daily-logs/:logId", requireAuth, async (req, res)
   const today = new Date().toISOString().slice(0, 10);
   if (log.logDate !== today) { res.status(409).json({ error: "Logs can only be edited on the same day" }); return; }
 
-  const parsed = PostDailyLogBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const contentSchema = log.authorRole === "teacher" ? TeacherLogContentSchema : ParentLogContentSchema;
+  const contentParsed = contentSchema.safeParse(req.body?.["content"]);
+  if (!contentParsed.success) { res.status(400).json({ error: contentParsed.error.message }); return; }
 
   // 2C: consent gate on edit too
-  const rawContent = parsed.data.content as Record<string, unknown>;
+  const rawContent = contentParsed.data as Record<string, unknown>;
   if (rawContent["photoKey"] && eng.childId) {
     const [child] = await db
       .select({ consent: childrenTable.consent })
@@ -204,7 +209,7 @@ router.patch("/engagements/:id/daily-logs/:logId", requireAuth, async (req, res)
 
   const [updated] = await db
     .update(engagementDailyLogsTable)
-    .set({ content: JSON.stringify(parsed.data.content), updatedAt: new Date() })
+    .set({ content: JSON.stringify(contentParsed.data), updatedAt: new Date() })
     .where(eq(engagementDailyLogsTable.id, logId))
     .returning();
 
