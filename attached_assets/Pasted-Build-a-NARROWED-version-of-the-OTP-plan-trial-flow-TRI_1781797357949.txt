@@ -1,0 +1,45 @@
+Build a NARROWED version of the OTP plan — trial flow + TRIAL-ONLY OTP.
+Do NOT build the engagement start/end/buyout OTP, the pending_start
+engagement status, or any change to engagement billing — those are
+DEFERRED to a separate later build. This build is the trial only.
+
+IN SCOPE:
+1. The trial payment flow (original 2D): request trial → pay trial fee →
+trial → commit (free, credit carries to first month) / no-commit (fee
+kept). Optional pre-meeting note. Verification-block on unverified
+teachers (409).
+2. TRIAL OTP handshake (start + end only):
+   - On trial payment success (verify-trial-payment): generate +
+   store a trial_start_otp, show it to the PARENT in-app (prominent card,
+   "Share with your teacher to start the trial").
+   - Teacher enters start OTP → status trial_pending → trial_started (new
+   enum value) → generate trial_end_otp, show to parent.
+   - Teacher enters end OTP → trial_started → trial_done.
+   - Keep the existing parent-only "mark-trial-done" as a fallback path.
+   - OTP delivery: IN-APP display is primary and must work standalone. Do
+   NOT depend on push notifications (the notification system isn't
+   functional). Push can fire if it works, but in-app must be sufficient.
+
+EXPLICITLY OUT OF SCOPE (do NOT build now):
+- Engagement start/end/buyout OTP
+- pending_start engagement status (commit still creates engagement as
+"active" exactly as today — do NOT change engagement-creation status)
+- Any change to engagement billing or billing-start timing
+- Touching the lifecycle/buyout flow
+
+DON'T TOUCH / REUSE:
+- commit handler, credit carry-over, salary deduction — unchanged (commit
+still creates an active engagement as today; only add trial_done to the
+allowed-status guard as already planned)
+- chat masking, match scoring — untouched
+- extract generateOtp() to a shared util reused by both sessions and
+trial — don't duplicate it
+
+MIGRATION: number it correctly — 0019 or the next genuinely-free number
+(NOT 0015; 0016/0017/0018 are applied). Additive only: the trial_started
+enum value + trial_start_otp/trial_end_otp columns on
+shadow_teacher_matches. Do NOT add the engagement OTP columns or
+pending_start in this migration. Show me the migration SQL and the new/
+changed endpoint code BEFORE applying.
+
+This auto-deploys to dev; no manual production deploy.
