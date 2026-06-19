@@ -1752,6 +1752,7 @@ function EngagementTab() {
     createdAt: string;
     updatedAt: string;
     authorName: string | null;
+    signedPhotoUrl?: string | null;
   }
 
   interface ChildGoal {
@@ -2432,6 +2433,16 @@ function EngagementTab() {
                   <div className="flex flex-wrap gap-1">
                     {ldurs.map((d, i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 font-semibold">⏱ {d.label}: {d.minutes}m</span>)}
                   </div>
+                )}
+                {!!log.signedPhotoUrl && (
+                  <a
+                    href={log.signedPhotoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-[#2EC4A5] hover:underline font-medium"
+                  >
+                    📷 View photo
+                  </a>
                 )}
               </div>
             );

@@ -10,6 +10,9 @@ import {
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { z } from "zod";
+import { ObjectStorageService } from "../lib/objectStorage";
+
+const objectStorageService = new ObjectStorageService();
 
 const router: IRouter = Router();
 
@@ -91,7 +94,20 @@ router.get("/engagements/:id/daily-logs", requireAuth, async (req, res): Promise
     .where(eq(engagementDailyLogsTable.engagementId, id))
     .orderBy(desc(engagementDailyLogsTable.logDate));
 
-  res.json(rows);
+  const enriched = await Promise.all(
+    rows.map(async (row) => {
+      let signedPhotoUrl: string | null = null;
+      try {
+        const content = JSON.parse(row.content as string) as Record<string, unknown>;
+        const photoKey = typeof content["photoKey"] === "string" ? content["photoKey"] : null;
+        if (photoKey) {
+          signedPhotoUrl = await objectStorageService.getSignedDownloadUrl(photoKey, 300);
+        }
+      } catch {}
+      return { ...row, signedPhotoUrl };
+    })
+  );
+  res.json(enriched);
 });
 
 router.post("/engagements/:id/daily-logs", requireAuth, async (req, res): Promise<void> => {

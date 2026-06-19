@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { useUser, useAuth } from "@clerk/react";
+import { useUser } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useGetMe,
@@ -1037,7 +1037,6 @@ function ShadowTeacherTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { selectedChildId } = useSelectedChild();
-  const { getToken } = useAuth();
 
   interface STEngagement {
     id: number;
@@ -1060,6 +1059,7 @@ function ShadowTeacherTab() {
     createdAt: string;
     updatedAt: string;
     authorName: string | null;
+    signedPhotoUrl?: string | null;
   }
   interface ChildGoal {
     id: number;
@@ -1364,7 +1364,6 @@ function ShadowTeacherTab() {
                 const goalRatings = parsed["goalRatings"] as { goalId: number; label: string; level: string }[] | undefined;
                 const bcs = parsed["behaviorCounts"] as { label: string; count: number }[] | undefined;
                 const durs = parsed["durations"] as { label: string; minutes: number }[] | undefined;
-                const photoKey = parsed["photoKey"] as string | undefined;
                 const summary = log.authorRole === "teacher"
                   ? String(parsed["behaviorMood"] ?? parsed["taughtToday"] ?? "")
                   : String(parsed["eventsForTeacher"] ?? "");
@@ -1412,25 +1411,15 @@ function ShadowTeacherTab() {
                         {durs.map((d, i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 font-semibold">⏱ {d.label}: {d.minutes}m</span>)}
                       </div>
                     )}
-                    {photoKey && (
-                      <button
-                        onClick={async () => {
-                          const token = await getToken();
-                          console.log("[photo] Clerk token:", token ? `${token.slice(0, 20)}…` : null);
-                          const path = `/api/storage/objects/${photoKey.replace(/^\/objects\//, "")}`;
-                          const res = await fetch(path, {
-                            headers: token ? { Authorization: `Bearer ${token}` } : {},
-                            credentials: "include",
-                          });
-                          if (!res.ok) { console.error("[photo] fetch failed", res.status); return; }
-                          const blob = await res.blob();
-                          const objectUrl = URL.createObjectURL(blob);
-                          window.open(objectUrl, "_blank", "noopener");
-                        }}
-                        className="inline-flex items-center gap-1 text-xs text-[#2EC4A5] hover:underline font-medium cursor-pointer"
+                    {!!log.signedPhotoUrl && (
+                      <a
+                        href={log.signedPhotoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-[#2EC4A5] hover:underline font-medium"
                       >
                         📷 View photo
-                      </button>
+                      </a>
                     )}
                   </div>
                 );

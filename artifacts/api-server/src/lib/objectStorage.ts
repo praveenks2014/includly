@@ -201,6 +201,16 @@ export class ObjectStorageService {
     return normalizedPath;
   }
 
+  async getSignedDownloadUrl(objectPath: string, ttlSec = 300): Promise<string> {
+    const file = await this.getObjectEntityFile(objectPath);
+    return signObjectURL({
+      bucketName: file.bucket.name,
+      objectName: file.name,
+      method: "GET",
+      ttlSec,
+    });
+  }
+
 }
 
 function parseObjectPath(path: string): {
