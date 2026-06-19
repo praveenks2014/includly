@@ -1611,20 +1611,22 @@ function ShadowTeacherTab() {
 
       {stTab === "payments" && (
         <div className="space-y-4">
-          <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
-            <p className="text-sm font-bold text-[#1A2340]">Pay Salary</p>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Month (YYYY-MM)</p>
-              <input value={payingMonth} onChange={(e) => setPayingMonth(e.target.value)}
-                placeholder="2026-06"
-                className="w-full max-w-xs rounded-lg border border-gray-200 p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]" />
+          {active.status !== "ended" && (
+            <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
+              <p className="text-sm font-bold text-[#1A2340]">Pay Salary</p>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Month (YYYY-MM)</p>
+                <input value={payingMonth} onChange={(e) => setPayingMonth(e.target.value)}
+                  placeholder="2026-06"
+                  className="w-full max-w-xs rounded-lg border border-gray-200 p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]" />
+              </div>
+              <Button onClick={handlePaySalary} disabled={payingInProgress || !payingMonth.trim()}
+                className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-sm">
+                {payingInProgress ? <Loader2 size={14} className="animate-spin mr-1" /> : <IndianRupee size={14} className="mr-1" />}
+                Pay ₹{Number(active.monthlyFeeInr).toLocaleString("en-IN")} via Razorpay
+              </Button>
             </div>
-            <Button onClick={handlePaySalary} disabled={payingInProgress || !payingMonth.trim()}
-              className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-sm">
-              {payingInProgress ? <Loader2 size={14} className="animate-spin mr-1" /> : <IndianRupee size={14} className="mr-1" />}
-              Pay ₹{Number(active.monthlyFeeInr).toLocaleString("en-IN")} via Razorpay
-            </Button>
-          </div>
+          )}
           {payments.length === 0 ? (
             <p className="text-center text-sm text-gray-400 py-8">No salary payments yet.</p>
           ) : (
