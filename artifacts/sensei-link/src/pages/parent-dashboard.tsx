@@ -1096,7 +1096,7 @@ function ShadowTeacherTab() {
   });
 
   const active = engagements.find(e =>
-    (["active", "notice_period", "paused", "pending_start"].includes(e.status)) &&
+    (["active", "notice_period", "paused", "pending_start", "ended"].includes(e.status)) &&
     e.childId === selectedChildId
   );
 
@@ -1402,10 +1402,12 @@ function ShadowTeacherTab() {
   return (
     <div className="space-y-5">
       {/* Header card */}
-      <div className="bg-gradient-to-br from-[#2EC4A5] to-[#26a88d] rounded-2xl p-5 text-white">
+      <div className={`rounded-2xl p-5 text-white ${active.status === "ended" ? "bg-gradient-to-br from-gray-500 to-gray-600" : "bg-gradient-to-br from-[#2EC4A5] to-[#26a88d]"}`}>
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide opacity-75">Active Engagement</p>
+            <p className="text-xs font-semibold uppercase tracking-wide opacity-75">
+              {active.status === "ended" ? "Past Engagement" : "Active Engagement"}
+            </p>
             <p className="text-xl font-bold mt-1">{active.professionalName ?? `Teacher #${active.professionalId}`}</p>
             {active.childName && <p className="text-sm opacity-80 mt-0.5">For {active.childName}</p>}
           </div>
@@ -1426,7 +1428,9 @@ function ShadowTeacherTab() {
 
       {/* Sub-tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
-        {([["overview", "Overview"], ["logs", "Daily Logs"], ["goals", "Goals"], ["trends", "Trends"], ["payments", "Payments"], ["lifecycle", "Manage"]] as [string, string][]).map(([id, label]) => (
+        {(([["overview", "Overview"], ["logs", "Daily Logs"], ["goals", "Goals"], ["trends", "Trends"], ["payments", "Payments"], ["lifecycle", "Manage"]] as [string, string][])
+          .filter(([id]) => !(active.status === "ended" && id === "lifecycle"))
+        ).map(([id, label]) => (
           <button key={id} onClick={() => setStTab(id as typeof stTab)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${stTab === id ? "bg-white text-[#1A2340] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
             {label}
@@ -1434,7 +1438,23 @@ function ShadowTeacherTab() {
         ))}
       </div>
 
-      {stTab === "overview" && (
+      {stTab === "overview" && active.status === "ended" && (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 space-y-1.5">
+          <p className="text-sm font-bold text-gray-700">This engagement has ended</p>
+          <p className="text-sm text-gray-500">
+            {active.endDate
+              ? <>Ended on <span className="font-semibold">{new Date(active.endDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                {active.endedReason === "buyout" ? " via early exit." : active.endedReason === "stop" ? " after the notice period." : "."}</>
+              : "This engagement is no longer active."}
+            {" "}You can still view logs, goals, and payment history above.
+          </p>
+          <p className="text-sm text-[#2EC4A5] font-medium mt-2 cursor-pointer" onClick={() => setStTab("overview")}>
+            Want to start a new engagement? Use the <span className="underline">Find a Teacher</span> tab.
+          </p>
+        </div>
+      )}
+
+      {stTab === "overview" && active.status !== "ended" && (
         <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
           {active.status === "pending_start" ? (
             <div className="space-y-3">

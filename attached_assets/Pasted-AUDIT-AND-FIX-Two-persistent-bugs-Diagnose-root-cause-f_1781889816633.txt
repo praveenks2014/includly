@@ -1,0 +1,71 @@
+AUDIT AND FIX — Two persistent bugs. Diagnose root cause first,
+then fix in the same pass. Show me the changed code before deploying.
+
+BUG 1 — "Teacher confirmed / engagement being set up" screen shows
+after a buyout wind-down:
+
+The parent sees the post-commit success screen ("Teacher confirmed!
+Your engagement is being set up. Refresh if it doesn't appear below.")
+when the engagement is in notice_period with endedReason = "buyout".
+This is wrong — the parent should see the engagement workspace with
+the amber "ending soon" banner, not the commit-success screen.
+
+Diagnose: In parent-dashboard.tsx, what is the EXACT condition that
+decides to render the commit-success screen vs the engagement
+workspace? It is almost certainly checking match.status === "committed"
+without also checking engagement.status — so any committed match,
+regardless of whether the engagement is active, notice_period, or
+ended, shows the setup screen if no engagement renders below it.
+
+Fix: The condition for showing the commit-success screen must be:
+match.status === "committed" AND (no engagement exists OR engagement
+is pending_start). If an engagement exists with status active,
+notice_period, paused, or ended — show the engagement workspace,
+NOT the setup screen. Specifically:
+- notice_period + endedReason "buyout" → show amber "ending soon"
+  banner in the workspace
+- notice_period without buyout → show blue "notice period active"
+  banner in the workspace  
+- ended → show "engagement ended on [date]" in the workspace
+- pending_start → show the start OTP card (correct to show setup
+  screen here)
+- active → show the normal engagement workspace
+
+Show me the exact condition currently in the code and the fix.
+
+BUG 2 — "You already have an active request" for Sudikesh despite
+no active request for that child:
+
+The find-shadow-teacher widget shows "You already have an active
+request — Refreshing your status" for child Sudikesh, who has no
+active match request. This has appeared in TWO separate test sessions
+now and has never been diagnosed or fixed.
+
+Diagnose:
+(a) Where exactly is the "existing active request" check — frontend
+condition on the fetched match data, or a backend guard? Show the
+exact code.
+(b) Does it filter by BOTH parentId AND childId, or parentId only?
+If parentId only, it finds requests belonging to OTHER children
+(Arsh Vihaan, Test 3, Test 4 etc.) and wrongly blocks Sudikesh.
+(c) Check the DB: does Sudikesh have ANY match request rows at all
+(including cancelled/ended ones)? What statuses?
+(d) What statuses does the "active request" check include? If it
+includes "committed" or "ended" statuses, a completed engagement for
+another child would wrongly block a new request for Sudikesh.
+
+Fix: The existing-active-request check must filter by BOTH parentId
+AND childId (the currently selected child's ID). A request for child
+A must never block a new request for child B. Also confirm the check
+only treats genuinely active statuses as blocking (pending, shortlisted,
+trial_pending, trial_started, trial_done, committed) — not cancelled
+or ended matches.
+
+ALSO — do a full sweep: are there ANY other places in the codebase
+that check for existing match requests, engagement existence, or
+active-status by parentId alone without childId? List every instance.
+This childId-scoping bug has appeared 6+ times in different places.
+Fix ALL of them in this pass so it stops recurring.
+
+Show me the root cause for both bugs and the changed code. This
+auto-deploys to dev; no manual production deploy.

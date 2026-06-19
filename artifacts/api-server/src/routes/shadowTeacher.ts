@@ -154,11 +154,16 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
     return;
   }
 
-  // Prevent duplicate active requests
+  // Prevent duplicate active requests — scoped to THIS child only
   const existing = await db
     .select()
     .from(shadowTeacherMatchesTable)
-    .where(eq(shadowTeacherMatchesTable.parentId, req.userId!))
+    .where(
+      and(
+        eq(shadowTeacherMatchesTable.parentId, req.userId!),
+        eq(shadowTeacherMatchesTable.childId, childId),
+      )
+    )
     .orderBy(desc(shadowTeacherMatchesTable.createdAt))
     .limit(1);
 
