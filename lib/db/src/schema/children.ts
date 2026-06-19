@@ -27,6 +27,8 @@ export const childrenTable = pgTable("children", {
   budgetMaxInr: integer("budget_max_inr"),
   careNotes: jsonb("care_notes"),
   consent: jsonb("consent"),
+  schoolStartTime: text("school_start_time"),
+  schoolEndTime:   text("school_end_time"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -11,6 +11,7 @@ import {
   Plus,
   Loader2,
   Baby,
+  CheckCheck,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -23,6 +24,139 @@ import {
 import { useGetMe } from "@workspace/api-client-react";
 import { NAV, SHELL_ROOT, type Role } from "@/nav/config";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchWithAuth, getApiBase } from "@/lib/api";
+import { formatDistanceToNow } from "date-fns";
+
+interface InAppNotification {
+  id: number;
+  type: string;
+  title: string;
+  body: string;
+  isRead: boolean;
+  relatedId: number | null;
+  relatedType: string | null;
+  createdAt: string;
+}
+
+interface NotificationsResponse {
+  notifications: InAppNotification[];
+  unreadCount: number;
+}
+
+function useNotifications() {
+  return useQuery<NotificationsResponse>({
+    queryKey: ["notifications"],
+    queryFn: async () => {
+      const res = await fetchWithAuth(`${getApiBase()}/notifications`);
+      if (!res.ok) throw new Error("Failed to fetch notifications");
+      return res.json();
+    },
+    refetchInterval: 30_000,
+    staleTime: 20_000,
+  });
+}
+
+function useMarkRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      await fetchWithAuth(`${getApiBase()}/notifications/${id}/read`, { method: "PATCH" });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+function useMarkAllRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      await fetchWithAuth(`${getApiBase()}/notifications/read-all`, { method: "PATCH" });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+function NotificationBell() {
+  const { data } = useNotifications();
+  const markRead = useMarkRead();
+  const markAll = useMarkAllRead();
+
+  const unreadCount = data?.unreadCount ?? 0;
+  const items = data?.notifications ?? [];
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="relative flex h-9 w-9 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+          aria-label="Notifications"
+        >
+          <Bell size={18} />
+          {unreadCount > 0 && (
+            <span className="absolute right-1.5 top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none text-white">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80 p-0">
+        <div className="flex items-center justify-between border-b px-3 py-2">
+          <span className="text-sm font-semibold text-gray-800">
+            Notifications {unreadCount > 0 && <span className="ml-1 text-xs font-normal text-muted-foreground">({unreadCount} new)</span>}
+          </span>
+          {unreadCount > 0 && (
+            <button
+              onClick={() => markAll.mutate()}
+              disabled={markAll.isPending}
+              className="flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700 disabled:opacity-50"
+            >
+              <CheckCheck size={12} />
+              Mark all read
+            </button>
+          )}
+        </div>
+
+        {items.length === 0 ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            No notifications yet
+          </div>
+        ) : (
+          <div className="max-h-[360px] overflow-y-auto">
+            {items.map((n) => (
+              <button
+                key={n.id}
+                onClick={() => {
+                  if (!n.isRead) markRead.mutate(n.id);
+                }}
+                className={`flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left transition-colors hover:bg-gray-50 focus:outline-none ${
+                  n.isRead ? "" : "bg-teal-50/60"
+                }`}
+              >
+                <div className="flex w-full items-start justify-between gap-2">
+                  <span className={`text-[13px] leading-snug ${n.isRead ? "font-normal text-gray-700" : "font-semibold text-gray-900"}`}>
+                    {n.title}
+                  </span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {!n.isRead && (
+                      <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-teal-500" />
+                    )}
+                  </div>
+                </div>
+                <p className="line-clamp-2 text-[12px] leading-snug text-muted-foreground">
+                  {n.body}
+                </p>
+                <span className="mt-0.5 text-[11px] text-gray-400">
+                  {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function TopBar() {
   const [loc, setLocation] = useLocation();
@@ -147,12 +281,7 @@ export function TopBar() {
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
-        <button
-          className="relative flex h-9 w-9 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100"
-          aria-label="Notifications"
-        >
-          <Bell size={18} />
-        </button>
+        <NotificationBell />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

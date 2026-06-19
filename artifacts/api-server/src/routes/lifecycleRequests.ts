@@ -11,7 +11,7 @@ import {
   usersTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
-import { sendPushNotification } from "../lib/notificationService";
+import { sendPushNotification, createInAppNotification } from "../lib/notificationService";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -86,6 +86,28 @@ router.post("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise
         reason: reason ?? null,
       })
       .returning();
+
+    // Notify the other party about the pause request
+    try {
+      if (role === "teacher") {
+        await createInAppNotification(eng.parentId, {
+          type: "pause_requested",
+          title: "Your teacher requested a pause",
+          body: "Your shadow teacher has requested a pause on the engagement. Log in to approve or decline.",
+          relatedType: "engagement", relatedId: id,
+        });
+      } else {
+        const [profRow] = await db.select({ userId: professionalProfilesTable.userId })
+          .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, eng.professionalId)).limit(1);
+        if (profRow) await createInAppNotification(profRow.userId, {
+          type: "pause_requested",
+          title: "Parent requested a pause",
+          body: "The parent has requested a pause on the engagement. Log in to approve or decline.",
+          relatedType: "engagement", relatedId: id,
+        });
+      }
+    } catch { /* non-blocking */ }
+
     res.status(201).json(req_);
     return;
   }
@@ -106,6 +128,28 @@ router.post("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise
         reason: reason ?? null,
       })
       .returning();
+
+    // Notify the other party about the resume request
+    try {
+      if (role === "teacher") {
+        await createInAppNotification(eng.parentId, {
+          type: "resume_requested",
+          title: "Your teacher requested to resume",
+          body: "Your shadow teacher has requested to resume the paused engagement. Log in to approve or decline.",
+          relatedType: "engagement", relatedId: id,
+        });
+      } else {
+        const [profRow] = await db.select({ userId: professionalProfilesTable.userId })
+          .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, eng.professionalId)).limit(1);
+        if (profRow) await createInAppNotification(profRow.userId, {
+          type: "resume_requested",
+          title: "Parent requested to resume",
+          body: "The parent has requested to resume the paused engagement. Log in to approve or decline.",
+          relatedType: "engagement", relatedId: id,
+        });
+      }
+    } catch { /* non-blocking */ }
+
     res.status(201).json(req_);
     return;
   }
@@ -154,6 +198,42 @@ router.post("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise
       .set({ status: "notice_period", endDate: effectiveEndDate, updatedAt: new Date() })
       .where(eq(shadowTeacherEngagementsTable.id, id));
   }
+
+  // Notify the OTHER party about this lifecycle request
+  try {
+    if (resolvedMethod === "notice") {
+      const isParentRaising = role === "parent";
+      if (isParentRaising) {
+        // Notify teacher
+        const [profRow] = await db.select({ userId: professionalProfilesTable.userId })
+          .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, eng.professionalId)).limit(1);
+        if (profRow) await createInAppNotification(profRow.userId, {
+          type: "notice_raised",
+          title: "Notice period started",
+          body: `The parent has given notice. The engagement will end on ${effectiveEndDate}.`,
+          relatedType: "engagement", relatedId: id,
+        });
+      } else {
+        // Notify parent
+        await createInAppNotification(eng.parentId, {
+          type: "notice_raised",
+          title: "Your teacher gave notice",
+          body: `Your shadow teacher has given notice. The engagement will end on ${effectiveEndDate}.`,
+          relatedType: "engagement", relatedId: id,
+        });
+      }
+    } else if (resolvedMethod === "buyout") {
+      // Notify teacher that a buyout was initiated (payment pending)
+      const [profRow] = await db.select({ userId: professionalProfilesTable.userId })
+        .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, eng.professionalId)).limit(1);
+      if (profRow) await createInAppNotification(profRow.userId, {
+        type: "buyout_initiated",
+        title: "Parent initiated early exit",
+        body: `The parent has initiated an early exit buyout (ending ${effectiveEndDate}). Payment is pending.`,
+        relatedType: "engagement", relatedId: id,
+      });
+    }
+  } catch { /* non-blocking */ }
 
   if (resolvedMethod === "buyout" && role === "parent") {
     const razorpay = getRazorpay();
@@ -265,6 +345,21 @@ router.patch("/engagements/:id/lifecycle/:reqId/consent", requireAuth, async (re
       .where(eq(shadowTeacherEngagementsTable.id, engId));
   }
 
+  // Notify the original requester about the decision
+  try {
+    const verb = status === "approved" ? "accepted" : "rejected";
+    const action = existing.type === "pause" ? "pause request" : "resume request";
+    await createInAppNotification(existing.raisedByUserId!, {
+      type: `${existing.type}_${verb}` as string,
+      title: `Your ${action} was ${verb}`,
+      body: status === "approved"
+        ? `Your ${action} has been accepted.`
+        : `Your ${action} was declined — the engagement continues as before.`,
+      relatedType: "engagement",
+      relatedId: engId,
+    });
+  } catch { /* non-blocking */ }
+
   res.json(updated);
 });
 
@@ -336,11 +431,39 @@ router.post("/engagements/:id/lifecycle/:reqId/verify-buyout-payment", requireAu
     res.status(400).json({ error: "Payment signature verification failed" }); return;
   }
 
+  // Auto-complete the lifecycle request — no admin gate needed for standard buyout
   const [updated] = await db
     .update(engagementLifecycleRequestsTable)
-    .set({ buyoutPaymentId: razorpay_payment_id })
+    .set({
+      buyoutPaymentId: razorpay_payment_id,
+      status: "completed",
+      resolvedAt: new Date(),
+      updatedAt: new Date(),
+    })
     .where(eq(engagementLifecycleRequestsTable.id, reqId))
     .returning();
+
+  // Move engagement to notice_period — scheduler transitions to ended on effectiveEndDate
+  await db
+    .update(shadowTeacherEngagementsTable)
+    .set({ status: "notice_period", endDate: existing.effectiveEndDate, endedReason: "buyout", updatedAt: new Date() })
+    .where(eq(shadowTeacherEngagementsTable.id, engId));
+
+  // Notify teacher that payment cleared and engagement is winding down
+  try {
+    const [engRow] = await db.select({ professionalId: shadowTeacherEngagementsTable.professionalId })
+      .from(shadowTeacherEngagementsTable).where(eq(shadowTeacherEngagementsTable.id, engId)).limit(1);
+    if (engRow) {
+      const [prof] = await db.select({ userId: professionalProfilesTable.userId })
+        .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, engRow.professionalId)).limit(1);
+      if (prof) await createInAppNotification(prof.userId, {
+        type: "buyout_paid",
+        title: "Buyout payment confirmed",
+        body: `The parent's early-exit fee has been paid. Your engagement ends on ${existing.effectiveEndDate ?? "the scheduled date"}.`,
+        relatedType: "engagement", relatedId: engId,
+      });
+    }
+  } catch { /* non-blocking */ }
 
   res.json(updated);
 });

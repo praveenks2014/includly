@@ -12,6 +12,7 @@ import {
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { createLedgerHeld } from "../lib/ledger";
+import { createInAppNotification } from "../lib/notificationService";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -336,6 +337,17 @@ router.post("/engagements/:id/confirm-start", requireAuth, requireRole("professi
       bookingType: "engagement",
     });
   }
+
+  // Notify parent that engagement is now active
+  try {
+    await createInAppNotification(engagement.parentId, {
+      type: "engagement_active",
+      title: "Engagement is now active!",
+      body: "Your teacher has confirmed the start code. The engagement is officially underway.",
+      relatedType: "engagement",
+      relatedId: id,
+    });
+  } catch { /* non-blocking */ }
 
   res.json(updated);
 });

@@ -21,6 +21,8 @@ type WizardData = {
   conditions: string[];
   schoolType: string;
   grade: string;
+  schoolStartTime: string;
+  schoolEndTime: string;
   existingTherapies: { type: string; frequency: string }[];
   goalsAreas: string[];
   preferredModes: string[];
@@ -42,6 +44,8 @@ const DEFAULT: WizardData = {
   conditions: [],
   schoolType: "",
   grade: "",
+  schoolStartTime: "",
+  schoolEndTime: "",
   existingTherapies: [],
   goalsAreas: [],
   preferredModes: [],
@@ -120,10 +124,11 @@ function Chip({ label, selected, onClick }: { label: string; selected: boolean; 
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <div className="space-y-1.5">
       <label className="block text-sm font-medium text-gray-700">{label}</label>
+      {hint && <p className="text-xs text-gray-500">{hint}</p>}
       {children}
     </div>
   );
@@ -191,6 +196,8 @@ export default function ChildOnboardingPage() {
       conditions:           (c.conditions as string[]) ?? [],
       schoolType:           (c.schoolType as string) ?? "",
       grade:                (c.grade as string) ?? "",
+      schoolStartTime:      (c.schoolStartTime as string) ?? "",
+      schoolEndTime:        (c.schoolEndTime as string) ?? "",
       existingTherapies:    (c.existingTherapies as { type: string; frequency: string }[]) ?? [],
       goalsAreas:           (c.goalsAreas as string[]) ?? [],
       preferredModes:       (c.preferredModes as string[]) ?? [],
@@ -253,6 +260,8 @@ export default function ChildOnboardingPage() {
       ...(data.conditions.length > 0 && { conditions: data.conditions }),
       ...(data.schoolType && { schoolType: data.schoolType }),
       ...(data.grade.trim() && { grade: data.grade.trim() }),
+      ...(data.schoolStartTime && { schoolStartTime: data.schoolStartTime }),
+      ...(data.schoolEndTime && { schoolEndTime: data.schoolEndTime }),
       ...(data.existingTherapies.filter((t) => t.type).length > 0 && {
         existingTherapies: data.existingTherapies.filter((t) => t.type),
       }),
@@ -399,6 +408,30 @@ export default function ChildOnboardingPage() {
 
             <Field label="Grade / class">
               <TextInput value={data.grade} onChange={(v) => update("grade", v)} placeholder="e.g. Grade 2, LKG, Nursery" />
+            </Field>
+
+            <Field label="School hours (optional)" hint="Used to match shadow teachers who are free during school time">
+              <div className="flex items-center gap-3">
+                <div className="flex flex-1 flex-col gap-1">
+                  <label className="text-xs text-gray-500">Start</label>
+                  <input
+                    type="time"
+                    value={data.schoolStartTime}
+                    onChange={(e) => update("schoolStartTime", e.target.value)}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  />
+                </div>
+                <span className="mt-5 text-gray-400">–</span>
+                <div className="flex flex-1 flex-col gap-1">
+                  <label className="text-xs text-gray-500">End</label>
+                  <input
+                    type="time"
+                    value={data.schoolEndTime}
+                    onChange={(e) => update("schoolEndTime", e.target.value)}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
             </Field>
 
             <Field label="Current therapies">

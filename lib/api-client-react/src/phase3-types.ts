@@ -41,6 +41,8 @@ export interface ChildResponseType {
   budgetMaxInr: number | null;
   careNotes: CareNotesType | null;
   consent: ChildConsentType | null;
+  schoolStartTime: string | null;
+  schoolEndTime: string | null;
   completionPct?: number;
   createdAt: string;
   updatedAt: string;

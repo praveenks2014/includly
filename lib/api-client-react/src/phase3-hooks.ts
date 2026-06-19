@@ -34,6 +34,8 @@ export type CreateChildPayload = {
   budgetMaxInr?: number | null;
   careNotes?: CareNotesType;
   consent: { intakeShare: boolean; media: boolean; reports: boolean };
+  schoolStartTime?: string | null;
+  schoolEndTime?: string | null;
 };
 
 export type UpdateChildPayload = {

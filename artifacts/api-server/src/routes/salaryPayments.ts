@@ -10,6 +10,7 @@ import {
   professionalProfilesTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
+import { createInAppNotification } from "../lib/notificationService";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -228,6 +229,32 @@ router.post("/engagements/:id/verify-salary-payment", requireAuth, requireRole("
       .where(eq(shadowTeacherEngagementsTable.id, id));
   }
 
+  // Notify teacher that salary has been paid (in-app + best-effort push)
+  try {
+    const [eng] = await db
+      .select({ professionalId: shadowTeacherEngagementsTable.professionalId })
+      .from(shadowTeacherEngagementsTable)
+      .where(eq(shadowTeacherEngagementsTable.id, id))
+      .limit(1);
+    if (eng) {
+      const [prof] = await db
+        .select({ userId: professionalProfilesTable.userId })
+        .from(professionalProfilesTable)
+        .where(eq(professionalProfilesTable.id, eng.professionalId))
+        .limit(1);
+      if (prof) {
+        const netAmount = updated!.netInr;
+        await createInAppNotification(prof.userId, {
+          type: "salary_paid",
+          title: "Salary payment received",
+          body: `Your salary of ₹${netAmount.toLocaleString("en-IN")} net for ${updated!.month} has been paid.`,
+          relatedType: "engagement",
+          relatedId: id,
+        });
+      }
+    }
+  } catch { /* non-blocking */ }
+
   res.json(updated);
 });
 
@@ -262,6 +289,41 @@ router.get("/engagements/:id/payments", requireAuth, async (req, res): Promise<v
     .select()
     .from(engagementSalaryPaymentsTable)
     .where(eq(engagementSalaryPaymentsTable.engagementId, id))
+    .orderBy(desc(engagementSalaryPaymentsTable.month));
+
+  res.json(rows);
+});
+
+// GET /my-salary-payments — teacher sees their own salary history across all engagements
+router.get("/my-salary-payments", requireAuth, requireRole("professional"), async (req, res): Promise<void> => {
+  const [prof] = await db
+    .select({ id: professionalProfilesTable.id })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.userId, req.userId!))
+    .limit(1);
+
+  if (!prof) { res.status(404).json({ error: "Professional profile not found" }); return; }
+
+  const rows = await db
+    .select({
+      id: engagementSalaryPaymentsTable.id,
+      engagementId: engagementSalaryPaymentsTable.engagementId,
+      month: engagementSalaryPaymentsTable.month,
+      grossInr: engagementSalaryPaymentsTable.grossInr,
+      platformCutInr: engagementSalaryPaymentsTable.platformCutInr,
+      trialCreditInr: engagementSalaryPaymentsTable.trialCreditInr,
+      netInr: engagementSalaryPaymentsTable.netInr,
+      status: engagementSalaryPaymentsTable.status,
+      paidAt: engagementSalaryPaymentsTable.paidAt,
+    })
+    .from(engagementSalaryPaymentsTable)
+    .innerJoin(
+      shadowTeacherEngagementsTable,
+      and(
+        eq(engagementSalaryPaymentsTable.engagementId, shadowTeacherEngagementsTable.id),
+        eq(shadowTeacherEngagementsTable.professionalId, prof.id),
+      ),
+    )
     .orderBy(desc(engagementSalaryPaymentsTable.month));
 
   res.json(rows);

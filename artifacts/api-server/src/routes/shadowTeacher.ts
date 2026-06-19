@@ -14,11 +14,12 @@ import {
   professionalProfilesTable,
   childrenTable,
   negotiationOffersTable,
+  professionalAvailabilityTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { z } from "zod/v4";
 import { rankCandidates, maskBody, type MatchSnapshot, type TierDef } from "../lib/shadowTeacherScoring";
-import { notifyMatchShortlisted, notifyMatchChatMessage, notifyParentOnTrialDone } from "../lib/notificationService";
+import { notifyMatchShortlisted, notifyMatchChatMessage, notifyParentOnTrialDone, createInAppNotification } from "../lib/notificationService";
 import { generateOtp } from "../lib/otp";
 
 const router: IRouter = Router();
@@ -38,6 +39,66 @@ async function getSettings() {
 function parseTiers(tiersJson: string | null): TierDef[] {
   if (!tiersJson) return [];
   try { return JSON.parse(tiersJson) as TierDef[]; } catch { return []; }
+}
+
+/**
+ * School-hours pre-filter for shadow-teacher matching.
+ *
+ * A professional is KEPT when:
+ *  - The child has no school hours set (null → no filter)
+ *  - The professional has NO weekday availability (assumed fully flexible)
+ *  - The professional has at least one weekday slot that overlaps with the
+ *    child's school hours (shadow teachers must be available during school)
+ *
+ * Weekday = dayOfWeek 1-5 (Mon-Fri).  Overlap test: slotStart < schoolEnd && slotEnd > schoolStart.
+ */
+async function filterBySchoolHours(
+  professionals: { id: number }[],
+  childId: number | null,
+): Promise<number[]> {
+  if (!childId || professionals.length === 0) return professionals.map((p) => p.id);
+
+  const [child] = await db
+    .select({ schoolStartTime: childrenTable.schoolStartTime, schoolEndTime: childrenTable.schoolEndTime })
+    .from(childrenTable)
+    .where(eq(childrenTable.id, childId))
+    .limit(1);
+
+  if (!child?.schoolStartTime || !child?.schoolEndTime) return professionals.map((p) => p.id);
+
+  const schoolStart = child.schoolStartTime;
+  const schoolEnd   = child.schoolEndTime;
+  const proIds      = professionals.map((p) => p.id);
+
+  const slots = await db
+    .select({
+      professionalId: professionalAvailabilityTable.professionalId,
+      startTime:      professionalAvailabilityTable.startTime,
+      endTime:        professionalAvailabilityTable.endTime,
+    })
+    .from(professionalAvailabilityTable)
+    .where(
+      and(
+        inArray(professionalAvailabilityTable.professionalId, proIds),
+        eq(professionalAvailabilityTable.isActive, true),
+        sql`${professionalAvailabilityTable.dayOfWeek} BETWEEN 1 AND 5`,
+      ),
+    );
+
+  const slotsByPro = new Map<number, { startTime: string; endTime: string }[]>();
+  for (const slot of slots) {
+    const arr = slotsByPro.get(slot.professionalId) ?? [];
+    arr.push({ startTime: slot.startTime, endTime: slot.endTime });
+    slotsByPro.set(slot.professionalId, arr);
+  }
+
+  return professionals
+    .filter((p) => {
+      const proSlots = slotsByPro.get(p.id);
+      if (!proSlots || proSlots.length === 0) return true; // flexible — no slots recorded → pass
+      return proSlots.some((s) => s.startTime < schoolEnd && s.endTime > schoolStart);
+    })
+    .map((p) => p.id);
 }
 
 function maskProfile(
@@ -199,7 +260,7 @@ router.post("/shadow-teacher/:matchId/verify-request-payment", requireAuth, requ
     .where(eq(shadowTeacherMatchesTable.id, matchId));
 
   // Run scoring and surface up to 3 candidates
-  const professionals = await db
+  const allProfessionals = await db
     .select()
     .from(professionalProfilesTable)
     .where(
@@ -209,6 +270,11 @@ router.post("/shadow-teacher/:matchId/verify-request-payment", requireAuth, requ
         isNotNull(professionalProfilesTable.pricingMinINR),
       ),
     );
+
+  // School hours pre-filter: remove professionals who have NO weekday overlap with child's school hours
+  const passedIds = await filterBySchoolHours(allProfessionals, match.childId ?? null);
+  const passedSet = new Set(passedIds);
+  const professionals = allProfessionals.filter((p) => passedSet.has(p.id));
 
   const settings = await getSettings();
   const tiers = parseTiers(settings.tiersJson);
@@ -237,11 +303,20 @@ router.post("/shadow-teacher/:matchId/verify-request-payment", requireAuth, requ
     );
     candidateCount = ranked.length;
 
-    // Push notify teachers (fire-and-forget)
+    // Push + in-app notify teachers
     const teacherUserIds = professionals
       .filter((p) => ranked.some((r) => r.professionalId === p.id))
       .map((p) => p.userId);
     void notifyMatchShortlisted(teacherUserIds).catch(() => {});
+    void Promise.allSettled(teacherUserIds.map((uid) =>
+      createInAppNotification(uid, {
+        type: "match_shortlisted",
+        title: "A family is interested in you",
+        body: "A parent has shortlisted you for their child. Log in to view details and chat.",
+        relatedType: "match",
+        relatedId: match.id,
+      }),
+    ));
   }
 
   // Set high-water-mark counter (never decrements from here)
@@ -681,6 +756,30 @@ router.post("/shadow-teacher/:matchId/candidates/:candidateId/offers", requireAu
     matchId, candidateId, raisedByUserId: req.userId!, raisedByRole: ctx.myRole,
     amountInr: parsed.data.amountInr, status: "pending",
   }).returning();
+
+  // Notify the other party about the new offer
+  try {
+    if (ctx.myRole === "parent") {
+      // Notify teacher
+      const [pro] = await db.select({ userId: professionalProfilesTable.userId })
+        .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, ctx.candidate.professionalId)).limit(1);
+      if (pro) await createInAppNotification(pro.userId, {
+        type: "offer_raised",
+        title: "New salary offer from parent",
+        body: `A parent proposed ₹${parsed.data.amountInr.toLocaleString("en-IN")}/month. Log in to respond.`,
+        relatedType: "match", relatedId: matchId,
+      });
+    } else {
+      // Notify parent
+      await createInAppNotification(ctx.match.parentId, {
+        type: "offer_raised",
+        title: "Counter-offer from teacher",
+        body: `Your teacher proposed ₹${parsed.data.amountInr.toLocaleString("en-IN")}/month. Log in to respond.`,
+        relatedType: "match", relatedId: matchId,
+      });
+    }
+  } catch { /* non-blocking */ }
+
   res.status(201).json(offer);
 });
 
@@ -704,6 +803,19 @@ router.patch("/shadow-teacher/:matchId/candidates/:candidateId/offers/:offerId/a
     .set({ status: "accepted", updatedAt: new Date() })
     .where(eq(negotiationOffersTable.id, offerId))
     .returning();
+
+  // Notify the person who raised the offer that it was accepted
+  try {
+    if (offer.raisedByUserId) {
+      await createInAppNotification(offer.raisedByUserId, {
+        type: "offer_accepted",
+        title: "Offer accepted!",
+        body: `Your proposed rate of ₹${offer.amountInr.toLocaleString("en-IN")}/month has been agreed. Proceed to commit.`,
+        relatedType: "match", relatedId: matchId,
+      });
+    }
+  } catch { /* non-blocking */ }
+
   res.json(accepted);
 });
 
@@ -822,6 +934,17 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
       updatedAt: new Date(),
     })
     .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  // Notify parent: engagement scheduled, OTP available on startDate
+  try {
+    await createInAppNotification(match.parentId, {
+      type: "engagement_start_otp",
+      title: "Engagement scheduled",
+      body: `Your engagement starts on ${effectiveStartDate}. Open the app on that date to get the start code for your teacher.`,
+      relatedType: "engagement",
+      relatedId: engagement!.id,
+    });
+  } catch { /* non-blocking */ }
 
   res.json({
     engagementId: engagement!.id,
@@ -991,6 +1114,17 @@ router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requir
       updatedAt: new Date(),
     })
     .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  // Notify parent: trial OTP is now visible in-app
+  try {
+    await createInAppNotification(match.parentId, {
+      type: "trial_otp_ready",
+      title: "Trial day scheduled — your start code is ready",
+      body: "Open the app to get the start code you'll show your teacher at the beginning of the trial day.",
+      relatedType: "match",
+      relatedId: matchId,
+    });
+  } catch { /* non-blocking */ }
 
   res.json({ matchId, status: "trial_pending" });
 });
@@ -1205,7 +1339,7 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
       .where(eq(shadowMatchCandidatesTable.matchId, matchId));
     const excludeIds = everShown.map((r) => r.professionalId);
 
-    const candidates = await db
+    const allCandidates = await db
       .select()
       .from(professionalProfilesTable)
       .where(
@@ -1218,6 +1352,11 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
             : sql`true`,
         ),
       );
+
+    // Apply school-hours filter on refill too
+    const refillPassedIds = await filterBySchoolHours(allCandidates, match.childId ?? null);
+    const refillPassedSet = new Set(refillPassedIds);
+    const candidates = allCandidates.filter((p) => refillPassedSet.has(p.id));
 
     if (candidates.length > 0) {
       const settings = await getSettings();

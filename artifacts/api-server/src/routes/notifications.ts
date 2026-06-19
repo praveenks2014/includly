@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, desc, sql } from "drizzle-orm";
 import webpush from "web-push";
-import { db, pushSubscriptionsTable, notificationPreferencesTable, usersTable, contactUnlocksTable, professionalProfilesTable } from "@workspace/db";
+import { db, pushSubscriptionsTable, notificationPreferencesTable, notificationsTable, usersTable, contactUnlocksTable, professionalProfilesTable } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -18,6 +18,55 @@ function setupWebPush(): boolean {
   webpush.setVapidDetails(subject, publicKey, privateKey);
   return true;
 }
+
+// ── GET /notifications — in-app inbox (newest first, max 50) ─────────────────
+router.get("/notifications", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const rows = await db
+    .select()
+    .from(notificationsTable)
+    .where(eq(notificationsTable.userId, req.userId!))
+    .orderBy(desc(notificationsTable.createdAt))
+    .limit(50);
+
+  const [{ count }] = await db
+    .select({ count: sql<number>`cast(count(*) as int)` })
+    .from(notificationsTable)
+    .where(and(eq(notificationsTable.userId, req.userId!), eq(notificationsTable.isRead, false)));
+
+  res.json({ notifications: rows, unreadCount: count ?? 0 });
+});
+
+// ── PATCH /notifications/:id/read — mark own notification as read ─────────────
+router.patch("/notifications/:id/read", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [existing] = await db
+    .select()
+    .from(notificationsTable)
+    .where(eq(notificationsTable.id, id))
+    .limit(1);
+
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+  if (existing.userId !== req.userId!) { res.status(403).json({ error: "Access denied" }); return; }
+
+  const [updated] = await db
+    .update(notificationsTable)
+    .set({ isRead: true })
+    .where(eq(notificationsTable.id, id))
+    .returning();
+
+  res.json(updated);
+});
+
+// ── PATCH /notifications/read-all — mark all own notifications as read ────────
+router.patch("/notifications/read-all", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  await db
+    .update(notificationsTable)
+    .set({ isRead: true })
+    .where(and(eq(notificationsTable.userId, req.userId!), eq(notificationsTable.isRead, false)));
+  res.json({ ok: true });
+});
 
 router.get("/notifications/vapid-public-key", (_req: Request, res: Response): void => {
   const key = getVapidPublicKey();

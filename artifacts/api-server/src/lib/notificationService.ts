@@ -1,5 +1,5 @@
 import webpush from "web-push";
-import { db, pushSubscriptionsTable, notificationPreferencesTable } from "@workspace/db";
+import { db, pushSubscriptionsTable, notificationPreferencesTable, notificationsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 function getWebPushConfig() {
@@ -49,6 +49,39 @@ export async function sendPushNotification(userId: number, payload: PushPayload)
   );
 }
 
+/**
+ * Creates an in-app notification row FIRST (guaranteed), then attempts push
+ * notification as a best-effort fire-and-forget. A push failure never rolls back
+ * or prevents the in-app row.
+ */
+export async function createInAppNotification(
+  userId: number,
+  data: {
+    type: string;
+    title: string;
+    body: string;
+    relatedId?: number;
+    relatedType?: string;
+  },
+): Promise<void> {
+  await db.insert(notificationsTable).values({
+    userId,
+    type: data.type,
+    title: data.title,
+    body: data.body,
+    relatedId: data.relatedId ?? null,
+    relatedType: data.relatedType ?? null,
+  });
+
+  try {
+    await sendPushNotification(userId, {
+      title: data.title,
+      body: data.body,
+      url: "/dashboard",
+    });
+  } catch { /* push failure is non-blocking */ }
+}
+
 export async function getUserPreferences(userId: number) {
   const [prefs] = await db
     .select()
@@ -85,7 +118,7 @@ export async function notifyCommunityReply(postAuthorUserId: number, professiona
   if (prefs && prefs.onCommunityReply === false) return;
 
   await sendPushNotification(postAuthorUserId, {
-    title: "💬 New answer on your question",
+    title: "New answer on your question",
     body: professionalName
       ? `${professionalName} answered your community question.`
       : "A specialist answered your community question.",

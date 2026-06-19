@@ -1,12 +1,12 @@
-import { and, eq, gte, isNull, lt, lte, ne, sql } from "drizzle-orm";
+import { and, eq, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import {
   db,
   sessionBookingsTable,
   usersTable,
   notificationPreferencesTable,
-  communityPostsTable,
+  shadowTeacherEngagementsTable,
 } from "@workspace/db";
-import { sendPushNotification } from "./notificationService";
+import { sendPushNotification, createInAppNotification } from "./notificationService";
 import { logger } from "./logger";
 
 const LOW_CREDIT_THRESHOLD_INR = 200;
@@ -179,6 +179,49 @@ function formatTime(t: string): string {
   return `${hr % 12 || 12}:${m} ${hr < 12 ? "AM" : "PM"}`;
 }
 
+// ── Notice-period → ended transition ─────────────────────────────────────────
+// Runs daily (each scheduler tick). Finds engagements whose end_date has passed
+// and transitions them from notice_period to ended.
+async function expireNoticePeriods(): Promise<void> {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const expired = await db
+      .select({ id: shadowTeacherEngagementsTable.id, parentId: shadowTeacherEngagementsTable.parentId, professionalId: shadowTeacherEngagementsTable.professionalId })
+      .from(shadowTeacherEngagementsTable)
+      .where(
+        and(
+          eq(shadowTeacherEngagementsTable.status, "notice_period"),
+          sql`${shadowTeacherEngagementsTable.endDate} IS NOT NULL AND ${shadowTeacherEngagementsTable.endDate} <= ${today}`,
+        ),
+      );
+
+    for (const eng of expired) {
+      await db
+        .update(shadowTeacherEngagementsTable)
+        .set({ status: "ended", updatedAt: new Date() })
+        .where(eq(shadowTeacherEngagementsTable.id, eng.id));
+
+      // Notify parent
+      try {
+        await createInAppNotification(eng.parentId, {
+          type: "engagement_ended",
+          title: "Engagement has ended",
+          body: "The notice period has concluded and the engagement is now closed.",
+          relatedType: "engagement",
+          relatedId: eng.id,
+        });
+      } catch { /* non-blocking */ }
+    }
+
+    if (expired.length > 0) {
+      logger.info({ count: expired.length }, "Notice-period engagements transitioned to ended");
+    }
+  } catch (err) {
+    logger.warn({ err }, "Notice-period expiry job failed");
+  }
+}
+
 // ── Scheduler init — runs all nudges every hour ─────────────────────────────────
 export function initNudgeScheduler(): void {
   const INTERVAL_MS = 60 * 60 * 1000;
@@ -187,6 +230,7 @@ export function initNudgeScheduler(): void {
     void sendSessionReminders();
     void sendWinbackNudges();
     void sendLowCreditNudges();
+    void expireNoticePeriods();
   };
 
   setInterval(runAll, INTERVAL_MS);

@@ -1182,11 +1182,49 @@ function BookingsTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: EARNINGS
 // ═══════════════════════════════════════════════════════════════════════════════
+interface SalaryPaymentRow {
+  id: number;
+  engagementId: number;
+  month: string;
+  grossInr: number;
+  platformCutInr: number;
+  trialCreditInr: number;
+  netInr: number;
+  status: string;
+  paidAt: string | null;
+}
+
+function useMySalaryPayments() {
+  return useQuery<SalaryPaymentRow[]>({
+    queryKey: ["my-salary-payments"],
+    queryFn: async () => {
+      const BASE = (window.location.origin) + (import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "");
+      const res = await fetchWithAuth(`${BASE}/api/my-salary-payments`);
+      if (!res.ok) throw new Error("Failed to fetch salary payments");
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+}
+
 function EarningsTab() {
   const { data: sessions = [] } = useGetMySessions({ role: "professional" } as Parameters<typeof useGetMySessions>[0]);
+  const { data: salaryPayments = [], isLoading: salaryLoading } = useMySalaryPayments();
   const typedSessions = sessions as SessionBookingWithDetails[];
   const completed = typedSessions.filter((s) => s.status === "completed");
-  const totalEarnings = completed.reduce((sum, s) => sum + (s.amountInr ?? 0), 0);
+  const sessionTotal = completed.reduce((sum, s) => sum + (s.amountInr ?? 0), 0);
+
+  const paidSalaries = salaryPayments.filter((p) => p.status === "paid");
+  const salaryTotal = paidSalaries.reduce((sum, p) => sum + p.netInr, 0);
+  const totalEarnings = sessionTotal + salaryTotal;
+
+  const thisMonthStr = new Date().toISOString().slice(0, 7);
+  const thisMonthSalary = paidSalaries
+    .filter((p) => p.month === thisMonthStr)
+    .reduce((sum, p) => sum + p.netInr, 0);
+  const thisMonthSession = completed
+    .filter((s) => new Date(s.bookedDate).toISOString().slice(0, 7) === thisMonthStr)
+    .reduce((sum, s) => sum + (s.amountInr ?? 0), 0);
 
   return (
     <div className="space-y-5">
@@ -1194,9 +1232,9 @@ function EarningsTab() {
 
       <div className="grid sm:grid-cols-3 gap-4">
         {[
-          { label: "Total Earned", value: `₹${totalEarnings.toLocaleString("en-IN")}`, icon: <IndianRupee size={16} className="text-green-600" />, bg: "bg-green-50" },
-          { label: "Completed Sessions", value: completed.length, icon: <CalendarCheck size={16} className="text-[#2EC4A5]" />, bg: "bg-[#2EC4A5]/10" },
-          { label: "This Month", value: `₹${completed.filter((s) => new Date(s.bookedDate).getMonth() === new Date().getMonth()).reduce((sum, s) => sum + (s.amountInr ?? 0), 0).toLocaleString("en-IN")}`, icon: <TrendingUp size={16} className="text-violet-600" />, bg: "bg-violet-50" },
+          { label: "Total Earned (Net)", value: `₹${totalEarnings.toLocaleString("en-IN")}`, icon: <IndianRupee size={16} className="text-green-600" />, bg: "bg-green-50" },
+          { label: "Salary Payments", value: paidSalaries.length, icon: <CalendarCheck size={16} className="text-[#2EC4A5]" />, bg: "bg-[#2EC4A5]/10" },
+          { label: "This Month (Net)", value: `₹${(thisMonthSalary + thisMonthSession).toLocaleString("en-IN")}`, icon: <TrendingUp size={16} className="text-violet-600" />, bg: "bg-violet-50" },
         ].map((stat) => (
           <div key={stat.label} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-[0_4px_24px_rgba(26,35,64,0.08)]">
             <div className={`w-9 h-9 ${stat.bg} rounded-xl flex items-center justify-center mb-3`}>{stat.icon}</div>
@@ -1206,35 +1244,87 @@ function EarningsTab() {
         ))}
       </div>
 
-      <div className="bg-[#FFB830]/10 border border-[#FFB830]/30 rounded-xl p-4 flex items-start gap-3">
-        <AlertCircle size={16} className="text-[#FFB830] mt-0.5 shrink-0" />
-        <p className="text-sm text-[#1A2340]">
-          <strong>Includly is currently free.</strong> Earnings tracking will activate once paid sessions are enabled. During the beta period, all session fees are ₹0 and earnings are ₹0.
-        </p>
+      {/* Shadow teacher salary payments */}
+      <div className="space-y-3">
+        <h2 className="font-semibold text-[#1A2340]">Shadow Teacher Salary</h2>
+        {salaryLoading ? (
+          <div className="flex items-center gap-2 py-4 text-sm text-gray-400">
+            <Loader2 size={14} className="animate-spin" /> Loading…
+          </div>
+        ) : salaryPayments.length === 0 ? (
+          <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center shadow-sm">
+            <IndianRupee size={32} className="mx-auto mb-2 text-gray-300" />
+            <p className="font-semibold text-gray-500">No salary payments yet</p>
+            <p className="text-xs text-gray-400 mt-1">Salary history will appear here once a parent pays your monthly fee.</p>
+          </div>
+        ) : (
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-[0_4px_24px_rgba(26,35,64,0.08)] overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/70">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Month</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Gross</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Platform cut</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Trial credit</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Net (you receive)</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {salaryPayments.map((p) => (
+                    <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-4 py-3 font-medium text-[#1A2340]">{p.month}</td>
+                      <td className="px-4 py-3 text-right text-gray-600">₹{p.grossInr.toLocaleString("en-IN")}</td>
+                      <td className="px-4 py-3 text-right text-gray-400">−₹{p.platformCutInr.toLocaleString("en-IN")}</td>
+                      <td className="px-4 py-3 text-right text-gray-400">
+                        {p.trialCreditInr > 0 ? `−₹${p.trialCreditInr.toLocaleString("en-IN")}` : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-green-700">
+                        ₹{p.netInr.toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-4 py-3">
+                        {p.status === "paid" ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
+                            <CheckCircle2 size={10} /> Paid
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-[11px] font-semibold text-yellow-700">
+                            <Clock size={10} /> Pending
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="border-t border-gray-100 bg-gray-50/50 px-4 py-2.5">
+              <p className="text-[11px] text-gray-400">
+                Disbursements are processed manually by Includly. Contact support if a payment is overdue.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
-      {completed.length > 0 ? (
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-[0_4px_24px_rgba(26,35,64,0.08)] overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-50">
-            <h2 className="font-semibold text-[#1A2340]">Completed Sessions</h2>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {completed.map((s) => (
-              <div key={s.id} className="flex items-center gap-4 px-5 py-3.5">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-[#1A2340]">{s.parentName ?? "Parent"}</p>
-                  <p className="text-xs text-gray-400">{fmtDate(s.bookedDate)} · {s.durationMinutes} min</p>
+      {/* Session earnings (legacy) */}
+      {completed.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="font-semibold text-[#1A2340]">Session Earnings</h2>
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-[0_4px_24px_rgba(26,35,64,0.08)] overflow-hidden">
+            <div className="divide-y divide-gray-50">
+              {completed.map((s) => (
+                <div key={s.id} className="flex items-center gap-4 px-5 py-3.5">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-[#1A2340]">{s.parentName ?? "Parent"}</p>
+                    <p className="text-xs text-gray-400">{fmtDate(s.bookedDate)} · {s.durationMinutes} min</p>
+                  </div>
+                  <p className="text-sm font-semibold text-green-700">₹{s.amountInr ?? 0}</p>
                 </div>
-                <p className="text-sm font-semibold text-green-700">₹{s.amountInr ?? 0}</p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="bg-white border border-gray-100 rounded-2xl p-10 text-center shadow-sm">
-          <IndianRupee size={36} className="mx-auto mb-3 text-gray-300" />
-          <p className="font-semibold text-gray-500">No completed sessions yet</p>
-          <p className="text-sm text-gray-400 mt-1">Earnings will appear here as you complete sessions with parents.</p>
         </div>
       )}
     </div>

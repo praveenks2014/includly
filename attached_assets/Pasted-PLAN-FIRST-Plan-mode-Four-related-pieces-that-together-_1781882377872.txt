@@ -1,0 +1,74 @@
+PLAN FIRST — Plan mode. Four related pieces that together make the
+ongoing engagement relationship fully self-managed and visible.
+
+PART A — In-app notification system (prerequisite for B):
+The notification bell currently 404s and nothing is wired. Build the
+foundation:
+- New notifications table: id, userId, type, title, body, isRead,
+  relatedId, relatedType, createdAt.
+- GET /api/notifications — returns recent + unread for the logged-in
+  user (paginated, newest first).
+- PATCH /api/notifications/:id/read — mark as read.
+- Fix the notification bell to call the real endpoint and show an
+  unread count badge.
+- Wire these shadow-teacher events to create notification rows:
+  notice raised → notify other party; pause requested → notify other
+  party; pause accepted/rejected → notify requester; buyout initiated
+  → notify teacher; trial OTP generated → notify parent; engagement
+  start OTP available → notify parent; salary paid → notify teacher;
+  new match candidate shortlisted → notify teacher.
+- In-app only for now. Push via existing web-push infra if it works
+  but in-app must work standalone without push. No email/SMS yet.
+
+PART B — Lifecycle self-management (parent + teacher, no admin required):
+Currently all lifecycle events (notice/pause/buyout) require admin
+approval. Change to direct party management with admin override only.
+
+Notice: either parent OR teacher raises a notice → engagement
+immediately transitions to notice_period (no admin approval). The
+OTHER party is notified via Part A. Admin can cancel or accelerate.
+
+Pause: mutual agreement (Part A handles notification). Either party
+raises → other party accepts/rejects in-app → if accepted: paused;
+if rejected: stays active. Admin can force-pause.
+
+Early Exit / Buyout (parent only): parent initiates → Razorpay
+order created for buyout amount (parentBuyoutDays × monthlyFeeInr
+÷ 30) → parent pays → teacher notified → engagement ends on
+effectiveEndDate. No admin approval for standard flow; admin can
+intervene in disputes.
+
+Admin override: admin can cancel/modify any lifecycle request, force-
+end any engagement, or manually set any engagement status.
+
+PART C — Teacher salary-received view:
+The teacher currently has no visibility into what they've been paid.
+Add a salary history view in the teacher's Engagement tab or Earnings
+tab showing: month, gross amount, platform cut, net amount, payment
+status, and payment date. Reads from engagement_salary_payments
+filtered to this teacher's engagements. Read-only.
+
+PART D — School hours + availability scheduling:
+Parent enters the child's SCHOOL HOURS (start time + end time) on the
+child profile or during the shadow-teacher request. A shadow teacher
+with an active engagement is BLOCKED from being shown as a candidate
+for other match requests that would overlap with the child's school
+hours ±1 hour, EXCEPT on Saturdays and Sundays.
+
+Parent can mark SCHOOL HOLIDAYS and PLANNED LEAVE DAYS (child absent —
+no session expected on those days; salary not affected unless admin
+decides otherwise).
+
+Teacher can REQUEST PLANNED LEAVE with advance notice (propose a
+sensible minimum notice window as a default — e.g. 48 hours — and make
+it admin-configurable).
+
+Schema: school_hours (start, end) on children or child_engagement
+snapshot; a leave_requests table or calendar_events table for holidays
+and leaves.
+
+Show me the plan for all four parts: notification table + endpoints,
+lifecycle flow changes, salary view, school hours schema and matching
+integration. List dependencies (Part B depends on Part A being built
+first). List all files touched and any migrations. No code until I
+approve.

@@ -68,6 +68,8 @@ const ChildBody = z.object({
   budgetMaxInr: z.number().int().nullable().optional(),
   careNotes: CareNotesBody.optional(),
   consent: ConsentBody,
+  schoolStartTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+  schoolEndTime:   z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
 });
 
 const UpdateChildBody = ChildBody.omit({ consent: true }).partial().extend({
