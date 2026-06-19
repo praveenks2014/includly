@@ -71,34 +71,26 @@ const CATEGORY_CARDS = [
     count: 360,
     specialty: "special_educator",
   },
-  {
-    icon: <Building2 size={28} className="text-emerald-600" />,
-    bg: "bg-emerald-50",
-    title: "Therapy Centre",
-    desc: "Multi-discipline ABA, sensory, and therapy centres equipped for comprehensive support.",
-    count: 85,
-    specialty: "therapy_centre",
-  },
 ];
 
 const HOW_IT_WORKS = {
   parents: [
-    { num: "01", icon: <UserCheck size={22} className="text-teal-600" />, title: "Create Your Profile", desc: "Sign up free and tell us about your child's needs, age, and location." },
-    { num: "02", icon: <Search size={22} className="text-teal-600" />, title: "Search & Filter", desc: "Filter by specialty, city, availability and session mode to find the perfect match." },
-    { num: "03", icon: <Phone size={22} className="text-teal-600" />, title: "Book a Free Intro Call", desc: "Unlock contact details and connect directly with your chosen specialist." },
-    { num: "04", icon: <Star size={22} className="text-teal-600" />, title: "Track Progress", desc: "Log sessions, track milestones, and leave a review to help other families." },
+    { num: "01", icon: <UserCheck size={22} className="text-teal-600" />, title: "Create your child's profile", desc: "Add your child's needs, conditions, school, and therapy goals. Profiles help specialists understand your child from day one." },
+    { num: "02", icon: <Sparkles size={22} className="text-teal-600" />, title: "Get matched", desc: "Receive scored shadow teacher candidates tailored to your child, or search therapists, special educators, and specialists directly." },
+    { num: "03", icon: <Phone size={22} className="text-teal-600" />, title: "Connect & try", desc: "Chat, agree on terms, and book a trial day (shadow teachers) or a first session (therapists and specialists)." },
+    { num: "04", icon: <CheckCircle2 size={22} className="text-teal-600" />, title: "Track progress", desc: "Daily logs, goals, and milestones — tracked in your engagement workspace so nothing is lost." },
   ],
   professionals: [
-    { num: "01", icon: <UserCheck size={22} className="text-teal-600" />, title: "Sign Up Free", desc: "Create an account as a specialist or centre — no credit card needed." },
-    { num: "02", icon: <Sparkles size={22} className="text-teal-600" />, title: "Build Your Profile", desc: "Add your specialties, qualifications, availability, and session fees." },
-    { num: "03", icon: <ShieldCheck size={22} className="text-teal-600" />, title: "Get Verified", desc: "Upload your ID and certifications. Our team reviews and approves within 48 hours." },
-    { num: "04", icon: <Heart size={22} className="text-teal-600" />, title: "Go Live & Earn", desc: "Your profile appears in search. Parents find you, pay, and connect directly." },
+    { num: "01", icon: <UserCheck size={22} className="text-teal-600" />, title: "Create your profile", desc: "Add your specialty, experience, location, availability, and session rates. First month is completely free." },
+    { num: "02", icon: <ShieldCheck size={22} className="text-teal-600" />, title: "Get verified", desc: "Upload your ID and credentials. Our team reviews and approves with a verified badge within 48 hours." },
+    { num: "03", icon: <Search size={22} className="text-teal-600" />, title: "Get matched & booked", desc: "Appear in parent search results, receive shadow teacher candidacies, or get direct session bookings from families nearby." },
+    { num: "04", icon: <Heart size={22} className="text-teal-600" />, title: "Deliver & earn", desc: "Run sessions or engagements, log progress, and get paid securely through the platform." },
   ],
   centres: [
-    { num: "01", icon: <Building2 size={22} className="text-teal-600" />, title: "Register Your Centre", desc: "List your centre with all services, team members, and available therapies." },
-    { num: "02", icon: <UserCheck size={22} className="text-teal-600" />, title: "Add Your Team", desc: "Each therapist gets their own sub-profile under your centre's umbrella." },
-    { num: "03", icon: <ShieldCheck size={22} className="text-teal-600" />, title: "Centre Verification", desc: "We verify your MSME, certifications, and team credentials for a trust badge." },
-    { num: "04", icon: <Star size={22} className="text-teal-600" />, title: "Grow Referrals", desc: "Receive enquiries, manage bookings, and collect reviews — all in one place." },
+    { num: "01", icon: <Building2 size={22} className="text-teal-600" />, title: "Register your centre", desc: "Complete the setup wizard with your centre's profile, specialties, focus areas, and location." },
+    { num: "02", icon: <UserCheck size={22} className="text-teal-600" />, title: "Add your team & services", desc: "List your therapists with their individual specialties and define the services and packages your centre offers." },
+    { num: "03", icon: <ShieldCheck size={22} className="text-teal-600" />, title: "Get verified", desc: "Submit for admin review. We verify your MSME registration, certifications, and team credentials for a trust badge." },
+    { num: "04", icon: <Star size={22} className="text-teal-600" />, title: "Start receiving enquiries", desc: "Once live, parents can find your centre, send enquiries, and connect with your team directly." },
   ],
 };
 
@@ -149,7 +141,6 @@ const SPECIALTIES_OPTIONS = [
   { value: "sensory_integration", label: "Sensory Integration" },
   { value: "special_educator", label: "Special Educator" },
   { value: "child_psychologist", label: "Child Psychologist" },
-  { value: "therapy_centre", label: "Therapy Centre" },
 ];
 
 const AGE_OPTIONS = [
@@ -555,7 +546,6 @@ export default function HomePage() {
             <ul className="space-y-2.5 text-xs">
               {[
                 { label: "Find Professionals", href: "/search" },
-                { label: "Find Therapy Centres", href: "/search?specialty=therapy_centre" },
                 { label: "How It Works", href: "/#how-it-works" },
                 { label: "Reviews", href: "/search" },
                 { label: "Support", href: "/support" },

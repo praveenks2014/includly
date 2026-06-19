@@ -1,0 +1,56 @@
+TWO-PHASE BUILD. Build Phase 1 completely first and show me the
+changes; I'll verify before you start Phase 2. Phase 1 is functional
+(hiding/coming-soon/copy). Phase 2 is a VISUAL-ONLY redesign that must
+not touch any data logic. Keeping them separate lets me verify Phase 1
+works before the redesign touches the same screens.
+
+═══════════════════════════════════════════
+PHASE 1 — FUNCTIONAL CHANGES (build + show me first)
+═══════════════════════════════════════════
+
+1. HIDE SESSION PASSES FROM SALE — passes are purchasable but never
+deducted at booking. Remove them from sale everywhere (pricing page,
+booking widget, any buy-passes CTA). Keep code + DB intact (hide, do
+not delete). No purchase path should reach session passes.
+
+2. HIDE THERAPY CENTRE FROM PARENT SEARCH — remove therapy_centre
+from SPECIALTY_OPTIONS in specialties.ts so centres don't surface as
+misleading ProfessionalCards. Keep centre-admin backend + /centre/*
+routes fully intact.
+
+3. JOURNEY TAB (parent) → polished "coming soon" state — replace the
+StubPage with a clean on-brand coming-soon screen. Tab stays in nav.
+Copy should clarify: unified cross-professional progress tracking is
+coming soon; shadow-teacher engagements ALREADY have full progress
+tracking (logs/goals/trends) via the engagement workspace.
+
+4. CLIENTS TAB (professional) → polished "coming soon" state — same
+treatment, tab stays in nav.
+
+5. LANDING "HOW IT WORKS" — keep the For Parents / For Professionals /
+For Therapy Centres tab structure (it's good). Replace the content:
+
+FOR PARENTS:
+1. Create your child's profile — needs, conditions, school, goals.
+2. Get matched — shadow teacher candidates scored for fit, or search
+therapists, special educators, and specialists directly.
+3. Connect & try — chat, agree on terms, book a trial (shadow
+teachers) or a session (therapists/specialists).
+4. Track progress — daily logs, goals, and milestones in one place.
+
+FOR PROFESSIONALS:
+1. Create your profile — specialty, experience, location, availability,
+rates.
+2. Get verified — identity and credential verification for a verified
+badge.
+3. Get matched & booked — shadow teacher candidacies or session
+bookings from parents nearby.
+4. Deliver & earn — run sessions/engagements, track progress, get paid
+through the platform.
+
+FOR THERAPY CENTRES: show me the current copy first, then propose
+corrected steps consistent with the centre-admin onboarding that
+exists.
+
+STOP after Phase 1. Show me all changes. I'll verify, THEN tell you
+to proceed to Phase 2.

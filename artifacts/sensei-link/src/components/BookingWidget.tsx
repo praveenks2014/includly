@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, CalendarCheck, Clock, IndianRupee, ChevronRight, Ticket, AlertCircle, MessageCircle, Info, MapPin } from "lucide-react";
+import { Loader2, CalendarCheck, Clock, IndianRupee, ChevronRight, Ticket, MessageCircle, Info, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { loadRazorpayScript } from "@/lib/razorpay";
 import type { RazorpayPaymentResponse } from "@/lib/razorpay";
@@ -211,22 +211,6 @@ export function BookingWidget({
       {/* Home-visit location prompt for parents without a location set */}
       {offersHomeVisits && isParent && <HomeVisitLocationPrompt />}
 
-      {/* No credits warning for credit-specialty */}
-      {noCredits && (
-        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-amber-800">No session credits</p>
-            <p className="text-xs text-amber-700 mt-0.5 mb-2">
-              Booking with occupational therapists, speech therapists, and psychiatrists requires session credits.
-            </p>
-            <Button size="sm" className="gap-1.5 h-7 text-xs" onClick={() => navigate("/account")}>
-              <Ticket size={12} />
-              Buy session pass
-            </Button>
-          </div>
-        </div>
-      )}
 
       <div className="mb-4">
         <Label htmlFor="booking-date" className="text-sm mb-1 block">Select date</Label>
@@ -256,13 +240,10 @@ export function BookingWidget({
                 <button
                   key={`${slot.date}-${slot.startTime}`}
                   onClick={() => setSelectedSlot(isSelected ? null : slot)}
-                  disabled={noCredits}
                   className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
-                    noCredits
-                      ? "border-border text-muted-foreground/50 cursor-not-allowed"
-                      : isSelected
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border hover:border-primary hover:bg-primary/5"
+                    isSelected
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border hover:border-primary hover:bg-primary/5"
                   }`}
                 >
                   <span className="flex items-center gap-1.5">
@@ -287,7 +268,7 @@ export function BookingWidget({
             })}
           </div>
 
-          {selectedSlot && !noCredits && (
+          {selectedSlot && (
             <div className="space-y-3 border-t border-border pt-4">
               <div className="bg-muted/40 rounded-lg p-3 text-sm">
                 <p className="font-medium">

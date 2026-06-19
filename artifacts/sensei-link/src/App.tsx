@@ -6,7 +6,9 @@ import { setFetchAuthTokenGetter } from "@/lib/api";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, useRef } from "react";
-import { Loader2 } from "lucide-react";
+import { Link } from "wouter";
+import { Loader2, LineChart, Users, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/Navbar";
 import { AppShell } from "@/components/AppShell";
 import { RequireRole } from "@/guards/RequireRole";
@@ -190,13 +192,44 @@ function RoleRedirect({ parentTo, proTo, defaultTo }: { parentTo: string; proTo:
   return null;
 }
 
-// ─── Stub pages (replaced in later passes) ────────────────────────────────────
+// ─── Coming-soon pages ─────────────────────────────────────────────────────────
 
-function StubPage({ title, description }: { title: string; description: string }) {
+function JourneyComingSoon() {
   return (
-    <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-      <h2 className="text-xl font-semibold text-gray-800 mb-2">{title}</h2>
-      <p className="text-sm text-muted-foreground max-w-sm">{description}</p>
+    <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+      <div className="w-16 h-16 bg-teal-50 rounded-2xl flex items-center justify-center mb-5">
+        <LineChart size={28} className="text-teal-600" />
+      </div>
+      <h2 className="text-xl font-semibold text-gray-900 mb-2">Unified progress tracking, coming soon</h2>
+      <p className="text-sm text-muted-foreground mb-6 leading-relaxed max-w-sm">
+        We're building a single view of your child's progress across all specialists — goals, milestones, and session notes in one place.
+      </p>
+      <div className="bg-teal-50 border border-teal-100 rounded-xl p-4 text-left mb-6 max-w-sm w-full">
+        <p className="text-xs font-semibold text-teal-800 mb-1">Already available for shadow teachers</p>
+        <p className="text-xs text-teal-700 leading-relaxed">
+          Full progress tracking — daily logs, goals, and trends — is live now for active shadow teacher engagements. Access it from the engagement workspace.
+        </p>
+      </div>
+      <Link href="/shadow-teacher">
+        <Button variant="outline" size="sm" className="gap-2">
+          Go to shadow teacher workspace
+          <ArrowRight size={13} />
+        </Button>
+      </Link>
+    </div>
+  );
+}
+
+function ClientsComingSoon() {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+      <div className="w-16 h-16 bg-violet-50 rounded-2xl flex items-center justify-center mb-5">
+        <Users size={28} className="text-violet-600" />
+      </div>
+      <h2 className="text-xl font-semibold text-gray-900 mb-2">Client roster, coming soon</h2>
+      <p className="text-sm text-muted-foreground leading-relaxed max-w-sm">
+        A dedicated workspace for each client — goals, session notes, and history in one place. We're building this now.
+      </p>
     </div>
   );
 }
@@ -352,10 +385,7 @@ function Router() {
           <RequireAuth>
             <RequireRole allow={["parent"]}>
               <AppShell>
-                <StubPage
-                  title="Journey"
-                  description="Track your child's progress, goals, and milestones — coming in V2."
-                />
+                <JourneyComingSoon />
               </AppShell>
             </RequireRole>
           </RequireAuth>
@@ -404,10 +434,7 @@ function Router() {
           <RequireAuth>
             <RequireRole allow={["professional"]}>
               <AppShell>
-                <StubPage
-                  title="My Clients"
-                  description="Your client roster with goals, notes, and session history — coming in V2."
-                />
+                <ClientsComingSoon />
               </AppShell>
             </RequireRole>
           </RequireAuth>

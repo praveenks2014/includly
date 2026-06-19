@@ -1,0 +1,102 @@
+AUDIT ONLY — Plan mode, no changes. I need a complete, honest
+inventory of what is built, partial, or not built across the entire
+app, so I can decide what to keep visible, what to mark "coming soon,"
+and what to hide for launch.
+
+For EVERY module/feature, report in the exact template format shown
+in the SAMPLE below. Be honest about partial/broken state — do not
+report something as working unless the full flow works. If you're
+unsure, say so and tell me how to verify.
+
+=== SAMPLE (this is the format and depth I want for every module) ===
+
+MODULE: Shadow Teacher — Matching & Engagement
+STATE: Fully Built & Working
+WHAT WORKS:
+- Match request flow (pay ₹500 → top-3 scored candidates) — working
+- Negotiation (offer/counter/lock) — working
+- Trial day + OTP handshake — working
+- Commit → scheduled start → start OTP → active — working
+- Daily logs (parent + teacher, both directions) — working
+- Goals (parent owns, teacher can add) — working
+- Trends — working
+- Lifecycle (notice/pause/buyout, self-managed) — working
+- Salary payment + teacher salary history — working
+WHAT'S BROKEN / INCOMPLETE:
+- Salary increase by parent — not built
+- Proration for mid-month payments — partial (first month only)
+ENTRY POINTS (how a user reaches it):
+- Parent dashboard → "Request a Shadow Teacher" card
+- Nav: Home tab → shadow teacher widget
+- Route: /home (parent), /pro/engagement (teacher)
+VISIBILITY CONTROL (how to hide/flag it):
+- Nav item in nav/config.ts
+- The ShadowTeacherRequestWidget render in parent-dashboard.tsx
+- Route guards in App.tsx
+SAFE TO HIDE WITHOUT BREAKING OTHERS? Yes — self-contained. Hiding
+the nav item + widget render + route would cleanly remove it.
+RECOMMENDATION: Keep fully visible — this is the launch vertical.
+
+=== END SAMPLE — now do this for every module below ===
+
+Report in that exact format for each of:
+
+1. Shadow Teacher vertical (confirm/correct my sample above)
+
+2. Therapy / OT / Speech session booking (the "V2 sessions" flow) —
+is booking functional end to end? Payment? Credits? What works?
+
+3. Therapy Centres — listings, centre-admin role, enquiries,
+bookings. What works, what's stub?
+
+4. Home Tutor — built, referenced, or nonexistent?
+
+5. Art / Sports trainers — built or not?
+
+6. Generic search & discovery — "Explore" tab, "Recommended
+Professionals," contact unlock (₹99), session passes (₹129),
+per-contact (₹99), Plan A/B/F. Which payment flows and features
+actually work end to end?
+
+7. Ratings & Reviews — functional? Can a parent leave one, does it
+display?
+
+8. Parent dashboard tabs — Home, Explore, Bookings, Journey, Inbox.
+For EACH tab: functional, partial, or empty/stub?
+
+9. Professional dashboard tabs — Today, Calendar, Clients, Inbox,
+Earnings, Enquiries, Engagement. For EACH: functional or stub?
+
+10. Admin panel — verification, settings, lifecycle, payouts,
+broadcast. What works?
+
+11. Notifications — the bell, the 8 events, mark-read. Confirm state.
+
+12. Any OTHER routes, modules, pages, or features in the codebase
+not listed above that I should know about — search the routes and
+nav configs and list anything I've missed.
+
+=== THEN, AFTER THE PER-MODULE INVENTORY, ANSWER THESE: ===
+
+A. HIDING STRATEGY: What's the cleanest single mechanism to hide a
+module while keeping its code intact for later? Options: a central
+feature-flag config (e.g. a FEATURES object that nav, routes, and
+cards all read from), per-nav-item removal, route guards, or "coming
+soon" placeholder components. Recommend ONE consistent approach I can
+apply across all modules, and explain why it's the cleanest for this
+codebase. I want to HIDE (not delete) so I can re-enable when each
+module is built.
+
+B. "COMING SOON" CANDIDATES: Based on the inventory, which modules
+are partial/incomplete enough that they should show a "coming soon"
+state rather than being fully functional or fully hidden? List them.
+
+C. SAFE-TO-SHIP-VISIBLE: Which modules are complete enough to be
+fully visible and functional at launch?
+
+D. RISK FLAGS: Any module where hiding it would break something else
+(shared components, shared routes, dependencies)? List these so I
+don't break a working feature by hiding an incomplete one.
+
+No code changes. Just the complete inventory in the template format,
+plus answers to A-D.

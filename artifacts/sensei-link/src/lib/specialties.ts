@@ -29,9 +29,9 @@ export const SPECIALTY_LABELS: Record<string, string> = {
   coaching: "Inclusive Coach",
 };
 
-export const SPECIALTY_OPTIONS = Object.entries(SPECIALTY_LABELS).map(
-  ([value, label]) => ({ value, label })
-);
+export const SPECIALTY_OPTIONS = Object.entries(SPECIALTY_LABELS)
+  .filter(([value]) => value !== "therapy_centre")
+  .map(([value, label]) => ({ value, label }));
 
 export function getSpecialtyLabel(specialty: string): string {
   return SPECIALTY_LABELS[specialty] ?? specialty;

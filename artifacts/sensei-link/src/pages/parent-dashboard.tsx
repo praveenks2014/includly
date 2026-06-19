@@ -77,7 +77,6 @@ const SPECIALTIES = [
   { value: "sensory_integration", label: "Sensory Integration" },
   { value: "special_educator", label: "Special Educator" },
   { value: "child_psychologist", label: "Child Psychologist" },
-  { value: "therapy_centre", label: "Therapy Centre" },
 ];
 
 function greeting() {
