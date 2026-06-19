@@ -1143,12 +1143,36 @@ function ShadowTeacherTab() {
   const [newGoalLabel, setNewGoalLabel] = useState("");
   const [newGoalCategory, setNewGoalCategory] = useState("");
   const [savingGoal, setSavingGoal] = useState(false);
+  const [editingStartDate, setEditingStartDate] = useState(false);
+  const [newStartDate, setNewStartDate] = useState("");
+  const [changingStartDate, setChangingStartDate] = useState(false);
 
   const pendingStartDisabledTabs = new Set(["logs", "goals", "trends", "payments"]);
   const visibleStTab: typeof stTab =
     (active?.status === "pending_start" && pendingStartDisabledTabs.has(stTab)) ||
     (active?.status === "ended" && stTab === "lifecycle")
       ? "overview" : stTab;
+
+  async function handleChangeStartDate() {
+    if (!active || !newStartDate) return;
+    setChangingStartDate(true);
+    try {
+      const res = await fetchWithAuth(`/api/engagements/${active.id}/start-date`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startDate: newStartDate }),
+      });
+      if (!res.ok) {
+        const err = await res.json() as { error?: string };
+        toast({ title: "Could not update date", description: err.error ?? "Unknown error", variant: "destructive" });
+        return;
+      }
+      await queryClient.invalidateQueries({ queryKey: ["parent-engagements"] });
+      setEditingStartDate(false);
+      toast({ title: "Start date updated", description: "Your teacher has been notified." });
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setChangingStartDate(false); }
+  }
 
   async function handlePostLog() {
     if (!active || !logNote.trim()) return;
@@ -1480,9 +1504,42 @@ function ShadowTeacherTab() {
                 <p className="text-xs font-semibold text-amber-800">⏳ Waiting for teacher to confirm start</p>
                 <p className="text-xs text-amber-700">
                   Share the code below with {active.professionalName ?? "your teacher"} on{" "}
-                  {new Date(active.startDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long" })}.
-                  They'll enter it to begin the engagement.
+                  <span className="font-semibold">
+                    {new Date(active.startDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+                  </span>.
+                  {" "}They'll enter it to begin the engagement.
                 </p>
+                {!editingStartDate ? (
+                  <button
+                    onClick={() => { setEditingStartDate(true); setNewStartDate(active.startDate); }}
+                    className="text-xs text-amber-700 underline font-medium"
+                  >
+                    Change start date
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                    <input
+                      type="date"
+                      value={newStartDate}
+                      onChange={e => setNewStartDate(e.target.value)}
+                      min={new Date().toISOString().slice(0, 10)}
+                      className="text-xs rounded-lg border border-amber-300 bg-white px-2 py-1 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    />
+                    <button
+                      onClick={() => void handleChangeStartDate()}
+                      disabled={changingStartDate || !newStartDate}
+                      className="text-xs bg-amber-700 text-white rounded-lg px-3 py-1 font-semibold disabled:opacity-50"
+                    >
+                      {changingStartDate ? "Saving…" : "Confirm"}
+                    </button>
+                    <button
+                      onClick={() => setEditingStartDate(false)}
+                      className="text-xs text-amber-700 underline"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
                 {active.startOtp ? (
                   <div className="bg-white border-2 border-amber-300 rounded-xl p-4 text-center space-y-1 mt-2">
                     <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-widest">Start Code</p>

@@ -225,6 +225,63 @@ router.patch("/engagements/:id/status", requireAuth, async (req, res): Promise<v
   res.json(updated);
 });
 
+// ── PATCH /engagements/:id/start-date — parent changes start date before engagement begins ──
+router.patch("/engagements/:id/start-date", requireAuth, requireRole("parent"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { startDate: newDate } = (req.body ?? {}) as { startDate?: string };
+  if (!newDate || !/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+    res.status(400).json({ error: "startDate is required (YYYY-MM-DD)" }); return;
+  }
+
+  const [engagement] = await db
+    .select()
+    .from(shadowTeacherEngagementsTable)
+    .where(eq(shadowTeacherEngagementsTable.id, id))
+    .limit(1);
+
+  if (!engagement) { res.status(404).json({ error: "Engagement not found" }); return; }
+  if (engagement.parentId !== req.userId!) { res.status(403).json({ error: "Access denied" }); return; }
+  if (engagement.status !== "pending_start") {
+    res.status(400).json({ error: "Start date can only be changed before the engagement begins" }); return;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  if (newDate < today) {
+    res.status(400).json({ error: "New date must be today or in the future" }); return;
+  }
+
+  const [updated] = await db
+    .update(shadowTeacherEngagementsTable)
+    .set({ startDate: newDate, updatedAt: new Date() })
+    .where(eq(shadowTeacherEngagementsTable.id, id))
+    .returning();
+
+  const [prof] = await db
+    .select({ userId: professionalProfilesTable.userId })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, engagement.professionalId))
+    .limit(1);
+
+  const formattedDate = new Date(newDate + "T00:00:00Z")
+    .toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+
+  if (prof?.userId) {
+    try {
+      await createInAppNotification(prof.userId, {
+        type: "start_date_updated",
+        title: "Start date updated",
+        body: `The parent has updated the engagement start date to ${formattedDate}. Please confirm start on that date.`,
+        relatedType: "engagement",
+        relatedId: id,
+      });
+    } catch { /* non-blocking */ }
+  }
+
+  res.json(updated);
+});
+
 router.post("/engagements/:id/bill", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
   const id = parseInt(req.params["id"] as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }

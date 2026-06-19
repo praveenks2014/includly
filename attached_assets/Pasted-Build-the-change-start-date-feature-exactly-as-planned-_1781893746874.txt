@@ -1,0 +1,61 @@
+Build the change-start-date feature exactly as planned. The plan
+was approved; no code was written because the prompt was never sent.
+Build it now.
+
+BACKEND — new endpoint in engagements.ts:
+PATCH /engagements/:id/start-date (parent only)
+Guards in order:
+- requireAuth
+- Fetch engagement by id → 404 if not found
+- engagement.parentId !== req.userId → 403
+- engagement.status !== "pending_start" → 400 "Start date can only
+  be changed before the engagement begins"
+- newDate < today (YYYY-MM-DD string compare) → 400 "New date must
+  be today or in the future"
+Action:
+- UPDATE shadow_teacher_engagements SET start_date = newDate,
+  updated_at = NOW() WHERE id = :id
+- Do NOT touch startOtp, status, or any billing field
+- Call createInAppNotification for the TEACHER's userId (not
+  professionalId — confirm which ID createInAppNotification expects
+  and pass the correct one): title "Start date updated", body "The
+  parent has updated the engagement start date to [formatted date].
+  Please confirm start on that date."
+- Return the updated engagement object (same shape as GET /engagements)
+
+FRONTEND — parent-dashboard.tsx only:
+In the pending_start branch of the engagement Overview tab, next to
+the start date display in the amber "Engagement Booked / Awaiting
+Start" card:
+- Add a small pencil icon or "Change" link inline next to the date
+- Clicking it shows an inline <input type="date"> with min={today}
+  and Confirm / Cancel buttons (no modal needed)
+- On confirm: PATCH /api/engagements/:id/start-date → on success,
+  invalidate the ["parent-engagements"] query key (or whatever key
+  the parent engagement list uses) and show a success toast: "Start
+  date updated — your teacher has been notified"
+- On error: show the server error message as a toast
+- The OTP card wording ("Your start code will appear here on [date]")
+  reads from active.startDate and updates automatically
+- Local state only: editingStartDate boolean + newStartDate string
+
+PROFESSIONAL dashboard — no code change needed IF the date display
+already reads from the query cache and auto-updates on refetch.
+Verify this by checking whether the teacher's pending_start banner
+shows active.startDate. If it reads from a static variable instead
+of the live query, add the date display fix there too.
+
+CONFIRM before deploying:
+- The existing server-side logic that withholds startOtp until
+  today >= startDate automatically applies to the new date — when
+  the parent pushes the date forward, the OTP disappears until the
+  new date. Confirm this requires no extra code.
+- The PATCH endpoint is correctly mounted in the Express router
+  (not accidentally placed after a catch-all that would shadow it).
+
+DO NOT touch: startOtp value, status, billing tables, salary logic,
+any other engagement status path, professional dashboard unless the
+date display is confirmed broken.
+
+Show me the new endpoint and the parent dashboard UI change.
+This auto-deploys to dev; no manual production deploy.
