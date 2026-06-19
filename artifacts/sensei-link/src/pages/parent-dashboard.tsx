@@ -1052,6 +1052,8 @@ function ShadowTeacherTab() {
     professionalName: string | null;
     childName: string | null;
     startOtp?: string | null;
+    endDate?: string | null;
+    endedReason?: string | null;
   }
   interface DailyLog {
     id: number;
@@ -1623,6 +1625,36 @@ function ShadowTeacherTab() {
 
       {stTab === "lifecycle" && (
         <div className="space-y-4">
+          {/* Buyout wind-down banner */}
+          {active.status === "notice_period" && active.endedReason === "buyout" && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-1">
+              <p className="text-sm font-bold text-amber-900">Early exit confirmed</p>
+              <p className="text-sm text-amber-800">
+                {active.professionalName ?? "Your teacher"} will continue working until{" "}
+                <span className="font-semibold">
+                  {active.endDate
+                    ? new Date(active.endDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                    : "the scheduled date"}
+                </span>. The engagement ends automatically on that date — no further action needed.
+              </p>
+            </div>
+          )}
+
+          {/* Standard notice period banner */}
+          {active.status === "notice_period" && active.endedReason !== "buyout" && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-1">
+              <p className="text-sm font-bold text-blue-900">Notice period active</p>
+              <p className="text-sm text-blue-800">
+                This engagement ends on{" "}
+                <span className="font-semibold">
+                  {active.endDate
+                    ? new Date(active.endDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                    : "the scheduled date"}
+                </span>. {active.professionalName ?? "Your teacher"} continues working until then.
+              </p>
+            </div>
+          )}
+
           {/* Pending pause/resume consent banner */}
           {pendingPR && (
             <div className={`rounded-xl p-4 border space-y-3 ${pendingPR.type === "pause" ? "bg-amber-50 border-amber-200" : "bg-blue-50 border-blue-200"}`}>
@@ -1664,7 +1696,10 @@ function ShadowTeacherTab() {
           {active.status === "active" && !pendingPR && (
             <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
               <p className="text-sm font-bold text-[#1A2340]">Pause Engagement</p>
-              <p className="text-xs text-gray-400">Both you and the teacher must agree. The teacher will need to accept your request.</p>
+              <p className="text-xs text-gray-500">
+                Temporarily pauses this engagement with {active.professionalName ?? "your teacher"}'s agreement.
+                Both parties must consent. Billing stops during the pause. Either party can request to resume.
+              </p>
               <textarea value={pauseReason} onChange={(e) => setPauseReason(e.target.value)} rows={2}
                 placeholder="Reason for pausing (optional)…"
                 className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
@@ -1679,7 +1714,7 @@ function ShadowTeacherTab() {
           {active.status === "paused" && !pendingPR && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 space-y-3">
               <p className="text-sm font-bold text-amber-800">Engagement is Paused</p>
-              <p className="text-xs text-amber-700">Both you and the teacher must agree to resume. The teacher will need to accept your request.</p>
+              <p className="text-xs text-amber-700">Both you and {active.professionalName ?? "your teacher"} must agree to resume. Billing resumes once both parties consent.</p>
               <Button size="sm" onClick={() => void handleRequestResume()} disabled={postingLifecycle}
                 className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-xs">
                 {postingLifecycle ? <Loader2 size={12} className="animate-spin mr-1" /> : null}Request Resume
@@ -1688,39 +1723,57 @@ function ShadowTeacherTab() {
           )}
 
           {/* End engagement — only when active or notice_period */}
-          {(active.status === "active" || active.status === "notice_period") && (
-            <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
-              <p className="text-sm font-bold text-[#1A2340]">End Engagement</p>
-              <div className="grid grid-cols-2 gap-2">
-                {([
-                  ["stop",   "End (Notice)",  "30-day notice period"],
-                  ["buyout", "Early Exit",    "15-day fee"],
-                ] as [string, string, string][]).map(([t, label, sub]) => (
-                  <button key={t} onClick={() => setLifecycleType(lifecycleType === t ? "" : t as typeof lifecycleType)}
-                    className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-colors text-left ${lifecycleType === t ? "border-[#FF6B6B] bg-[#FF6B6B]/10 text-[#FF6B6B]" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}>
-                    <div>{label}</div>
-                    <div className="text-[10px] font-normal opacity-60 mt-0.5">{sub}</div>
+          {(active.status === "active" || active.status === "notice_period") && (() => {
+            const buyoutFee = Math.round(15 * parseFloat(active.monthlyFeeInr) / 30);
+            const buyoutEndDate = new Date(); buyoutEndDate.setDate(buyoutEndDate.getDate() + 15);
+            const buyoutEndStr = buyoutEndDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+            const teacherName = active.professionalName ?? "your teacher";
+            return (
+              <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
+                <p className="text-sm font-bold text-[#1A2340]">End Engagement</p>
+                <div className="space-y-2">
+                  {/* Give Notice */}
+                  <button onClick={() => setLifecycleType(lifecycleType === "stop" ? "" : "stop")}
+                    className={`w-full py-2.5 px-3 rounded-xl border text-sm font-semibold transition-colors text-left ${lifecycleType === "stop" ? "border-[#FF6B6B] bg-[#FF6B6B]/10 text-[#FF6B6B]" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}>
+                    End (30-day notice) — no extra cost
                   </button>
-                ))}
-              </div>
-              {lifecycleType && (
-                <>
-                  <textarea value={lifecycleNotes} onChange={(e) => setLifecycleNotes(e.target.value)} rows={3}
-                    placeholder="Please explain why you are making this request…"
-                    className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
-                  <Button onClick={handleLifecycleRequest} disabled={postingLifecycle}
-                    className="w-full bg-[#FF6B6B] hover:bg-[#e85a5a] text-white text-sm">
-                    {postingLifecycle ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Submit Request
-                  </Button>
-                </>
-              )}
-              {buyoutPaid && (
-                <div className="flex items-center gap-2 p-3 bg-green-50 rounded-xl border border-green-200 text-sm text-green-700 font-medium">
-                  <CheckCircle2 size={16} /> Buyout payment confirmed — your request is pending admin review.
+                  {lifecycleType === "stop" && (
+                    <p className="text-xs text-gray-500 px-1">
+                      Ends this engagement after 30 days at no extra cost. {teacherName} continues for 30 days while you find alternative support. Either party can give notice.
+                    </p>
+                  )}
+
+                  {/* Early Exit / Buyout */}
+                  <button onClick={() => setLifecycleType(lifecycleType === "buyout" ? "" : "buyout")}
+                    className={`w-full py-2.5 px-3 rounded-xl border text-sm font-semibold transition-colors text-left ${lifecycleType === "buyout" ? "border-[#FF6B6B] bg-[#FF6B6B]/10 text-[#FF6B6B]" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}>
+                    Early Exit (15 days) — one-time fee of ₹{buyoutFee.toLocaleString("en-IN")}
+                  </button>
+                  {lifecycleType === "buyout" && (
+                    <p className="text-xs text-gray-500 px-1">
+                      Ends this engagement in 15 days by paying a one-time fee of ₹{buyoutFee.toLocaleString("en-IN")}. {teacherName} continues working until {buyoutEndStr}. The engagement ends automatically on that date. The fee is non-refundable.
+                    </p>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
+
+                {lifecycleType && (
+                  <>
+                    <textarea value={lifecycleNotes} onChange={(e) => setLifecycleNotes(e.target.value)} rows={3}
+                      placeholder="Please explain why you are making this request…"
+                      className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
+                    <Button onClick={handleLifecycleRequest} disabled={postingLifecycle}
+                      className="w-full bg-[#FF6B6B] hover:bg-[#e85a5a] text-white text-sm">
+                      {postingLifecycle ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Submit Request
+                    </Button>
+                  </>
+                )}
+                {buyoutPaid && (
+                  <div className="flex items-center gap-2 p-3 bg-green-50 rounded-xl border border-green-200 text-sm text-green-700 font-medium">
+                    <CheckCircle2 size={16} /> Buyout payment confirmed — {teacherName} continues until {buyoutEndStr}. The engagement ends automatically on that date.
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 

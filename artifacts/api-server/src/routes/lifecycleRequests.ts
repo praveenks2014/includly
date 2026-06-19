@@ -496,12 +496,23 @@ router.patch("/admin/lifecycle/:reqId", requireAuth, requireRole("admin"), async
     .where(eq(engagementLifecycleRequestsTable.id, reqId))
     .returning();
 
-  if (status === "approved" && existing.method === "buyout") {
-    await db
-      .update(shadowTeacherEngagementsTable)
-      .set({ status: "ended", endDate: existing.effectiveEndDate, endedReason: "buyout", updatedAt: new Date() })
-      .where(eq(shadowTeacherEngagementsTable.id, existing.engagementId));
+  if ((status === "approved" || status === "completed") && existing.method === "buyout") {
+    // For buyout: if engagement is not already in notice_period (i.e., verify-buyout-payment
+    // hasn't run yet — edge case for legacy/manual admin flow), move it to notice_period.
+    // If it's already in notice_period the scheduler will fire the final transition on effectiveEndDate.
+    const [engNow] = await db
+      .select({ status: shadowTeacherEngagementsTable.status })
+      .from(shadowTeacherEngagementsTable)
+      .where(eq(shadowTeacherEngagementsTable.id, existing.engagementId))
+      .limit(1);
 
+    if (engNow && engNow.status !== "notice_period" && engNow.status !== "ended") {
+      await db
+        .update(shadowTeacherEngagementsTable)
+        .set({ status: "notice_period", endDate: existing.effectiveEndDate, endedReason: "buyout", updatedAt: new Date() })
+        .where(eq(shadowTeacherEngagementsTable.id, existing.engagementId));
+    }
+    // Push notification to teacher
     try {
       const [engRow] = await db
         .select({ professionalId: shadowTeacherEngagementsTable.professionalId })
@@ -517,20 +528,13 @@ router.patch("/admin/lifecycle/:reqId", requireAuth, requireRole("admin"), async
         if (prof) {
           const dateStr = existing.effectiveEndDate ?? new Date().toISOString().slice(0, 10);
           void sendPushNotification(prof.userId, {
-            title: "Engagement ended — early exit",
-            body: `Your engagement has been ended via early exit, effective ${dateStr}. Log in for details.`,
+            title: "Engagement ending — early exit",
+            body: `The parent has confirmed early exit. Your engagement ends on ${dateStr}. Continue working until then.`,
             url: "/dashboard",
           });
         }
       }
     } catch { /* push failure is non-blocking */ }
-  }
-
-  if (status === "completed") {
-    await db
-      .update(shadowTeacherEngagementsTable)
-      .set({ status: "ended", endDate: existing.effectiveEndDate ?? new Date().toISOString().slice(0, 10), updatedAt: new Date() })
-      .where(eq(shadowTeacherEngagementsTable.id, existing.engagementId));
   }
 
   res.json(updated);

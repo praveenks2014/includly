@@ -1831,6 +1831,8 @@ function EngagementTab() {
     childLanguages: string[] | null;
     childCity: string | null;
     childConsent: { media?: boolean } | null;
+    endDate?: string | null;
+    endedReason?: string | null;
   }
 
   interface DailyLog {
@@ -2549,6 +2551,36 @@ function EngagementTab() {
       {/* ── Manage / Lifecycle ── */}
       {engTab === "lifecycle" && (
         <div className="space-y-4">
+          {/* Buyout wind-down banner */}
+          {active.status === "notice_period" && active.endedReason === "buyout" && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-1">
+              <p className="text-sm font-bold text-amber-900">Engagement ending early</p>
+              <p className="text-sm text-amber-800">
+                This engagement is ending early. You are confirmed to continue working until{" "}
+                <span className="font-semibold">
+                  {active.endDate
+                    ? new Date(active.endDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                    : "the scheduled date"}
+                </span>. The engagement ends automatically on that date — no action needed from you.
+              </p>
+            </div>
+          )}
+
+          {/* Standard notice period banner */}
+          {active.status === "notice_period" && active.endedReason !== "buyout" && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-1">
+              <p className="text-sm font-bold text-blue-900">Notice period active</p>
+              <p className="text-sm text-blue-800">
+                This engagement ends on{" "}
+                <span className="font-semibold">
+                  {active.endDate
+                    ? new Date(active.endDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                    : "the scheduled date"}
+                </span>. Continue working until that date.
+              </p>
+            </div>
+          )}
+
           {/* Pending pause/resume consent banner */}
           {pendingPR && (
             <div className={`rounded-xl p-4 border space-y-3 ${pendingPR.type === "pause" ? "bg-amber-50 border-amber-200" : "bg-blue-50 border-blue-200"}`}>
@@ -2590,7 +2622,9 @@ function EngagementTab() {
           {active.status === "active" && !pendingPR && (
             <div className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
               <p className="text-sm font-bold text-[#1A2340]">Pause Engagement</p>
-              <p className="text-xs text-gray-400">Both you and the parent must agree. The parent will need to accept your request.</p>
+              <p className="text-xs text-gray-500">
+                Temporarily pauses this engagement with the parent's agreement. Both parties must consent. Billing stops during the pause. Either party can request to resume.
+              </p>
               <Button size="sm" onClick={() => void handleProRequestPause()} disabled={postingLifecycle}
                 className="bg-amber-500 hover:bg-amber-600 text-white text-xs">
                 {postingLifecycle ? <Loader2 size={12} className="animate-spin mr-1" /> : null}Request Pause
@@ -2602,7 +2636,7 @@ function EngagementTab() {
           {active.status === "paused" && !pendingPR && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
               <p className="text-sm font-bold text-amber-800">Engagement is Paused</p>
-              <p className="text-xs text-amber-700">Both you and the parent must agree to resume.</p>
+              <p className="text-xs text-amber-700">Both you and the parent must agree to resume. Billing resumes once both parties consent.</p>
               <Button size="sm" onClick={() => void handleProRequestResume()} disabled={postingLifecycle}
                 className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-xs">
                 {postingLifecycle ? <Loader2 size={12} className="animate-spin mr-1" /> : null}Request Resume
@@ -2613,12 +2647,14 @@ function EngagementTab() {
           {/* End engagement — only when active or notice_period */}
           {(active.status === "active" || active.status === "notice_period") && (
             <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
-              <p className="text-sm font-bold text-[#1A2340]">End Engagement</p>
-              <p className="text-xs text-gray-400">Notice period applies. Request is reviewed by admin.</p>
+              <p className="text-sm font-bold text-[#1A2340]">Give Notice</p>
               <button onClick={() => setLifecycleType(lifecycleType === "stop" ? "" : "stop")}
                 className={`w-full py-2.5 px-3 rounded-xl border text-sm font-semibold transition-colors text-left ${lifecycleType === "stop" ? "border-[#FF6B6B] bg-[#FF6B6B]/10 text-[#FF6B6B]" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}>
                 End Engagement (30-day notice)
               </button>
+              <p className="text-xs text-gray-500">
+                Gives 30 days notice to end this engagement. The parent will be notified and the engagement ends after 30 days. Either party can give notice. No extra cost.
+              </p>
               {lifecycleType === "stop" && (
                 <>
                   <textarea value={lifecycleNotes} onChange={e => setLifecycleNotes(e.target.value)} rows={3}

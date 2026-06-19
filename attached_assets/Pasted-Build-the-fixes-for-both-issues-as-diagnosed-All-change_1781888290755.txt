@@ -1,0 +1,93 @@
+Build the fixes for both issues as diagnosed. All changes are
+frontend copy + one backend correction. Show me the changed code
+before it deploys.
+
+ISSUE 1 — Three fixes:
+
+1a. Admin approval paths in lifecycleRequests.ts (lines 499–503 and
+529–533): When admin approves or completes a BUYOUT lifecycle request,
+do NOT immediately transition to "ended". Instead: if the engagement
+is not already in notice_period, transition it to notice_period and
+set endDate = effectiveEndDate. If it's already in notice_period
+(standard path via verify-buyout-payment), do nothing to the
+engagement status — just mark the lifecycle request as completed.
+The existing hourly scheduler (expireNoticePeriods) handles the
+final notice_period → ended transition automatically. Do not touch
+the scheduler.
+
+1b. Parent dashboard stale copy (line ~1718–1721): Replace "pending
+admin review" with "Your engagement continues until [effectiveEndDate],
+then ends automatically. No further action needed."
+
+1c. Add "ending soon" banner to BOTH dashboards when
+engagement.status === "notice_period" AND engagement.endedReason ===
+"buyout":
+
+Parent banner: amber/orange card, prominent:
+"Early exit confirmed — [Teacher name] will continue until
+[endDate formatted as DD MMM YYYY]. The engagement ends automatically
+on that date."
+
+Teacher banner: same amber card:
+"This engagement is ending early. You are confirmed to work until
+[endDate formatted as DD MMM YYYY]. The engagement ends automatically
+on that date."
+
+These banners use engagement.status, engagement.endDate, and
+engagement.endedReason — all already available in the frontend.
+No new API call needed.
+
+ISSUE 2 — Plain-language lifecycle explanations:
+Add explanatory text beneath each lifecycle action on BOTH dashboards.
+Not tooltips — inline text, always visible, in a smaller muted style
+beneath the button/card title so it's impossible to miss before
+clicking.
+
+PARENT DASHBOARD lifecycle section:
+
+Give Notice (30 days):
+Beneath the button — "Ends the engagement after 30 days at no extra
+cost. [Teacher name] continues for 30 days while you find alternative
+support. Either party can give notice."
+
+Early Exit / Buyout:
+Beneath the button — "Ends the engagement in [parentBuyoutDays] days
+by paying a one-time fee of ₹[calculated amount]. [Teacher name]
+continues working until [date = today + buyoutDays]. The fee is
+non-refundable."
+Note: calculate and show the actual buyout fee (parentBuyoutDays ×
+monthlyFeeInr ÷ 30, rounded up) and the actual end date so the
+parent knows exactly what they're paying and when it ends BEFORE
+they click.
+
+Pause:
+Beneath the card — "Temporarily pauses this engagement with
+[Teacher name]'s agreement. Both parties must consent. Billing
+stops during the pause. Either party can request to resume."
+
+TEACHER DASHBOARD lifecycle section:
+
+Give Notice:
+Beneath the button — "Gives 30 days notice to end this engagement.
+The parent will be notified and the engagement ends after 30 days.
+Either party can give notice."
+
+Pause:
+Beneath the card — "Temporarily pauses this engagement with the
+parent's agreement. Both parties must consent. Billing stops during
+the pause."
+
+Teacher read-only banner when notice_period (teacher-initiated or
+parent buyout):
+If endedReason === "buyout": show the amber banner from 1c above.
+If endedReason !== "buyout" (standard notice): show a neutral banner:
+"Notice period active — this engagement ends on [endDate]. Continue
+working until that date."
+
+IMPORTANT — do NOT change any logic, state, payment handlers, or
+API calls. This is copy + UI only on the frontend, plus the single
+backend correction in 1a. The engagement data already has everything
+needed (status, endDate, endedReason, monthlyFeeInr, teacher name).
+
+Show me the changed code for all three files before deploying. This
+auto-deploys to dev; no manual production deploy.
