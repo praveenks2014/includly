@@ -1,0 +1,71 @@
+FRONTEND ONLY — no API or data logic changes. Fix tab visibility in
+the engagement workspace based on engagement status. This is a
+UI/display change only — the data and endpoints are untouched.
+
+CONTEXT: The engagement workspace has sub-tabs: Overview, Daily Logs,
+Goals, Trends, Payments, Manage. Currently all tabs are accessible
+regardless of engagement status. They should be conditionally
+disabled or hidden based on status.
+
+RULES PER STATUS:
+
+pending_start (committed, teacher hasn't confirmed start yet):
+- Overview: ✅ visible (shows start OTP card + "waiting for teacher
+  to confirm start on [date]")
+- Daily Logs: ❌ disabled with tooltip "Available once the engagement
+  starts"
+- Goals: ❌ disabled with tooltip "Available once the engagement
+  starts"  
+- Trends: ❌ disabled with tooltip "Available once the engagement
+  starts"
+- Payments: ❌ disabled with tooltip "Available once the engagement
+  starts — salary payments begin on the confirmed start date"
+- Manage: ✅ visible (parent/teacher may need to cancel before start)
+
+active:
+- All tabs: ✅ fully accessible (no change from today)
+
+paused:
+- All tabs: ✅ fully accessible (history still viewable, goals still
+  relevant, salary halted but history visible)
+
+notice_period:
+- All tabs: ✅ fully accessible (teacher is still working, logs/goals/
+  salary still active)
+- Manage: ✅ visible but show current notice status; no new lifecycle
+  actions should be offered (already in wind-down — don't show Give
+  Notice or Early Exit buttons again)
+
+ended:
+- Overview: ✅ visible (shows "Past Engagement" gray card — already
+  built)
+- Daily Logs: ✅ visible but READ-ONLY (no submit form, history only)
+- Goals: ✅ visible but READ-ONLY (no add/toggle, history only)
+- Trends: ✅ visible (read-only by nature, always fine)
+- Payments: ✅ visible but READ-ONLY (history only, no pay button)
+- Manage: ❌ hidden (nothing to manage on a closed engagement —
+  already built from the previous fix)
+
+IMPLEMENTATION:
+- Disabled tabs should render as visually greyed-out tab buttons that
+  are not clickable (not just hidden — the parent/teacher should see
+  the tabs exist but understand they're not yet available).
+- Disabled tabs should show a tooltip or a small explanatory line
+  when hovered/tapped: "Available once the engagement starts."
+- If the user is currently on a disabled tab (e.g. navigated there
+  before status changed), automatically redirect them to Overview.
+- Read-only state for ended engagement: hide the submit/save/add
+  buttons and forms in Daily Logs, Goals, and Payments. Keep the
+  display of existing data. Add a subtle "This engagement has ended
+  — records are read-only" notice at the top of each read-only tab.
+- Apply these rules on BOTH parent dashboard AND professional
+  (teacher) dashboard engagement workspace — the same status-based
+  logic applies to both sides.
+
+DO NOT touch: data queries, API endpoints, React Query keys, payment
+handlers, OTP logic, childId scoping, or any state management.
+Tab visibility only.
+
+Show me the changed code for both parent-dashboard.tsx and
+professional-dashboard.tsx. This auto-deploys to dev; no manual
+production deploy.

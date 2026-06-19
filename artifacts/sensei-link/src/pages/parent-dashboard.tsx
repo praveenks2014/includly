@@ -1144,6 +1144,12 @@ function ShadowTeacherTab() {
   const [newGoalCategory, setNewGoalCategory] = useState("");
   const [savingGoal, setSavingGoal] = useState(false);
 
+  const pendingStartDisabledTabs = new Set(["logs", "goals", "trends", "payments"]);
+  const visibleStTab: typeof stTab =
+    (active?.status === "pending_start" && pendingStartDisabledTabs.has(stTab)) ||
+    (active?.status === "ended" && stTab === "lifecycle")
+      ? "overview" : stTab;
+
   async function handlePostLog() {
     if (!active || !logNote.trim()) return;
     setPostingLog(true);
@@ -1430,12 +1436,23 @@ function ShadowTeacherTab() {
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
         {(([["overview", "Overview"], ["logs", "Daily Logs"], ["goals", "Goals"], ["trends", "Trends"], ["payments", "Payments"], ["lifecycle", "Manage"]] as [string, string][])
           .filter(([id]) => !(active.status === "ended" && id === "lifecycle"))
-        ).map(([id, label]) => (
-          <button key={id} onClick={() => setStTab(id as typeof stTab)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${stTab === id ? "bg-white text-[#1A2340] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-            {label}
-          </button>
-        ))}
+        ).map(([id, label]) => {
+          const isPendingDisabled = active.status === "pending_start" && pendingStartDisabledTabs.has(id);
+          const tipText = id === "payments"
+            ? "Available once the engagement starts — salary payments begin on the confirmed start date"
+            : "Available once the engagement starts";
+          return isPendingDisabled ? (
+            <button key={id} disabled title={tipText}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap text-gray-300 cursor-not-allowed select-none">
+              {label}
+            </button>
+          ) : (
+            <button key={id} onClick={() => setStTab(id as typeof stTab)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${stTab === id ? "bg-white text-[#1A2340] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {stTab === "overview" && active.status === "ended" && (
@@ -1499,41 +1516,48 @@ function ShadowTeacherTab() {
         </div>
       )}
 
-      {stTab === "logs" && (
+      {visibleStTab === "logs" && (
         <div className="space-y-4">
-          <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
-            <div>
-              <p className="text-sm font-bold text-[#1A2340]">Today's Update</p>
-              <p className="text-xs text-gray-400 mt-0.5">Anything the teacher should know today?</p>
+          {active.status === "ended" && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <p className="text-xs text-gray-500">📋 This engagement has ended — records are read-only.</p>
             </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-2">Child's mood at home today <span className="text-gray-400">(optional)</span></p>
-              <div className="flex gap-2 flex-wrap">
-                {MOODS.map(m => (
-                  <button key={m} onClick={() => setLogMood(logMood === m ? "" : m)}
-                    className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${logMood === m ? "border-[#2EC4A5] bg-[#2EC4A5]/10 text-[#2EC4A5]" : "border-gray-200 hover:border-gray-300"}`}>
-                    {m}
-                  </button>
-                ))}
+          )}
+          {active.status !== "ended" && (
+            <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
+              <div>
+                <p className="text-sm font-bold text-[#1A2340]">Today's Update</p>
+                <p className="text-xs text-gray-400 mt-0.5">Anything the teacher should know today?</p>
               </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-2">Child's mood at home today <span className="text-gray-400">(optional)</span></p>
+                <div className="flex gap-2 flex-wrap">
+                  {MOODS.map(m => (
+                    <button key={m} onClick={() => setLogMood(logMood === m ? "" : m)}
+                      className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${logMood === m ? "border-[#2EC4A5] bg-[#2EC4A5]/10 text-[#2EC4A5]" : "border-gray-200 hover:border-gray-300"}`}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Events at home</p>
+                <textarea value={logNote} onChange={(e) => setLogNote(e.target.value)} rows={3}
+                  placeholder="Didn't sleep well, was upset at breakfast…"
+                  className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Areas needing extra support <span className="text-gray-400">(optional)</span></p>
+                <textarea value={logExtraSupport} onChange={(e) => setLogExtraSupport(e.target.value)} rows={2}
+                  placeholder="Please help with transitions today"
+                  className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
+              </div>
+              <Button onClick={handlePostLog} disabled={postingLog || !logNote.trim()}
+                className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-sm">
+                {postingLog ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Post Update
+              </Button>
             </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Events at home</p>
-              <textarea value={logNote} onChange={(e) => setLogNote(e.target.value)} rows={3}
-                placeholder="Didn't sleep well, was upset at breakfast…"
-                className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Areas needing extra support <span className="text-gray-400">(optional)</span></p>
-              <textarea value={logExtraSupport} onChange={(e) => setLogExtraSupport(e.target.value)} rows={2}
-                placeholder="Please help with transitions today"
-                className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
-            </div>
-            <Button onClick={handlePostLog} disabled={postingLog || !logNote.trim()}
-              className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-sm">
-              {postingLog ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Post Update
-            </Button>
-          </div>
+          )}
           {logs.length === 0 ? (
             <p className="text-center text-sm text-gray-400 py-8">No logs yet. Post the first one above.</p>
           ) : (
@@ -1609,8 +1633,13 @@ function ShadowTeacherTab() {
         </div>
       )}
 
-      {stTab === "payments" && (
+      {visibleStTab === "payments" && (
         <div className="space-y-4">
+          {active.status === "ended" && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <p className="text-xs text-gray-500">📋 This engagement has ended — records are read-only.</p>
+            </div>
+          )}
           {active.status !== "ended" && (
             <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
               <p className="text-sm font-bold text-[#1A2340]">Pay Salary</p>
@@ -1645,7 +1674,7 @@ function ShadowTeacherTab() {
         </div>
       )}
 
-      {stTab === "lifecycle" && (
+      {visibleStTab === "lifecycle" && (
         <div className="space-y-4">
           {/* Buyout wind-down banner */}
           {active.status === "notice_period" && active.endedReason === "buyout" && (
@@ -1800,20 +1829,27 @@ function ShadowTeacherTab() {
       )}
 
       {/* ── Goals ── */}
-      {stTab === "goals" && (
+      {visibleStTab === "goals" && (
         <div className="space-y-4">
+          {active.status === "ended" && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <p className="text-xs text-gray-500">📋 This engagement has ended — records are read-only.</p>
+            </div>
+          )}
           <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-bold text-[#1A2340]">Goals for {active.childName ?? "your child"}</p>
                 <p className="text-xs text-gray-400 mt-0.5">You set the goals — your teacher tracks progress each session.</p>
               </div>
-              <button onClick={() => setAddingGoal(!addingGoal)}
-                className="flex items-center gap-1 text-xs text-[#2EC4A5] font-semibold hover:underline shrink-0 ml-3">
-                <Plus size={13} />{addingGoal ? "Cancel" : "Add Goal"}
-              </button>
+              {active.status !== "ended" && (
+                <button onClick={() => setAddingGoal(!addingGoal)}
+                  className="flex items-center gap-1 text-xs text-[#2EC4A5] font-semibold hover:underline shrink-0 ml-3">
+                  <Plus size={13} />{addingGoal ? "Cancel" : "Add Goal"}
+                </button>
+              )}
             </div>
-            {addingGoal && (
+            {addingGoal && active.status !== "ended" && (
               <div className="p-3 bg-gray-50 rounded-lg space-y-2">
                 <input value={newGoalLabel} onChange={e => setNewGoalLabel(e.target.value)}
                   placeholder="Goal (e.g. Writes own name)"
@@ -1837,10 +1873,16 @@ function ShadowTeacherTab() {
                       <p className={`text-sm font-medium truncate ${g.isActive ? "text-[#1A2340]" : "text-gray-400 line-through"}`}>{g.label}</p>
                       {g.category && <p className="text-xs text-gray-400">{g.category}</p>}
                     </div>
-                    <button onClick={() => void handleToggleParentGoal(g.id, g.isActive)}
-                      className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold border transition-colors ${g.isActive ? "bg-green-50 text-green-600 border-green-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200" : "bg-gray-100 text-gray-400 border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200"}`}>
-                      {g.isActive ? "Active" : "Inactive"}
-                    </button>
+                    {active.status !== "ended" ? (
+                      <button onClick={() => void handleToggleParentGoal(g.id, g.isActive)}
+                        className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold border transition-colors ${g.isActive ? "bg-green-50 text-green-600 border-green-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200" : "bg-gray-100 text-gray-400 border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200"}`}>
+                        {g.isActive ? "Active" : "Inactive"}
+                      </button>
+                    ) : (
+                      <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold border ${g.isActive ? "bg-green-50 text-green-600 border-green-200" : "bg-gray-100 text-gray-400 border-gray-200"}`}>
+                        {g.isActive ? "Active" : "Inactive"}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1850,7 +1892,7 @@ function ShadowTeacherTab() {
       )}
 
       {/* ── Trends ── */}
-      {stTab === "trends" && (
+      {visibleStTab === "trends" && (
         hasPtTrendData ? (
           <div className="space-y-4">
             {ptGoalEntries.map(([gid, { label, pts }]) => {

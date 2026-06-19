@@ -1,0 +1,46 @@
+PLAN FIRST — Plan mode, no code yet. Add the ability for a parent
+to update the engagement start date, but ONLY when the engagement
+is in pending_start status.
+
+RULES:
+- Only allowed when engagement.status === "pending_start"
+- New date must be today or in the future (no backdating)
+- The start OTP visibility resets to the new date (OTP is shown
+  to the parent on/after the new startDate, same as original logic)
+- The teacher is notified in-app when the date changes:
+  "The parent has updated the engagement start date to [new date].
+  Please confirm start on that date."
+- The existing startOtp is preserved (no need to regenerate — same
+  OTP, new date)
+- No billing implications (billing hasn't started yet in pending_start)
+- NOT allowed in active, paused, notice_period, or ended status —
+  those states are locked
+
+UI:
+- In the parent's engagement workspace (Overview tab, pending_start
+  state), show a small "Change start date" link or edit icon next
+  to the displayed start date
+- Clicking it opens an inline date picker (min date = today)
+- On confirm: call the update endpoint, show the new date, show a
+  success message "Start date updated — your teacher has been notified"
+- Teacher dashboard (pending_start state): show the updated date
+  clearly, no action needed from teacher (their OTP entry flow is
+  unchanged, just on a new date)
+
+API:
+- PATCH /engagements/:id/start-date (parent only)
+- Guards: engagement must be pending_start, new date must be >= today,
+  caller must be the parent of this engagement
+- Updates startDate on the engagement
+- Creates an in-app notification for the teacher (uses the existing
+  createInAppNotification helper from #80)
+- Returns the updated engagement
+
+DO NOT touch:
+- The startOtp value (preserve it)
+- The engagement status (stays pending_start)
+- Any active/ended/notice_period engagements
+- Billing logic or salary calculations
+
+Show me the plan: the endpoint, the UI change location, the
+notification, and which files are touched. No code until I approve.

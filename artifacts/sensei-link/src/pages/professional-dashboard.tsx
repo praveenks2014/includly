@@ -1871,6 +1871,12 @@ function EngagementTab() {
   const [engTab, setEngTab] = useState<"overview" | "child" | "log" | "trends" | "lifecycle">("overview");
   const [chatOpen, setChatOpen] = useState(false);
 
+  const pendingStartDisabledEngTabs = new Set(["child", "log", "trends"]);
+  const visibleEngTab: typeof engTab =
+    (active?.status === "pending_start" && pendingStartDisabledEngTabs.has(engTab)) ||
+    (active?.status === "ended" && engTab === "lifecycle")
+      ? "overview" : engTab;
+
   const { data: engagements = [], isLoading } = useQuery<STEngagement[]>({
     queryKey: ["pro-engagements"],
     queryFn: () => fetchWithAuth("/api/engagements").then(r => r.json()),
@@ -2228,16 +2234,26 @@ function EngagementTab() {
 
       {/* Sub-tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
-        {([["overview", "Overview"], ["child", "Child & Goals"], ["log", "Daily Log"], ["trends", "Trends"], ["lifecycle", "Manage"]] as [string, string][]).map(([id, label]) => (
-          <button key={id} onClick={() => setEngTab(id as typeof engTab)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${engTab === id ? "bg-white text-[#1A2340] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-            {label}
-          </button>
-        ))}
+        {([["overview", "Overview"], ["child", "Child & Goals"], ["log", "Daily Log"], ["trends", "Trends"], ["lifecycle", "Manage"]] as [string, string][])
+          .filter(([id]) => !(active.status === "ended" && id === "lifecycle"))
+          .map(([id, label]) => {
+            const isPendingDisabled = active.status === "pending_start" && pendingStartDisabledEngTabs.has(id);
+            return isPendingDisabled ? (
+              <button key={id} disabled title="Available once the engagement starts"
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap text-gray-300 cursor-not-allowed select-none">
+                {label}
+              </button>
+            ) : (
+              <button key={id} onClick={() => setEngTab(id as typeof engTab)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${engTab === id ? "bg-white text-[#1A2340] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                {label}
+              </button>
+            );
+          })}
       </div>
 
       {/* ── Overview ── */}
-      {engTab === "overview" && (
+      {visibleEngTab === "overview" && (
         <div className="space-y-4">
           {active.status === "pending_start" && (
             <EngagementStartOtpEntry engagementId={active.id} />
@@ -2277,8 +2293,13 @@ function EngagementTab() {
       )}
 
       {/* ── Child & Goals ── */}
-      {engTab === "child" && (
+      {visibleEngTab === "child" && (
         <div className="space-y-4">
+          {active.status === "ended" && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <p className="text-xs text-gray-500">📋 This engagement has ended — records are read-only.</p>
+            </div>
+          )}
           {(active.childConditions?.length || active.childLanguages?.length) ? (
             <div className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
               <p className="text-sm font-bold text-[#1A2340]">Child Profile</p>
@@ -2304,12 +2325,14 @@ function EngagementTab() {
           <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-sm font-bold text-[#1A2340]">Goals</p>
-              <button onClick={() => setAddingGoal(!addingGoal)}
-                className="flex items-center gap-1 text-xs text-[#2EC4A5] font-semibold hover:underline">
-                <Plus size={13} />{addingGoal ? "Cancel" : "Add Goal"}
-              </button>
+              {active.status !== "ended" && (
+                <button onClick={() => setAddingGoal(!addingGoal)}
+                  className="flex items-center gap-1 text-xs text-[#2EC4A5] font-semibold hover:underline">
+                  <Plus size={13} />{addingGoal ? "Cancel" : "Add Goal"}
+                </button>
+              )}
             </div>
-            {addingGoal && (
+            {addingGoal && active.status !== "ended" && (
               <div className="p-3 bg-gray-50 rounded-lg space-y-2">
                 <input value={newGoalLabel} onChange={e => setNewGoalLabel(e.target.value)}
                   placeholder="Goal (e.g. Writes own name)"
@@ -2333,13 +2356,19 @@ function EngagementTab() {
                       <p className={`text-sm font-medium truncate ${g.isActive ? "text-[#1A2340]" : "text-gray-400 line-through"}`}>{g.label}</p>
                       {g.category && <p className="text-xs text-gray-400">{g.category}</p>}
                     </div>
-                    <button onClick={() => void handleToggleGoal(g.id, g.isActive)}
-                      className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold border transition-colors ${
-                        g.isActive ? "bg-green-50 text-green-600 border-green-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200"
-                                   : "bg-gray-100 text-gray-400 border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200"
-                      }`}>
-                      {g.isActive ? "Active" : "Inactive"}
-                    </button>
+                    {active.status !== "ended" ? (
+                      <button onClick={() => void handleToggleGoal(g.id, g.isActive)}
+                        className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold border transition-colors ${
+                          g.isActive ? "bg-green-50 text-green-600 border-green-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200"
+                                     : "bg-gray-100 text-gray-400 border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200"
+                        }`}>
+                        {g.isActive ? "Active" : "Inactive"}
+                      </button>
+                    ) : (
+                      <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold border ${g.isActive ? "bg-green-50 text-green-600 border-green-200" : "bg-gray-100 text-gray-400 border-gray-200"}`}>
+                        {g.isActive ? "Active" : "Inactive"}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -2372,11 +2401,16 @@ function EngagementTab() {
       )}
 
       {/* ── Daily Log ── */}
-      {engTab === "log" && (
+      {visibleEngTab === "log" && (
         <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-5">
+          {active.status === "ended" && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <p className="text-xs text-gray-500">📋 This engagement has ended — records are read-only.</p>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <p className="text-sm font-bold text-[#1A2340]">Today's Log</p>
-            {todayLogged && !logSubmitted && <span className="text-xs text-green-600 font-semibold">Already submitted today</span>}
+            {todayLogged && !logSubmitted && active.status !== "ended" && <span className="text-xs text-green-600 font-semibold">Already submitted today</span>}
           </div>
 
           {/* Post-submit share CTA */}
@@ -2401,7 +2435,7 @@ function EngagementTab() {
             </div>
           )}
 
-          {!logSubmitted && (
+          {!logSubmitted && active.status !== "ended" && (
             <>
               {/* Goals sampling */}
               <div className="space-y-2">
@@ -2549,7 +2583,7 @@ function EngagementTab() {
       )}
 
       {/* ── Manage / Lifecycle ── */}
-      {engTab === "lifecycle" && (
+      {visibleEngTab === "lifecycle" && (
         <div className="space-y-4">
           {/* Buyout wind-down banner */}
           {active.status === "notice_period" && active.endedReason === "buyout" && (
@@ -2728,7 +2762,7 @@ function EngagementTab() {
       )}
 
       {/* ── Trends ── */}
-      {engTab === "trends" && (
+      {visibleEngTab === "trends" && (
         hasTrendData ? (
           <div className="space-y-4">
             {trendGoalEntries.map(([gid, { label, pts }]) => {
