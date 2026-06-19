@@ -1864,11 +1864,12 @@ export default function ParentDashboard() {
   const firstName = me?.fullName?.split(" ")[0] ?? user?.firstName ?? "there";
   const city = me?.location ?? null;
 
-  const { data: notifications } = useQuery<Notification[]>({
+  const { data: notifData } = useQuery<{ notifications: Notification[]; unreadCount: number }>({
     queryKey: ["notifications"],
     queryFn: () => fetchWithAuth("/api/notifications").then((r) => r.json()),
   });
-  const unreadCount = (notifications ?? []).filter((n) => !n.read).length;
+  const notifications = notifData?.notifications ?? [];
+  const unreadCount = notifData?.unreadCount ?? 0;
 
   function handleTabChange(tab: Tab) {
     if (tab === "notifications") { setShowNotifications(true); return; }
