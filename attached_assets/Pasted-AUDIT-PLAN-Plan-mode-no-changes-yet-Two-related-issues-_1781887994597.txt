@@ -1,0 +1,64 @@
+AUDIT + PLAN — Plan mode, no changes yet. Two related issues with
+the buyout/lifecycle flow:
+
+ISSUE 1 — Buyout ends engagement immediately instead of on effectiveEndDate:
+The buyout flow currently flips the engagement to "ended" immediately
+when payment is confirmed (or when admin approves). This is WRONG.
+A 15-day buyout means the engagement continues for 15 more days and
+ends automatically on effectiveEndDate. The payment is a fee for
+shorter notice, not an immediate stop.
+
+Correct behaviour:
+- Parent pays buyout fee → engagement stays ACTIVE (not ended)
+- Both parent and teacher see a clear banner: "Engagement ending on
+  [effectiveEndDate]" — countdown or date prominently shown
+- On effectiveEndDate, engagement automatically transitions to "ended"
+- Teacher continues working (and receiving salary) until effectiveEndDate
+- No admin approval needed for the standard flow (per #81)
+
+Diagnose: where in the code does the engagement transition to "ended"
+— is it in verify-buyout-payment, the admin approval handler, or
+elsewhere? Show me the exact transition and what needs to change to
+make it fire on effectiveEndDate instead of immediately.
+
+Also propose: how should the "auto-end on effectiveEndDate" be
+implemented? Options are: (a) a scheduled job that checks daily, (b)
+lazy evaluation — check on every engagement load and transition if
+past effectiveEndDate, or (c) admin manually closes it on the date.
+Propose the right approach for this codebase.
+
+ISSUE 2 — Plain-language tooltips / explanations for lifecycle actions:
+Parents and teachers are confused about what "Early Exit", "15-day
+buyout", and "Give Notice" actually mean. Add clear explanations
+adjacent to each lifecycle action button — either as an info tooltip
+(ℹ️ icon) or as a short explanatory line beneath the button label.
+
+Add these explanations on BOTH the parent dashboard and teacher
+dashboard wherever lifecycle buttons appear:
+
+GIVE NOTICE (30-day):
+"End this engagement after 30 days at no extra cost. Your teacher
+continues for 30 days while you find alternative support. Either
+party can give notice."
+
+EARLY EXIT / BUYOUT (15-day):
+"End this engagement in 15 days by paying a one-time fee of ₹[amount].
+Your teacher continues for 15 more days — the engagement ends
+automatically on [date]. No refund on the fee."
+
+PAUSE:
+"Temporarily pause this engagement with the teacher's agreement.
+Both parties must consent. Billing stops during the pause."
+
+For the teacher side, mirror the same explanations from their
+perspective:
+GIVE NOTICE: "You are giving 30 days notice to end this engagement.
+The parent will be notified and the engagement ends after 30 days."
+EARLY EXIT (when notified): "The parent has chosen to exit early.
+You will continue for [X] more days until [date]."
+
+Show me: (1) where the lifecycle buttons render on both dashboards,
+(2) the diagnosis for Issue 1 including the proposed auto-end
+approach, (3) which files need to change for both issues.
+
+No code yet — plan only.
