@@ -1,0 +1,66 @@
+PLAN FIRST — Plan mode. Fix all open bugs and broken items in the
+shadow teacher module before any new features are built.
+
+FIX 1 — Trial OTP migration not on production:
+Migration 0019_trial_otp.sql (adds trial_start_otp and trial_end_otp
+columns to shadow_teacher_matches) has NOT been applied to production.
+Apply it via psql $DATABASE_URL -f in auto-commit mode (same as previous
+migrations). Confirm both columns exist on production afterward. Also
+create a test trial_pending match row in dev so the OTP handshake can
+be verified end to end. Then confirm the full trial OTP flow works:
+parent sees trial start code → teacher enters it → trial_started →
+parent sees trial end code → teacher enters it → trial_done.
+
+FIX 2 — Admin lifecycle panel (wrong URL + field mismatch):
+Admin.tsx calls /api/admin/engagements/${id}/lifecycle but the route
+is /engagements/:id/lifecycle (no admin prefix) → 404, so the admin
+sees no lifecycle requests even though 5 pending rows exist in the DB.
+Also the LifecycleReq interface expects requestType/requestedBy/
+requestedAt/notes but the API returns type/raisedByName/raisedAt/reason.
+Fix both the URL and the interface/display references. Confirm the admin
+lifecycle panel now shows the existing pending requests with correct
+labels.
+
+FIX 3 — Photo viewing (teacher side missing + signed URL):
+3a. The teacher uploaded photos but has no UI to VIEW them in their own
+log history. Add a photo view button to the teacher's log history in the
+Engagement tab (same fetchWithAuth pattern as the parent side).
+3b. The current approach (fetchWithAuth proxy through requireAuth
+endpoint) is fragile — it breaks if the Clerk auth context isn't
+available in the render path. Replace with SIGNED URLS: when GET
+/api/engagements/:id/daily-logs is called, generate a TIME-LIMITED
+signed GCS URL server-side for each log that has a photoKey, return it
+as a top-level signedPhotoUrl field on the log object, and use it
+directly in <img src={log.signedPhotoUrl}> on both parent and teacher
+sides. No auth header needed. Ownership check: confirm the requester
+is the parent or professional of this engagement before generating the
+signed URL.
+
+FIX 4 — Early Exit (buyout) payment and notification (wiring the known gap):
+Currently Early Exit just ends the engagement on admin approval with no
+payment and no notification. Wire the missing pieces:
+- At Early Exit initiation: create a Razorpay order for the buyout
+  amount (parentBuyoutDays × monthlyFeeInr ÷ 30, rounded). Parent pays
+  it in-app (same HMAC verify pattern as existing flows). Store the
+  payment record.
+- On successful payment: notify the teacher in-app (Section 5 of the
+  big plan covers the notification infrastructure — if not yet built,
+  at minimum update the teacher's engagement status badge so they can
+  see the buyout was initiated when they next log in).
+- Engagement ends on effectiveEndDate = today + parentBuyoutDays.
+  Admin can still override if there's a dispute.
+
+FIX 5 — Pause (no server-side flow):
+Currently the parent's "Pause" button sends type:"change" which the API
+accepts but doesn't create a real pause state. Build the pause flow:
+- Either party can RAISE a pause request.
+- The OTHER party must ACCEPT or REJECT it (mutual agreement).
+- If accepted: engagement transitions to paused status, no billing
+  during the pause period.
+- If rejected: stays active.
+- Admin can force-pause via direct override.
+- Add a resume flow: either party can request to resume; other party
+  confirms; engagement returns to active.
+
+Show me the plan for all five fixes including files touched and any
+migrations needed. No code until I approve.
