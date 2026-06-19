@@ -1784,7 +1784,7 @@ function EngagementTab() {
     queryFn: () => fetchWithAuth("/api/engagements").then(r => r.json()),
   });
 
-  const activeList = engagements.filter(e => ["active", "notice_period", "paused"].includes(e.status));
+  const activeList = engagements.filter(e => ["pending_start", "active", "notice_period", "paused"].includes(e.status));
   const active = (selectedEngId ? engagements.find(e => e.id === selectedEngId) : null) ?? activeList[0] ?? null;
 
   // ── Logs ───────────────────────────────────────────────────────────────────
@@ -2147,6 +2147,9 @@ function EngagementTab() {
       {/* ── Overview ── */}
       {engTab === "overview" && (
         <div className="space-y-4">
+          {active.status === "pending_start" && (
+            <EngagementStartOtpEntry engagementId={active.id} />
+          )}
           <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-sm font-bold text-[#1A2340]">Recent Logs</p>
@@ -2722,7 +2725,105 @@ const MATCH_STATUS_COLOR: Record<string, string> = {
   trial_done:      "bg-purple-50 text-purple-700 border-purple-200",
 };
 
-function CandidacyCard({ candidacy: c, onOpen }: { candidacy: Candidacy; onOpen: () => void }) {
+function CandidacyOfferSection({ matchId, candidateId, myUserId }: { matchId: number; candidateId: number; myUserId: number }) {
+  const [offerInput, setOfferInput] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: offers = [] } = useQuery<{ id: number; raisedByUserId: number; raisedByRole: string; amountInr: number; status: string }[]>({
+    queryKey: ["pro-offers", matchId, candidateId],
+    queryFn: () => fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/offers`).then(r => r.json()),
+    enabled: myUserId > 0,
+    refetchInterval: 15_000,
+  });
+
+  const acceptedOffer = offers.find(o => o.status === "accepted");
+  const myPendingOffer = offers.find(o => o.status === "pending" && o.raisedByUserId === myUserId);
+  const theirPendingOffer = offers.find(o => o.status === "pending" && o.raisedByUserId !== myUserId);
+
+  async function submitOffer() {
+    const amount = parseInt(offerInput.replace(/\D/g, ""), 10);
+    if (!amount) { toast({ title: "Enter a valid amount", variant: "destructive" }); return; }
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/offers`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amountInr: amount }),
+      });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Failed", variant: "destructive" }); return; }
+      setOfferInput("");
+      queryClient.invalidateQueries({ queryKey: ["pro-offers", matchId, candidateId] });
+    } finally { setSubmitting(false); }
+  }
+
+  async function acceptOffer(offerId: number) {
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/offers/${offerId}/accept`, { method: "PATCH" });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Failed", variant: "destructive" }); return; }
+      queryClient.invalidateQueries({ queryKey: ["pro-offers", matchId, candidateId] });
+    } finally { setSubmitting(false); }
+  }
+
+  async function withdrawOffer(offerId: number) {
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/offers/${offerId}`, { method: "DELETE" });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Failed", variant: "destructive" }); return; }
+      queryClient.invalidateQueries({ queryKey: ["pro-offers", matchId, candidateId] });
+    } finally { setSubmitting(false); }
+  }
+
+  return (
+    <div className="mt-2 space-y-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Price Negotiation</p>
+      {offers.filter(o => o.status !== "withdrawn").slice(-4).map(o => (
+        <div key={o.id} className={`flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg ${o.raisedByUserId === myUserId ? "bg-blue-50 text-blue-800" : "bg-gray-50 text-gray-600"}`}>
+          <span>{o.raisedByUserId === myUserId ? "You" : "Parent"} offered ₹{o.amountInr.toLocaleString("en-IN")}/mo</span>
+          <span className={`ml-2 text-[10px] font-semibold ${o.status === "accepted" ? "text-green-600" : o.status === "superseded" ? "text-gray-400" : "text-amber-600"}`}>
+            {o.status === "accepted" ? "✓ Agreed" : o.status === "superseded" ? "replaced" : "pending"}
+          </span>
+        </div>
+      ))}
+      {acceptedOffer ? (
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+          <span className="text-xs font-bold text-green-800">🔒 Agreed: ₹{acceptedOffer.amountInr.toLocaleString("en-IN")}/mo</span>
+        </div>
+      ) : myPendingOffer ? (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-amber-700">Waiting for parent's response…</span>
+          <button onClick={() => void withdrawOffer(myPendingOffer.id)} disabled={submitting}
+            className="text-[10px] text-red-500 hover:underline disabled:opacity-50">Withdraw</button>
+        </div>
+      ) : theirPendingOffer ? (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-gray-700">Parent offered ₹{theirPendingOffer.amountInr.toLocaleString("en-IN")}/mo</p>
+          <div className="flex gap-2">
+            <button onClick={() => void acceptOffer(theirPendingOffer.id)} disabled={submitting}
+              className="flex-1 text-xs bg-green-600 text-white rounded-lg py-1.5 font-semibold hover:bg-green-700 disabled:opacity-50">Accept</button>
+            <div className="flex flex-1 gap-1">
+              <input type="number" min="1" placeholder="Counter ₹" value={offerInput} onChange={e => setOfferInput(e.target.value)}
+                className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-[#2EC4A5] min-w-0" />
+              <button onClick={() => void submitOffer()} disabled={submitting || !offerInput}
+                className="text-xs bg-[#1A2340] text-white rounded-lg px-2 font-semibold disabled:opacity-50">Send</button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <input type="number" min="1" placeholder="Propose a fee ₹/mo" value={offerInput} onChange={e => setOfferInput(e.target.value)}
+            className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-[#2EC4A5] min-w-0" />
+          <button onClick={() => void submitOffer()} disabled={submitting || !offerInput}
+            className="text-xs bg-[#2EC4A5] text-white rounded-lg px-3 py-1.5 font-semibold hover:bg-[#26a88d] disabled:opacity-50">
+            {submitting ? "…" : "Propose"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CandidacyCard({ candidacy: c, onOpen, myUserId }: { candidacy: Candidacy; onOpen: () => void; myUserId: number }) {
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-[0_4px_24px_rgba(26,35,64,0.06)]">
       <div className="flex items-start justify-between gap-3 mb-3">
@@ -2773,6 +2874,10 @@ function CandidacyCard({ candidacy: c, onOpen }: { candidacy: Candidacy; onOpen:
         <TrialOtpEntry matchId={c.matchId} type="end" />
       )}
 
+      {["shortlisted", "trial_done"].includes(c.matchStatus) && c.candidateId !== null && (
+        <CandidacyOfferSection matchId={c.matchId} candidateId={c.candidateId!} myUserId={myUserId} />
+      )}
+
       <div className="flex items-center justify-between pt-3 border-t border-gray-50">
         {c.messageCount > 0 ? (
           <span className="flex items-center gap-1.5 text-xs text-[#2EC4A5] font-medium">
@@ -2789,6 +2894,65 @@ function CandidacyCard({ candidacy: c, onOpen }: { candidacy: Candidacy; onOpen:
         >
           <MessageSquare size={12} className="mr-1.5" />
           Open Chat
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function EngagementStartOtpEntry({ engagementId }: { engagementId: number }) {
+  const [otp, setOtp] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  async function handleSubmit() {
+    const code = otp.trim();
+    if (code.length === 0) { toast({ title: "Enter the start code", variant: "destructive" }); return; }
+    setLoading(true);
+    try {
+      const res = await fetchWithAuth(`/api/engagements/${engagementId}/confirm-start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ otp: code }),
+      });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        toast({ title: d.error ?? "Incorrect code — try again", variant: "destructive" });
+        setOtp("");
+        return;
+      }
+      toast({ title: "Engagement started!", description: "Your engagement is now active." });
+      queryClient.invalidateQueries({ queryKey: ["pro-engagements"] });
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+      <p className="text-sm font-semibold text-amber-800">📋 Enter the parent's start code to begin</p>
+      <p className="text-xs text-amber-700">Ask the parent to open their app — the start code appears on the engagement start date.</p>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          inputMode="numeric"
+          maxLength={6}
+          placeholder="_ _ _ _ _ _"
+          value={otp}
+          onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+          className="flex-1 h-9 text-center text-lg font-mono tracking-widest border border-amber-300 rounded-xl px-3 outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+          onKeyDown={(e) => { if (e.key === "Enter") void handleSubmit(); }}
+        />
+        <Button
+          size="sm"
+          className="h-9 px-4 rounded-xl text-xs text-white bg-amber-500 hover:bg-amber-600"
+          onClick={() => void handleSubmit()}
+          disabled={loading || otp.length === 0}
+        >
+          {loading ? <Loader2 size={12} className="animate-spin" /> : "Confirm Start"}
         </Button>
       </div>
     </div>
@@ -2918,7 +3082,7 @@ function EnquiriesTab() {
           </p>
         </div>
         {candidacies.map((c) => (
-          <CandidacyCard key={c.candidateId} candidacy={c} onOpen={() => setSelected(c)} />
+          <CandidacyCard key={c.candidateId} candidacy={c} onOpen={() => setSelected(c)} myUserId={(me as unknown as { id?: number })?.id ?? 0} />
         ))}
       </div>
       {selected && (

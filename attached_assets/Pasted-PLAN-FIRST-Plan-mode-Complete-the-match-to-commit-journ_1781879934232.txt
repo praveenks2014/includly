@@ -1,0 +1,54 @@
+PLAN FIRST — Plan mode. Complete the match-to-commit journey with two
+missing pieces: price negotiation before commit, and a scheduled
+engagement start with OTP confirmation.
+
+PART A — Price negotiation (offer / counter-offer / lock):
+After a parent and teacher chat (match is shortlisted), the parent makes
+a SALARY OFFER. The teacher can ACCEPT (locking the price) or COUNTER
+with a different amount. Either side can EDIT their current offer until
+the other accepts or counters. Once both agree, the price LOCKS and
+cannot be changed.
+
+Rules:
+- Store offers on the match (a new negotiation_offers table or columns
+  on shadow_teacher_matches — propose the cleaner approach).
+- Either side can edit only their OWN current offer, not the other's.
+- Show negotiation history (who offered what, when) in the chat/
+  candidacy view — a lightweight offer thread alongside the message
+  thread.
+- Locked price becomes the engagement's monthlyFeeInr at commit.
+- If no negotiation happens: teacher's listed pricingMinINR is used
+  as default (existing behaviour preserved — don't break direct commit).
+- Parent UI: offer input on the candidate card after chatting.
+- Teacher UI: offer card in the Enquiries tab with accept/counter
+  options.
+
+PART B — Engagement start OTP + scheduled date:
+At COMMIT, the parent enters a START DATE for the engagement (when the
+teacher should actually begin). The engagement is created in a new
+"pending_start" status (not immediately active).
+
+On the start date: a START OTP becomes visible to the parent in-app
+("Share this with your teacher to begin"). The teacher enters the OTP
+in their Engagement tab → engagement transitions to active.
+
+Billing anchor: salary is calculated from the parent's scheduled
+startDate (not from when the OTP is entered). If the teacher never
+enters the OTP, engagement stays pending_start with no billing; admin
+can intervene. Clear status messages to both sides ("Waiting for teacher
+to confirm start on [date]").
+
+Migration needed: add pending_start to engagement_status enum and
+start_otp column to shadow_teacher_engagements (additive, next free
+migration number after confirmed current highest).
+
+CRITICAL — do NOT touch:
+- The existing trial OTP code
+- Credit carry-over or salary deduction logic
+- Chat masking or match scoring
+- Any engagement already in active status
+
+Show me the plan: negotiation data model, offer/counter API endpoints,
+the commit flow change (date picker + pending_start + OTP generation),
+teacher OTP entry flow, and the billing-anchor interaction with the
+existing salary route. List all files touched. No code until I approve.

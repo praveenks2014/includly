@@ -56,6 +56,7 @@ router.get("/engagements", requireAuth, async (req, res): Promise<void> => {
         billedThroughDate: shadowTeacherEngagementsTable.billedThroughDate,
         notes: shadowTeacherEngagementsTable.notes,
         createdAt: shadowTeacherEngagementsTable.createdAt,
+        startOtp: shadowTeacherEngagementsTable.startOtp,
         professionalName: professionalProfilesTable.fullName,
         professionalSpecialty: professionalProfilesTable.specialty,
         childName: childrenTable.name,
@@ -65,7 +66,12 @@ router.get("/engagements", requireAuth, async (req, res): Promise<void> => {
       .leftJoin(childrenTable, eq(shadowTeacherEngagementsTable.childId, childrenTable.id))
       .where(eq(shadowTeacherEngagementsTable.parentId, req.userId!))
       .orderBy(desc(shadowTeacherEngagementsTable.createdAt));
-    res.json(rows);
+    const today = new Date().toISOString().slice(0, 10);
+    const safeRows = rows.map(r => ({
+      ...r,
+      startOtp: r.startOtp && r.startDate <= today ? r.startOtp : null,
+    }));
+    res.json(safeRows);
     return;
   }
 
@@ -279,6 +285,59 @@ router.post("/engagements/:id/logs", requireAuth, async (req, res): Promise<void
     .returning();
 
   res.status(201).json(row);
+});
+
+// ── POST /engagements/:id/confirm-start — teacher enters parent's start code to activate engagement ──
+router.post("/engagements/:id/confirm-start", requireAuth, requireRole("professional"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { otp } = (req.body ?? {}) as { otp?: string };
+  if (typeof otp !== "string" || otp.trim().length === 0) { res.status(400).json({ error: "Start code required" }); return; }
+
+  const [prof] = await db
+    .select({ id: professionalProfilesTable.id, userId: professionalProfilesTable.userId })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.userId, req.userId!))
+    .limit(1);
+  if (!prof) { res.status(403).json({ error: "Professional profile not found" }); return; }
+
+  const [engagement] = await db
+    .select()
+    .from(shadowTeacherEngagementsTable)
+    .where(and(
+      eq(shadowTeacherEngagementsTable.id, id),
+      eq(shadowTeacherEngagementsTable.professionalId, prof.id),
+    ))
+    .limit(1);
+  if (!engagement) { res.status(404).json({ error: "Engagement not found" }); return; }
+  if (engagement.status !== "pending_start") { res.status(409).json({ error: "Engagement is not awaiting start confirmation" }); return; }
+  if (!engagement.startOtp || engagement.startOtp !== otp.trim()) {
+    res.status(400).json({ error: "Incorrect start code" }); return;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  if (engagement.startDate > today) {
+    res.status(400).json({ error: `Start date is ${engagement.startDate} — you can confirm on or after that date` }); return;
+  }
+
+  const [updated] = await db
+    .update(shadowTeacherEngagementsTable)
+    .set({ status: "active", startOtp: null, updatedAt: new Date() })
+    .where(eq(shadowTeacherEngagementsTable.id, id))
+    .returning();
+
+  if (engagement.monthlyFeeInr > 0) {
+    await createLedgerHeld({
+      engagementId: id,
+      parentId: engagement.parentId,
+      professionalUserId: prof.userId ?? null,
+      amountInr: engagement.monthlyFeeInr,
+      bookingType: "engagement",
+    });
+  }
+
+  res.json(updated);
 });
 
 async function isProfessionalOwner(professionalId: number, userId: number): Promise<boolean> {

@@ -13,6 +13,7 @@ import {
   usersTable,
   professionalProfilesTable,
   childrenTable,
+  negotiationOffersTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { z } from "zod/v4";
@@ -611,8 +612,127 @@ router.post("/shadow-teacher/:matchId/thread/:candidateId", requireAuth, async (
   res.status(201).json({ ...message, body });
 });
 
+// ── Negotiation Offer Helpers ──────────────────────────────────────────────────
+
+async function resolveNegotiationAccess(
+  matchId: number,
+  candidateId: number,
+  userId: number,
+  userRole: string,
+): Promise<{ match: typeof shadowTeacherMatchesTable.$inferSelect; candidate: typeof shadowMatchCandidatesTable.$inferSelect; myRole: "parent" | "professional" } | null> {
+  const [match] = await db.select().from(shadowTeacherMatchesTable)
+    .where(eq(shadowTeacherMatchesTable.id, matchId)).limit(1);
+  if (!match) return null;
+  const [candidate] = await db.select().from(shadowMatchCandidatesTable)
+    .where(and(eq(shadowMatchCandidatesTable.id, candidateId), eq(shadowMatchCandidatesTable.matchId, matchId), isNull(shadowMatchCandidatesTable.removedAt)))
+    .limit(1);
+  if (!candidate) return null;
+  if (match.parentId === userId) return { match, candidate, myRole: "parent" };
+  if (userRole === "professional") {
+    const [pro] = await db.select({ id: professionalProfilesTable.id }).from(professionalProfilesTable)
+      .where(eq(professionalProfilesTable.userId, userId)).limit(1);
+    if (pro?.id === candidate.professionalId) return { match, candidate, myRole: "professional" };
+  }
+  if (userRole === "admin") return { match, candidate, myRole: "parent" };
+  return null;
+}
+
+// ── GET /shadow-teacher/:matchId/candidates/:candidateId/offers ───────────────
+router.get("/shadow-teacher/:matchId/candidates/:candidateId/offers", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  const offers = await db.select().from(negotiationOffersTable)
+    .where(and(eq(negotiationOffersTable.matchId, matchId), eq(negotiationOffersTable.candidateId, candidateId)))
+    .orderBy(negotiationOffersTable.createdAt);
+  res.json(offers);
+});
+
+// ── POST /shadow-teacher/:matchId/candidates/:candidateId/offers ──────────────
+const OfferBody = z.object({ amountInr: z.number().int().positive() });
+
+router.post("/shadow-teacher/:matchId/candidates/:candidateId/offers", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const parsed = OfferBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  if (!["shortlisted", "trial_done"].includes(ctx.match.status)) {
+    res.status(409).json({ error: "Offers can only be made while match is shortlisted or trial_done" }); return;
+  }
+  const [existingAccepted] = await db.select({ id: negotiationOffersTable.id })
+    .from(negotiationOffersTable)
+    .where(and(eq(negotiationOffersTable.matchId, matchId), eq(negotiationOffersTable.candidateId, candidateId), eq(negotiationOffersTable.status, "accepted")))
+    .limit(1);
+  if (existingAccepted) { res.status(409).json({ error: "A price has already been agreed for this candidate" }); return; }
+  await db.update(negotiationOffersTable)
+    .set({ status: "superseded", updatedAt: new Date() })
+    .where(and(
+      eq(negotiationOffersTable.matchId, matchId),
+      eq(negotiationOffersTable.candidateId, candidateId),
+      eq(negotiationOffersTable.raisedByRole, ctx.myRole),
+      eq(negotiationOffersTable.status, "pending"),
+    ));
+  const [offer] = await db.insert(negotiationOffersTable).values({
+    matchId, candidateId, raisedByUserId: req.userId!, raisedByRole: ctx.myRole,
+    amountInr: parsed.data.amountInr, status: "pending",
+  }).returning();
+  res.status(201).json(offer);
+});
+
+// ── PATCH /shadow-teacher/:matchId/candidates/:candidateId/offers/:offerId/accept ──
+router.patch("/shadow-teacher/:matchId/candidates/:candidateId/offers/:offerId/accept", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  const offerId = parseInt(req.params["offerId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId) || isNaN(offerId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  const [offer] = await db.select().from(negotiationOffersTable)
+    .where(and(eq(negotiationOffersTable.id, offerId), eq(negotiationOffersTable.matchId, matchId), eq(negotiationOffersTable.candidateId, candidateId), eq(negotiationOffersTable.status, "pending")))
+    .limit(1);
+  if (!offer) { res.status(404).json({ error: "Pending offer not found" }); return; }
+  if (offer.raisedByRole === ctx.myRole) { res.status(403).json({ error: "You cannot accept your own offer" }); return; }
+  await db.update(negotiationOffersTable)
+    .set({ status: "superseded", updatedAt: new Date() })
+    .where(and(eq(negotiationOffersTable.matchId, matchId), eq(negotiationOffersTable.candidateId, candidateId), eq(negotiationOffersTable.status, "pending")));
+  const [accepted] = await db.update(negotiationOffersTable)
+    .set({ status: "accepted", updatedAt: new Date() })
+    .where(eq(negotiationOffersTable.id, offerId))
+    .returning();
+  res.json(accepted);
+});
+
+// ── DELETE /shadow-teacher/:matchId/candidates/:candidateId/offers/:offerId ───
+router.delete("/shadow-teacher/:matchId/candidates/:candidateId/offers/:offerId", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  const offerId = parseInt(req.params["offerId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId) || isNaN(offerId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  const [offer] = await db.select().from(negotiationOffersTable)
+    .where(and(eq(negotiationOffersTable.id, offerId), eq(negotiationOffersTable.matchId, matchId), eq(negotiationOffersTable.candidateId, candidateId)))
+    .limit(1);
+  if (!offer) { res.status(404).json({ error: "Offer not found" }); return; }
+  if (offer.raisedByUserId !== req.userId) { res.status(403).json({ error: "You can only withdraw your own offer" }); return; }
+  if (offer.status !== "pending") { res.status(409).json({ error: "Only pending offers can be withdrawn" }); return; }
+  const [withdrawn] = await db.update(negotiationOffersTable)
+    .set({ status: "withdrawn", updatedAt: new Date() })
+    .where(eq(negotiationOffersTable.id, offerId))
+    .returning();
+  res.json(withdrawn);
+});
+
 // ── POST /shadow-teacher/:matchId/commit — parent selects a teacher (FREE — matching fee already paid at request) ─
-const CommitBody = z.object({ selectedProfessionalId: z.number().int().positive() });
+const CommitBody = z.object({
+  selectedProfessionalId: z.number().int().positive(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
 
 router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
   const matchId = parseInt(req.params["matchId"] as string, 10);
@@ -621,7 +741,7 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
   const parsed = CommitBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { selectedProfessionalId } = parsed.data;
+  const { selectedProfessionalId, startDate } = parsed.data;
 
   const [match] = await db
     .select()
@@ -656,9 +776,25 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
     return;
   }
 
+  // Use accepted negotiated price if one exists, else fall back to teacher's listed minimum.
+  const [acceptedOffer] = await db
+    .select({ amountInr: negotiationOffersTable.amountInr })
+    .from(negotiationOffersTable)
+    .where(
+      and(
+        eq(negotiationOffersTable.matchId, matchId),
+        eq(negotiationOffersTable.candidateId, candidate.id),
+        eq(negotiationOffersTable.status, "accepted"),
+      ),
+    )
+    .limit(1);
+  const monthlyFeeInr = acceptedOffer?.amountInr ?? teacher.pricingMinINR!;
+
   // Create engagement — no Razorpay call; matching fee was already captured at request time.
   // If a trial fee was paid, carry it forward as a credit on the first salary payment.
+  // Engagement starts in pending_start; teacher enters parent's start OTP to activate it.
   const today = new Date().toISOString().split("T")[0]!;
+  const effectiveStartDate = startDate ?? today;
   const [engagement] = await db
     .insert(shadowTeacherEngagementsTable)
     .values({
@@ -666,11 +802,12 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
       professionalId: selectedProfessionalId,
       childId: match.childId ?? null,
       matchRequestId: match.id,
-      startDate: today,
+      startDate: effectiveStartDate,
       hoursPerWeek: 0,
-      monthlyFeeInr: teacher.pricingMinINR!,
+      monthlyFeeInr,
       trialCreditInr: match.trialFeePaidInr ?? 0,
-      status: "active",
+      status: "pending_start",
+      startOtp: generateOtp(),
     })
     .returning();
 

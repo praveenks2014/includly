@@ -1,0 +1,39 @@
+Plan #79 approved — build Part A (negotiation) and Part B (scheduled
+start + OTP) as specified. Four confirmations before building:
+
+1. MIGRATION NUMBER: confirm 0022 is the next genuinely-free number.
+The last confirmed applied is 0019. Tasks #74 and #75 introduce 0020
+and 0021 — confirm all three are applied cleanly before running 0022.
+Do NOT run 0022 until you confirm the actual highest applied migration
+number in the production DB.
+
+2. START OTP VISIBILITY TIMING: the OTP must not be visible to the
+parent before the scheduled start date. Confirm the API WITHHOLDS
+startOtp from the GET /engagements/:id or my-request response until
+today >= engagement.startDate — not just hidden in the frontend UI.
+Frontend-only date-gating can be bypassed by inspecting API responses.
+Server-side date check before including startOtp in the response.
+
+3. LOCKED OFFER AMOUNT AT COMMIT: confirm the commit endpoint reads
+the accepted offer amount from the DB (not from the client-sent
+lockedOfferAmount field) and falls back to teacher.pricingMinINR if
+no accepted offer exists for that candidate. The client value should
+be ignored entirely for the amount that flows into monthlyFeeInr.
+
+4. KNOWN GAP TO DOCUMENT (don't build now, just note): if the start
+date passes and the teacher never enters the OTP, the engagement stays
+pending_start indefinitely. Note this as a known gap — a future task
+should handle it (e.g. admin notification after N days, or a parent
+"flag no-show" button). Don't leave it undocumented.
+
+CRITICAL — do NOT touch:
+- Trial OTP code (generateOtp() is shared — reuse only, don't modify)
+- Credit carry-over or salary deduction logic
+- Chat masking or match scoring
+- Any engagement currently in active or notice_period status
+- The existing direct-commit flow for matches with no negotiation
+  (must still work without an offer being made)
+
+Show me migration 0022 SQL and the commit endpoint changes (especially
+the createLedgerHeld deferral) before applying the migration. This
+auto-deploys to dev; no manual production deploy.

@@ -1051,6 +1051,7 @@ function ShadowTeacherTab() {
     notes: string | null;
     professionalName: string | null;
     childName: string | null;
+    startOtp?: string | null;
   }
   interface DailyLog {
     id: number;
@@ -1093,7 +1094,7 @@ function ShadowTeacherTab() {
   });
 
   const active = engagements.find(e =>
-    (e.status === "active" || e.status === "notice_period" || e.status === "paused") &&
+    (["active", "notice_period", "paused", "pending_start"].includes(e.status)) &&
     e.childId === selectedChildId
   );
 
@@ -1433,18 +1434,46 @@ function ShadowTeacherTab() {
 
       {stTab === "overview" && (
         <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
-          <p className="text-sm font-bold text-[#1A2340]">Engagement Summary</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gray-50 rounded-xl p-3">
-              <p className="text-xs text-gray-400">Total Logs</p>
-              <p className="text-2xl font-bold text-[#1A2340] mt-0.5">{logs.length}</p>
+          {active.status === "pending_start" ? (
+            <div className="space-y-3">
+              <p className="text-sm font-bold text-[#1A2340]">Engagement Booked — Awaiting Start</p>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+                <p className="text-xs font-semibold text-amber-800">⏳ Waiting for teacher to confirm start</p>
+                <p className="text-xs text-amber-700">
+                  Share the code below with {active.professionalName ?? "your teacher"} on{" "}
+                  {new Date(active.startDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long" })}.
+                  They'll enter it to begin the engagement.
+                </p>
+                {active.startOtp ? (
+                  <div className="bg-white border-2 border-amber-300 rounded-xl p-4 text-center space-y-1 mt-2">
+                    <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-widest">Start Code</p>
+                    <p className="text-4xl font-mono font-bold tracking-[0.3em] text-amber-900 select-all">{active.startOtp}</p>
+                    <p className="text-[10px] text-amber-600">Show this to your teacher — do not share publicly</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-amber-600 bg-white rounded-lg px-3 py-2 border border-amber-200 mt-2">
+                    Your start code will appear here on{" "}
+                    {new Date(active.startDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}.
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="bg-gray-50 rounded-xl p-3">
-              <p className="text-xs text-gray-400">Payments Made</p>
-              <p className="text-2xl font-bold text-[#1A2340] mt-0.5">{payments.filter(p => p.status === "paid").length}</p>
-            </div>
-          </div>
-          {active.notes && <p className="text-xs text-gray-500 bg-gray-50 rounded-xl p-3">{active.notes}</p>}
+          ) : (
+            <>
+              <p className="text-sm font-bold text-[#1A2340]">Engagement Summary</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400">Total Logs</p>
+                  <p className="text-2xl font-bold text-[#1A2340] mt-0.5">{logs.length}</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400">Payments Made</p>
+                  <p className="text-2xl font-bold text-[#1A2340] mt-0.5">{payments.filter(p => p.status === "paid").length}</p>
+                </div>
+              </div>
+              {active.notes && <p className="text-xs text-gray-500 bg-gray-50 rounded-xl p-3">{active.notes}</p>}
+            </>
+          )}
         </div>
       )}
 

@@ -8,7 +8,7 @@
  *
  * Legacy (queued/matched) states also handled for existing records.
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -142,6 +142,15 @@ const STATUS_COLORS: Record<string, string> = {
   trial_done: "bg-teal-100 text-teal-700",
 };
 
+interface NegotiationOffer {
+  id: number;
+  raisedByUserId: number;
+  raisedByRole: string;
+  amountInr: number;
+  status: string;
+  createdAt: string;
+}
+
 function ScoreBadge({ score }: { score: number | null }) {
   if (score == null) return null;
   const color = score >= 70 ? "bg-green-100 text-green-700" : score >= 45 ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-500";
@@ -149,6 +158,117 @@ function ScoreBadge({ score }: { score: number | null }) {
     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${color}`}>
       {Math.round(score)}/100
     </span>
+  );
+}
+
+function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
+  matchId: number;
+  candidateId: number;
+  myUserId: number;
+  matchStatus: string;
+}) {
+  const [offerInput, setOfferInput] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: offers = [] } = useQuery<NegotiationOffer[]>({
+    queryKey: ["offers", matchId, candidateId],
+    queryFn: () => fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/offers`).then(r => r.json() as Promise<NegotiationOffer[]>),
+    enabled: myUserId > 0 && ["shortlisted", "trial_done"].includes(matchStatus),
+    refetchInterval: 15_000,
+  });
+
+  useEffect(() => { void 0; }, []);
+
+  const acceptedOffer = offers.find(o => o.status === "accepted");
+  const myPendingOffer = offers.find(o => o.status === "pending" && o.raisedByUserId === myUserId);
+  const theirPendingOffer = offers.find(o => o.status === "pending" && o.raisedByUserId !== myUserId);
+
+  if (!["shortlisted", "trial_done"].includes(matchStatus)) return null;
+
+  async function submitOffer() {
+    const amount = parseInt(offerInput.replace(/\D/g, ""), 10);
+    if (!amount || amount <= 0) { toast({ title: "Enter a valid amount", variant: "destructive" }); return; }
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/offers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amountInr: amount }),
+      });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Failed to send offer", variant: "destructive" }); return; }
+      setOfferInput("");
+      queryClient.invalidateQueries({ queryKey: ["offers", matchId, candidateId] });
+    } finally { setSubmitting(false); }
+  }
+
+  async function acceptOffer(offerId: number) {
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/offers/${offerId}/accept`, { method: "PATCH" });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Failed", variant: "destructive" }); return; }
+      queryClient.invalidateQueries({ queryKey: ["offers", matchId, candidateId] });
+    } finally { setSubmitting(false); }
+  }
+
+  async function withdrawOffer(offerId: number) {
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/offers/${offerId}`, { method: "DELETE" });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Failed", variant: "destructive" }); return; }
+      queryClient.invalidateQueries({ queryKey: ["offers", matchId, candidateId] });
+    } finally { setSubmitting(false); }
+  }
+
+  return (
+    <div className="border-t border-gray-100 pt-3 space-y-2 mt-1">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Price Negotiation</p>
+      {offers.filter(o => o.status !== "withdrawn").slice(-4).map(o => (
+        <div key={o.id} className={`flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg ${o.raisedByUserId === myUserId ? "bg-blue-50 text-blue-800" : "bg-gray-50 text-gray-600"}`}>
+          <span>{o.raisedByUserId === myUserId ? "You" : "Teacher"} offered ₹{o.amountInr.toLocaleString("en-IN")}/mo</span>
+          <span className={`ml-2 text-[10px] font-semibold ${o.status === "accepted" ? "text-green-600" : o.status === "superseded" ? "text-gray-400" : "text-amber-600"}`}>
+            {o.status === "accepted" ? "✓ Agreed" : o.status === "superseded" ? "replaced" : "pending"}
+          </span>
+        </div>
+      ))}
+      {acceptedOffer ? (
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+          <span className="text-xs font-bold text-green-800">🔒 Agreed: ₹{acceptedOffer.amountInr.toLocaleString("en-IN")}/mo — click Choose to lock in</span>
+        </div>
+      ) : myPendingOffer ? (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-amber-700">Waiting for teacher's response…</span>
+          <button onClick={() => void withdrawOffer(myPendingOffer.id)} disabled={submitting}
+            className="text-[10px] text-red-500 hover:underline disabled:opacity-50">Withdraw</button>
+        </div>
+      ) : theirPendingOffer ? (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-gray-700">Teacher offered ₹{theirPendingOffer.amountInr.toLocaleString("en-IN")}/mo</p>
+          <div className="flex gap-2">
+            <button onClick={() => void acceptOffer(theirPendingOffer.id)} disabled={submitting}
+              className="flex-1 text-xs bg-green-600 text-white rounded-lg py-1.5 font-semibold hover:bg-green-700 disabled:opacity-50">Accept</button>
+            <div className="flex flex-1 gap-1">
+              <input type="number" min="1" placeholder="Counter ₹"
+                value={offerInput} onChange={e => setOfferInput(e.target.value)}
+                className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-[#2EC4A5] min-w-0" />
+              <button onClick={() => void submitOffer()} disabled={submitting || !offerInput}
+                className="text-xs bg-[#1A2340] text-white rounded-lg px-2 font-semibold hover:bg-[#2a3660] disabled:opacity-50">Send</button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <input type="number" min="1" placeholder="Make an offer ₹/mo"
+            value={offerInput} onChange={e => setOfferInput(e.target.value)}
+            className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-[#2EC4A5] min-w-0" />
+          <button onClick={() => void submitOffer()} disabled={submitting || !offerInput}
+            className="text-xs bg-[#2EC4A5] text-white rounded-lg px-3 py-1.5 font-semibold hover:bg-[#26a88d] disabled:opacity-50">
+            {submitting ? "…" : "Offer"}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -162,6 +282,7 @@ function CandidateCard({
   onNotInterested,
   onRequestTrial,
   trialMode,
+  matchStatus,
 }: {
   candidate: Candidate;
   matchId: number;
@@ -172,6 +293,7 @@ function CandidateCard({
   onNotInterested?: (candidateId: number) => void;
   onRequestTrial?: (professionalId: number) => void;
   trialMode?: boolean;
+  matchStatus?: string;
 }) {
   const [chatOpen, setChatOpen] = useState(false);
   const p = candidate.profile;
@@ -240,6 +362,15 @@ function CandidateCard({
             {p.phone && <p className="text-green-700">📞 {p.phone}</p>}
             {p.email && <p className="text-green-700">✉️ {p.email}</p>}
           </div>
+        )}
+
+        {!committed && !trialMode && matchStatus && (
+          <OfferSection
+            matchId={matchId}
+            candidateId={candidate.id}
+            myUserId={myUserId}
+            matchStatus={matchStatus}
+          />
         )}
 
         <div className="flex gap-2 pt-1">
@@ -325,6 +456,11 @@ export function ShadowTeacherRequestWidget() {
   const [requestingTrial, setRequestingTrial] = useState(false);
   const [markingTrialDone, setMarkingTrialDone] = useState(false);
   const [noCommitting, setNoCommitting] = useState(false);
+
+  // Commit date-picker dialog state
+  const [commitDialogOpen, setCommitDialogOpen] = useState(false);
+  const [commitProfId, setCommitProfId] = useState<number | null>(null);
+  const [commitStartDate, setCommitStartDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   // Trial booking modal state
   const [trialModalOpen, setTrialModalOpen] = useState(false);
@@ -422,14 +558,14 @@ export function ShadowTeacherRequestWidget() {
   }
 
   // ── handleChoose — FREE commit (matching fee was already paid at request) ──
-  async function handleChoose(professionalId: number) {
+  async function handleChoose(professionalId: number, startDate?: string) {
     if (!match) return;
     setChoosingId(professionalId);
     try {
       const res = await fetchWithAuth(`/api/shadow-teacher/${match.id}/commit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ selectedProfessionalId: professionalId }),
+        body: JSON.stringify({ selectedProfessionalId: professionalId, startDate }),
       });
       const data = await res.json() as { error?: string; message?: string; engagementId?: number };
       if (!res.ok) {
@@ -440,7 +576,7 @@ export function ShadowTeacherRequestWidget() {
         }
         return;
       }
-      toast({ title: "Teacher confirmed!", description: "Your engagement is live. Contact details are now visible." });
+      toast({ title: "Teacher confirmed!", description: "Your start code is now visible in the Engagement tab." });
       queryClient.invalidateQueries({ queryKey: ["parent-engagements"] });
       queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
       await refetch();
@@ -824,6 +960,44 @@ export function ShadowTeacherRequestWidget() {
     );
   }
 
+  // ── Commit date-picker dialog (rendered in trial_done and shortlisted returns) ──
+  const CommitDialog = commitDialogOpen && commitProfId !== null ? (
+    <Dialog open onOpenChange={(o) => { if (!o) { setCommitDialogOpen(false); setCommitProfId(null); } }}>
+      <DialogContent className="max-w-sm rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-base font-bold text-[#1A2340]">Pick a Start Date</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <p className="text-sm text-gray-600">When should the engagement begin? The teacher will enter your start code on this date to activate things.</p>
+          <input
+            type="date"
+            min={new Date().toISOString().slice(0, 10)}
+            value={commitStartDate}
+            onChange={(e) => setCommitStartDate(e.target.value)}
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2EC4A5]"
+          />
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" className="rounded-xl" onClick={() => { setCommitDialogOpen(false); setCommitProfId(null); }}>Cancel</Button>
+          <Button
+            className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl"
+            disabled={choosingId !== null || !commitStartDate}
+            onClick={async () => {
+              const profId = commitProfId!;
+              const sd = commitStartDate;
+              setCommitDialogOpen(false);
+              setCommitProfId(null);
+              await handleChoose(profId, sd);
+            }}
+          >
+            {choosingId ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+            Confirm
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  ) : null;
+
   // ── Trial done: commit or walk away ───────────────────────────────────────
   if (status === "trial_done" && match) {
     const myId = me?.id ?? 0;
@@ -832,24 +1006,24 @@ export function ShadowTeacherRequestWidget() {
       ? (trialCandidate.profile.firstName ?? `Teacher #${trialCandidate.rank}`)
       : "this teacher";
     return (
-      <div className="space-y-4">
+      <>{CommitDialog}<div className="space-y-4">
         <div className="bg-teal-50 border border-teal-200 rounded-2xl p-5 space-y-3">
           <div className="flex items-center gap-2">
             <CheckCircle2 size={18} className="text-teal-600" />
             <p className="font-semibold text-teal-800">Trial day complete — what would you like to do?</p>
           </div>
           <p className="text-sm text-teal-700">
-            If you commit to {trialName}, your trial fee of ₹{trialFee.toLocaleString("en-IN")} will be credited against the first month's salary.
+            If you commit to {trialName}, your trial fee of ₹{trialFee.toLocaleString("en-IN")} will be credited against the first month&apos;s salary.
             Walking away closes this request — no refund on the trial fee.
           </p>
           <div className="flex gap-3">
             <Button
               className="flex-1 gap-2 bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl"
-              onClick={async () => {
+              onClick={() => {
                 if (!match.selectedProfessionalId) return;
-                setChoosingId(match.selectedProfessionalId);
-                await handleChoose(match.selectedProfessionalId);
-                setChoosingId(null);
+                setCommitProfId(match.selectedProfessionalId);
+                setCommitStartDate(new Date().toISOString().slice(0, 10));
+                setCommitDialogOpen(true);
               }}
               disabled={choosingId !== null}
             >
@@ -878,7 +1052,7 @@ export function ShadowTeacherRequestWidget() {
             trialMode
           />
         )}
-      </div>
+      </div></>
     );
   }
 
@@ -890,7 +1064,7 @@ export function ShadowTeacherRequestWidget() {
     const refundEligible = !committed && (match.distinctTeachersShown < 3) && (daysSincePaid >= 60);
 
     return (
-      <div className="space-y-4">
+      <>{CommitDialog}<div className="space-y-4">
         <div className="flex items-center gap-2">
           <UserCheck size={18} className="text-primary" />
           <h2 className="font-serif font-semibold text-lg text-foreground">Your Matches</h2>
@@ -914,9 +1088,12 @@ export function ShadowTeacherRequestWidget() {
                 committed={committed}
                 myUserId={myId}
                 selected={match.selectedProfessionalId === c.professionalId}
-                onChoose={async (proId) => {
+                matchStatus={status}
+                onChoose={(proId) => {
                   if (choosingId) return;
-                  await handleChoose(proId);
+                  setCommitProfId(proId);
+                  setCommitStartDate(new Date().toISOString().slice(0, 10));
+                  setCommitDialogOpen(true);
                 }}
                 onNotInterested={async (candidateId) => { await handleNotInterested(candidateId); }}
                 onRequestTrial={requestingTrial ? undefined : (proId) => {
@@ -1024,7 +1201,7 @@ export function ShadowTeacherRequestWidget() {
           </DialogContent>
         </Dialog>
       </div>
-    );
+    </>);
   }
 
   // ── Committed (brief state before engagement loads) ──────────────────────
