@@ -1562,7 +1562,7 @@ function AdminEngagementsTab() {
                       {lifecycle.map(lc => (
                         <div key={lc.id} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg">
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-[#1A2340] capitalize">{lc.type}{lc.method ? ` (${lc.method})` : ""} · by {lc.raisedByName ?? lc.raisedByRole}</p>
+                            <p className="text-xs font-semibold text-[#1A2340] capitalize">{lc.type}{lc.method ? ` (${lc.method})` : ""} · by {lc.raisedByName ?? lc.raisedByRole} · {new Date(lc.raisedAt).toLocaleDateString("en-IN")}</p>
                             <p className="text-xs text-gray-400 truncate">{lc.reason ?? (lc.effectiveEndDate ? `Ends: ${lc.effectiveEndDate}` : "No reason given")}</p>
                           </div>
                           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${lc.status === "pending" ? "bg-yellow-50 text-yellow-700 border-yellow-200" : lc.status === "approved" ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
