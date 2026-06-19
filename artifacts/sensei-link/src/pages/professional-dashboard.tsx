@@ -1764,6 +1764,15 @@ function EngagementTab() {
     category: string | null;
     isActive: boolean;
   }
+  interface LifecycleRequest {
+    id: number;
+    type: string;
+    status: string;
+    raisedByUserId: number;
+    raisedByRole: string;
+    raisedAt: string;
+    reason: string | null;
+  }
 
   // ── Engagement selection ───────────────────────────────────────────────────
   const [selectedEngId, setSelectedEngId] = useState<number | null>(null);
@@ -1775,7 +1784,7 @@ function EngagementTab() {
     queryFn: () => fetchWithAuth("/api/engagements").then(r => r.json()),
   });
 
-  const activeList = engagements.filter(e => e.status === "active" || e.status === "notice_period");
+  const activeList = engagements.filter(e => ["active", "notice_period", "paused"].includes(e.status));
   const active = (selectedEngId ? engagements.find(e => e.id === selectedEngId) : null) ?? activeList[0] ?? null;
 
   // ── Logs ───────────────────────────────────────────────────────────────────
@@ -1791,6 +1800,16 @@ function EngagementTab() {
     queryFn: () => fetchWithAuth(`/api/children/${active!.childId}/goals`).then(r => r.json()),
     enabled: !!active?.childId && (engTab === "child" || engTab === "log"),
   });
+
+  // ── Lifecycle requests ─────────────────────────────────────────────────────
+  const { data: lifecycleRequests = [] } = useQuery<LifecycleRequest[]>({
+    queryKey: ["engagement-lifecycle", active?.id],
+    queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/lifecycle`).then(r => r.json()),
+    enabled: !!active,
+  });
+
+  const pendingPR = lifecycleRequests.find(r => ["pause", "resume"].includes(r.type) && r.status === "pending") ?? null;
+  const iAmPRRequester = myUserId > 0 && pendingPR?.raisedByUserId === myUserId;
 
   // ── Goal management state ──────────────────────────────────────────────────
   const [newGoalLabel, setNewGoalLabel] = useState("");
@@ -1950,6 +1969,69 @@ function EngagementTab() {
     finally { setSharingToChat(false); resetLogForm(); }
   }
 
+  async function handleProRequestPause() {
+    if (!active) return;
+    setPostingLifecycle(true);
+    try {
+      const resp = await fetchWithAuth(`/api/engagements/${active.id}/lifecycle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "pause" }),
+      });
+      if (!resp.ok) { const e = await resp.json() as { error?: string }; throw new Error(e.error ?? "Failed to submit"); }
+      queryClient.invalidateQueries({ queryKey: ["engagement-lifecycle", active.id] });
+      toast({ title: "Pause request sent — waiting for parent to respond" });
+    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
+    finally { setPostingLifecycle(false); }
+  }
+
+  async function handleProRequestResume() {
+    if (!active) return;
+    setPostingLifecycle(true);
+    try {
+      const resp = await fetchWithAuth(`/api/engagements/${active.id}/lifecycle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "resume" }),
+      });
+      if (!resp.ok) { const e = await resp.json() as { error?: string }; throw new Error(e.error ?? "Failed to submit"); }
+      queryClient.invalidateQueries({ queryKey: ["engagement-lifecycle", active.id] });
+      toast({ title: "Resume request sent — waiting for parent to respond" });
+    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
+    finally { setPostingLifecycle(false); }
+  }
+
+  async function handleProConsentPR(status: "approved" | "rejected") {
+    if (!active || !pendingPR) return;
+    setPostingLifecycle(true);
+    try {
+      const resp = await fetchWithAuth(`/api/engagements/${active.id}/lifecycle/${pendingPR.id}/consent`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!resp.ok) { const e = await resp.json() as { error?: string }; throw new Error(e.error ?? "Failed"); }
+      queryClient.invalidateQueries({ queryKey: ["engagement-lifecycle", active.id] });
+      queryClient.invalidateQueries({ queryKey: ["pro-engagements"] });
+      toast({ title: status === "approved" ? "Request accepted ✓" : "Request rejected" });
+    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
+    finally { setPostingLifecycle(false); }
+  }
+
+  async function handleProWithdrawPR() {
+    if (!active || !pendingPR) return;
+    setPostingLifecycle(true);
+    try {
+      const resp = await fetchWithAuth(`/api/engagements/${active.id}/lifecycle/${pendingPR.id}`, {
+        method: "DELETE",
+      });
+      if (!resp.ok && resp.status !== 204) { const e = await resp.json() as { error?: string }; throw new Error(e.error ?? "Failed"); }
+      queryClient.invalidateQueries({ queryKey: ["engagement-lifecycle", active.id] });
+      toast({ title: "Request withdrawn" });
+    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
+    finally { setPostingLifecycle(false); }
+  }
+
   async function handleLifecycleRequest() {
     if (!active || !lifecycleType) return;
     setPostingLifecycle(true);
@@ -1958,7 +2040,7 @@ function EngagementTab() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: lifecycleType === "pause" ? "change" : lifecycleType,
+          type: lifecycleType,
           reason: lifecycleNotes || undefined,
         }),
       });
@@ -2373,24 +2455,90 @@ function EngagementTab() {
 
       {/* ── Manage / Lifecycle ── */}
       {engTab === "lifecycle" && (
-        <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
-          <p className="text-sm font-bold text-[#1A2340]">Request Engagement Change</p>
-          <p className="text-xs text-gray-400">Requests are reviewed by the admin. Your notice period applies.</p>
-          <div className="grid grid-cols-2 gap-2">
-            {([["stop", "End Engagement"], ["pause", "Pause Temporarily"]] as [string, string][]).map(([t, label]) => (
-              <button key={t} onClick={() => setLifecycleType(lifecycleType === t ? "" : t as typeof lifecycleType)}
-                className={`py-2.5 px-3 rounded-xl border text-sm font-semibold transition-colors ${lifecycleType === t ? "border-[#FF6B6B] bg-[#FF6B6B]/10 text-[#FF6B6B]" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}>
-                {label}
+        <div className="space-y-4">
+          {/* Pending pause/resume consent banner */}
+          {pendingPR && (
+            <div className={`rounded-xl p-4 border space-y-3 ${pendingPR.type === "pause" ? "bg-amber-50 border-amber-200" : "bg-blue-50 border-blue-200"}`}>
+              <p className="text-sm font-bold text-[#1A2340]">
+                {pendingPR.type === "pause" ? "Pause Request Pending" : "Resume Request Pending"}
+              </p>
+              {iAmPRRequester ? (
+                <>
+                  <p className="text-xs text-gray-600">
+                    You requested to {pendingPR.type} this engagement. Waiting for the parent to respond.
+                  </p>
+                  <Button size="sm" variant="outline" onClick={() => void handleProWithdrawPR()} disabled={postingLifecycle}
+                    className="border-red-200 text-red-600 hover:bg-red-50 text-xs">
+                    {postingLifecycle ? <Loader2 size={12} className="animate-spin mr-1" /> : null}Withdraw Request
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-gray-600">
+                    The parent wants to {pendingPR.type} this engagement.
+                    {pendingPR.reason ? ` Reason: "${pendingPR.reason}"` : ""}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => void handleProConsentPR("approved")} disabled={postingLifecycle}
+                      className="bg-green-600 hover:bg-green-700 text-white text-xs">
+                      {postingLifecycle ? <Loader2 size={12} className="animate-spin mr-1" /> : "Accept"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => void handleProConsentPR("rejected")} disabled={postingLifecycle}
+                      className="border-red-200 text-red-600 hover:bg-red-50 text-xs">
+                      Reject
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Pause section — only when active and no pending pause/resume */}
+          {active.status === "active" && !pendingPR && (
+            <div className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
+              <p className="text-sm font-bold text-[#1A2340]">Pause Engagement</p>
+              <p className="text-xs text-gray-400">Both you and the parent must agree. The parent will need to accept your request.</p>
+              <Button size="sm" onClick={() => void handleProRequestPause()} disabled={postingLifecycle}
+                className="bg-amber-500 hover:bg-amber-600 text-white text-xs">
+                {postingLifecycle ? <Loader2 size={12} className="animate-spin mr-1" /> : null}Request Pause
+              </Button>
+            </div>
+          )}
+
+          {/* Resume section — only when paused and no pending request */}
+          {active.status === "paused" && !pendingPR && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+              <p className="text-sm font-bold text-amber-800">Engagement is Paused</p>
+              <p className="text-xs text-amber-700">Both you and the parent must agree to resume.</p>
+              <Button size="sm" onClick={() => void handleProRequestResume()} disabled={postingLifecycle}
+                className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-xs">
+                {postingLifecycle ? <Loader2 size={12} className="animate-spin mr-1" /> : null}Request Resume
+              </Button>
+            </div>
+          )}
+
+          {/* End engagement — only when active or notice_period */}
+          {(active.status === "active" || active.status === "notice_period") && (
+            <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
+              <p className="text-sm font-bold text-[#1A2340]">End Engagement</p>
+              <p className="text-xs text-gray-400">Notice period applies. Request is reviewed by admin.</p>
+              <button onClick={() => setLifecycleType(lifecycleType === "stop" ? "" : "stop")}
+                className={`w-full py-2.5 px-3 rounded-xl border text-sm font-semibold transition-colors text-left ${lifecycleType === "stop" ? "border-[#FF6B6B] bg-[#FF6B6B]/10 text-[#FF6B6B]" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}>
+                End Engagement (30-day notice)
               </button>
-            ))}
-          </div>
-          <textarea value={lifecycleNotes} onChange={e => setLifecycleNotes(e.target.value)} rows={3}
-            placeholder="Please explain why you are making this request…"
-            className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
-          <Button onClick={() => void handleLifecycleRequest()} disabled={postingLifecycle || !lifecycleType}
-            className="w-full bg-[#FF6B6B] hover:bg-[#e85a5a] text-white text-sm">
-            {postingLifecycle ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Submit Request
-          </Button>
+              {lifecycleType === "stop" && (
+                <>
+                  <textarea value={lifecycleNotes} onChange={e => setLifecycleNotes(e.target.value)} rows={3}
+                    placeholder="Please explain why you are making this request…"
+                    className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
+                  <Button onClick={() => void handleLifecycleRequest()} disabled={postingLifecycle}
+                    className="w-full bg-[#FF6B6B] hover:bg-[#e85a5a] text-white text-sm">
+                    {postingLifecycle ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Submit End Request
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 

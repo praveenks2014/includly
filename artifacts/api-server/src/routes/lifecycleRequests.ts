@@ -53,7 +53,7 @@ async function getEngagementWithAccess(engagementId: number, userId: number, use
 }
 
 const RaiseLifecycleBody = z.object({
-  type: z.enum(["stop", "change"]),
+  type: z.enum(["stop", "change", "pause", "resume"]),
   method: z.enum(["notice", "buyout"]).optional(),
   reason: z.string().max(1000).optional(),
 });
@@ -68,13 +68,54 @@ router.post("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise
   const { eng, role } = await getEngagementWithAccess(id, req.userId!, req.userRole!);
   if (!eng || !role) { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
 
+  const { type, method, reason } = parsed.data;
+
+  // Handle pause — mutual consent; either parent or teacher may raise
+  if (type === "pause") {
+    if (eng.status !== "active") {
+      res.status(409).json({ error: "Engagement must be active to request a pause" }); return;
+    }
+    const [req_] = await db
+      .insert(engagementLifecycleRequestsTable)
+      .values({
+        engagementId: id,
+        type: "pause",
+        raisedByUserId: req.userId!,
+        raisedByRole: role === "teacher" ? "teacher" : "parent",
+        status: "pending",
+        reason: reason ?? null,
+      })
+      .returning();
+    res.status(201).json(req_);
+    return;
+  }
+
+  // Handle resume — mutual consent; either parent or teacher may raise
+  if (type === "resume") {
+    if (eng.status !== "paused") {
+      res.status(409).json({ error: "Engagement must be paused to request a resume" }); return;
+    }
+    const [req_] = await db
+      .insert(engagementLifecycleRequestsTable)
+      .values({
+        engagementId: id,
+        type: "resume",
+        raisedByUserId: req.userId!,
+        raisedByRole: role === "teacher" ? "teacher" : "parent",
+        status: "pending",
+        reason: reason ?? null,
+      })
+      .returning();
+    res.status(201).json(req_);
+    return;
+  }
+
   if (!["active", "notice_period"].includes(eng.status)) {
     res.status(409).json({ error: "Engagement is not active" });
     return;
   }
 
   const settings = await getSettings();
-  const { type, method, reason } = parsed.data;
 
   // Teachers can only raise "stop" requests
   if (role === "teacher" && type !== "stop") {
@@ -156,6 +197,7 @@ router.get("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise<
       engagementId: engagementLifecycleRequestsTable.engagementId,
       type: engagementLifecycleRequestsTable.type,
       method: engagementLifecycleRequestsTable.method,
+      raisedByUserId: engagementLifecycleRequestsTable.raisedByUserId,
       raisedByRole: engagementLifecycleRequestsTable.raisedByRole,
       status: engagementLifecycleRequestsTable.status,
       reason: engagementLifecycleRequestsTable.reason,
@@ -174,6 +216,88 @@ router.get("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise<
     .orderBy(desc(engagementLifecycleRequestsTable.createdAt));
 
   res.json(rows);
+});
+
+// PATCH /engagements/:id/lifecycle/:reqId/consent — peer (non-requester) accepts or rejects a pause/resume
+router.patch("/engagements/:id/lifecycle/:reqId/consent", requireAuth, async (req, res): Promise<void> => {
+  const engId = parseInt(req.params["id"] as string, 10);
+  const reqId = parseInt(req.params["reqId"] as string, 10);
+  if (isNaN(engId) || isNaN(reqId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { status } = req.body ?? {};
+  if (!["approved", "rejected"].includes(status as string)) {
+    res.status(400).json({ error: "status must be approved or rejected" }); return;
+  }
+
+  const { eng, role } = await getEngagementWithAccess(engId, req.userId!, req.userRole!);
+  if (!eng || !role) { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
+  if (role === "admin") { res.status(403).json({ error: "Admins use the admin lifecycle endpoint" }); return; }
+
+  const [existing] = await db
+    .select()
+    .from(engagementLifecycleRequestsTable)
+    .where(and(
+      eq(engagementLifecycleRequestsTable.id, reqId),
+      eq(engagementLifecycleRequestsTable.engagementId, engId),
+    ))
+    .limit(1);
+  if (!existing) { res.status(404).json({ error: "Request not found" }); return; }
+  if (existing.status !== "pending") { res.status(409).json({ error: "Request is no longer pending" }); return; }
+  if (!["pause", "resume"].includes(existing.type)) {
+    res.status(400).json({ error: "Only pause/resume requests support peer consent" }); return;
+  }
+  if (existing.raisedByUserId === req.userId!) {
+    res.status(403).json({ error: "You cannot consent to your own request" }); return;
+  }
+
+  const now = new Date();
+  const [updated] = await db
+    .update(engagementLifecycleRequestsTable)
+    .set({ status: status as "approved" | "rejected", peerResponseByUserId: req.userId!, peerRespondedAt: now, resolvedAt: now, updatedAt: now })
+    .where(eq(engagementLifecycleRequestsTable.id, reqId))
+    .returning();
+
+  if (status === "approved") {
+    const newEngStatus = existing.type === "pause" ? "paused" : "active";
+    await db
+      .update(shadowTeacherEngagementsTable)
+      .set({ status: newEngStatus, updatedAt: now })
+      .where(eq(shadowTeacherEngagementsTable.id, engId));
+  }
+
+  res.json(updated);
+});
+
+// DELETE /engagements/:id/lifecycle/:reqId — requester withdraws their own pending pause/resume request
+router.delete("/engagements/:id/lifecycle/:reqId", requireAuth, async (req, res): Promise<void> => {
+  const engId = parseInt(req.params["id"] as string, 10);
+  const reqId = parseInt(req.params["reqId"] as string, 10);
+  if (isNaN(engId) || isNaN(reqId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [existing] = await db
+    .select()
+    .from(engagementLifecycleRequestsTable)
+    .where(and(
+      eq(engagementLifecycleRequestsTable.id, reqId),
+      eq(engagementLifecycleRequestsTable.engagementId, engId),
+    ))
+    .limit(1);
+  if (!existing) { res.status(404).json({ error: "Request not found" }); return; }
+  if (!["pause", "resume"].includes(existing.type)) {
+    res.status(400).json({ error: "Only pause/resume requests can be withdrawn" }); return;
+  }
+  if (existing.raisedByUserId !== req.userId!) {
+    res.status(403).json({ error: "Only the requester can withdraw this request" }); return;
+  }
+  if (existing.status !== "pending") {
+    res.status(409).json({ error: "Request is no longer pending" }); return;
+  }
+
+  await db
+    .delete(engagementLifecycleRequestsTable)
+    .where(eq(engagementLifecycleRequestsTable.id, reqId));
+
+  res.status(204).end();
 });
 
 router.post("/engagements/:id/lifecycle/:reqId/verify-buyout-payment", requireAuth, async (req, res): Promise<void> => {

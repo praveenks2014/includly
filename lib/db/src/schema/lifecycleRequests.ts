@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 import { shadowTeacherEngagementsTable } from "./engagements";
 import { usersTable } from "./users";
 
-export const lifecycleRequestTypeEnum = pgEnum("lifecycle_request_type", ["stop", "change"]);
+export const lifecycleRequestTypeEnum = pgEnum("lifecycle_request_type", ["stop", "change", "pause", "resume"]);
 export const lifecycleRequestMethodEnum = pgEnum("lifecycle_request_method", ["notice", "buyout"]);
 export const lifecycleRequestStatusEnum = pgEnum("lifecycle_request_status", ["pending", "approved", "rejected", "completed"]);
 export const lifecycleRaisedByRoleEnum = pgEnum("lifecycle_raised_by_role", ["parent", "teacher"]);
@@ -23,6 +23,8 @@ export const engagementLifecycleRequestsTable = pgTable("engagement_lifecycle_re
   buyoutOrderId: text("buyout_order_id"),
   buyoutPaymentId: text("buyout_payment_id"),
   buyoutFeeInr: integer("buyout_fee_inr"),
+  peerResponseByUserId: integer("peer_response_by_user_id").references(() => usersTable.id),
+  peerRespondedAt: timestamp("peer_responded_at", { withTimezone: true }),
   raisedAt: timestamp("raised_at", { withTimezone: true }).notNull().defaultNow(),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
