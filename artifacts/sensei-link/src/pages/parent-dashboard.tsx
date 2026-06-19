@@ -974,9 +974,10 @@ function MessagesTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 function NotificationsTab() {
   const queryClient = useQueryClient();
-  const { data: notifications, isLoading } = useQuery<Notification[]>({
+  const { data: notifications, isLoading } = useQuery({
     queryKey: ["notifications"],
-    queryFn: () => fetchWithAuth("/api/notifications").then((r) => r.json()),
+    queryFn: () => fetchWithAuth("/api/notifications").then((r) => r.json()) as Promise<unknown>,
+    select: (d: unknown): Notification[] => Array.isArray(d) ? d as Notification[] : ((d as { notifications?: Notification[] })?.notifications ?? []),
   });
 
   async function markRead(id: number) {

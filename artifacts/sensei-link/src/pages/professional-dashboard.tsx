@@ -1605,9 +1605,10 @@ function VerificationTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 function NotificationsTab() {
   const queryClient = useQueryClient();
-  const { data: notifications, isLoading } = useQuery<Notification[]>({
+  const { data: notifications, isLoading } = useQuery({
     queryKey: ["notifications"],
-    queryFn: () => fetchWithAuth("/api/notifications").then((r) => r.json()),
+    queryFn: () => fetchWithAuth("/api/notifications").then((r) => r.json()) as Promise<unknown>,
+    select: (d: unknown): Notification[] => Array.isArray(d) ? d as Notification[] : ((d as { notifications?: Notification[] })?.notifications ?? []),
   });
 
   async function markRead(id: number) {
@@ -1619,7 +1620,7 @@ function NotificationsTab() {
     queryClient.invalidateQueries({ queryKey: ["notifications"] });
   }
 
-  const unreadCount = (notifications ?? []).filter((n) => !n.read).length;
+  const unreadCount = (notifications ?? []).filter((n) => !n.isRead).length;
 
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-[#2EC4A5]" /></div>;
 
@@ -1647,12 +1648,12 @@ function NotificationsTab() {
           {notifications.map((n) => (
             <div
               key={n.id}
-              className={`flex items-start gap-3 px-5 py-4 cursor-pointer transition-colors ${!n.read ? "bg-[#2EC4A5]/5 hover:bg-[#2EC4A5]/10" : "hover:bg-gray-50"}`}
-              onClick={() => !n.read && markRead(n.id)}
+              className={`flex items-start gap-3 px-5 py-4 cursor-pointer transition-colors ${!n.isRead ? "bg-[#2EC4A5]/5 hover:bg-[#2EC4A5]/10" : "hover:bg-gray-50"}`}
+              onClick={() => !n.isRead && markRead(n.id)}
             >
-              <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${n.read ? "bg-transparent" : "bg-[#2EC4A5]"}`} />
+              <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${n.isRead ? "bg-transparent" : "bg-[#2EC4A5]"}`} />
               <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium ${n.read ? "text-gray-600" : "text-[#1A2340]"}`}>{n.title}</p>
+                <p className={`text-sm font-medium ${n.isRead ? "text-gray-600" : "text-[#1A2340]"}`}>{n.title}</p>
                 <p className="text-xs text-gray-500 mt-0.5">{n.body}</p>
               </div>
               <span className="text-xs text-gray-400 shrink-0">{timeAgo(n.createdAt)}</span>
@@ -1871,12 +1872,6 @@ function EngagementTab() {
   const [engTab, setEngTab] = useState<"overview" | "child" | "log" | "trends" | "lifecycle">("overview");
   const [chatOpen, setChatOpen] = useState(false);
 
-  const pendingStartDisabledEngTabs = new Set(["child", "log", "trends"]);
-  const visibleEngTab: typeof engTab =
-    (active?.status === "pending_start" && pendingStartDisabledEngTabs.has(engTab)) ||
-    (active?.status === "ended" && engTab === "lifecycle")
-      ? "overview" : engTab;
-
   const { data: engagements = [], isLoading } = useQuery<STEngagement[]>({
     queryKey: ["pro-engagements"],
     queryFn: () => fetchWithAuth("/api/engagements").then(r => r.json()),
@@ -1884,6 +1879,12 @@ function EngagementTab() {
 
   const activeList = engagements.filter(e => ["pending_start", "active", "notice_period", "paused"].includes(e.status));
   const active = (selectedEngId ? engagements.find(e => e.id === selectedEngId) : null) ?? activeList[0] ?? null;
+
+  const pendingStartDisabledEngTabs = new Set(["child", "log", "trends"]);
+  const visibleEngTab: typeof engTab =
+    (active?.status === "pending_start" && pendingStartDisabledEngTabs.has(engTab)) ||
+    (active?.status === "ended" && engTab === "lifecycle")
+      ? "overview" : engTab;
 
   // ── Logs ───────────────────────────────────────────────────────────────────
   const { data: logs = [] } = useQuery<DailyLog[]>({
@@ -3288,11 +3289,12 @@ export default function ProfessionalDashboard() {
   const profileTyped = profile as ProfessionalProfile | undefined;
 
   // Unread notification count (badge on sidebar)
-  const { data: notifications } = useQuery<Notification[]>({
+  const { data: notifications } = useQuery({
     queryKey: ["notifications"],
-    queryFn: () => fetchWithAuth("/api/notifications").then((r) => r.json()),
+    queryFn: () => fetchWithAuth("/api/notifications").then((r) => r.json()) as Promise<unknown>,
+    select: (d: unknown): Notification[] => Array.isArray(d) ? d as Notification[] : ((d as { notifications?: Notification[] })?.notifications ?? []),
   });
-  const unreadCount = (notifications ?? []).filter((n) => !n.read).length;
+  const unreadCount = (notifications ?? []).filter((n) => !n.isRead).length;
 
   if (profileLoading) {
     return (
