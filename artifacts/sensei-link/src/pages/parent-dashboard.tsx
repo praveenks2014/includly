@@ -1111,6 +1111,7 @@ function ShadowTeacherTab() {
   const [lifecycleType, setLifecycleType] = useState<"stop" | "pause" | "buyout" | "">("");
   const [lifecycleNotes, setLifecycleNotes] = useState("");
   const [postingLifecycle, setPostingLifecycle] = useState(false);
+  const [buyoutPaid, setBuyoutPaid] = useState(false);
   const [payingMonth, setPayingMonth] = useState("");
   const [payingInProgress, setPayingInProgress] = useState(false);
   const [stTab, setStTab] = useState<"overview" | "logs" | "goals" | "trends" | "payments" | "lifecycle">("overview");
@@ -1198,7 +1199,7 @@ function ShadowTeacherTab() {
     if (!active || !lifecycleType) return;
     setPostingLifecycle(true);
     try {
-      await fetchWithAuth(`/api/engagements/${active.id}/lifecycle`, {
+      const resp = await fetchWithAuth(`/api/engagements/${active.id}/lifecycle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
@@ -1209,11 +1210,54 @@ function ShadowTeacherTab() {
               : { type: "stop", method: "notice", reason: lifecycleNotes || undefined }
         ),
       });
+      if (!resp.ok) { const e = await resp.json() as { error?: string }; throw new Error(e.error ?? "Failed to submit"); }
+      const data = await resp.json() as { id: number; buyoutOrderId?: string; buyoutFeeInr?: number; keyId?: string };
+
+      if (lifecycleType === "buyout" && data.buyoutOrderId && data.buyoutFeeInr && data.keyId) {
+        const script = document.createElement("script");
+        script.src = "https://checkout.razorpay.com/v1/checkout.js";
+        document.body.appendChild(script);
+        await new Promise<void>(resolve => { script.onload = () => resolve(); });
+
+        await new Promise<void>((resolve, reject) => {
+          const rzp = new (window as unknown as { Razorpay: new (opts: unknown) => { open: () => void } }).Razorpay({
+            key: data.keyId,
+            amount: data.buyoutFeeInr! * 100,
+            currency: "INR",
+            name: "Includly",
+            description: "Early Exit Buyout Fee",
+            order_id: data.buyoutOrderId,
+            handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+              try {
+                const vResp = await fetchWithAuth(`/api/engagements/${active.id}/lifecycle/${data.id}/verify-buyout-payment`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_signature: response.razorpay_signature,
+                  }),
+                });
+                if (!vResp.ok) { const e = await vResp.json() as { error?: string }; throw new Error(e.error ?? "Verification failed"); }
+                setBuyoutPaid(true);
+                toast({ title: "Buyout payment confirmed ✓" });
+                resolve();
+              } catch (e) { reject(e); }
+            },
+            modal: { ondismiss: () => reject(new Error("dismissed")) },
+            theme: { color: "#2EC4A5" },
+          });
+          rzp.open();
+        });
+      }
+
       queryClient.invalidateQueries({ queryKey: ["parent-engagements"] });
       setLifecycleType(""); setLifecycleNotes("");
-      toast({ title: "Request submitted ✓" });
-    } catch { toast({ title: "Failed to submit request", variant: "destructive" }); }
-    finally { setPostingLifecycle(false); }
+      if (lifecycleType !== "buyout") toast({ title: "Request submitted ✓" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed";
+      if (msg !== "dismissed") toast({ title: msg, variant: "destructive" });
+    } finally { setPostingLifecycle(false); }
   }
 
   async function handleAddGoal() {
@@ -1486,6 +1530,11 @@ function ShadowTeacherTab() {
             className="w-full bg-[#FF6B6B] hover:bg-[#e85a5a] text-white text-sm">
             {postingLifecycle ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Submit Request
           </Button>
+          {buyoutPaid && (
+            <div className="flex items-center gap-2 p-3 bg-green-50 rounded-xl border border-green-200 text-sm text-green-700 font-medium">
+              <CheckCircle2 size={16} /> Buyout payment confirmed — your request is pending admin review.
+            </div>
+          )}
         </div>
       )}
 

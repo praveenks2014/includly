@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, desc } from "drizzle-orm";
+import crypto from "crypto";
+import Razorpay from "razorpay";
 import {
   db,
   shadowTeacherEngagementsTable,
@@ -9,6 +11,7 @@ import {
   usersTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
+import { sendPushNotification } from "../lib/notificationService";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -22,6 +25,13 @@ function addDays(dateStr: string, days: number): string {
 async function getSettings() {
   const [s] = await db.select().from(adminSettingsTable).limit(1);
   return s ?? { noticePeriodDays: 30, parentBuyoutDays: 15, salaryPlatformCutPct: 5 };
+}
+
+function getRazorpay() {
+  const keyId = process.env["RAZORPAY_KEY_ID"];
+  const keySecret = process.env["RAZORPAY_KEY_SECRET"];
+  if (!keyId || !keySecret) return null;
+  return new Razorpay({ key_id: keyId, key_secret: keySecret });
 }
 
 async function getEngagementWithAccess(engagementId: number, userId: number, userRole: string) {
@@ -97,12 +107,37 @@ router.post("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise
     })
     .returning();
 
-  // If teacher stops or parent notice, put engagement in notice_period
   if (resolvedMethod === "notice") {
     await db
       .update(shadowTeacherEngagementsTable)
       .set({ status: "notice_period", endDate: effectiveEndDate, updatedAt: new Date() })
       .where(eq(shadowTeacherEngagementsTable.id, id));
+  }
+
+  if (resolvedMethod === "buyout" && role === "parent") {
+    const razorpay = getRazorpay();
+    if (!razorpay) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
+
+    const buyoutFeeInr = Math.round(settings.parentBuyoutDays * eng.monthlyFeeInr / 30);
+    const order = await razorpay.orders.create({
+      amount: buyoutFeeInr * 100,
+      currency: "INR",
+      receipt: `buyout_${req_!.id}_${Date.now()}`,
+    });
+    const buyoutOrderId = order.id as string;
+
+    await db
+      .update(engagementLifecycleRequestsTable)
+      .set({ buyoutOrderId, buyoutFeeInr })
+      .where(eq(engagementLifecycleRequestsTable.id, req_!.id));
+
+    res.status(201).json({
+      ...req_,
+      buyoutOrderId,
+      buyoutFeeInr,
+      keyId: process.env["RAZORPAY_KEY_ID"],
+    });
+    return;
   }
 
   res.status(201).json(req_);
@@ -126,6 +161,9 @@ router.get("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise<
       reason: engagementLifecycleRequestsTable.reason,
       effectiveEndDate: engagementLifecycleRequestsTable.effectiveEndDate,
       adminNotes: engagementLifecycleRequestsTable.adminNotes,
+      buyoutOrderId: engagementLifecycleRequestsTable.buyoutOrderId,
+      buyoutPaymentId: engagementLifecycleRequestsTable.buyoutPaymentId,
+      buyoutFeeInr: engagementLifecycleRequestsTable.buyoutFeeInr,
       raisedAt: engagementLifecycleRequestsTable.raisedAt,
       resolvedAt: engagementLifecycleRequestsTable.resolvedAt,
       raisedByName: usersTable.fullName,
@@ -136,6 +174,51 @@ router.get("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise<
     .orderBy(desc(engagementLifecycleRequestsTable.createdAt));
 
   res.json(rows);
+});
+
+router.post("/engagements/:id/lifecycle/:reqId/verify-buyout-payment", requireAuth, async (req, res): Promise<void> => {
+  const engId = parseInt(req.params["id"] as string, 10);
+  const reqId = parseInt(req.params["reqId"] as string, 10);
+  if (isNaN(engId) || isNaN(reqId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body ?? {};
+  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+    res.status(400).json({ error: "Missing payment fields" }); return;
+  }
+
+  const { eng, role } = await getEngagementWithAccess(engId, req.userId!, req.userRole!);
+  if (!eng || role !== "parent") { res.status(403).json({ error: "Access denied" }); return; }
+
+  const [existing] = await db
+    .select()
+    .from(engagementLifecycleRequestsTable)
+    .where(and(
+      eq(engagementLifecycleRequestsTable.id, reqId),
+      eq(engagementLifecycleRequestsTable.engagementId, engId),
+    ))
+    .limit(1);
+  if (!existing) { res.status(404).json({ error: "Request not found" }); return; }
+  if (existing.method !== "buyout") { res.status(400).json({ error: "Not a buyout request" }); return; }
+  if (existing.buyoutOrderId !== razorpay_order_id) { res.status(400).json({ error: "Order ID mismatch" }); return; }
+
+  const keySecret = process.env["RAZORPAY_KEY_SECRET"];
+  if (!keySecret) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
+
+  const expectedSig = crypto
+    .createHmac("sha256", keySecret)
+    .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+    .digest("hex");
+  if (expectedSig !== razorpay_signature) {
+    res.status(400).json({ error: "Payment signature verification failed" }); return;
+  }
+
+  const [updated] = await db
+    .update(engagementLifecycleRequestsTable)
+    .set({ buyoutPaymentId: razorpay_payment_id })
+    .where(eq(engagementLifecycleRequestsTable.id, reqId))
+    .returning();
+
+  res.json(updated);
 });
 
 router.patch("/admin/lifecycle/:reqId", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
@@ -155,18 +238,45 @@ router.patch("/admin/lifecycle/:reqId", requireAuth, requireRole("admin"), async
     .limit(1);
   if (!existing) { res.status(404).json({ error: "Request not found" }); return; }
 
+  if (existing.method === "buyout" && status === "approved" && !existing.buyoutPaymentId) {
+    res.status(409).json({ error: "Buyout payment not yet confirmed" });
+    return;
+  }
+
   const [updated] = await db
     .update(engagementLifecycleRequestsTable)
     .set({ status, adminNotes: adminNotes ?? null, resolvedAt: new Date(), updatedAt: new Date() })
     .where(eq(engagementLifecycleRequestsTable.id, reqId))
     .returning();
 
-  // If completed/approved and method is buyout → end the engagement immediately
   if (status === "approved" && existing.method === "buyout") {
     await db
       .update(shadowTeacherEngagementsTable)
       .set({ status: "ended", endDate: existing.effectiveEndDate, endedReason: "buyout", updatedAt: new Date() })
       .where(eq(shadowTeacherEngagementsTable.id, existing.engagementId));
+
+    try {
+      const [engRow] = await db
+        .select({ professionalId: shadowTeacherEngagementsTable.professionalId })
+        .from(shadowTeacherEngagementsTable)
+        .where(eq(shadowTeacherEngagementsTable.id, existing.engagementId))
+        .limit(1);
+      if (engRow) {
+        const [prof] = await db
+          .select({ userId: professionalProfilesTable.userId })
+          .from(professionalProfilesTable)
+          .where(eq(professionalProfilesTable.id, engRow.professionalId))
+          .limit(1);
+        if (prof) {
+          const dateStr = existing.effectiveEndDate ?? new Date().toISOString().slice(0, 10);
+          void sendPushNotification(prof.userId, {
+            title: "Engagement ended — early exit",
+            body: `Your engagement has been ended via early exit, effective ${dateStr}. Log in for details.`,
+            url: "/dashboard",
+          });
+        }
+      }
+    } catch { /* push failure is non-blocking */ }
   }
 
   if (status === "completed") {
@@ -191,6 +301,9 @@ router.get("/admin/lifecycle", requireAuth, requireRole("admin"), async (_req, r
       reason: engagementLifecycleRequestsTable.reason,
       effectiveEndDate: engagementLifecycleRequestsTable.effectiveEndDate,
       adminNotes: engagementLifecycleRequestsTable.adminNotes,
+      buyoutOrderId: engagementLifecycleRequestsTable.buyoutOrderId,
+      buyoutPaymentId: engagementLifecycleRequestsTable.buyoutPaymentId,
+      buyoutFeeInr: engagementLifecycleRequestsTable.buyoutFeeInr,
       raisedAt: engagementLifecycleRequestsTable.raisedAt,
       resolvedAt: engagementLifecycleRequestsTable.resolvedAt,
       raisedByName: usersTable.fullName,

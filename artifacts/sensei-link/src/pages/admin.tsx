@@ -1423,6 +1423,7 @@ interface LifecycleReq {
   raisedByRole: string; raisedByName: string | null; status: string;
   reason: string | null; adminNotes: string | null; effectiveEndDate: string | null;
   raisedAt: string;
+  buyoutOrderId: string | null; buyoutPaymentId: string | null; buyoutFeeInr: number | null;
 }
 interface AdminSalaryPayment {
   id: number; engagementId: number; month: string; grossInr: string;
@@ -1560,17 +1561,30 @@ function AdminEngagementsTab() {
                   ) : (
                     <div className="space-y-2">
                       {lifecycle.map(lc => (
-                        <div key={lc.id} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg">
+                        <div key={lc.id} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg flex-wrap">
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-semibold text-[#1A2340] capitalize">{lc.type}{lc.method ? ` (${lc.method})` : ""} · by {lc.raisedByName ?? lc.raisedByRole} · {new Date(lc.raisedAt).toLocaleDateString("en-IN")}</p>
                             <p className="text-xs text-gray-400 truncate">{lc.reason ?? (lc.effectiveEndDate ? `Ends: ${lc.effectiveEndDate}` : "No reason given")}</p>
+                            {lc.method === "buyout" && lc.buyoutFeeInr != null && (
+                              <p className="text-xs text-gray-400 mt-0.5">Buyout fee: ₹{lc.buyoutFeeInr.toLocaleString("en-IN")}</p>
+                            )}
                           </div>
                           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${lc.status === "pending" ? "bg-yellow-50 text-yellow-700 border-yellow-200" : lc.status === "approved" ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
                             {lc.status}
                           </span>
+                          {lc.method === "buyout" && (
+                            lc.buyoutPaymentId
+                              ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-200">payment confirmed ✓</span>
+                              : <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-yellow-50 text-yellow-700 border-yellow-200">payment pending</span>
+                          )}
                           {lc.status === "pending" && (
                             <div className="flex gap-1">
-                              <button onClick={() => handleLifecycleAction(lc.id, "approved")} className="text-xs bg-green-50 hover:bg-green-100 text-green-700 px-2 py-1 rounded font-medium">Approve</button>
+                              <button
+                                onClick={() => handleLifecycleAction(lc.id, "approved")}
+                                disabled={lc.method === "buyout" && !lc.buyoutPaymentId}
+                                className="text-xs bg-green-50 hover:bg-green-100 text-green-700 px-2 py-1 rounded font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                                title={lc.method === "buyout" && !lc.buyoutPaymentId ? "Buyout payment not yet confirmed" : undefined}
+                              >Approve</button>
                               <button onClick={() => handleLifecycleAction(lc.id, "rejected")} className="text-xs bg-red-50 hover:bg-red-100 text-red-700 px-2 py-1 rounded font-medium">Reject</button>
                             </div>
                           )}
