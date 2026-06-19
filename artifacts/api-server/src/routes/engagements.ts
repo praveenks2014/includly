@@ -198,6 +198,13 @@ router.patch("/engagements/:id/status", requireAuth, async (req, res): Promise<v
 
   if (!canEdit) { res.status(403).json({ error: "Access denied" }); return; }
 
+  // paused / active transitions must go through the mutual-consent lifecycle flow;
+  // only admins may force-set these directly.
+  if (["paused", "active"].includes(status) && req.userRole !== "admin") {
+    res.status(403).json({ error: "Use the lifecycle consent flow to pause or resume an engagement" });
+    return;
+  }
+
   const [updated] = await db
     .update(shadowTeacherEngagementsTable)
     .set({ status, updatedAt: new Date() })
