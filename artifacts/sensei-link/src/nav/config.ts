@@ -11,6 +11,7 @@ import {
   Layers,
   Inbox,
   BookOpen,
+  Sparkles,
 } from "lucide-react";
 
 export type Role = "parent" | "professional" | "centre_admin" | "admin";
@@ -24,6 +25,8 @@ export interface NavItem {
   match: (loc: string) => boolean;
   badge?: BadgeKey;
   specialtyFilter?: string;
+  /** Hidden from the mobile bottom bar's primary slots; surfaced via the "More" sheet instead. */
+  mobileHidden?: boolean;
 }
 
 function tab(
@@ -46,10 +49,12 @@ function tab(
 export const NAV: Record<Exclude<Role, "admin">, NavItem[]> = {
   parent: [
     tab("Home", Home, "/home"),
-    tab("Explore", Search, "/explore"),
-    tab("Bookings", CalendarDays, "/bookings"),
-    tab("Journey", LineChart, "/journey"),
+    tab("Services", Layers, "/services"),
+    tab("Progress", LineChart, "/progress"),
     tab("Inbox", MessageSquare, "/inbox", "unreadMessages"),
+    { ...tab("Community", Users, "/community"), mobileHidden: true },
+    { ...tab("Resources", BookOpen, "/resources"), mobileHidden: true },
+    { ...tab("Ask Includly", Sparkles, "/ask"), mobileHidden: true },
   ],
   professional: [
     tab("Today", LayoutDashboard, "/pro/today", "pendingRequests"),
@@ -77,10 +82,14 @@ export const SHELL_ROOT: Record<Role, string> = {
 export const SHELL_PREFIXES = [
   "/home",
   "/explore",
+  "/services",
   "/bookings",
   "/journey",
+  "/progress",
   "/inbox",
   "/shadow-teacher",
+  "/community",
+  "/ask",
   "/account",
   "/pro/",
   "/centre/",

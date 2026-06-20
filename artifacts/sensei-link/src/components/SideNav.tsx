@@ -1,6 +1,6 @@
 import { useLocation, Link } from "wouter";
 import { useGetMe, useGetMyProfessionalProfile } from "@workspace/api-client-react";
-import { NAV, SHELL_ROOT, type Role } from "@/nav/config";
+import { NAV, SHELL_ROOT, type Role, type NavItem } from "@/nav/config";
 
 export function SideNav() {
   const [loc] = useLocation();
@@ -12,11 +12,34 @@ export function SideNav() {
   });
 
   if (!role || role === "admin") return null;
-  const allTabs = NAV[role];
-  const tabs = allTabs.filter(
+  const allTabs = NAV[role].filter(
     (item) => !item.specialtyFilter || proProfile?.specialty === item.specialtyFilter,
   );
+  const primaryTabs = allTabs.filter((item) => !item.mobileHidden);
+  const secondaryTabs = allTabs.filter((item) => item.mobileHidden);
   const shellRoot = SHELL_ROOT[role];
+
+  const renderItem = (item: NavItem) => {
+    const active = item.match(loc);
+    const Icon = item.icon;
+    return (
+      <Link
+        key={item.path}
+        href={item.path}
+        replace
+        className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+          active
+            ? "bg-teal-50 text-teal-700"
+            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+        }`}
+        aria-current={active ? "page" : undefined}
+        style={{ minHeight: 44 }}
+      >
+        <Icon size={18} strokeWidth={active ? 2.5 : 1.8} />
+        {item.label}
+      </Link>
+    );
+  };
 
   return (
     <aside
@@ -36,27 +59,11 @@ export function SideNav() {
       </Link>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-        {tabs.map((item) => {
-          const active = item.match(loc);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.path}
-              href={item.path}
-              replace
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                active
-                  ? "bg-teal-50 text-teal-700"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              }`}
-              aria-current={active ? "page" : undefined}
-              style={{ minHeight: 44 }}
-            >
-              <Icon size={18} strokeWidth={active ? 2.5 : 1.8} />
-              {item.label}
-            </Link>
-          );
-        })}
+        {primaryTabs.map(renderItem)}
+        {secondaryTabs.length > 0 && (
+          <div className="my-3 border-t border-border" />
+        )}
+        {secondaryTabs.map(renderItem)}
       </nav>
     </aside>
   );

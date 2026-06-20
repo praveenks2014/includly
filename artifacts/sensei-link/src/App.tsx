@@ -6,11 +6,10 @@ import { setFetchAuthTokenGetter } from "@/lib/api";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, useRef } from "react";
-import { Link } from "wouter";
-import { Loader2, LineChart, Users, ArrowRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Loader2, Users, Sparkles } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { AppShell } from "@/components/AppShell";
+import { ComingSoon } from "@/components/ComingSoon";
 import { RequireRole } from "@/guards/RequireRole";
 import { RequireChildProfile } from "@/guards/RequireChildProfile";
 import { SHELL_ROOT, isShellPath, type Role } from "@/nav/config";
@@ -126,7 +125,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const hideNav =
     HIDE_NAVBAR_PATHS.some((p) => loc.startsWith(p)) ||
     isShellPath(loc) ||
-    (isSignedIn === true && loc.startsWith("/support"));
+    (isSignedIn === true && (loc.startsWith("/support") || loc.startsWith("/resources")));
   return (
     <>
       {!hideNav && <Navbar />}
@@ -211,32 +210,6 @@ function ParentShell({ children }: { children: React.ReactNode }) {
 }
 
 // ─── Coming-soon pages ─────────────────────────────────────────────────────────
-
-function JourneyComingSoon() {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-      <div className="w-16 h-16 bg-teal-50 rounded-2xl flex items-center justify-center mb-5">
-        <LineChart size={28} className="text-teal-600" />
-      </div>
-      <h2 className="text-xl font-semibold text-gray-900 mb-2">Unified progress tracking, coming soon</h2>
-      <p className="text-sm text-muted-foreground mb-6 leading-relaxed max-w-sm">
-        We're building a single view of your child's progress across all specialists — goals, milestones, and session notes in one place.
-      </p>
-      <div className="bg-teal-50 border border-teal-100 rounded-xl p-4 text-left mb-6 max-w-sm w-full">
-        <p className="text-xs font-semibold text-teal-800 mb-1">Already available for shadow teachers</p>
-        <p className="text-xs text-teal-700 leading-relaxed">
-          Full progress tracking — daily logs, goals, and trends — is live now for active shadow teacher engagements. Access it from the engagement workspace.
-        </p>
-      </div>
-      <Link href="/shadow-teacher">
-        <Button variant="outline" size="sm" className="gap-2">
-          Go to shadow teacher workspace
-          <ArrowRight size={13} />
-        </Button>
-      </Link>
-    </div>
-  );
-}
 
 function ClientsComingSoon() {
   return (
@@ -327,7 +300,11 @@ function Router() {
         <Route path="/pricing" component={PricingPage} />
         <Route path="/payment/success" component={PaymentSuccessPage} />
         <Route path="/payment/cancel" component={PaymentCancelPage} />
-        <Route path="/resources" component={ResourcesPage} />
+        <Route path="/resources">
+          <AuthShell>
+            <ResourcesPage />
+          </AuthShell>
+        </Route>
         <Route path="/forum" component={ForumPage} />
         <Route path="/privacy" component={PrivacyPage} />
         <Route path="/terms" component={TermsPage} />
@@ -380,6 +357,9 @@ function Router() {
           </ParentShell>
         </Route>
         <Route path="/explore">
+          <StaticRedirect to="/services" />
+        </Route>
+        <Route path="/services">
           <ParentShell>
             <AppShell>
               <ParentDashboard />
@@ -394,9 +374,31 @@ function Router() {
           </ParentShell>
         </Route>
         <Route path="/journey">
+          <StaticRedirect to="/progress" />
+        </Route>
+        <Route path="/progress">
           <ParentShell>
             <AppShell>
-              <JourneyComingSoon />
+              <ParentDashboard />
+            </AppShell>
+          </ParentShell>
+        </Route>
+        <Route path="/community">
+          <ParentShell>
+            <AppShell>
+              <ForumPage />
+            </AppShell>
+          </ParentShell>
+        </Route>
+        <Route path="/ask">
+          <ParentShell>
+            <AppShell>
+              <ComingSoon
+                icon={Sparkles}
+                accent="violet"
+                title="Ask Includly — coming soon"
+                description="Get instant answers about therapies, school accommodations, government schemes, and navigating your child's journey. Our AI assistant is on the way."
+              />
             </AppShell>
           </ParentShell>
         </Route>

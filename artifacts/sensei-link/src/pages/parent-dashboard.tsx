@@ -18,6 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { StarRating } from "@/components/StarRating";
 import { ShadowTeacherRequestWidget } from "@/components/ShadowTeacherRequestWidget";
+import { ComingSoon } from "@/components/ComingSoon";
+import { EngagementProgress } from "@/components/EngagementProgress";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { fetchWithAuth } from "@/lib/api";
 import { getSpecialtyLabel } from "@/lib/specialties";
@@ -28,10 +30,10 @@ import {
   Clock, Video, Navigation, ArrowRight, HelpCircle,
   Phone, Mail, MessageSquarePlus, Check, X, Wallet,
   TrendingUp, Gift, Copy, Sparkles, Menu, MessageCircle,
-  User, IndianRupee, Plus,
+  User, IndianRupee, ArrowLeft, Building2,
 } from "lucide-react";
 
-type Tab = "home" | "find" | "bookings" | "messages" | "notifications" | "shadow-teacher";
+type Tab = "home" | "find" | "services" | "progress" | "bookings" | "messages" | "notifications" | "shadow-teacher";
 
 interface ProgressNote {
   bookingId: number;
@@ -660,7 +662,7 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
       )}
 
       {/* ── Shadow Teacher CTA ───────────────────────────────────────── */}
-      <Link href="/shadow-teacher">
+      <Link href="/services">
         <div className="bg-gradient-to-r from-[#2EC4A5] to-[#26a88d] rounded-2xl p-5 shadow-[0_4px_18px_rgba(46,196,165,0.28)] flex items-center gap-4 hover:shadow-[0_6px_24px_rgba(46,196,165,0.38)] transition-shadow cursor-pointer">
           <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
             <Sparkles size={20} className="text-white" />
@@ -1144,13 +1146,6 @@ function ShadowTeacherTab() {
     authorName: string | null;
     signedPhotoUrl?: string | null;
   }
-  interface ChildGoal {
-    id: number;
-    label: string;
-    category: string | null;
-    isActive: boolean;
-    createdByUserId: number;
-  }
   interface SalaryPayment {
     id: number;
     month: string;
@@ -1190,12 +1185,6 @@ function ShadowTeacherTab() {
     enabled: !!active,
   });
 
-  const { data: childGoals = [] } = useQuery<ChildGoal[]>({
-    queryKey: ["child-goals", active?.childId],
-    queryFn: () => fetchWithAuth(`/api/children/${active!.childId}/goals`).then(r => r.json()),
-    enabled: !!active?.childId,
-  });
-
   const { data: lifecycleRequests = [] } = useQuery<LifecycleRequest[]>({
     queryKey: ["engagement-lifecycle", active?.id],
     queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/lifecycle`).then(r => r.json()),
@@ -1205,10 +1194,6 @@ function ShadowTeacherTab() {
   const pendingPR = lifecycleRequests.find(r => ["pause", "resume"].includes(r.type) && r.status === "pending") ?? null;
   const iAmPRRequester = myUserId > 0 && pendingPR?.raisedByUserId === myUserId;
 
-  const [logNote, setLogNote] = useState("");
-  const [logExtraSupport, setLogExtraSupport] = useState("");
-  const [logMood, setLogMood] = useState("");
-  const [postingLog, setPostingLog] = useState(false);
   const [lifecycleType, setLifecycleType] = useState<"stop" | "pause" | "buyout" | "full_buyout" | "">("");
   const [lifecycleNotes, setLifecycleNotes] = useState("");
   const [pauseReason, setPauseReason] = useState("");
@@ -1219,10 +1204,6 @@ function ShadowTeacherTab() {
   const [payingMonth, setPayingMonth] = useState("");
   const [payingInProgress, setPayingInProgress] = useState(false);
   const [stTab, setStTab] = useState<"overview" | "logs" | "goals" | "trends" | "payments" | "lifecycle">("overview");
-  const [addingGoal, setAddingGoal] = useState(false);
-  const [newGoalLabel, setNewGoalLabel] = useState("");
-  const [newGoalCategory, setNewGoalCategory] = useState("");
-  const [savingGoal, setSavingGoal] = useState(false);
   const [editingStartDate, setEditingStartDate] = useState(false);
   const [newStartDate, setNewStartDate] = useState("");
   const [changingStartDate, setChangingStartDate] = useState(false);
@@ -1252,28 +1233,6 @@ function ShadowTeacherTab() {
       toast({ title: "Start date updated", description: "Your teacher has been notified." });
     } catch { toast({ title: "Network error", variant: "destructive" }); }
     finally { setChangingStartDate(false); }
-  }
-
-  async function handlePostLog() {
-    if (!active || !logNote.trim()) return;
-    setPostingLog(true);
-    try {
-      await fetchWithAuth(`/api/engagements/${active.id}/daily-logs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          logDate: new Date().toISOString().slice(0, 10),
-          content: {
-            eventsForTeacher: [logMood, logNote.trim()].filter(Boolean).join(" — "),
-            extraSupportAreas: logExtraSupport.trim() || undefined,
-          },
-        }),
-      });
-      queryClient.invalidateQueries({ queryKey: ["engagement-logs", active.id] });
-      setLogNote(""); setLogExtraSupport(""); setLogMood("");
-      toast({ title: "Update posted ✓" });
-    } catch { toast({ title: "Failed to post update", variant: "destructive" }); }
-    finally { setPostingLog(false); }
   }
 
   async function handleRequestPause() {
@@ -1466,34 +1425,6 @@ function ShadowTeacherTab() {
     } finally { setPostingLifecycle(false); }
   }
 
-  async function handleAddGoal() {
-    if (!active?.childId || !newGoalLabel.trim()) return;
-    setSavingGoal(true);
-    try {
-      await fetchWithAuth(`/api/children/${active.childId}/goals`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: newGoalLabel.trim(), category: newGoalCategory.trim() || undefined, engagementId: active.id }),
-      });
-      await queryClient.invalidateQueries({ queryKey: ["child-goals", active.childId] });
-      setNewGoalLabel(""); setNewGoalCategory(""); setAddingGoal(false);
-      toast({ title: "Goal added ✓" });
-    } catch { toast({ title: "Failed to add goal", variant: "destructive" }); }
-    finally { setSavingGoal(false); }
-  }
-
-  async function handleToggleParentGoal(goalId: number, isActive: boolean) {
-    if (!active?.childId) return;
-    try {
-      await fetchWithAuth(`/api/children/${active.childId}/goals/${goalId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: !isActive }),
-      });
-      queryClient.invalidateQueries({ queryKey: ["child-goals", active.childId] });
-    } catch { toast({ title: "Failed to update goal", variant: "destructive" }); }
-  }
-
   if (isLoading) {
     return <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-14 bg-white rounded-xl animate-pulse shadow-sm" />)}</div>;
   }
@@ -1501,21 +1432,6 @@ function ShadowTeacherTab() {
   if (!active) {
     return <ShadowTeacherRequestWidget key={selectedChildId ?? "no-child"} />;
   }
-
-  const P_RANK: Record<string, number> = { independent: 5, visual_prompt: 4, verbal_prompt: 3, modeling: 2, physical_assist: 1 };
-  const P_BG: Record<string, string> = { independent: "bg-green-400", visual_prompt: "bg-yellow-400", verbal_prompt: "bg-amber-400", modeling: "bg-orange-400", physical_assist: "bg-red-400" };
-  const _ptLogs = [...logs].filter(l => l.authorRole === "teacher").sort((a, b) => a.logDate.localeCompare(b.logDate)).map(l => { let c: Record<string, unknown> = {}; try { c = JSON.parse(l.content) as Record<string, unknown>; } catch {} return { date: l.logDate.slice(5), c }; });
-  const ptGoalMap: Record<string, { label: string; pts: { date: string; rank: number; level: string }[] }> = {};
-  _ptLogs.forEach(({ date, c }) => { ((c["goalRatings"] as { goalId: number; label: string; level: string }[] | undefined) ?? []).forEach(gr => { const k = String(gr.goalId); if (!ptGoalMap[k]) ptGoalMap[k] = { label: gr.label, pts: [] }; ptGoalMap[k].pts.push({ date, rank: P_RANK[gr.level] ?? 3, level: gr.level }); }); });
-  const ptBehavMap: Record<string, { date: string; count: number }[]> = {};
-  _ptLogs.forEach(({ date, c }) => { ((c["behaviorCounts"] as { label: string; count: number }[] | undefined) ?? []).filter(b => b.count > 0).forEach(b => { if (!ptBehavMap[b.label]) ptBehavMap[b.label] = []; ptBehavMap[b.label].push({ date, count: b.count }); }); });
-  const ptDurData = _ptLogs.flatMap(({ date, c }) => { const tot = ((c["durations"] as { label: string; minutes: number }[] | undefined) ?? []).reduce((s, d) => s + d.minutes, 0); return tot > 0 ? [{ date, minutes: tot }] : []; });
-  const ptGoalEntries = Object.entries(ptGoalMap);
-  const ptBehavEntries = Object.entries(ptBehavMap);
-  const hasPtTrendData = ptGoalEntries.length > 0 || ptBehavEntries.length > 0 || ptDurData.length > 0;
-  const ptMaxMins = ptDurData.length > 0 ? Math.max(...ptDurData.map(d => d.minutes), 1) : 1;
-
-  const MOODS = ["😊 Great", "🙂 Good", "😐 Okay", "😔 Difficult"];
 
   return (
     <div className="space-y-5 pb-4">
@@ -1721,132 +1637,7 @@ function ShadowTeacherTab() {
         </div>
       )}
 
-      {visibleStTab === "logs" && (
-        <div className="space-y-4">
-          {active.status === "ended" && (
-            <div className="flex items-center gap-2.5 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-              <CheckCircle2 size={13} className="text-gray-400 shrink-0" />
-              <p className="text-xs text-gray-500 font-medium">This engagement has ended — records are read-only.</p>
-            </div>
-          )}
-          {active.status !== "ended" && (
-            <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
-              <div>
-                <p className="text-sm font-bold text-[#1A2340]">Today's Update</p>
-                <p className="text-xs text-gray-400 mt-0.5">Anything the teacher should know today?</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-2">Child's mood at home today <span className="text-gray-400">(optional)</span></p>
-                <div className="flex gap-2 flex-wrap">
-                  {MOODS.map(m => (
-                    <button key={m} onClick={() => setLogMood(logMood === m ? "" : m)}
-                      className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${logMood === m ? "border-[#2EC4A5] bg-[#2EC4A5]/10 text-[#2EC4A5]" : "border-gray-200 hover:border-gray-300"}`}>
-                      {m}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Events at home</p>
-                <textarea value={logNote} onChange={(e) => setLogNote(e.target.value)} rows={3}
-                  placeholder="Didn't sleep well, was upset at breakfast…"
-                  className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Areas needing extra support <span className="text-gray-400">(optional)</span></p>
-                <textarea value={logExtraSupport} onChange={(e) => setLogExtraSupport(e.target.value)} rows={2}
-                  placeholder="Please help with transitions today"
-                  className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
-              </div>
-              <Button onClick={handlePostLog} disabled={postingLog || !logNote.trim()}
-                className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-sm">
-                {postingLog ? <Loader2 size={14} className="animate-spin mr-1" /> : null}Post Update
-              </Button>
-            </div>
-          )}
-          {logs.length === 0 ? (
-            <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-10 text-center">
-              <div className="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <BookOpen size={20} className="text-teal-300" />
-              </div>
-              <p className="text-sm font-semibold text-gray-600">No logs yet</p>
-              <p className="text-xs text-gray-400 mt-1">Post today's update above — your teacher will see it before the session.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {[...logs].reverse().map(log => {
-                let parsed: Record<string, unknown> = {};
-                try { parsed = JSON.parse(log.content) as Record<string, unknown>; } catch {}
-                const goalRatings = parsed["goalRatings"] as { goalId: number; label: string; level: string }[] | undefined;
-                const bcs = parsed["behaviorCounts"] as { label: string; count: number }[] | undefined;
-                const durs = parsed["durations"] as { label: string; minutes: number }[] | undefined;
-                const summary = log.authorRole === "teacher"
-                  ? String(parsed["behaviorMood"] ?? parsed["taughtToday"] ?? "")
-                  : String(parsed["eventsForTeacher"] ?? "");
-                const LEVEL_CHIP: Record<string, { label: string; cls: string }> = {
-                  independent:    { label: "Independent", cls: "bg-green-100 text-green-700" },
-                  visual_prompt:  { label: "Visual ✓",    cls: "bg-yellow-100 text-yellow-700" },
-                  verbal_prompt:  { label: "Verbal",      cls: "bg-amber-100 text-amber-700" },
-                  modeling:       { label: "Modeling",    cls: "bg-orange-100 text-orange-700" },
-                  physical_assist:{ label: "Physical",    cls: "bg-red-100 text-red-700" },
-                };
-                return (
-                  <div key={log.id} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-2.5">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${log.authorRole === "teacher" ? "bg-blue-50" : "bg-teal-50"}`}>
-                        <User size={12} className={log.authorRole === "teacher" ? "text-blue-500" : "text-teal-500"} />
-                      </div>
-                      <span className="text-xs font-bold text-[#1A2340]">{new Date(log.logDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</span>
-                      <span className={`ml-auto text-[10px] px-2.5 py-0.5 rounded-full border font-bold ${log.authorRole === "teacher" ? "bg-blue-50 text-blue-600 border-blue-100" : "bg-teal-50 text-teal-600 border-teal-100"}`}>
-                        {log.authorRole === "teacher" ? "Teacher" : "You"}
-                      </span>
-                    </div>
-                    {summary && <p className="text-sm text-gray-600 leading-relaxed">{summary}</p>}
-                    {log.authorRole === "parent" && !!parsed["extraSupportAreas"] && (
-                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">Extra support needed: {String(parsed["extraSupportAreas"])}</p>
-                    )}
-                    {log.authorRole === "teacher" && !!parsed["reteachAtHome"] && (
-                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">🏠 Reteach at home: {String(parsed["reteachAtHome"])}</p>
-                    )}
-                    {goalRatings && goalRatings.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {goalRatings.map((gr, i) => {
-                          const chip = LEVEL_CHIP[gr.level] ?? { label: gr.level, cls: "bg-gray-100 text-gray-600" };
-                          return (
-                            <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${chip.cls}`}>
-                              {gr.label}: {chip.label}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-                    {bcs && bcs.filter(b => b.count > 0).length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {bcs.filter(b => b.count > 0).map((b, i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">{b.label}: {b.count}×</span>)}
-                      </div>
-                    )}
-                    {durs && durs.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {durs.map((d, i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 font-semibold">⏱ {d.label}: {d.minutes}m</span>)}
-                      </div>
-                    )}
-                    {!!log.signedPhotoUrl && (
-                      <a
-                        href={log.signedPhotoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-[#2EC4A5] hover:underline font-medium"
-                      >
-                        📷 View photo
-                      </a>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+      {visibleStTab === "logs" && <EngagementProgress active={active} view="logs" />}
 
       {visibleStTab === "payments" && (
         <div className="space-y-4">
@@ -2107,145 +1898,205 @@ function ShadowTeacherTab() {
       )}
 
       {/* ── Goals ── */}
-      {visibleStTab === "goals" && (
-        <div className="space-y-4">
-          {active.status === "ended" && (
-            <div className="flex items-center gap-2.5 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-              <CheckCircle2 size={13} className="text-gray-400 shrink-0" />
-              <p className="text-xs text-gray-500 font-medium">This engagement has ended — records are read-only.</p>
-            </div>
-          )}
-          <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-bold text-[#1A2340]">Goals for {active.childName ?? "your child"}</p>
-                <p className="text-xs text-gray-400 mt-0.5">You set the goals — your teacher tracks progress each session.</p>
-              </div>
-              {active.status !== "ended" && (
-                <button onClick={() => setAddingGoal(!addingGoal)}
-                  className="flex items-center gap-1 text-xs text-[#2EC4A5] font-semibold hover:underline shrink-0 ml-3">
-                  <Plus size={13} />{addingGoal ? "Cancel" : "Add Goal"}
-                </button>
-              )}
-            </div>
-            {addingGoal && active.status !== "ended" && (
-              <div className="p-3 bg-gray-50 rounded-lg space-y-2">
-                <input value={newGoalLabel} onChange={e => setNewGoalLabel(e.target.value)}
-                  placeholder="Goal (e.g. Writes own name)"
-                  className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]" />
-                <input value={newGoalCategory} onChange={e => setNewGoalCategory(e.target.value)}
-                  placeholder="Category (optional — e.g. Writing, Math)"
-                  className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]" />
-                <Button size="sm" onClick={() => void handleAddGoal()} disabled={savingGoal || !newGoalLabel.trim()}
-                  className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-xs w-full">
-                  {savingGoal ? <Loader2 size={12} className="animate-spin mr-1" /> : null}Add Goal
-                </Button>
-              </div>
-            )}
-            {childGoals.length === 0 ? (
-              <div className="text-center py-6">
-                <div className="w-10 h-10 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-2.5">
-                  <TrendingUp size={16} className="text-gray-300" />
-                </div>
-                <p className="text-xs font-semibold text-gray-500">No goals yet</p>
-                <p className="text-[11px] text-gray-400 mt-0.5">Tap "Add Goal" to create the first one.</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {childGoals.map(g => (
-                  <div key={g.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                    <div className={`w-1.5 h-8 rounded-full shrink-0 ${g.isActive ? "bg-teal-400" : "bg-gray-200"}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-semibold truncate ${g.isActive ? "text-[#1A2340]" : "text-gray-400 line-through"}`}>{g.label}</p>
-                      {g.category && <p className="text-[11px] text-gray-400 mt-0.5">{g.category}</p>}
-                    </div>
-                    {active.status !== "ended" ? (
-                      <button onClick={() => void handleToggleParentGoal(g.id, g.isActive)}
-                        className={`shrink-0 text-[10px] px-2.5 py-1 rounded-full font-bold border transition-all ${g.isActive ? "bg-green-50 text-green-600 border-green-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200" : "bg-gray-100 text-gray-400 border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200"}`}>
-                        {g.isActive ? "Active" : "Inactive"}
-                      </button>
-                    ) : (
-                      <span className={`shrink-0 text-[10px] px-2.5 py-1 rounded-full font-bold border ${g.isActive ? "bg-green-50 text-green-600 border-green-200" : "bg-gray-100 text-gray-400 border-gray-200"}`}>
-                        {g.isActive ? "Active" : "Inactive"}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {visibleStTab === "goals" && <EngagementProgress active={active} view="goals" />}
 
       {/* ── Trends ── */}
-      {visibleStTab === "trends" && (
-        hasPtTrendData ? (
-          <div className="space-y-4">
-            {ptGoalEntries.map(([gid, { label, pts }]) => {
-              const trend = pts.length > 1 ? pts[pts.length - 1].rank - pts[0].rank : 0;
-              return (
-                <div key={gid} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-bold text-[#1A2340]">{label}</p>
-                    {pts.length > 1 && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${trend > 0 ? "bg-green-100 text-green-700" : trend < 0 ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500"}`}>{trend > 0 ? "↑ Improving" : trend < 0 ? "↓ More support" : "Steady"}</span>}
-                  </div>
-                  <div className="flex items-end gap-1.5 overflow-x-auto pb-1" style={{ minHeight: 52 }}>
-                    {pts.map((pt, i) => (
-                      <div key={i} className="flex flex-col items-center gap-0.5 shrink-0">
-                        <div className={`w-7 rounded-sm ${P_BG[pt.level] ?? "bg-gray-300"}`} style={{ height: `${(pt.rank / 5) * 40}px` }} />
-                        <span className="text-[9px] text-gray-400">{pt.date}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-between mt-1">
-                    <span className="text-[9px] text-gray-300">← needs support</span>
-                    <span className="text-[9px] text-gray-300">independent →</span>
-                  </div>
-                </div>
-              );
-            })}
-            {ptBehavEntries.map(([bLabel, pts]) => {
-              const maxC = Math.max(...pts.map(p => p.count), 1);
-              return (
-                <div key={bLabel} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
-                  <p className="text-sm font-bold text-[#1A2340] mb-3">{bLabel} <span className="text-xs font-normal text-gray-400">incidents</span></p>
-                  <div className="flex items-end gap-1.5 overflow-x-auto pb-1" style={{ minHeight: 52 }}>
-                    {pts.map((pt, i) => (
-                      <div key={i} className="flex flex-col items-center gap-0.5 shrink-0">
-                        <span className="text-[9px] text-gray-500 font-medium">{pt.count}</span>
-                        <div className="w-7 bg-amber-400 rounded-sm" style={{ height: `${Math.max((pt.count / maxC) * 40, 3)}px` }} />
-                        <span className="text-[9px] text-gray-400">{pt.date}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-            {ptDurData.length > 0 && (
-              <div className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
-                <p className="text-sm font-bold text-[#1A2340] mb-3">Focus duration <span className="text-xs font-normal text-gray-400">min</span></p>
-                <div className="flex items-end gap-1.5 overflow-x-auto pb-1" style={{ minHeight: 52 }}>
-                  {ptDurData.map((pt, i) => (
-                    <div key={i} className="flex flex-col items-center gap-0.5 shrink-0">
-                      <span className="text-[9px] text-gray-500 font-medium">{pt.minutes}</span>
-                      <div className="w-7 bg-teal-400 rounded-sm" style={{ height: `${Math.max((pt.minutes / ptMaxMins) * 40, 3)}px` }} />
-                      <span className="text-[9px] text-gray-400">{pt.date}</span>
-                    </div>
-                  ))}
-                </div>
+      {visibleStTab === "trends" && <EngagementProgress active={active} view="trends" />}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SERVICES (hub chooser)
+// ═══════════════════════════════════════════════════════════════════════════════
+function ServicesTab() {
+  const [, setLocation] = useLocation();
+  const [view, setView] = useState<"menu" | "find" | "centre" | "tutor">("menu");
+
+  const backBtn = (
+    <button
+      onClick={() => setView("menu")}
+      className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-teal-600 transition-colors"
+    >
+      <ArrowLeft size={14} /> All services
+    </button>
+  );
+
+  if (view === "find") {
+    return (
+      <div className="space-y-4 pb-4">
+        {backBtn}
+        <FindTab />
+      </div>
+    );
+  }
+  if (view === "centre") {
+    return (
+      <div className="space-y-4 pb-4">
+        {backBtn}
+        <ComingSoon
+          icon={Building2}
+          accent="amber"
+          title="Therapy Centres coming soon"
+          description="Browse and book verified therapy centres near you — occupational, speech, behavioural and more. We're onboarding centres now."
+        />
+      </div>
+    );
+  }
+  if (view === "tutor") {
+    return (
+      <div className="space-y-4 pb-4">
+        {backBtn}
+        <ComingSoon
+          icon={BookOpen}
+          accent="violet"
+          title="Home Tutors coming soon"
+          description="Find patient, special-needs-aware tutors for academic support at home. This service is on the way."
+        />
+      </div>
+    );
+  }
+
+  const services: { icon: typeof Search; title: string; desc: string; accent: string; onClick: () => void }[] = [
+    { icon: Sparkles, title: "Shadow Teacher", desc: "Get matched with a verified shadow teacher for your child", accent: "bg-teal-50 text-teal-600", onClick: () => setLocation("/shadow-teacher") },
+    { icon: Search, title: "Therapists & Specialists", desc: "OT, speech, psychology, paediatrics & more", accent: "bg-blue-50 text-blue-600", onClick: () => setView("find") },
+    { icon: HelpCircle, title: "Parent Coaching", desc: "1:1 guidance from experienced coaches", accent: "bg-violet-50 text-violet-600", onClick: () => setView("find") },
+    { icon: Building2, title: "Therapy Centres", desc: "Centre-based programmes near you", accent: "bg-amber-50 text-amber-600", onClick: () => setView("centre") },
+    { icon: BookOpen, title: "Home Tutors", desc: "Academic support tailored for your child", accent: "bg-rose-50 text-rose-600", onClick: () => setView("tutor") },
+  ];
+
+  return (
+    <div className="space-y-5 pb-4">
+      <div>
+        <h1 className="text-[1.35rem] font-bold text-[#1A2340] leading-tight">Services</h1>
+        <p className="text-xs text-gray-400 mt-0.5">Find the right support for your child</p>
+      </div>
+      <div className="space-y-3">
+        {services.map((s) => {
+          const Icon = s.icon;
+          return (
+            <button
+              key={s.title}
+              onClick={s.onClick}
+              className="w-full bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center gap-4 text-left hover:shadow-md transition-shadow"
+            >
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${s.accent}`}>
+                <Icon size={20} />
               </div>
-            )}
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-[#1A2340] text-sm">{s.title}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{s.desc}</p>
+              </div>
+              <ArrowRight size={16} className="text-gray-300 shrink-0" />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PROGRESS (logs / goals / trends for the selected child's active engagement)
+// ═══════════════════════════════════════════════════════════════════════════════
+function ProgressTab() {
+  const { selectedChildId } = useSelectedChild();
+  const [, setLocation] = useLocation();
+  const [pTab, setPTab] = useState<"logs" | "goals" | "trends">("logs");
+
+  interface PEngagement {
+    id: number;
+    childId: number | null;
+    childName: string | null;
+    status: string;
+  }
+  const { data: engagements = [], isLoading } = useQuery<PEngagement[]>({
+    queryKey: ["parent-engagements"],
+    queryFn: () => fetchWithAuth("/api/engagements").then((r) => r.json()),
+  });
+
+  const active = engagements.find(e =>
+    (["active", "notice_period", "paused", "pending_start", "pending_teacher_acceptance", "ended"].includes(e.status)) &&
+    e.childId === selectedChildId
+  );
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3 pb-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-14 bg-white rounded-xl animate-pulse shadow-sm" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!active) {
+    return (
+      <div className="space-y-5 pb-4">
+        <div>
+          <h1 className="text-[1.35rem] font-bold text-[#1A2340] leading-tight">Progress</h1>
+          <p className="text-xs text-gray-400 mt-0.5">Daily logs, goals & trends for your child</p>
+        </div>
+        <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-12 text-center">
+          <div className="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+            <TrendingUp size={20} className="text-teal-300" />
           </div>
-        ) : (
-          <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-12 text-center">
-            <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <TrendingUp size={20} className="text-gray-300" />
-            </div>
-            <p className="text-sm font-semibold text-gray-600">No trend data yet</p>
-            <p className="text-xs text-gray-400 mt-1">Charts will appear as your teacher logs goal ratings each session.</p>
+          <p className="text-sm font-semibold text-gray-600">No active engagement yet</p>
+          <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
+            Once you start working with a shadow teacher, daily logs, goals and progress trends for your child appear here.
+          </p>
+          <Button onClick={() => setLocation("/services")} className="mt-4 bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-sm">
+            Explore Services
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Mirror ShadowTeacherTab: logs/goals/trends are gated until the engagement
+  // actually starts (pending_start / pending_teacher_acceptance) — no pre-start writes.
+  if (active.status === "pending_start" || active.status === "pending_teacher_acceptance") {
+    return (
+      <div className="space-y-5 pb-4">
+        <div>
+          <h1 className="text-[1.35rem] font-bold text-[#1A2340] leading-tight">Progress</h1>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {active.childName ? `${active.childName}'s daily logs, goals & trends` : "Daily logs, goals & trends"}
+          </p>
+        </div>
+        <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-12 text-center">
+          <div className="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+            <Clock size={20} className="text-teal-300" />
           </div>
-        )
-      )}
+          <p className="text-sm font-semibold text-gray-600">Available once the engagement starts</p>
+          <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
+            Daily logs, goals and progress trends become available once your engagement begins on the confirmed start date.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5 pb-4">
+      <div>
+        <h1 className="text-[1.35rem] font-bold text-[#1A2340] leading-tight">Progress</h1>
+        <p className="text-xs text-gray-400 mt-0.5">
+          {active.childName ? `${active.childName}'s daily logs, goals & trends` : "Daily logs, goals & trends"}
+        </p>
+      </div>
+      <div className="flex gap-1 bg-gray-100 rounded-2xl p-1">
+        {(([["logs", "Daily Logs"], ["goals", "Goals"], ["trends", "Trends"]] as ["logs" | "goals" | "trends", string][]).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setPTab(id)}
+            className={`flex-1 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${pTab === id ? "bg-white text-[#1A2340] shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+          >
+            {label}
+          </button>
+        )))}
+      </div>
+      <EngagementProgress active={active} view={pTab} />
     </div>
   );
 }
@@ -2259,7 +2110,8 @@ export default function ParentDashboard() {
   const { data: me } = useGetMe();
 
   const activeTab: Tab = (() => {
-    if (loc.startsWith("/explore"))        return "find";
+    if (loc.startsWith("/services"))       return "services";
+    if (loc.startsWith("/progress"))       return "progress";
     if (loc.startsWith("/bookings"))       return "bookings";
     if (loc.startsWith("/inbox"))          return "messages";
     if (loc.startsWith("/shadow-teacher")) return "shadow-teacher";
@@ -2283,7 +2135,9 @@ export default function ParentDashboard() {
     setShowNotifications(false);
     const routes: Partial<Record<Tab, string>> = {
       home: "/home",
-      find: "/explore",
+      find: "/services",
+      services: "/services",
+      progress: "/progress",
       bookings: "/bookings",
       "shadow-teacher": "/shadow-teacher",
       messages: "/inbox",
@@ -2300,7 +2154,8 @@ export default function ParentDashboard() {
         ) : (
           <>
             {activeTab === "home"           && <HomeTab parentName={firstName} city={city} onTabChange={handleTabChange} />}
-            {activeTab === "find"           && <FindTab />}
+            {activeTab === "services"       && <ServicesTab />}
+            {activeTab === "progress"       && <ProgressTab />}
             {activeTab === "bookings"       && <BookingsTab />}
             {activeTab === "shadow-teacher" && <ShadowTeacherTab />}
             {activeTab === "messages"       && <MessagesTab />}
