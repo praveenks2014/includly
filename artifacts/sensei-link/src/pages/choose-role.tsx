@@ -50,20 +50,20 @@ const ROLE_CARDS: {
   },
 ];
 
-const AGE_RANGES = ["0–3 years", "3–6 years", "6–12 years", "12–18 years", "18+ years"];
-
-const CONDITIONS = [
-  "ADHD", "Autism", "Dyslexia", "Cerebral Palsy", "Down Syndrome",
-  "Speech Delay", "Learning Disabilities", "Multiple Disabilities", "Not sure yet",
-];
-
 const SUPPORT_TYPES = [
   "Occupational Therapist", "Speech Therapist", "Special Education Teacher",
   "Shadow Teacher", "Behavioral Therapist", "Psychologist / Counsellor",
   "Developmental Paediatrician", "Not sure yet",
 ];
 
-const PARENT_STEPS = ["Your child", "Support needed", "Your location"];
+const CHILD_COUNT_OPTIONS: { label: string; value: number }[] = [
+  { label: "1", value: 1 },
+  { label: "2", value: 2 },
+  { label: "3", value: 3 },
+  { label: "4+", value: 4 },
+];
+
+const PARENT_STEPS = ["Support needed", "Your family", "Your location"];
 
 export default function ChooseRolePage() {
   const [, setLocation] = useLocation();
@@ -77,10 +77,8 @@ export default function ChooseRolePage() {
   const [selected, setSelected] = useState<RoleChoice | null>(null);
   const [step, setStep] = useState(0);
 
-  // Parent wizard state
-  const [childAge, setChildAge] = useState("");
-  const [condition, setCondition] = useState("");
   const [supportTypes, setSupportTypes] = useState<string[]>([]);
+  const [childCount, setChildCount] = useState<number | null>(null);
   const [locationText, setLocationText] = useState("");
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -92,8 +90,8 @@ export default function ChooseRolePage() {
   }
 
   function canProceedWizard() {
-    if (step === 0) return !!childAge && !!condition;
-    if (step === 1) return supportTypes.length > 0;
+    if (step === 0) return supportTypes.length > 0;
+    if (step === 1) return childCount !== null;
     return true;
   }
 
@@ -103,7 +101,6 @@ export default function ChooseRolePage() {
       setPhase("parent-wizard");
       setStep(0);
     } else {
-      // Professional or Therapy Centre → onboard flow
       sessionStorage.setItem("chose_professional", "true");
       if (selected === "centre") {
         sessionStorage.setItem("is_therapy_centre", "true");
@@ -152,13 +149,13 @@ export default function ChooseRolePage() {
       await setMyRoleAsync({ data: { role: "parent" } });
       queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
 
-      if (locationText.trim()) {
-        await updateMe({ data: { location: locationText.trim() } });
-      }
-
-      localStorage.setItem("includly_child_age", childAge);
-      localStorage.setItem("includly_child_condition", condition);
-      localStorage.setItem("includly_support_types", JSON.stringify(supportTypes));
+      await updateMe({
+        data: {
+          supportTypes,
+          ...(childCount != null && { childCount }),
+          ...(locationText.trim() && { location: locationText.trim() }),
+        },
+      });
 
       setLocation("/dashboard");
     } catch {
@@ -170,7 +167,6 @@ export default function ChooseRolePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#dff2ec] via-[#f7fbf9] to-[#f0f4ff] flex flex-col">
-      {/* Minimal logo header */}
       <div className="flex justify-center pt-8 pb-2 shrink-0">
         <a href="/" className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center shadow-sm">
@@ -196,7 +192,6 @@ export default function ChooseRolePage() {
               </p>
             </div>
 
-            {/* Three cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
               {ROLE_CARDS.map((card) => {
                 const isSelected = selected === card.id;
@@ -211,7 +206,6 @@ export default function ChooseRolePage() {
                         : "border-gray-100 hover:border-teal-200"
                     }`}
                   >
-                    {/* Checkmark badge */}
                     <div
                       className={`absolute top-3 right-3 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-150 ${
                         isSelected
@@ -222,7 +216,6 @@ export default function ChooseRolePage() {
                       <Check size={13} strokeWidth={3} />
                     </div>
 
-                    {/* Icon */}
                     <div className={`w-14 h-14 ${card.bg} rounded-2xl flex items-center justify-center text-3xl mb-4`}>
                       {card.emoji}
                     </div>
@@ -281,60 +274,8 @@ export default function ChooseRolePage() {
               </div>
             </div>
 
-            {/* Step 0 — Child info */}
+            {/* Step 0 — Support types */}
             {step === 0 && (
-              <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-6">
-                <div>
-                  <h2 className="text-xl font-serif font-semibold text-gray-900 mb-1">Tell us about your child</h2>
-                  <p className="text-sm text-gray-500">This helps us show the most relevant professionals near you.</p>
-                </div>
-
-                <div>
-                  <p className="text-sm font-medium text-gray-800 mb-3">
-                    Child's age group <span className="text-red-500">*</span>
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {AGE_RANGES.map((age) => (
-                      <button
-                        key={age}
-                        onClick={() => setChildAge(age)}
-                        className={`px-4 py-2 rounded-full border text-sm font-medium transition-all ${
-                          childAge === age
-                            ? "bg-teal-600 text-white border-teal-600"
-                            : "bg-white border-gray-200 text-gray-700 hover:border-teal-400"
-                        }`}
-                      >
-                        {age}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-sm font-medium text-gray-800 mb-3">
-                    Primary challenge / condition <span className="text-red-500">*</span>
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {CONDITIONS.map((cond) => (
-                      <button
-                        key={cond}
-                        onClick={() => setCondition(cond)}
-                        className={`px-4 py-2 rounded-full border text-sm font-medium transition-all ${
-                          condition === cond
-                            ? "bg-teal-600 text-white border-teal-600"
-                            : "bg-white border-gray-200 text-gray-700 hover:border-teal-400"
-                        }`}
-                      >
-                        {cond}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Step 1 — Support types */}
-            {step === 1 && (
               <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-5">
                 <div>
                   <h2 className="text-xl font-serif font-semibold text-gray-900 mb-1">What kind of support do you need?</h2>
@@ -356,6 +297,40 @@ export default function ChooseRolePage() {
                       {type}
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Step 1 — Child count */}
+            {step === 1 && (
+              <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-5">
+                <div>
+                  <h2 className="text-xl font-serif font-semibold text-gray-900 mb-1">Your family</h2>
+                  <p className="text-sm text-gray-500">Helps us understand how many children you're finding support for.</p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-800 mb-3">
+                    How many children do you have? <span className="text-red-500">*</span>
+                  </p>
+                  <div className="flex gap-3">
+                    {CHILD_COUNT_OPTIONS.map(({ label, value }) => (
+                      <button
+                        key={label}
+                        onClick={() => setChildCount(value)}
+                        className={`flex-1 py-3 rounded-xl border text-base font-semibold transition-all ${
+                          childCount === value
+                            ? "bg-teal-600 text-white border-teal-600 shadow-sm"
+                            : "bg-white border-gray-200 text-gray-700 hover:border-teal-400"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs text-gray-400">
+                    You can always add more children later — this is just a starting count.
+                  </p>
                 </div>
               </div>
             )}

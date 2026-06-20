@@ -7,8 +7,11 @@ import {
   useCreateChild,
   useUpdateChild,
   useGetChild,
+  useGetMe,
   type CreateChildPayload,
 } from "@workspace/api-client-react";
+import { WheelDatePicker } from "@/components/WheelDatePicker";
+import { WheelTimePicker } from "@/components/WheelTimePicker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,6 +24,7 @@ type WizardData = {
   conditions: string[];
   schoolType: string;
   grade: string;
+  gradeOtherText: string;
   schoolStartTime: string;
   schoolEndTime: string;
   existingTherapies: { type: string; frequency: string }[];
@@ -31,7 +35,13 @@ type WizardData = {
   budgetKey: string;
   budgetMinInr: number | null;
   budgetMaxInr: number | null;
-  careNotes: { calming: string; triggers: string; communicationMode: string; favorites: string };
+  careNotes: {
+    calming: string;
+    triggers: string;
+    communicationMode: string[];
+    communicationModeOther: string;
+    favorites: string;
+  };
   consent: { intakeShare: boolean; media: boolean; reports: boolean };
 };
 
@@ -44,6 +54,7 @@ const DEFAULT: WizardData = {
   conditions: [],
   schoolType: "",
   grade: "",
+  gradeOtherText: "",
   schoolStartTime: "",
   schoolEndTime: "",
   existingTherapies: [],
@@ -54,7 +65,7 @@ const DEFAULT: WizardData = {
   budgetKey: "",
   budgetMinInr: null,
   budgetMaxInr: null,
-  careNotes: { calming: "", triggers: "", communicationMode: "", favorites: "" },
+  careNotes: { calming: "", triggers: "", communicationMode: [], communicationModeOther: "", favorites: "" },
   consent: { intakeShare: false, media: false, reports: false },
 };
 
@@ -104,6 +115,53 @@ const BUDGET_PRESETS = [
   { key: "2000+",     label: "₹2,000+",       min: 2000, max: null  },
   { key: "flexible",  label: "Flexible",       min: null, max: null  },
 ];
+
+const GRADE_OPTIONS = [
+  "Nursery", "LKG", "UKG",
+  "Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6",
+  "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11", "Grade 12",
+  "Other",
+];
+
+const THERAPY_TYPE_OPTIONS = [
+  "Occupational Therapy", "Speech Therapy", "ABA / Behavioural",
+  "Physiotherapy", "Special Education", "Psychology / Counselling",
+  "Developmental Paediatrics", "Sensory Integration",
+];
+
+const THERAPY_FREQ_OPTIONS = [
+  "Daily", "3x / week", "2x / week", "1x / week", "Fortnightly", "Monthly",
+];
+
+const COMMS_MODE_OPTIONS = [
+  "Verbal", "Non-verbal", "AAC device", "Sign language",
+  "Gestures", "Picture cards (PECS)", "Other",
+];
+
+const THERAPY_TYPE_ALIASES: Record<string, string> = {
+  "occupational therapy": "Occupational Therapy",
+  "ot": "Occupational Therapy",
+  "speech therapy": "Speech Therapy",
+  "speech": "Speech Therapy",
+  "speech-language therapy": "Speech Therapy",
+  "aba": "ABA / Behavioural",
+  "aba therapy": "ABA / Behavioural",
+  "behavioral therapy": "ABA / Behavioural",
+  "behavioural therapy": "ABA / Behavioural",
+  "physiotherapy": "Physiotherapy",
+  "physio": "Physiotherapy",
+  "physical therapy": "Physiotherapy",
+  "special education": "Special Education",
+  "special ed": "Special Education",
+  "psychology": "Psychology / Counselling",
+  "counselling": "Psychology / Counselling",
+  "counseling": "Psychology / Counselling",
+  "sensory integration": "Sensory Integration",
+};
+
+function normalizeTherapyType(raw: string): string {
+  return THERAPY_TYPE_ALIASES[raw.toLowerCase().trim()] ?? raw;
+}
 
 // ─── Small helpers ────────────────────────────────────────────────────────────
 
@@ -178,15 +236,47 @@ export default function ChildOnboardingPage() {
   const createChild = useCreateChild();
   const updateChild = useUpdateChild();
   const { data: existingChild } = useGetChild(editChildId ?? 0, { query: { enabled: !!editChildId } });
+  const { data: meData } = useGetMe();
+
+  // Pre-fill city from user.location when adding a new child (not editing)
+  useEffect(() => {
+    if (editChildId) return;
+    const userLocation = meData?.location;
+    if (userLocation) {
+      setData((prev) => prev.city === "" ? { ...prev, city: userLocation } : prev);
+    }
+  }, [meData?.location, editChildId]);
 
   useEffect(() => {
     if (!existingChild || !editChildId) return;
-    const c = existingChild as Record<string, unknown>;
+    const c = existingChild as unknown as Record<string, unknown>;
     const budgetMin = c.budgetMinInr as number | null;
     const budgetMax = c.budgetMaxInr as number | null;
     const matchedPreset = BUDGET_PRESETS.find(
       (p) => p.min === budgetMin && p.max === budgetMax,
     );
+
+    // Grade: map non-canonical values to "Other" + gradeOtherText
+    const rawGrade = (c.grade as string) ?? "";
+    const isCanonicalGrade = GRADE_OPTIONS.includes(rawGrade) && rawGrade !== "Other";
+    const gradeSelect = rawGrade === "" ? "" : isCanonicalGrade ? rawGrade : "Other";
+    const gradeOtherText = isCanonicalGrade ? "" : rawGrade;
+
+    // Therapies: normalise common aliases to canonical option labels
+    const rawTherapies = (c.existingTherapies as { type: string; frequency: string }[]) ?? [];
+    const normalizedTherapies = rawTherapies.map((t) => ({
+      type: normalizeTherapyType(t.type),
+      frequency: t.frequency,
+    }));
+
+    // Care notes: migrate legacy string communicationMode to string[]
+    const rawCareNotes = (c.careNotes as Record<string, unknown>) ?? {};
+    const rawCommMode = rawCareNotes.communicationMode;
+    const commMode = Array.isArray(rawCommMode)
+      ? (rawCommMode as string[])
+      : (typeof rawCommMode === "string" && rawCommMode ? ["Other"] : []);
+    const commModeOther = typeof rawCommMode === "string" ? rawCommMode : "";
+
     setData({
       name:                 (c.name as string) ?? "",
       dob:                  (c.dob as string) ?? "",
@@ -195,10 +285,11 @@ export default function ChildOnboardingPage() {
       diagnosisStatus:      (c.diagnosisStatus as string) ?? "",
       conditions:           (c.conditions as string[]) ?? [],
       schoolType:           (c.schoolType as string) ?? "",
-      grade:                (c.grade as string) ?? "",
+      grade:                gradeSelect,
+      gradeOtherText:       gradeOtherText,
       schoolStartTime:      (c.schoolStartTime as string) ?? "",
       schoolEndTime:        (c.schoolEndTime as string) ?? "",
-      existingTherapies:    (c.existingTherapies as { type: string; frequency: string }[]) ?? [],
+      existingTherapies:    normalizedTherapies,
       goalsAreas:           (c.goalsAreas as string[]) ?? [],
       preferredModes:       (c.preferredModes as string[]) ?? [],
       availableTimeWindows: (c.availableTimeWindows as string[]) ?? [],
@@ -206,8 +297,14 @@ export default function ChildOnboardingPage() {
       budgetKey:            matchedPreset?.key ?? "",
       budgetMinInr:         budgetMin,
       budgetMaxInr:         budgetMax,
-      careNotes:            (c.careNotes as WizardData["careNotes"]) ?? DEFAULT.careNotes,
-      consent:              (c.consent as WizardData["consent"]) ?? DEFAULT.consent,
+      careNotes: {
+        calming:                 (rawCareNotes.calming as string) ?? "",
+        triggers:                (rawCareNotes.triggers as string) ?? "",
+        communicationMode:       commMode,
+        communicationModeOther:  commModeOther,
+        favorites:               (rawCareNotes.favorites as string) ?? "",
+      },
+      consent: (c.consent as WizardData["consent"]) ?? DEFAULT.consent,
     });
   }, [existingChild, editChildId]);
 
@@ -251,6 +348,11 @@ export default function ChildOnboardingPage() {
 
   async function handleSubmit() {
     setSaveError(null);
+    // Resolve the final grade value: if "Other" was selected use the free text
+    const finalGrade = data.grade === "Other"
+      ? data.gradeOtherText.trim() || "Other"
+      : data.grade;
+
     const payload: CreateChildPayload = {
       name: data.name.trim(),
       ...(data.dob && { dob: data.dob }),
@@ -259,7 +361,7 @@ export default function ChildOnboardingPage() {
       ...(data.diagnosisStatus && { diagnosisStatus: data.diagnosisStatus }),
       ...(data.conditions.length > 0 && { conditions: data.conditions }),
       ...(data.schoolType && { schoolType: data.schoolType }),
-      ...(data.grade.trim() && { grade: data.grade.trim() }),
+      ...(finalGrade && { grade: finalGrade }),
       ...(data.schoolStartTime && { schoolStartTime: data.schoolStartTime }),
       ...(data.schoolEndTime && { schoolEndTime: data.schoolEndTime }),
       ...(data.existingTherapies.filter((t) => t.type).length > 0 && {
@@ -271,7 +373,12 @@ export default function ChildOnboardingPage() {
       ...(data.languages.length > 0 && { languages: data.languages }),
       ...(data.budgetMinInr != null && { budgetMinInr: data.budgetMinInr }),
       ...(data.budgetMaxInr != null && { budgetMaxInr: data.budgetMaxInr }),
-      careNotes: data.careNotes,
+      careNotes: {
+        calming:   data.careNotes.calming,
+        triggers:  data.careNotes.triggers,
+        communicationMode: data.careNotes.communicationMode.join(", "),
+        favorites: data.careNotes.favorites,
+      },
       consent: data.consent,
     };
 
@@ -319,7 +426,7 @@ export default function ChildOnboardingPage() {
             </Field>
 
             <Field label="Date of birth">
-              <TextInput type="date" value={data.dob} onChange={(v) => update("dob", v)} />
+              <WheelDatePicker value={data.dob} onChange={(v) => update("dob", v)} />
             </Field>
 
             <Field label="Gender">
@@ -407,58 +514,113 @@ export default function ChildOnboardingPage() {
             </Field>
 
             <Field label="Grade / class">
-              <TextInput value={data.grade} onChange={(v) => update("grade", v)} placeholder="e.g. Grade 2, LKG, Nursery" />
+              <select
+                value={data.grade}
+                onChange={(e) => {
+                  update("grade", e.target.value);
+                  if (e.target.value !== "Other") update("gradeOtherText", "");
+                }}
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              >
+                <option value="">Select grade / class</option>
+                {GRADE_OPTIONS.map((g) => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+              {data.grade === "Other" && (
+                <div className="mt-2">
+                  <TextInput
+                    value={data.gradeOtherText}
+                    onChange={(v) => update("gradeOtherText", v)}
+                    placeholder="e.g. Pre-primary, Foundation Year, Class V"
+                  />
+                </div>
+              )}
             </Field>
 
-            <Field label="School hours (optional)" hint="Used to match shadow teachers who are free during school time">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">School hours (optional)</label>
+              <div className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2.5 text-xs text-teal-800 leading-relaxed">
+                Shadow teachers must be available during your child's school hours. Filling this in ensures you only see candidates with matching availability.
+              </div>
               <div className="flex items-center gap-3">
                 <div className="flex flex-1 flex-col gap-1">
                   <label className="text-xs text-gray-500">Start</label>
-                  <input
-                    type="time"
+                  <WheelTimePicker
                     value={data.schoolStartTime}
-                    onChange={(e) => update("schoolStartTime", e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    onChange={(v) => update("schoolStartTime", v)}
+                    placeholder="Start time"
                   />
                 </div>
                 <span className="mt-5 text-gray-400">–</span>
                 <div className="flex flex-1 flex-col gap-1">
                   <label className="text-xs text-gray-500">End</label>
-                  <input
-                    type="time"
+                  <WheelTimePicker
                     value={data.schoolEndTime}
-                    onChange={(e) => update("schoolEndTime", e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    onChange={(v) => update("schoolEndTime", v)}
+                    placeholder="End time"
                   />
                 </div>
               </div>
-            </Field>
+            </div>
 
             <Field label="Current therapies">
-              <div className="space-y-2">
-                {data.existingTherapies.map((t, i) => (
-                  <div key={i} className="flex gap-2">
-                    <input
-                      value={t.type}
-                      onChange={(e) => updateTherapy(i, "type", e.target.value)}
-                      placeholder="e.g. Speech therapy"
-                      className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                    />
-                    <input
-                      value={t.frequency}
-                      onChange={(e) => updateTherapy(i, "frequency", e.target.value)}
-                      placeholder="e.g. 2x/week"
-                      className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeTherapy(i)}
-                      className="rounded-lg border border-gray-200 p-2 text-gray-400 hover:border-red-200 hover:text-red-500"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
+              <div className="space-y-3">
+                {data.existingTherapies.map((t, i) => {
+                  const typeIsCanonical = THERAPY_TYPE_OPTIONS.includes(t.type);
+                  const freqIsCanonical = THERAPY_FREQ_OPTIONS.includes(t.frequency);
+                  return (
+                    <div key={i} className="space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
+                      <div className="flex gap-2">
+                        <select
+                          value={typeIsCanonical ? t.type : "Other"}
+                          onChange={(e) => updateTherapy(i, "type", e.target.value === "Other" ? "" : e.target.value)}
+                          className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                        >
+                          <option value="">Type of therapy</option>
+                          {THERAPY_TYPE_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                          <option value="Other">Other</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => removeTherapy(i)}
+                          className="rounded-lg border border-gray-200 p-2 text-gray-400 hover:border-red-200 hover:text-red-500"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                      {!typeIsCanonical && (
+                        <input
+                          value={t.type}
+                          onChange={(e) => updateTherapy(i, "type", e.target.value)}
+                          placeholder="Describe the therapy…"
+                          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                        />
+                      )}
+                      <select
+                        value={freqIsCanonical ? t.frequency : "Other"}
+                        onChange={(e) => updateTherapy(i, "frequency", e.target.value === "Other" ? "" : e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      >
+                        <option value="">Frequency</option>
+                        {THERAPY_FREQ_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                        <option value="Other">Other</option>
+                      </select>
+                      {!freqIsCanonical && (
+                        <input
+                          value={t.frequency}
+                          onChange={(e) => updateTherapy(i, "frequency", e.target.value)}
+                          placeholder="e.g. Twice a month"
+                          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
                 <button
                   type="button"
                   onClick={addTherapy}
@@ -562,11 +724,36 @@ export default function ChildOnboardingPage() {
             </Field>
 
             <Field label="Communication mode">
-              <TextInput
-                value={data.careNotes.communicationMode}
-                onChange={(v) => update("careNotes", { ...data.careNotes, communicationMode: v })}
-                placeholder="e.g. Verbal, AAC device, sign language, picture cards"
-              />
+              {typeof (data.careNotes as Record<string, unknown>).communicationMode === "string" && (
+                <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Previously saved as: "{(data.careNotes as Record<string, unknown>).communicationMode as string}" — please re-select below.
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {COMMS_MODE_OPTIONS.map((mode) => (
+                  <Chip
+                    key={mode}
+                    label={mode}
+                    selected={data.careNotes.communicationMode.includes(mode)}
+                    onClick={() => {
+                      const current = data.careNotes.communicationMode;
+                      const updated = current.includes(mode)
+                        ? current.filter((m) => m !== mode)
+                        : [...current, mode];
+                      update("careNotes", { ...data.careNotes, communicationMode: updated });
+                    }}
+                  />
+                ))}
+              </div>
+              {data.careNotes.communicationMode.includes("Other") && (
+                <div className="mt-2">
+                  <TextInput
+                    value={data.careNotes.communicationModeOther}
+                    onChange={(v) => update("careNotes", { ...data.careNotes, communicationModeOther: v })}
+                    placeholder="Describe the communication mode…"
+                  />
+                </div>
+              )}
             </Field>
 
             <Field label="Favourites (icebreakers)">

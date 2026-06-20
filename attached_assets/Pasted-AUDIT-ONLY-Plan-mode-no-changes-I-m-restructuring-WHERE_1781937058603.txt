@@ -1,0 +1,51 @@
+AUDIT ONLY — Plan mode, no changes. I'm restructuring WHERE parent
+questions are collected. First I need a complete inventory of every
+question/field currently asked across three flows. List each field
+with: the exact label, the field type (text/dropdown/multi-select/
+date/etc.), whether it's required or optional, and which DB column it
+maps to.
+
+FLOW 1 — PARENT ONBOARDING (the initial signup flow after Clerk auth,
+before adding a child):
+List every question/field asked. What does the parent answer about
+themselves before they get to add a child?
+
+FLOW 2 — ADD CHILD (the child profile creation wizard, "Step X of Y"):
+List every step and every field in the add-child wizard. The
+screenshots showed "Step 1 of 6" with name/DOB/gender/city — list all
+6 steps and their fields.
+
+FLOW 3 — SHADOW TEACHER REQUEST (the find-a-shadow-teacher request
+flow):
+List every field asked when a parent requests a shadow teacher. The
+screenshots showed it pulls city, conditions, languages, budget, modes
+from the child profile, plus an optional "anything else" note — confirm
+what's pulled from the child vs asked fresh here.
+
+FLOW 4 — Also check: are there service-specific questions asked in the
+V2 SESSION BOOKING flow (for therapists/OT/speech) or anywhere else
+(therapy centre, coaching)? List any service-specific intake questions
+in those flows too.
+
+THEN, FOR EACH FIELD, categorize it into one of these buckets (your
+recommendation, I'll confirm):
+- PARENT-LEVEL (about the parent/family, belongs at onboarding): e.g.
+why they're here, how many children, what service(s) they need.
+- CHILD-LEVEL (about a specific child, belongs at add-child): e.g.
+child's needs, conditions, support required, major concerns.
+- SERVICE-SPECIFIC (only relevant to one service, belongs at that
+service's request): e.g. shadow-teacher-only questions, therapy-
+centre-only questions, trainer-only questions.
+- SHARED (genuinely needed across multiple flows — flag these, as they
+shouldn't simply be moved): e.g. city, budget, languages might be
+needed by multiple services.
+
+For SHARED fields, tell me where they're currently collected and
+whether they could be collected once (e.g. at child level) and reused
+across service requests, rather than re-asked each time.
+
+Output a table: Field | Current Flow | Type | Required? | DB Column |
+Recommended Bucket | Notes.
+
+No changes yet — just the complete inventory and your recommended
+categorization.

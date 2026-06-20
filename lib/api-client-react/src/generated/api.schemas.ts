@@ -53,6 +53,10 @@ export interface UserProfile {
   longitude?: number | null;
   shareHomeLocation?: boolean;
   /** @nullable */
+  supportTypes?: string[] | null;
+  /** @nullable */
+  childCount?: number | null;
+  /** @nullable */
   deletionScheduledAt?: string | null;
   createdAt: string;
 }
@@ -69,6 +73,8 @@ export interface UpdateUserBody {
   longitude?: number;
   shareHomeLocation?: boolean;
   avatarUrl?: string;
+  supportTypes?: string[];
+  childCount?: number;
 }
 
 export type SetRoleBodyRole =

@@ -42,6 +42,8 @@ export const GetMeResponse = zod.object({
       "Parent's home longitude — stored only with consent for home-visit matching",
     ),
   shareHomeLocation: zod.boolean().optional(),
+  supportTypes: zod.array(zod.string()).nullish(),
+  childCount: zod.number().nullish(),
   deletionScheduledAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
 });
@@ -65,6 +67,8 @@ export const UpdateMeBody = zod.object({
     .describe("Parent's home longitude — stored for home-visit matching"),
   shareHomeLocation: zod.boolean().optional(),
   avatarUrl: zod.string().optional(),
+  supportTypes: zod.array(zod.string()).optional(),
+  childCount: zod.number().int().optional(),
 });
 
 export const UpdateMeResponse = zod.object({
@@ -91,6 +95,8 @@ export const UpdateMeResponse = zod.object({
       "Parent's home longitude — stored only with consent for home-visit matching",
     ),
   shareHomeLocation: zod.boolean().optional(),
+  supportTypes: zod.array(zod.string()).nullish(),
+  childCount: zod.number().nullish(),
   deletionScheduledAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
 });

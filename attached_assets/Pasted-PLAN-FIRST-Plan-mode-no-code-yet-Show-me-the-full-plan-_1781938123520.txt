@@ -1,0 +1,109 @@
+PLAN FIRST — Plan mode, no code yet. Show me the full plan before
+building. This is an "intake redesign" — restructuring what's asked
+where, upgrading input controls, and converting some free-text fields
+to structured selects. There are data/migration implications, so I
+want to review the plan first.
+
+═══ PART A — RESTRUCTURE (what's asked where) ═══
+
+PARENT ONBOARDING (choose-role.tsx quick wizard) — make it minimal,
+meaningful, and PERSISTED:
+- KEEP "what support do you need" (support types multi-select) but
+  PERSIST it to the users table (currently it's written to
+  localStorage and discarded). Add a users column for this. This is
+  the parent's intent signal.
+- ADD "how many children do you have?" — a number input or chip
+  select (1, 2, 3, 4+). Persist to the users table. This is used ONLY
+  as a SOFT PROMPT later (see child-count rule below) — NOT a hard cap.
+- KEEP location (already persists to users.location).
+- DROP "child's age group" and "primary condition" from onboarding
+  entirely — they're written to localStorage and discarded, and the
+  same data is properly collected in the add-child wizard. Remove them
+  from the onboarding wizard. (Do not pre-fill — just remove; add-child
+  asks these properly.)
+
+CHILD COUNT — SOFT PROMPT, NOT A HARD CAP:
+- When a parent adds a child beyond the number they gave at onboarding,
+  do NOT block them. Show a gentle prompt: "You mentioned [N] children
+  at signup — adding another? We'll update your count." Then allow it
+  and update the stored count. Never prevent adding a child.
+
+ADD-CHILD WIZARD — keep the existing 6-step structure largely as-is
+(it's well organized). Changes only:
+- Pre-fill the child's CITY from users.location if set (dedupe the
+  double city entry — parent location and child city currently
+  collected separately and can drift). Keep both DB columns
+  (users.location and children.city) but pre-fill child city from
+  parent location so the parent isn't re-typing.
+
+SCHOOL HOURS — currently in add-child Step 3, but it's the ONLY field
+used exclusively by shadow-teacher matching. PROPOSE the better option
+and recommend one: (a) move it to the shadow-teacher request flow so
+it's only asked when relevant, or (b) keep it in the child profile but
+relabel clearly "Used for shadow teacher matching." Tell me your
+recommendation with rationale — I'll confirm.
+
+═══ PART B — INPUT CONTROL UPGRADES ═══
+
+Upgrade these specific inputs to better controls (mobile-first — this
+is a phone-primary app):
+- DATE OF BIRTH → a wheel/rolling date picker (iPhone-style scrollable
+  day/month/year), not a raw <input type="date">. Default to a sensible
+  range for children (e.g. last 18 years). Much easier on mobile.
+- SCHOOL HOURS (start/end time) → a wheel-style time picker, not raw
+  time inputs.
+- Use a well-supported approach within the existing React + Tailwind +
+  shadcn/ui stack. Do NOT add a heavy new UI library — if a small
+  focused picker library is needed, propose it and I'll approve.
+
+KEEP AS-IS (do not change — these controls are already correct):
+- All multi-select chip fields (conditions, goals, modes, languages,
+  time slots) — chips are the right control, leave them.
+- Name (text), care notes / calming / triggers / favourites
+  (textareas — these are genuinely open-ended, keep as free text).
+- Budget (chip-select ranges — keep as chips, they work fine).
+
+═══ PART C — FREE-TEXT → STRUCTURED SELECTS ═══
+
+Convert these fields from free text to proper dropdowns/selects (this
+improves data quality AND UX — structured data is filterable):
+- GRADE / CLASS → dropdown: Nursery, LKG, UKG, Grade 1 through Grade
+  12, Other. (Currently free text → produces messy data like "5th" /
+  "Class V" / "Grade 5".)
+- CURRENT THERAPY TYPE → dropdown of known therapies: Occupational
+  Therapy, Speech Therapy, ABA / Behavioural, Physiotherapy,
+  Special Education, Psychology / Counselling, Other. (Frequency can
+  stay as a simple structured input or a small select like "1x/week,
+  2x/week, 3x/week, Daily, Other".)
+- COMMUNICATION MODE (in care notes) → dropdown/multi-select: Verbal,
+  Non-verbal, AAC device, Sign language, Gestures, Picture cards (PECS),
+  Other. (Currently free text.)
+
+DATA MIGRATION CONSIDERATION: these fields already have free-text data
+in existing records. For the conversion: new entries use the select;
+existing free-text values should be preserved/displayed (don't lose
+data). Propose how to handle existing free-text values — map common
+ones to the new options where possible, keep an "Other" + free-text
+fallback for anything unmapped. Show me the migration approach.
+
+═══ WHAT THE PLAN MUST INCLUDE ═══
+- The users-table columns to add (support types, child count) + migration
+- The child-count soft-prompt logic (where it triggers, that it never
+  blocks)
+- The school-hours recommendation (move vs relabel)
+- The DOB + time picker approach (and any library proposed)
+- The grade/therapy/comms-mode select conversions + how existing
+  free-text data is handled
+- Every file touched
+- Confirm NO change to: the multi-select chips, the matching engine's
+  reading of child fields (city, conditions, languages, budget, school
+  hours — wherever they end up, matching must still read them), the
+  consent gates, or any service request beyond what's specified.
+
+CRITICAL: the shadow-teacher matching engine reads child.city,
+child.conditions, child.languages, child.budget, child.school hours.
+Wherever these fields end up after restructuring, the matching engine
+MUST still read them correctly. Confirm the matching engine isn't
+broken by any field move. This is the highest risk in this change.
+
+No code until I approve the plan. Show me everything.

@@ -18,6 +18,8 @@ export const usersTable = pgTable("users", {
   latitude: real("latitude"),
   longitude: real("longitude"),
   shareHomeLocation: boolean("share_home_location").notNull().default(false),
+  supportTypes: text("support_types").array().notNull().default([]),
+  childCount: integer("child_count"),
   sessionCredits: integer("session_credits").notNull().default(0),
   walletBalanceInr: integer("wallet_balance_inr").notNull().default(0),
   referralCode: text("referral_code").unique(),

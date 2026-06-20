@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { useClerk, useUser } from "@clerk/react";
 import {
@@ -21,7 +22,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useGetMe } from "@workspace/api-client-react";
+import { useGetMe, useUpdateMe } from "@workspace/api-client-react";
+import { useToast } from "@/hooks/use-toast";
 import { NAV, SHELL_ROOT, type Role } from "@/nav/config";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -163,6 +165,8 @@ export function TopBar() {
   const { user } = useUser();
   const { signOut } = useClerk();
   const { data: me } = useGetMe();
+  const { mutate: updateMeCount } = useUpdateMe();
+  const { toast } = useToast();
   const {
     childProfiles,
     childrenLoading,
@@ -187,8 +191,39 @@ export function TopBar() {
         .slice(0, 2)
     : (user?.firstName?.[0] ?? "U").toUpperCase();
 
+  // Auto-sync child count: fires ONCE per distinct children.length increase
+  // The ref is set BEFORE the async call to prevent re-fire during in-flight PATCH.
+  // After the PATCH resolves, me.childCount equals children.length, so
+  // "actual > declared" becomes false — no loop even without the ref.
+  // The ref closes the narrow window while the PATCH is still in flight.
+  const syncedCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    const declared = me?.childCount ?? null;
+    const actual = childProfiles.length;
+    if (
+      declared != null &&               // parent answered count at onboarding
+      actual > declared &&              // children count exceeds declared
+      syncedCountRef.current !== actual // haven't already synced for this exact count
+    ) {
+      syncedCountRef.current = actual;  // guard set before call — prevents re-fire
+      updateMeCount({ data: { childCount: actual } });
+    }
+  }, [childProfiles.length, me?.childCount]);
+
   function handleSignOut() {
     signOut(() => setLocation("/"));
+  }
+
+  function handleAddChild() {
+    const declared = me?.childCount ?? null;
+    const actual = childProfiles.length;
+    if (declared != null && actual >= declared) {
+      toast({
+        title: "Adding another child?",
+        description: `You mentioned ${declared} child${declared !== 1 ? "ren" : ""} at signup — no problem, we'll update your count automatically.`,
+      });
+    }
+    setLocation("/onboarding/child");
   }
 
   const noChildren = !childrenLoading && childProfiles.length === 0;
@@ -206,7 +241,7 @@ export function TopBar() {
           </button>
         ) : noChildren ? (
           <button
-            onClick={() => setLocation("/onboarding/child")}
+            onClick={handleAddChild}
             className="flex min-w-0 shrink-0 items-center gap-1.5 rounded-full border border-dashed border-teal-400 bg-teal-50 px-3 py-1.5 text-sm font-medium text-teal-700 transition-colors hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
             aria-label="Add your child"
           >
@@ -254,7 +289,7 @@ export function TopBar() {
               ))}
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => setLocation("/onboarding/child")}
+                onClick={handleAddChild}
                 className="flex cursor-pointer items-center gap-2 text-teal-600 focus:text-teal-700"
               >
                 <Plus size={14} />
