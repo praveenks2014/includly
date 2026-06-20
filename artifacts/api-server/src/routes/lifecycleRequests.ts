@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNull } from "drizzle-orm";
 import crypto from "crypto";
 import Razorpay from "razorpay";
 import {
@@ -9,6 +9,9 @@ import {
   adminSettingsTable,
   professionalProfilesTable,
   usersTable,
+  shadowTeacherMatchesTable,
+  shadowMatchCandidatesTable,
+  negotiationOffersTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { sendPushNotification, createInAppNotification } from "../lib/notificationService";
@@ -602,6 +605,108 @@ router.get("/admin/lifecycle", requireAuth, requireRole("admin"), async (_req, r
     .orderBy(desc(engagementLifecycleRequestsTable.raisedAt));
 
   res.json(rows);
+});
+
+// ── PATCH /engagements/:id/teacher-acceptance — teacher accepts or declines ────────────────────
+router.patch("/engagements/:id/teacher-acceptance", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { action } = req.body ?? {};
+  if (!["accept", "decline"].includes(action as string)) {
+    res.status(400).json({ error: "action must be accept or decline" }); return;
+  }
+
+  const { eng, role } = await getEngagementWithAccess(id, req.userId!, req.userRole!);
+  if (!eng || !role) { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
+  if (role !== "teacher") { res.status(403).json({ error: "Only the assigned teacher can accept or decline" }); return; }
+  if (eng.status !== "pending_teacher_acceptance") {
+    res.status(409).json({ error: "Engagement is not awaiting teacher acceptance" }); return;
+  }
+
+  if (action === "accept") {
+    await db
+      .update(shadowTeacherEngagementsTable)
+      .set({ status: "pending_start", updatedAt: new Date() })
+      .where(eq(shadowTeacherEngagementsTable.id, id));
+
+    try {
+      const [profRow] = await db.select({ fullName: professionalProfilesTable.fullName })
+        .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, eng.professionalId)).limit(1);
+      await createInAppNotification(eng.parentId, {
+        type: "engagement_accepted",
+        title: "Teacher accepted the engagement",
+        body: `${profRow?.fullName ?? "Your teacher"} accepted the engagement. Your start code will be ready on ${eng.startDate}.`,
+        relatedType: "engagement", relatedId: id,
+      });
+    } catch { /* non-blocking */ }
+
+    res.json({ status: "pending_start" });
+    return;
+  }
+
+  // ── Decline ─────────────────────────────────────────────────────────────────
+  // 1. End the engagement
+  await db
+    .update(shadowTeacherEngagementsTable)
+    .set({ status: "ended", endedReason: "teacher_declined", updatedAt: new Date() })
+    .where(eq(shadowTeacherEngagementsTable.id, id));
+
+  if (eng.matchRequestId) {
+    // 2. Find the declining teacher's candidate row
+    const [candidate] = await db
+      .select({ id: shadowMatchCandidatesTable.id })
+      .from(shadowMatchCandidatesTable)
+      .where(and(
+        eq(shadowMatchCandidatesTable.matchId, eng.matchRequestId),
+        eq(shadowMatchCandidatesTable.professionalId, eng.professionalId),
+        isNull(shadowMatchCandidatesTable.removedAt),
+      ))
+      .limit(1);
+
+    if (candidate) {
+      // 3. Mark declining teacher un-pickable (excluded by existing isNull guard on re-commit)
+      await db
+        .update(shadowMatchCandidatesTable)
+        .set({ removedAt: new Date(), removedByUserId: req.userId! })
+        .where(eq(shadowMatchCandidatesTable.id, candidate.id));
+
+      // 4. Void the accepted offer so it cannot carry forward to a new candidate
+      await db
+        .update(negotiationOffersTable)
+        .set({ status: "superseded", updatedAt: new Date() })
+        .where(and(
+          eq(negotiationOffersTable.candidateId, candidate.id),
+          eq(negotiationOffersTable.status, "accepted"),
+        ));
+    }
+
+    // 5. Reset match to shortlisted — parent can re-pick from remaining candidates
+    await db
+      .update(shadowTeacherMatchesTable)
+      .set({
+        status: "shortlisted",
+        selectedProfessionalId: null,
+        matchedAt: null,
+        matchedProfessionalId: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(shadowTeacherMatchesTable.id, eng.matchRequestId));
+  }
+
+  // 6. Notify parent
+  try {
+    const [profRow] = await db.select({ fullName: professionalProfilesTable.fullName })
+      .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, eng.professionalId)).limit(1);
+    await createInAppNotification(eng.parentId, {
+      type: "engagement_declined",
+      title: "Teacher declined the engagement",
+      body: `${profRow?.fullName ?? "The teacher"} declined this engagement. You can return to your enquiry to choose another teacher.`,
+      relatedType: "engagement", relatedId: id,
+    });
+  } catch { /* non-blocking */ }
+
+  res.json({ status: "ended", endedReason: "teacher_declined" });
 });
 
 export default router;

@@ -1495,6 +1495,8 @@ function AdminEngagementsTab() {
   }
 
   const ENG_STATUS_COLORS: Record<string, string> = {
+    pending_teacher_acceptance: "bg-purple-50 text-purple-700 border-purple-200",
+    pending_start: "bg-amber-50 text-amber-700 border-amber-200",
     active: "bg-green-50 text-green-700 border-green-200",
     notice_period: "bg-yellow-50 text-yellow-700 border-yellow-200",
     ended: "bg-gray-50 text-gray-500 border-gray-200",

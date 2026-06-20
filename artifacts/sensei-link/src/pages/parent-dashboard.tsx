@@ -1096,7 +1096,7 @@ function ShadowTeacherTab() {
   });
 
   const active = engagements.find(e =>
-    (["active", "notice_period", "paused", "pending_start", "ended"].includes(e.status)) &&
+    (["active", "notice_period", "paused", "pending_start", "pending_teacher_acceptance", "ended"].includes(e.status)) &&
     e.childId === selectedChildId
   );
 
@@ -1151,7 +1151,7 @@ function ShadowTeacherTab() {
 
   const pendingStartDisabledTabs = new Set(["logs", "goals", "trends", "payments"]);
   const visibleStTab: typeof stTab =
-    (active?.status === "pending_start" && pendingStartDisabledTabs.has(stTab)) ||
+    ((active?.status === "pending_start" || active?.status === "pending_teacher_acceptance") && pendingStartDisabledTabs.has(stTab)) ||
     (active?.status === "ended" && stTab === "lifecycle")
       ? "overview" : stTab;
 
@@ -1469,9 +1469,12 @@ function ShadowTeacherTab() {
       {/* Sub-tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
         {(([["overview", "Overview"], ["logs", "Daily Logs"], ["goals", "Goals"], ["trends", "Trends"], ["payments", "Payments"], ["lifecycle", "Manage"]] as [string, string][])
-          .filter(([id]) => !(active.status === "ended" && id === "lifecycle"))
+          .filter(([id]) =>
+            !(active.status === "ended" && id === "lifecycle") &&
+            !(active.status === "pending_teacher_acceptance" && id === "lifecycle")
+          )
         ).map(([id, label]) => {
-          const isPendingDisabled = active.status === "pending_start" && pendingStartDisabledTabs.has(id);
+          const isPendingDisabled = (active.status === "pending_start" || active.status === "pending_teacher_acceptance") && pendingStartDisabledTabs.has(id);
           const tipText = id === "payments"
             ? "Available once the engagement starts — salary payments begin on the confirmed start date"
             : "Available once the engagement starts";
@@ -1507,7 +1510,32 @@ function ShadowTeacherTab() {
 
       {stTab === "overview" && active.status !== "ended" && (
         <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
-          {active.status === "pending_start" ? (
+          {active.status === "pending_teacher_acceptance" ? (
+            <div className="space-y-3">
+              <p className="text-sm font-bold text-[#1A2340]">Waiting for Teacher to Accept</p>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
+                <p className="text-xs font-semibold text-blue-800">⏳ Awaiting teacher confirmation</p>
+                <p className="text-xs text-blue-700">
+                  {active.professionalName ?? "Your teacher"} has been notified and needs to accept this engagement before it begins.
+                  You'll be notified as soon as they confirm.
+                </p>
+                <div className="bg-white rounded-lg border border-blue-100 p-3 space-y-1.5 mt-1">
+                  <p className="text-xs text-gray-500">
+                    Proposed start:{" "}
+                    <span className="font-semibold text-gray-700">
+                      {new Date(active.startDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+                    </span>
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Agreed fee:{" "}
+                    <span className="font-semibold text-gray-700">
+                      ₹{parseFloat(active.monthlyFeeInr).toLocaleString("en-IN")}/month
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : active.status === "pending_start" ? (
             <div className="space-y-3">
               <p className="text-sm font-bold text-[#1A2340]">Engagement Booked — Awaiting Start</p>
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">

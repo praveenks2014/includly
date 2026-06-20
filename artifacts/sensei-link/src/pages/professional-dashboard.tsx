@@ -1877,12 +1877,12 @@ function EngagementTab() {
     queryFn: () => fetchWithAuth("/api/engagements").then(r => r.json()),
   });
 
-  const activeList = engagements.filter(e => ["pending_start", "active", "notice_period", "paused"].includes(e.status));
+  const activeList = engagements.filter(e => ["pending_teacher_acceptance", "pending_start", "active", "notice_period", "paused"].includes(e.status));
   const active = (selectedEngId ? engagements.find(e => e.id === selectedEngId) : null) ?? activeList[0] ?? null;
 
   const pendingStartDisabledEngTabs = new Set(["child", "log", "trends"]);
   const visibleEngTab: typeof engTab =
-    (active?.status === "pending_start" && pendingStartDisabledEngTabs.has(engTab)) ||
+    ((active?.status === "pending_start" || active?.status === "pending_teacher_acceptance") && pendingStartDisabledEngTabs.has(engTab)) ||
     (active?.status === "ended" && engTab === "lifecycle")
       ? "overview" : engTab;
 
@@ -1909,6 +1909,26 @@ function EngagementTab() {
 
   const pendingPR = lifecycleRequests.find(r => ["pause", "resume"].includes(r.type) && r.status === "pending") ?? null;
   const iAmPRRequester = myUserId > 0 && pendingPR?.raisedByUserId === myUserId;
+
+  // ── Teacher acceptance state ────────────────────────────────────────────────
+  const [submittingAcceptance, setSubmittingAcceptance] = useState(false);
+
+  async function handleTeacherAcceptance(action: "accept" | "decline") {
+    if (!active) return;
+    setSubmittingAcceptance(true);
+    try {
+      const res = await fetchWithAuth(`/api/engagements/${active.id}/teacher-acceptance`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) { const e = await res.json() as { error?: string }; throw new Error(e.error ?? "Failed"); }
+      queryClient.invalidateQueries({ queryKey: ["pro-engagements"] });
+      toast({ title: action === "accept" ? "Engagement accepted ✓" : "Engagement declined" });
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally { setSubmittingAcceptance(false); }
+  }
 
   // ── Goal management state ──────────────────────────────────────────────────
   const [newGoalLabel, setNewGoalLabel] = useState("");
@@ -2236,9 +2256,12 @@ function EngagementTab() {
       {/* Sub-tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
         {([["overview", "Overview"], ["child", "Child & Goals"], ["log", "Daily Log"], ["trends", "Trends"], ["lifecycle", "Manage"]] as [string, string][])
-          .filter(([id]) => !(active.status === "ended" && id === "lifecycle"))
+          .filter(([id]) =>
+            !(active.status === "ended" && id === "lifecycle") &&
+            !(active.status === "pending_teacher_acceptance" && id === "lifecycle")
+          )
           .map(([id, label]) => {
-            const isPendingDisabled = active.status === "pending_start" && pendingStartDisabledEngTabs.has(id);
+            const isPendingDisabled = (active.status === "pending_start" || active.status === "pending_teacher_acceptance") && pendingStartDisabledEngTabs.has(id);
             return isPendingDisabled ? (
               <button key={id} disabled title="Available once the engagement starts"
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap text-gray-300 cursor-not-allowed select-none">
@@ -2256,6 +2279,51 @@ function EngagementTab() {
       {/* ── Overview ── */}
       {visibleEngTab === "overview" && (
         <div className="space-y-4">
+          {active.status === "pending_teacher_acceptance" && (
+            <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
+              <p className="text-sm font-bold text-[#1A2340]">New Engagement — Your Response Needed</p>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">Parent</span>
+                  <span className="font-semibold text-[#1A2340]">{active.parentName ?? "—"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">Proposed start</span>
+                  <span className="font-semibold text-[#1A2340]">
+                    {new Date(active.startDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500">Agreed monthly fee</span>
+                  <span className="font-semibold text-[#1A2340]">₹{parseFloat(active.monthlyFeeInr).toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">
+                By accepting you commit to starting on the proposed date and entering the parent's start code to activate the engagement.
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleTeacherAcceptance("decline")}
+                  disabled={submittingAcceptance}
+                  className="flex-1 border-red-200 text-red-600 hover:bg-red-50 text-xs font-semibold"
+                >
+                  {submittingAcceptance && <Loader2 size={12} className="animate-spin mr-1" />}
+                  Decline
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => void handleTeacherAcceptance("accept")}
+                  disabled={submittingAcceptance}
+                  className="flex-1 bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-xs font-semibold"
+                >
+                  {submittingAcceptance && <Loader2 size={12} className="animate-spin mr-1" />}
+                  Accept Engagement
+                </Button>
+              </div>
+            </div>
+          )}
           {active.status === "pending_start" && (
             <EngagementStartOtpEntry engagementId={active.id} />
           )}

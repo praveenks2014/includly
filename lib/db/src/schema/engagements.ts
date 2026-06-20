@@ -6,7 +6,7 @@ import { professionalProfilesTable } from "./professionals";
 import { shadowTeacherMatchesTable } from "./shadowTeacher";
 import { childrenTable } from "./children";
 
-export const engagementStatusEnum = pgEnum("engagement_status", ["pending_start", "active", "paused", "notice_period", "ended"]);
+export const engagementStatusEnum = pgEnum("engagement_status", ["pending_start", "active", "paused", "notice_period", "ended", "pending_teacher_acceptance"]);
 
 export const shadowTeacherEngagementsTable = pgTable("shadow_teacher_engagements", {
   id: serial("id").primaryKey(),

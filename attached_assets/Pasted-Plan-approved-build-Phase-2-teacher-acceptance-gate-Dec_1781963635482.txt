@@ -1,0 +1,44 @@
+Plan approved — build Phase 2 (teacher acceptance gate). Decline
+handling: YES, reset the match to "shortlisted" so the parent can
+re-pick from the same match (don't force a new match request — the
+parent shouldn't be penalized for the teacher's decline). But handle
+these edge cases the reset creates:
+
+1. NEGOTIATION RESET: the accepted offer that enabled the commit was
+specific to the DECLINING teacher. On reset, clear/void that accepted
+offer so it does NOT carry over to a different candidate. When the
+parent picks a new candidate, they negotiate fresh (or use that
+teacher's listed price) — they must not inherit the declined teacher's
+agreed price. Confirm how you handle the negotiation_offers on decline.
+
+2. DECLINING TEACHER IN CANDIDATE LIST: a teacher who DECLINED should
+NOT remain a freely re-pickable candidate (the parent could re-pick
+them and get declined again). Either remove them from the candidate
+list or mark them "declined" and make them un-pickable. Propose which
+— I lean toward marking them declined/un-pickable so the parent picks
+from teachers who haven't declined. Confirm your approach.
+
+3. START DATE: the start date the parent set at the first commit was
+tied to the now-dead engagement. On re-pick + re-commit, confirm the
+parent sets a FRESH start date (the new commit collects it again).
+
+Also confirm:
+4. MIGRATION 0026 is next free (after 0025 full_buyout). ALTER TYPE ADD
+VALUE not in a transaction. Confirm.
+
+5. THE START OTP: you noted "start OTP already generated at commit time
+— no change." But the engagement is now pending_teacher_acceptance, NOT
+pending_start. Confirm the start OTP is NOT visible to the parent
+during pending_teacher_acceptance (it should only become relevant after
+the teacher accepts AND the start date arrives). The server-side
+date-gate withholds it until startDate — but also confirm it's not
+shown during pending_teacher_acceptance regardless.
+
+6. TAB VISIBILITY: pending_teacher_acceptance disables Logs/Goals/
+Trends/Payments same as pending_start. Confirm both the parent AND
+teacher sides apply this.
+
+Show me the migration SQL, the commit-handler change (pending_start →
+pending_teacher_acceptance), the new PATCH endpoint, and the
+accept/decline UI before deploying. This auto-deploys to dev; no manual
+production deploy.

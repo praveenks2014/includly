@@ -947,7 +947,7 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
       hoursPerWeek: 0,
       monthlyFeeInr,
       trialCreditInr: match.trialFeePaidInr ?? 0,
-      status: "pending_start",
+      status: "pending_teacher_acceptance",
       startOtp: generateOtp(),
     })
     .returning();
@@ -964,15 +964,33 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
     })
     .where(eq(shadowTeacherMatchesTable.id, matchId));
 
-  // Notify parent: engagement scheduled, OTP available on startDate
+  // Notify parent: waiting for teacher to accept
   try {
     await createInAppNotification(match.parentId, {
-      type: "engagement_start_otp",
-      title: "Engagement scheduled",
-      body: `Your engagement starts on ${effectiveStartDate}. Open the app on that date to get the start code for your teacher.`,
+      type: "engagement_pending_acceptance",
+      title: "Waiting for teacher to accept",
+      body: `${teacher.fullName ?? "Your teacher"} has been notified and needs to accept the engagement. You'll be notified once they confirm.`,
       relatedType: "engagement",
       relatedId: engagement!.id,
     });
+  } catch { /* non-blocking */ }
+
+  // Notify teacher: new engagement awaiting their acceptance
+  try {
+    const [teacherUserRow] = await db
+      .select({ userId: professionalProfilesTable.userId })
+      .from(professionalProfilesTable)
+      .where(eq(professionalProfilesTable.id, selectedProfessionalId))
+      .limit(1);
+    if (teacherUserRow) {
+      await createInAppNotification(teacherUserRow.userId, {
+        type: "engagement_awaiting_acceptance",
+        title: "New engagement — your acceptance needed",
+        body: `A parent has selected you for an engagement starting ${effectiveStartDate}. Open the app to accept or decline.`,
+        relatedType: "engagement",
+        relatedId: engagement!.id,
+      });
+    }
   } catch { /* non-blocking */ }
 
   res.json({
