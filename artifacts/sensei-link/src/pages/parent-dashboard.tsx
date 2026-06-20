@@ -1610,44 +1610,55 @@ function ShadowTeacherTab() {
           {active.status === "pending_teacher_acceptance" ? (
             <div className="space-y-3">
               <p className="text-sm font-bold text-[#1A2340]">Waiting for Teacher to Accept</p>
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
-                <p className="text-xs font-semibold text-blue-800">⏳ Awaiting teacher confirmation</p>
-                <p className="text-xs text-blue-700">
+              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center shrink-0">
+                    <Clock size={14} className="text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-blue-900">Awaiting teacher confirmation</p>
+                    <p className="text-[11px] text-blue-600 mt-0.5">You'll be notified as soon as they confirm</p>
+                  </div>
+                </div>
+                <p className="text-xs text-blue-700 leading-relaxed">
                   {active.professionalName ?? "Your teacher"} has been notified and needs to accept this engagement before it begins.
-                  You'll be notified as soon as they confirm.
                 </p>
-                <div className="bg-white rounded-lg border border-blue-100 p-3 space-y-1.5 mt-1">
-                  <p className="text-xs text-gray-500">
-                    Proposed start:{" "}
-                    <span className="font-semibold text-gray-700">
+                <div className="bg-white rounded-xl border border-blue-100 p-3 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[11px] text-gray-500">Proposed start</span>
+                    <span className="text-[11px] font-semibold text-gray-700">
                       {new Date(active.startDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
                     </span>
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Agreed fee:{" "}
-                    <span className="font-semibold text-gray-700">
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[11px] text-gray-500">Agreed fee</span>
+                    <span className="text-[11px] font-semibold text-gray-700">
                       ₹{parseFloat(active.monthlyFeeInr).toLocaleString("en-IN")}/month
                     </span>
-                  </p>
+                  </div>
                 </div>
               </div>
             </div>
           ) : active.status === "pending_start" ? (
             <div className="space-y-3">
               <p className="text-sm font-bold text-[#1A2340]">Engagement Booked — Awaiting Start</p>
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
-                <p className="text-xs font-semibold text-amber-800">⏳ Waiting for teacher to confirm start</p>
-                <p className="text-xs text-amber-700">
-                  Share the code below with {active.professionalName ?? "your teacher"} on{" "}
-                  <span className="font-semibold">
-                    {new Date(active.startDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
-                  </span>.
-                  {" "}They'll enter it to begin the engagement.
-                </p>
+              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+                    <Clock size={14} className="text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-amber-900">Waiting for teacher to confirm start</p>
+                    <p className="text-[11px] text-amber-600 mt-0.5">
+                      Share the code on{" "}
+                      <span className="font-semibold">{new Date(active.startDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</span>
+                    </p>
+                  </div>
+                </div>
                 {!editingStartDate ? (
                   <button
                     onClick={() => { setEditingStartDate(true); setNewStartDate(active.startDate); }}
-                    className="text-xs text-amber-700 underline font-medium"
+                    className="text-xs text-amber-700 underline font-semibold"
                   >
                     Change start date
                   </button>
@@ -1676,16 +1687,18 @@ function ShadowTeacherTab() {
                   </div>
                 )}
                 {active.startOtp ? (
-                  <div className="bg-white border-2 border-amber-300 rounded-xl p-4 text-center space-y-1 mt-2">
-                    <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-widest">Start Code</p>
-                    <p className="text-4xl font-mono font-bold tracking-[0.3em] text-amber-900 select-all">{active.startOtp}</p>
-                    <p className="text-[10px] text-amber-600">Show this to your teacher — do not share publicly</p>
+                  <div className="bg-white border border-amber-200 rounded-2xl p-5 text-center space-y-2 shadow-inner">
+                    <p className="text-[10px] font-bold text-amber-500 uppercase tracking-[0.18em]">Start Code</p>
+                    <p className="text-4xl font-mono font-bold tracking-[0.35em] text-[#1A2340] select-all py-1">{active.startOtp}</p>
+                    <p className="text-[10px] text-amber-600 font-medium">Show this to your teacher — do not share publicly</p>
                   </div>
                 ) : (
-                  <p className="text-xs text-amber-600 bg-white rounded-lg px-3 py-2 border border-amber-200 mt-2">
-                    Your start code will appear here on{" "}
-                    {new Date(active.startDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}.
-                  </p>
+                  <div className="bg-white rounded-xl px-4 py-3 border border-amber-100">
+                    <p className="text-xs text-amber-700">
+                      Your start code will appear here on{" "}
+                      <span className="font-semibold">{new Date(active.startDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</span>.
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
@@ -1778,19 +1791,22 @@ function ShadowTeacherTab() {
                   physical_assist:{ label: "Physical",    cls: "bg-red-100 text-red-700" },
                 };
                 return (
-                  <div key={log.id} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-2">
+                  <div key={log.id} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-2.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-[#1A2340]">{new Date(log.logDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</span>
-                      <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full border font-semibold ${log.authorRole === "teacher" ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-[#2EC4A5]/10 text-[#2EC4A5] border-[#2EC4A5]/20"}`}>
+                      <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${log.authorRole === "teacher" ? "bg-blue-50" : "bg-teal-50"}`}>
+                        <User size={12} className={log.authorRole === "teacher" ? "text-blue-500" : "text-teal-500"} />
+                      </div>
+                      <span className="text-xs font-bold text-[#1A2340]">{new Date(log.logDate).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</span>
+                      <span className={`ml-auto text-[10px] px-2.5 py-0.5 rounded-full border font-bold ${log.authorRole === "teacher" ? "bg-blue-50 text-blue-600 border-blue-100" : "bg-teal-50 text-teal-600 border-teal-100"}`}>
                         {log.authorRole === "teacher" ? "Teacher" : "You"}
                       </span>
                     </div>
-                    {summary && <p className="text-sm text-gray-600">{summary}</p>}
+                    {summary && <p className="text-sm text-gray-600 leading-relaxed">{summary}</p>}
                     {log.authorRole === "parent" && !!parsed["extraSupportAreas"] && (
-                      <p className="text-xs text-gray-500 bg-amber-50 border border-amber-100 rounded-lg px-3 py-1.5">Extra support needed: {String(parsed["extraSupportAreas"])}</p>
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">Extra support needed: {String(parsed["extraSupportAreas"])}</p>
                     )}
                     {log.authorRole === "teacher" && !!parsed["reteachAtHome"] && (
-                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-1.5">🏠 Reteach at home: {String(parsed["reteachAtHome"])}</p>
+                      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">🏠 Reteach at home: {String(parsed["reteachAtHome"])}</p>
                     )}
                     {goalRatings && goalRatings.length > 0 && (
                       <div className="flex flex-wrap gap-1">
@@ -1887,11 +1903,14 @@ function ShadowTeacherTab() {
         <div className="space-y-4">
           {/* Buyout / Full-buyout wind-down banner */}
           {active.status === "notice_period" && ["buyout", "full_buyout"].includes(active.endedReason ?? "") && (
-            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-1">
-              <p className="text-sm font-bold text-amber-900">
-                {active.endedReason === "full_buyout" ? "Full buyout confirmed" : "Early exit confirmed"}
-              </p>
-              <p className="text-sm text-amber-800">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={15} className="text-amber-600 shrink-0" />
+                <p className="text-sm font-bold text-amber-900">
+                  {active.endedReason === "full_buyout" ? "Full buyout confirmed" : "Early exit confirmed"}
+                </p>
+              </div>
+              <p className="text-xs text-amber-800 leading-relaxed">
                 {active.professionalName ?? "Your teacher"} will continue working until{" "}
                 <span className="font-semibold">
                   {active.endDate
@@ -1904,9 +1923,12 @@ function ShadowTeacherTab() {
 
           {/* Standard notice period banner */}
           {active.status === "notice_period" && !["buyout", "full_buyout"].includes(active.endedReason ?? "") && (
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-1">
-              <p className="text-sm font-bold text-blue-900">Notice period active</p>
-              <p className="text-sm text-blue-800">
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <Clock size={15} className="text-blue-500 shrink-0" />
+                <p className="text-sm font-bold text-blue-900">Notice period active</p>
+              </div>
+              <p className="text-xs text-blue-800 leading-relaxed">
                 This engagement ends on{" "}
                 <span className="font-semibold">
                   {active.endDate
@@ -1919,33 +1941,36 @@ function ShadowTeacherTab() {
 
           {/* Pending pause/resume consent banner */}
           {pendingPR && (
-            <div className={`rounded-xl p-4 border space-y-3 ${pendingPR.type === "pause" ? "bg-amber-50 border-amber-200" : "bg-blue-50 border-blue-200"}`}>
-              <p className="text-sm font-bold text-[#1A2340]">
-                {pendingPR.type === "pause" ? "Pause Request Pending" : "Resume Request Pending"}
-              </p>
+            <div className={`rounded-2xl p-4 border space-y-3 ${pendingPR.type === "pause" ? "bg-amber-50 border-amber-100" : "bg-blue-50 border-blue-100"}`}>
+              <div className="flex items-center gap-2">
+                <Clock size={15} className={`shrink-0 ${pendingPR.type === "pause" ? "text-amber-500" : "text-blue-500"}`} />
+                <p className="text-sm font-bold text-[#1A2340]">
+                  {pendingPR.type === "pause" ? "Pause Request Pending" : "Resume Request Pending"}
+                </p>
+              </div>
               {iAmPRRequester ? (
                 <>
-                  <p className="text-xs text-gray-600">
+                  <p className="text-xs text-gray-600 leading-relaxed">
                     You requested to {pendingPR.type} this engagement. Waiting for the teacher to respond.
                   </p>
                   <Button size="sm" variant="outline" onClick={() => void handleWithdrawPR()} disabled={postingLifecycle}
-                    className="border-red-200 text-red-600 hover:bg-red-50 text-xs">
+                    className="border-red-200 text-red-600 hover:bg-red-50 text-xs rounded-xl">
                     {postingLifecycle ? <Loader2 size={12} className="animate-spin mr-1" /> : null}Withdraw Request
                   </Button>
                 </>
               ) : (
                 <>
-                  <p className="text-xs text-gray-600">
+                  <p className="text-xs text-gray-600 leading-relaxed">
                     Your teacher has requested to {pendingPR.type} this engagement.
                     {pendingPR.reason ? ` Reason: "${pendingPR.reason}"` : ""}
                   </p>
                   <div className="flex gap-2">
                     <Button size="sm" onClick={() => void handleConsentPR("approved")} disabled={postingLifecycle}
-                      className="bg-green-600 hover:bg-green-700 text-white text-xs">
+                      className="bg-green-600 hover:bg-green-700 text-white text-xs rounded-xl">
                       {postingLifecycle ? <Loader2 size={12} className="animate-spin mr-1" /> : "Accept"}
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => void handleConsentPR("rejected")} disabled={postingLifecycle}
-                      className="border-red-200 text-red-600 hover:bg-red-50 text-xs">
+                      className="border-red-200 text-red-600 hover:bg-red-50 text-xs rounded-xl">
                       Reject
                     </Button>
                   </div>
@@ -1956,30 +1981,37 @@ function ShadowTeacherTab() {
 
           {/* Pause section — only when active and no pending pause/resume */}
           {active.status === "active" && !pendingPR && (
-            <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
-              <p className="text-sm font-bold text-[#1A2340]">Pause Engagement</p>
-              <p className="text-xs text-gray-500">
-                Temporarily pauses this engagement with {active.professionalName ?? "your teacher"}'s agreement.
-                Both parties must consent. Billing stops during the pause. Either party can request to resume.
-              </p>
+            <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm space-y-3">
+              <div>
+                <p className="text-sm font-bold text-[#1A2340]">Pause Engagement</p>
+                <p className="text-xs text-gray-400 mt-0.5">Both parties must agree — billing stops during the pause</p>
+              </div>
               <textarea value={pauseReason} onChange={(e) => setPauseReason(e.target.value)} rows={2}
                 placeholder="Reason for pausing (optional)…"
-                className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
+                className="w-full rounded-xl border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
               <Button size="sm" onClick={() => void handleRequestPause()} disabled={postingLifecycle}
-                className="bg-amber-500 hover:bg-amber-600 text-white text-xs">
-                {postingLifecycle ? <Loader2 size={12} className="animate-spin mr-1" /> : null}Request Pause
+                className="bg-amber-500 hover:bg-amber-600 text-white text-xs rounded-xl gap-1">
+                {postingLifecycle ? <Loader2 size={12} className="animate-spin" /> : null}Request Pause
               </Button>
             </div>
           )}
 
           {/* Resume section — only when paused and no pending request */}
           {active.status === "paused" && !pendingPR && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 space-y-3">
-              <p className="text-sm font-bold text-amber-800">Engagement is Paused</p>
-              <p className="text-xs text-amber-700">Both you and {active.professionalName ?? "your teacher"} must agree to resume. Billing resumes once both parties consent.</p>
+            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 space-y-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+                  <Clock size={14} className="text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-amber-900">Engagement is Paused</p>
+                  <p className="text-[11px] text-amber-600 mt-0.5">Billing is on hold until both parties agree to resume</p>
+                </div>
+              </div>
+              <p className="text-xs text-amber-700 leading-relaxed">Both you and {active.professionalName ?? "your teacher"} must consent to resume.</p>
               <Button size="sm" onClick={() => void handleRequestResume()} disabled={postingLifecycle}
-                className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-xs">
-                {postingLifecycle ? <Loader2 size={12} className="animate-spin mr-1" /> : null}Request Resume
+                className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-xs rounded-xl gap-1">
+                {postingLifecycle ? <Loader2 size={12} className="animate-spin" /> : null}Request Resume
               </Button>
             </div>
           )}
@@ -1991,8 +2023,11 @@ function ShadowTeacherTab() {
             const buyoutEndStr = buyoutEndDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
             const teacherName = active.professionalName ?? "your teacher";
             return (
-              <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
-                <p className="text-sm font-bold text-[#1A2340]">End Engagement</p>
+              <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm space-y-4">
+                <div>
+                  <p className="text-sm font-bold text-[#1A2340]">End Engagement</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Choose how you'd like to close this engagement</p>
+                </div>
                 <div className="space-y-2">
                   {/* Give Notice */}
                   <button onClick={() => setLifecycleType(lifecycleType === "stop" ? "" : "stop")}
