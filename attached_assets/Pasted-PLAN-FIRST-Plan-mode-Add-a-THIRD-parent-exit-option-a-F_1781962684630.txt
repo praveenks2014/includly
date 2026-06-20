@@ -1,0 +1,59 @@
+PLAN FIRST — Plan mode. Add a THIRD parent exit option: a FULL BUYOUT.
+This is separate from the existing notice (30-day) and 15-day buyout —
+it's a new option alongside them.
+
+FULL BUYOUT:
+- Cost: exactly one full month's salary (the engagement's full
+  monthlyFeeInr — not prorated, not the 15-day amount).
+- The parent CHOOSES the end date: anywhere from IMMEDIATELY (today)
+  up to a date they pick. A date picker, min = today.
+- Parent pays the full month via Razorpay (same HMAC verify pattern as
+  the existing 15-day buyout payment).
+- On payment confirmed: the engagement transitions to notice_period
+  with endDate = the parent's chosen date, endedReason = "full_buyout"
+  (a new reason value, distinct from the existing "buyout"). The
+  existing hourly scheduler ends it on that date — OR if the parent
+  chose "immediately" (today), it ends right away.
+- Teacher is notified (existing notification system): "The engagement
+  has been ended via full buyout, effective [date]."
+- Self-managed per the existing model — no admin approval needed for
+  the standard flow; admin can override.
+
+REUSE the existing buyout infrastructure:
+- Same Razorpay order → HMAC verify → notice_period → scheduler-ends-on-
+  date pattern you built for the 15-day buyout. Only differences: the
+  fee is the full monthlyFeeInr, and the end date is parent-chosen (not
+  fixed at +15 days).
+- If the parent picks "immediately"/today, confirm the engagement ends
+  right away (either the scheduler picks it up, or end it on payment
+  confirm if the date is today). Handle the "today = immediate" case
+  cleanly.
+
+UI — the Manage/lifecycle tab (parent side):
+Add the full buyout as a third clearly-explained option alongside Give
+Notice and Early Exit. Plain-language explanation (matching the style
+of the existing two):
+"Full Buyout — End the engagement on a date of your choice, up to
+immediately, by paying one full month's salary (₹[monthlyFeeInr]).
+[Teacher] is compensated for the full month. The engagement ends on
+your chosen date."
+Show the actual ₹ amount (full monthlyFeeInr) and a date picker (min =
+today) BEFORE the parent confirms/pays, so they know exactly what
+they're paying and when it ends.
+
+Teacher side: when a full buyout is confirmed, show the same "ending
+on [date]" banner you already built for the 15-day buyout (the
+amber wind-down banner), with the correct end date.
+
+MIGRATION if needed: add "full_buyout" to the endedReason values (if
+it's an enum) and any buyout-fee/order columns if the existing buyout
+columns can't be reused. Additive, numbered after current highest.
+
+Do NOT touch: the notice flow, the 15-day buyout flow, the scheduler
+logic itself (just feed it the parent's chosen date), or any
+match/commit/engagement-creation flow.
+
+Show me the plan: how it reuses the existing buyout payment +
+notice_period + scheduler, how the "immediate" (today) case is handled,
+the UI for the three-way choice, and any migration. No code until I
+approve.
