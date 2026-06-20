@@ -783,14 +783,23 @@ function FindTab() {
   const results = data?.professionals ?? [];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-4">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-serif font-semibold text-gray-900">Find Professionals</h1>
-        {isFetching && <Loader2 size={16} className="animate-spin text-teal-500" />}
+        <div>
+          <h1 className="text-[1.35rem] font-bold text-[#1A2340] leading-tight">Find Professionals</h1>
+          <p className="text-xs text-gray-400 mt-0.5">Search verified specialists near you</p>
+        </div>
+        {isFetching && (
+          <div className="flex items-center gap-1.5 text-xs text-teal-600 font-semibold bg-teal-50 border border-teal-100 rounded-full px-3 py-1.5">
+            <Loader2 size={12} className="animate-spin" /> Searching…
+          </div>
+        )}
       </div>
 
       {/* Filters */}
       <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm space-y-3">
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.14em]">Filter by</p>
         <div className="grid grid-cols-2 gap-3">
           <div className="relative">
             <select
@@ -800,10 +809,10 @@ function FindTab() {
             >
               {SPECIALTIES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
           <div className="relative">
-            <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <MapPin size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-400 pointer-events-none" />
             <Input
               value={city}
               onChange={(e) => setCity(e.target.value)}
@@ -823,17 +832,18 @@ function FindTab() {
               <option value="online">Online only</option>
               <option value="offline">Offline only</option>
             </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
           <div className="relative">
+            <IndianRupee size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <Input
               type="number"
               min={0}
               max={10000}
               value={maxFee ?? ""}
               onChange={(e) => setMaxFee(e.target.value ? Number(e.target.value) : undefined)}
-              placeholder="Max fee (₹)"
-              className="h-10 border-gray-200 bg-gray-50 text-sm"
+              placeholder="Max fee"
+              className="pl-8 h-10 border-gray-200 bg-gray-50 text-sm"
             />
           </div>
         </div>
@@ -841,16 +851,29 @@ function FindTab() {
 
       {/* Results */}
       {isFetching && results.length === 0 ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 size={28} className="animate-spin text-teal-500" />
+        <div className="flex flex-col items-center justify-center py-20 gap-3">
+          <div className="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center">
+            <Loader2 size={22} className="animate-spin text-teal-500" />
+          </div>
+          <p className="text-sm text-gray-400 font-medium">Finding specialists…</p>
         </div>
       ) : (
         <>
-          <p className="text-sm text-gray-500">{results.length} professional{results.length !== 1 ? "s" : ""} found</p>
+          {!isFetching && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-teal-700 bg-teal-50 border border-teal-100 rounded-full px-3 py-1">
+              <User size={11} />{results.length} professional{results.length !== 1 ? "s" : ""} found
+            </span>
+          )}
           {results.length === 0 ? (
-            <div className="text-center py-10 text-gray-400">No professionals found — try different filters.</div>
+            <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-10 text-center">
+              <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <Search size={20} className="text-gray-300" />
+              </div>
+              <p className="text-sm font-semibold text-gray-600">No professionals found</p>
+              <p className="text-xs text-gray-400 mt-1">Try adjusting your filters or broadening the city.</p>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {results.map((p) => (
                 <ProfCard
                   key={p.id}
@@ -897,23 +920,35 @@ function BookingsTab() {
   const shown = bookingTab === "upcoming" ? upcoming : past;
 
   return (
-    <div className="space-y-5">
-      <h1 className="text-xl font-serif font-semibold text-gray-900">My Bookings</h1>
-      <div className="inline-flex bg-gray-100 rounded-xl p-1 gap-1">
+    <div className="space-y-5 pb-4">
+      <div>
+        <h1 className="text-[1.35rem] font-bold text-[#1A2340] leading-tight">My Bookings</h1>
+        <p className="text-xs text-gray-400 mt-0.5">Session history with your specialists</p>
+      </div>
+      <div className="flex bg-gray-100 rounded-2xl p-1 gap-1">
         {(["upcoming", "past"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setBookingTab(t)}
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
-              bookingTab === t ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              bookingTab === t ? "bg-white shadow-sm text-[#1A2340]" : "text-gray-400 hover:text-gray-600"
             }`}
           >
-            {t === "upcoming" ? `Upcoming (${upcoming.length})` : `Past (${past.length})`}
+            {t === "upcoming" ? "Upcoming" : "Past"}
+            <span className={`ml-1.5 text-[11px] font-bold px-1.5 py-0.5 rounded-full ${bookingTab === t ? "bg-teal-100 text-teal-700" : "bg-gray-200 text-gray-500"}`}>
+              {t === "upcoming" ? upcoming.length : past.length}
+            </span>
           </button>
         ))}
       </div>
       {shown.length === 0 ? (
-        <div className="text-center py-12 text-gray-400 text-sm">No {bookingTab} bookings.</div>
+        <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-10 text-center">
+          <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+            <CalendarCheck size={20} className="text-gray-300" />
+          </div>
+          <p className="text-sm font-semibold text-gray-600">No {bookingTab} bookings</p>
+          <p className="text-xs text-gray-400 mt-1">{bookingTab === "upcoming" ? "Find a professional to book a session." : "Your completed sessions will appear here."}</p>
+        </div>
       ) : (
         <div className="space-y-3">{shown.map((s) => <SessionCard key={s.id} s={s} />)}</div>
       )}
@@ -949,33 +984,44 @@ function MessagesTab() {
   if (loading) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-teal-600" /></div>;
 
   return (
-    <div className="space-y-5">
-      <h1 className="text-xl font-serif font-semibold text-gray-900">Messages</h1>
+    <div className="space-y-5 pb-4">
+      <div>
+        <h1 className="text-[1.35rem] font-bold text-[#1A2340] leading-tight">Messages</h1>
+        <p className="text-xs text-gray-400 mt-0.5">Conversations with your professionals</p>
+      </div>
       {threads.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          <MessageCircle size={32} className="mx-auto mb-3 text-gray-300" />
-          <p className="font-medium text-gray-600">No conversations yet</p>
-          <p className="text-sm mt-1">Find a professional and start a conversation.</p>
+        <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-12 text-center">
+          <div className="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+            <MessageCircle size={20} className="text-teal-300" />
+          </div>
+          <p className="text-sm font-semibold text-gray-600">No conversations yet</p>
+          <p className="text-xs text-gray-400 mt-1">Find a professional and send your first message.</p>
         </div>
       ) : (
-        <div className="bg-white border border-gray-100 rounded-2xl divide-y divide-gray-50 shadow-sm">
+        <div className="bg-white border border-gray-100 rounded-2xl divide-y divide-gray-50 shadow-sm overflow-hidden">
           {threads.map((t) => (
             <button
               key={t.threadId}
               onClick={() => setChatProfessional({ id: t.professionalId, name: t.professionalName ?? "Professional" })}
-              className="w-full flex items-center gap-3 px-4 py-4 hover:bg-gray-50 transition-colors text-left"
+              className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50/80 transition-colors text-left"
             >
-              <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm shrink-0">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-teal-100 to-teal-50 border border-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm shrink-0">
                 {initials(t.professionalName)}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm text-gray-900 truncate">{t.professionalName ?? "Professional"}</p>
-                {t.lastMessage && <p className="text-xs text-gray-500 truncate mt-0.5">{t.lastMessage}</p>}
+                <p className={`text-sm truncate ${t.unread > 0 ? "font-bold text-[#1A2340]" : "font-semibold text-gray-700"}`}>
+                  {t.professionalName ?? "Professional"}
+                </p>
+                {t.lastMessage && (
+                  <p className={`text-[11px] truncate mt-0.5 ${t.unread > 0 ? "text-gray-600 font-medium" : "text-gray-400"}`}>
+                    {t.lastMessage}
+                  </p>
+                )}
               </div>
-              <div className="flex flex-col items-end gap-1 shrink-0">
-                {t.lastAt && <span className="text-xs text-gray-400">{timeAgo(t.lastAt)}</span>}
+              <div className="flex flex-col items-end gap-1.5 shrink-0">
+                {t.lastAt && <span className="text-[11px] text-gray-400 tabular-nums">{timeAgo(t.lastAt)}</span>}
                 {t.unread > 0 && (
-                  <span className="text-[10px] font-bold bg-teal-500 text-white rounded-full w-5 h-5 flex items-center justify-center">{t.unread}</span>
+                  <span className="min-w-[20px] h-5 px-1.5 text-[10px] font-bold bg-teal-500 text-white rounded-full flex items-center justify-center">{t.unread}</span>
                 )}
               </div>
             </button>
@@ -1017,36 +1063,43 @@ function NotificationsTab() {
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-teal-600" /></div>;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5 pb-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-serif font-semibold text-gray-900">
-          Notifications {unreadCount > 0 && <span className="text-sm font-normal text-gray-400">({unreadCount} unread)</span>}
-        </h1>
+        <div>
+          <h1 className="text-[1.35rem] font-bold text-[#1A2340] leading-tight">Notifications</h1>
+          {unreadCount > 0
+            ? <p className="text-xs text-teal-600 font-semibold mt-0.5">{unreadCount} unread</p>
+            : <p className="text-xs text-gray-400 mt-0.5">You're all caught up</p>
+          }
+        </div>
         {unreadCount > 0 && (
-          <Button variant="ghost" size="sm" className="text-xs text-teal-600 gap-1" onClick={markAllRead}>
-            <Check size={13} /> Mark all read
+          <Button variant="ghost" size="sm" className="text-xs text-teal-600 gap-1.5 border border-teal-100 hover:bg-teal-50 rounded-xl" onClick={markAllRead}>
+            <Check size={12} /> Mark all read
           </Button>
         )}
       </div>
       {(!notifications || notifications.length === 0) ? (
-        <div className="text-center py-16 text-gray-400">
-          <Bell size={32} className="mx-auto mb-3 text-gray-300" />
-          <p className="font-medium text-gray-600">No notifications yet</p>
+        <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-12 text-center">
+          <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+            <Bell size={20} className="text-gray-300" />
+          </div>
+          <p className="text-sm font-semibold text-gray-600">No notifications yet</p>
+          <p className="text-xs text-gray-400 mt-1">You'll see updates about your sessions here.</p>
         </div>
       ) : (
-        <div className="bg-white border border-gray-100 rounded-2xl divide-y divide-gray-50 shadow-sm">
+        <div className="bg-white border border-gray-100 rounded-2xl divide-y divide-gray-50 shadow-sm overflow-hidden">
           {notifications.map((n) => (
             <div
               key={n.id}
-              className={`flex items-start gap-3 px-4 py-4 cursor-pointer ${!n.read ? "bg-teal-50/40" : ""}`}
+              className={`flex items-start gap-3 px-4 py-4 cursor-pointer transition-colors hover:bg-gray-50/50 ${!n.read ? "bg-teal-50/25" : ""}`}
               onClick={() => !n.read && markRead(n.id)}
             >
-              <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${n.read ? "bg-transparent" : "bg-teal-500"}`} />
+              <div className={`mt-1.5 shrink-0 rounded-full ${n.read ? "w-1.5 h-1.5 bg-gray-200" : "w-2.5 h-2.5 bg-teal-500 shadow-[0_0_0_3px_rgba(46,196,165,0.18)]"}`} />
               <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium ${n.read ? "text-gray-600" : "text-gray-900"}`}>{n.title}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{n.body}</p>
+                <p className={`text-sm leading-snug ${n.read ? "font-medium text-gray-500" : "font-bold text-[#1A2340]"}`}>{n.title}</p>
+                <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{n.body}</p>
               </div>
-              <span className="text-xs text-gray-400 shrink-0">{timeAgo(n.createdAt)}</span>
+              <span className="text-[11px] text-gray-400 shrink-0 tabular-nums mt-0.5">{timeAgo(n.createdAt)}</span>
             </div>
           ))}
         </div>
