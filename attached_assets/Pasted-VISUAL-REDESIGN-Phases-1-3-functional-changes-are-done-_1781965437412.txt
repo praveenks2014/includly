@@ -1,0 +1,133 @@
+VISUAL REDESIGN — Phases 1-3 functional changes are done. This restyles
+the screens; it must NOT change any behavior.
+
+═══════════════════════════════════════════════
+THE ONE RULE THAT MATTERS MOST
+═══════════════════════════════════════════════
+VISUAL AND LAYOUT ONLY. Do NOT change, touch, refactor, or "improve":
+- data queries or React Query keys
+- the childId scoping logic (parent-dashboard.tsx)
+- the SelectedChildProvider / useSelectedChild context
+- chat masking (and the new location-sharing message type from Phase 3)
+- payment / Razorpay handlers
+- OTP logic (trial OTP, engagement start OTP)
+- the commit price guard / negotiation logic (Phase 1)
+- the teacher-acceptance gate and pending_teacher_acceptance state
+  (Phase 2)
+- the trial location field (Phase 3)
+- consent gates
+- form submission logic, validation, the intake wheel pickers/selects
+- the tab-visibility-by-status logic (pending_start,
+  pending_teacher_acceptance disabled; ended read-only)
+- the lifecycle flows (notice, 15-day buyout, full buyout)
+- the matching engine
+- any state management
+
+If ANY behavior changes after the redesign, that is a bug to revert.
+The redesign changes how things LOOK, never how they WORK. After each
+screen, verify by clicking that every function still works identically.
+Same behavior, better looks — that is the entire standard.
+
+═══════════════════════════════════════════════
+AESTHETIC — Modern & Premium (fintech-quality)
+═══════════════════════════════════════════════
+- Clean, confident, polished — the visual quality of a well-funded
+  fintech app, applied to a special-needs care platform.
+- Generous whitespace. Clear visual hierarchy. Purposeful typography:
+  strong confident headings, highly readable body, a consistent type
+  scale across every screen.
+- A refined, restrained palette anchored on the existing Includly
+  teal/green. Consistent semantic colors used the same way everywhere:
+  success (green), warning (amber), info (blue/teal), error (red).
+- Thoughtful depth — subtle shadows, card elevation, gentle layering.
+  Premium-minimal, NOT flat-and-generic, NOT heavy.
+- ONE consistent component language across every screen: buttons,
+  cards, inputs, badges, status chips, empty states all share the same
+  design system. A button here looks like a button there.
+- Mobile-first — phone-primary app. Excellent on a narrow phone
+  viewport first, then clean on desktop.
+- Warm enough to reassure anxious parents of special-needs children;
+  premium and trustworthy enough to feel like a serious platform.
+  Confident not childish; warm not clinical-cold.
+- Use the existing Tailwind + shadcn/ui. NO new UI libraries. Establish
+  reusable styling (consistent card, button variants, spacing scale) so
+  the look is unified and future screens inherit it.
+
+═══════════════════════════════════════════════
+BUILD AS SEPARATE SUB-STEPS — verify each before the next
+═══════════════════════════════════════════════
+Build SUB-STEP 1 only, show me, I verify it still works, THEN proceed
+to 2, then 3, then 4. Do not build all at once.
+
+─── SUB-STEP 1 — PARENT HOME DASHBOARD ───
+The hub. The most important thing for THIS parent dominates: if they
+have an active engagement, surface its status as the hero (teacher
+name, status, next salary due, quick path to the workspace). If not,
+"Find a Shadow Teacher" is the hero. Wallet, referral, stats become
+clean secondary elements; move referral lower. Recommendations as a
+polished card grid/scroll. Empty states warm and actionable. Premium
+child switcher at top. Restyle only — all data, CTAs, links, and the
+child-switcher logic identical.
+
+─── SUB-STEP 2 — FIND A SHADOW TEACHER (match flow) ───
+A guided premium funnel where each step feels like forward progress.
+Request screen: child shown confidently, clear "what happens next", the
+₹500 CTA a confident step not a paywall. Candidate cards: teacher info
+scannable on a phone, fit/score shown elegantly (clean indicator, not a
+dominant number), verified badge prominent, Chat/Choose obvious. The
+negotiation offer thread reads clearly (who offered what, locked-price
+badge, and the Phase 1 "waiting for teacher to accept your offer"
+state). Chat with the location-sharing (Phase 3) styled cleanly. Trial
+request including the trial-location field (Phase 3) presented clearly.
+Trial OTP states reassuring. The NEW pending_teacher_acceptance state
+(Phase 2): style the parent "waiting for teacher to accept" panel and
+the teacher accept/decline card to look premium. Commit + scheduled
+start feels meaningful. Keep masking, payment, OTP, negotiation, the
+teacher-acceptance gate, and trial-location logic completely untouched.
+
+─── SUB-STEP 3 — ENGAGEMENT WORKSPACE + PROGRESS ───
+The child's and teacher's names anchor every screen. Overview surfaces
+recent log + goals-progress-at-a-glance + next salary date cleanly.
+Daily logs as a warm readable feed, not a clinical table — each log a
+clean card with goal chips, prompt levels, notes nicely presented.
+Goals + Trends as THE visual centerpiece — a parent sees their child's
+progress beautifully at a glance (clean charts, good semantic color,
+clear labels, elegant trend badges). This is the emotional payoff —
+make it rewarding to look at. Payments: clean history, next-payment
+prominent. Manage: the three exit options (notice / 15-day buyout /
+full buyout) with their plain-language explanations and real numbers,
+presented calmly and clearly. PRESERVE all the status-based states
+(pending_start / pending_teacher_acceptance disabled tabs, ended
+read-only, the wind-down banners) — restyle them premium but keep the
+logic exactly. Keep all logging, goal, trends, payment, and lifecycle
+DATA logic untouched.
+
+─── SUB-STEP 4 — INTAKE FORMS POLISH ───
+Apply the premium look to the intake forms (3-step parent onboarding,
+6-step add-child wizard). The wheel pickers, selects, chips, and ALL
+field logic, validation, and data-preservation logic stay identical —
+style only the wizard chrome: a premium multi-step progress indicator,
+clean step transitions, consistent spacing, premium card container,
+warm confident step headings. The chips/dropdowns/wheel-picker
+bottom-sheets styled to match the design system. Do NOT change any
+field, control, validation, the wheel pickers, or the data-preservation
+logic — only the visual wrapper.
+
+═══════════════════════════════════════════════
+VERIFICATION PER SUB-STEP
+═══════════════════════════════════════════════
+For each, show me the redesigned screen AND list what you tested to
+confirm behavior is unchanged:
+- Sub-step 1: child switcher switches correctly; CTAs navigate; both
+  active-engagement and no-engagement states render.
+- Sub-step 2: making an offer works; the "waiting for teacher to
+  accept" block shows when an offer is pending; paying works (test
+  mode); OTP displays; chat masking + location sharing intact; trial
+  location field works; the teacher accept/decline card works.
+- Sub-step 3: posting a log works; goals add/toggle; trends render;
+  switching children scopes correctly; the disabled/read-only tab
+  states still apply; all three exit options show correct numbers.
+- Sub-step 4: the wizard completes and saves a child; wheel pickers
+  work; existing-child data preservation still works.
+
+Build SUB-STEP 1 only. Stop and show me before sub-step 2.

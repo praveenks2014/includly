@@ -121,62 +121,60 @@ function ProfCard({
   onChat?: () => void;
 }) {
   return (
-    <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-3">
-      <div className="flex items-start gap-3">
-        <div className="w-12 h-12 rounded-xl bg-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm shrink-0">
+    <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-teal-100 transition-all flex flex-col gap-3">
+      <div className="flex items-start gap-2.5">
+        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-teal-100 to-teal-50 flex items-center justify-center text-teal-700 font-bold text-sm shrink-0 border border-teal-100">
           {initials(p.fullName)}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900 truncate">{p.fullName ?? "Professional"}</p>
-          <div className="flex flex-wrap gap-1 mt-1">
-            <span className="text-xs px-2 py-0.5 bg-teal-50 text-teal-700 rounded-full border border-teal-100">
-              {getSpecialtyLabel(p.specialty)}
-            </span>
-          </div>
+          <p className="font-bold text-[#1A2340] text-sm truncate leading-tight">{p.fullName ?? "Professional"}</p>
+          <span className="inline-block text-[11px] px-2 py-0.5 bg-teal-50 text-teal-700 rounded-full border border-teal-100 mt-1">
+            {getSpecialtyLabel(p.specialty)}
+          </span>
         </div>
         {p.isVerified && (
-          <Badge className="shrink-0 text-xs bg-green-50 text-green-700 border-green-200 hover:bg-green-50">
-            <CheckCircle2 size={10} className="mr-1" />Verified
-          </Badge>
+          <div className="shrink-0 w-5 h-5 rounded-full bg-green-50 border border-green-200 flex items-center justify-center" title="Verified">
+            <CheckCircle2 size={11} className="text-green-600" />
+          </div>
         )}
       </div>
 
-      <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
-        {p.city && <span className="flex items-center gap-1"><MapPin size={11} />{p.city}</span>}
+      <div className="flex items-center gap-2.5 text-[11px] text-gray-400 flex-wrap">
+        {p.city && <span className="flex items-center gap-1"><MapPin size={10} />{p.city}</span>}
         {p.averageRating != null && p.totalRatings > 0 && (
           <span className="flex items-center gap-1">
-            <Star size={11} className="fill-amber-400 text-amber-400" />
-            {p.averageRating.toFixed(1)} ({p.totalRatings})
+            <Star size={10} className="fill-amber-400 text-amber-400" />
+            {p.averageRating.toFixed(1)}
           </span>
         )}
         {p.pricingMinINR != null && (
-          <span className="ml-auto font-semibold text-gray-800">
-            {p.pricingMinINR === 0 ? "Free intro" : `₹${p.pricingMinINR}/session`}
+          <span className="ml-auto font-bold text-[#1A2340] text-xs">
+            {p.pricingMinINR === 0 ? "Free intro" : `₹${p.pricingMinINR}`}
           </span>
         )}
       </div>
 
       {(p.phone || p.email) && (
-        <div className="bg-teal-50 rounded-xl p-3 space-y-1 text-xs">
-          {p.phone && <p className="flex items-center gap-2 text-teal-800"><Phone size={12} />{p.phone}</p>}
-          {p.email && <p className="flex items-center gap-2 text-teal-800"><Mail size={12} />{p.email}</p>}
+        <div className="bg-gray-50 rounded-xl p-2.5 space-y-1 text-[11px] border border-gray-100">
+          {p.phone && <p className="flex items-center gap-2 text-gray-600"><Phone size={11} className="text-teal-500" />{p.phone}</p>}
+          {p.email && <p className="flex items-center gap-2 text-gray-600"><Mail size={11} className="text-teal-500" />{p.email}</p>}
         </div>
       )}
 
-      <div className="flex gap-2 mt-auto pt-1">
+      <div className="flex gap-2 mt-auto">
         <Link href={`/professionals/${p.id}`} className="flex-1">
-          <Button variant="outline" size="sm" className="w-full text-xs border-gray-200">
+          <Button variant="outline" size="sm" className="w-full text-xs border-gray-200 rounded-xl font-semibold">
             View Profile
           </Button>
         </Link>
         {onChat && (
-          <Button size="sm" variant="ghost" className="text-xs gap-1 text-teal-600 border border-teal-100 hover:bg-teal-50" onClick={onChat}>
-            <MessageCircle size={13} /> Message
+          <Button size="sm" variant="ghost" className="text-xs gap-1 text-teal-600 border border-teal-100 hover:bg-teal-50 rounded-xl" onClick={onChat}>
+            <MessageCircle size={12} />
           </Button>
         )}
         {onReview && !hasReviewed && (
-          <Button size="sm" variant="ghost" className="text-xs gap-1 text-teal-600" onClick={onReview}>
-            <Star size={13} /> Review
+          <Button size="sm" variant="ghost" className="text-xs gap-1 text-amber-500 border border-amber-100 hover:bg-amber-50 rounded-xl" onClick={onReview}>
+            <Star size={12} />
           </Button>
         )}
       </div>
@@ -188,66 +186,71 @@ function ProfCard({
 function SessionCard({ s, compact = false }: { s: SessionBookingWithDetails; compact?: boolean }) {
   const isPast = ["completed", "cancelled_by_parent", "cancelled_by_professional", "no_show"].includes(s.status);
   const statusColor: Record<string, string> = {
-    confirmed: "bg-green-100 text-green-700",
-    pending_payment: "bg-yellow-100 text-yellow-700",
-    completed: "bg-gray-100 text-gray-600",
-    cancelled_by_parent: "bg-red-100 text-red-600",
-    cancelled_by_professional: "bg-red-100 text-red-600",
-    no_show: "bg-red-100 text-red-600",
+    confirmed: "bg-green-50 text-green-700 border-green-200",
+    pending_payment: "bg-amber-50 text-amber-700 border-amber-200",
+    completed: "bg-gray-100 text-gray-500 border-gray-200",
+    cancelled_by_parent: "bg-red-50 text-red-600 border-red-200",
+    cancelled_by_professional: "bg-red-50 text-red-600 border-red-200",
+    no_show: "bg-red-50 text-red-600 border-red-200",
   };
 
   return (
-    <div className={`bg-white border border-gray-100 rounded-xl p-4 ${compact ? "" : "shadow-sm"}`}>
+    <div className={`bg-white border border-gray-100 rounded-2xl p-4 ${compact ? "" : "shadow-sm"}`}>
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-semibold text-gray-900 text-sm">{s.professionalName ?? "Professional"}</p>
-          {s.professionalSpecialty && (
-            <p className="text-xs text-gray-500 mt-0.5">{getSpecialtyLabel(s.professionalSpecialty)}</p>
-          )}
-          <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
-            <span className="flex items-center gap-1"><CalendarCheck size={11} />{fmtDate(s.bookedDate)}</span>
-            <span className="flex items-center gap-1"><Clock size={11} />{fmtTime(s.startTime)}</span>
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center shrink-0">
+            <CalendarCheck size={15} className="text-violet-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-[#1A2340] text-sm truncate">{s.professionalName ?? "Professional"}</p>
+            {s.professionalSpecialty && (
+              <p className="text-[11px] text-gray-400 mt-0.5">{getSpecialtyLabel(s.professionalSpecialty)}</p>
+            )}
+            <div className="flex items-center gap-3 mt-1.5 text-[11px] text-gray-400">
+              <span className="flex items-center gap-1"><CalendarCheck size={10} />{fmtDate(s.bookedDate)}</span>
+              <span className="flex items-center gap-1"><Clock size={10} />{fmtTime(s.startTime)}</span>
+            </div>
           </div>
         </div>
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${statusColor[s.status] ?? "bg-gray-100 text-gray-600"}`}>
+        <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold shrink-0 border ${statusColor[s.status] ?? "bg-gray-100 text-gray-500 border-gray-200"}`}>
           {s.status.replace(/_/g, " ")}
         </span>
       </div>
       {!isPast && s.status === "confirmed" && (
         <div className="mt-3 space-y-3">
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="gap-1 text-xs border-gray-200">
+            <Button size="sm" variant="outline" className="gap-1 text-xs border-gray-200 rounded-xl">
               <Video size={12} /> Join online
             </Button>
             {s.professionalCity && (
-              <Button size="sm" variant="ghost" className="gap-1 text-xs text-gray-600">
-                <Navigation size={12} /> Get directions
+              <Button size="sm" variant="ghost" className="gap-1 text-xs text-gray-500 rounded-xl">
+                <Navigation size={12} /> Directions
               </Button>
             )}
           </div>
           {((s as any).startOtp || (s as any).endOtp) && (
-            <div className="bg-teal-50 border border-teal-100 rounded-xl p-3 space-y-2">
-              <p className="text-[11px] font-semibold text-teal-700 uppercase tracking-wide">Session Codes — show to your specialist</p>
+            <div className="bg-gradient-to-br from-teal-50 to-emerald-50 border border-teal-100 rounded-2xl p-4 space-y-2.5">
+              <p className="text-[10px] font-bold text-teal-700 uppercase tracking-[0.12em]">Session Codes — show to your specialist</p>
               <div className="grid grid-cols-2 gap-2">
                 {(s as any).startOtp && (
-                  <div className="bg-white rounded-lg p-2.5 border border-teal-100 text-center">
-                    <p className="text-[10px] text-teal-500 font-medium mb-0.5">START CODE</p>
-                    <p className="text-xl font-bold tracking-widest text-[#1A2340] font-mono">{(s as any).startOtp}</p>
+                  <div className="bg-white rounded-xl p-3 border border-teal-100 text-center shadow-sm">
+                    <p className="text-[10px] text-teal-500 font-bold uppercase tracking-wide mb-1">Start</p>
+                    <p className="text-2xl font-bold tracking-[0.2em] text-[#1A2340] font-mono">{(s as any).startOtp}</p>
                   </div>
                 )}
                 {(s as any).endOtp && (
-                  <div className="bg-white rounded-lg p-2.5 border border-teal-100 text-center">
-                    <p className="text-[10px] text-teal-500 font-medium mb-0.5">FINISH CODE</p>
-                    <p className="text-xl font-bold tracking-widest text-[#1A2340] font-mono">{(s as any).endOtp}</p>
+                  <div className="bg-white rounded-xl p-3 border border-teal-100 text-center shadow-sm">
+                    <p className="text-[10px] text-teal-500 font-bold uppercase tracking-wide mb-1">Finish</p>
+                    <p className="text-2xl font-bold tracking-[0.2em] text-[#1A2340] font-mono">{(s as any).endOtp}</p>
                   </div>
                 )}
               </div>
-              <p className="text-[10px] text-teal-500">Give the start code when session begins. Give the finish code when it ends.</p>
+              <p className="text-[10px] text-teal-500/80">Start code at the beginning · Finish code at the end.</p>
             </div>
           )}
         </div>
       )}
-      {s.notes && <p className="mt-2 text-xs text-gray-400 italic">{s.notes}</p>}
+      {s.notes && <p className="mt-2 text-[11px] text-gray-400 italic">{s.notes}</p>}
     </div>
   );
 }
@@ -424,42 +427,41 @@ function ProgressTimeline() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-          <TrendingUp size={16} className="text-teal-600" />
-          Your Child's Progress
-        </h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-bold text-[#1A2340] text-sm">Progress Notes</h2>
         {notes && notes.length > 0 && (
-          <span className="text-xs text-gray-400">{notes.length} update{notes.length !== 1 ? "s" : ""}</span>
+          <span className="text-[11px] text-gray-400 font-medium">{notes.length} update{notes.length !== 1 ? "s" : ""}</span>
         )}
       </div>
       {!notes || notes.length === 0 ? (
         <div className="bg-white border border-dashed border-teal-200 rounded-2xl p-6 text-center">
-          <Sparkles size={28} className="mx-auto mb-2 text-teal-300" />
-          <p className="text-sm font-medium text-gray-600">Progress notes will appear here</p>
+          <div className="w-10 h-10 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+            <Sparkles size={18} className="text-teal-400" />
+          </div>
+          <p className="text-sm font-semibold text-gray-700">Progress notes will appear here</p>
           <p className="text-xs text-gray-400 mt-1">After each session, your specialist leaves a note on your child's progress.</p>
         </div>
       ) : (
         <div className="relative">
-          <div className="absolute left-[19px] top-0 bottom-0 w-px bg-teal-100" aria-hidden />
+          <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-gradient-to-b from-teal-200 to-teal-50" aria-hidden />
           <div className="space-y-3">
             {notes.slice(0, 5).map((note) => (
               <div key={note.bookingId} className="flex gap-4">
-                <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center shrink-0 z-10 border-2 border-white shadow-sm">
-                  <TrendingUp size={14} className="text-teal-600" />
+                <div className="w-9 h-9 rounded-2xl bg-teal-100 flex items-center justify-center shrink-0 z-10 border-2 border-white shadow-sm mt-0.5">
+                  <TrendingUp size={13} className="text-teal-600" />
                 </div>
                 <div className="flex-1 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <p className="text-xs font-medium text-teal-700">{note.professionalName ?? "Your specialist"}</p>
-                    <time className="text-xs text-gray-400 shrink-0">
+                    <p className="text-xs font-bold text-teal-700">{note.professionalName ?? "Your specialist"}</p>
+                    <time className="text-[11px] text-gray-400 shrink-0">
                       {new Date(note.noteCreatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                     </time>
                   </div>
                   {note.parentSummary && <p className="text-sm text-gray-700 leading-relaxed">{note.parentSummary}</p>}
                   {note.progressMarkers && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
+                    <div className="mt-2.5 flex flex-wrap gap-1.5">
                       {note.progressMarkers.split(",").filter(Boolean).map((m) => (
-                        <span key={m.trim()} className="text-[11px] bg-teal-50 text-teal-700 border border-teal-100 rounded-full px-2 py-0.5">{m.trim()}</span>
+                        <span key={m.trim()} className="text-[11px] bg-teal-50 text-teal-700 border border-teal-100 rounded-full px-2.5 py-0.5 font-medium">{m.trim()}</span>
                       ))}
                     </div>
                   )}
@@ -601,134 +603,157 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
     .slice(0, 5);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-serif font-semibold text-gray-900">{greeting()}, {parentName}!</h1>
-        <p className="text-gray-500 text-sm mt-1">Here's what's happening on your Includly dashboard.</p>
+    <div className="space-y-5 pb-4">
+
+      {/* ── Hero header + Wallet ─────────────────────────────────────── */}
+      <div className="rounded-3xl bg-gradient-to-br from-[#1A2340] via-[#1e2d55] to-[#243070] p-6 shadow-[0_8px_32px_rgba(26,35,64,0.22)] overflow-hidden relative">
+        <div className="absolute top-0 right-0 w-48 h-48 rounded-full bg-[#2EC4A5] opacity-[0.06] -translate-y-1/2 translate-x-1/4 pointer-events-none" />
+        <div className="relative">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#2EC4A5] mb-2">Includly</p>
+          <h1 className="text-[1.6rem] font-bold text-white leading-tight">{greeting()}, {parentName}!</h1>
+          <p className="text-sm text-white/45 mt-1">Your family's support hub.</p>
+          {walletData !== undefined && (
+            <div className="mt-5 flex items-center justify-between bg-white/[0.08] rounded-2xl px-4 py-3.5 border border-white/[0.07]">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#2EC4A5]">Wallet Balance</p>
+                <p className="text-2xl font-bold text-white mt-0.5">₹{walletData.balanceInr}</p>
+              </div>
+              <div className="w-10 h-10 rounded-2xl bg-[#2EC4A5]/20 flex items-center justify-center">
+                <Wallet size={18} className="text-[#2EC4A5]" />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Wallet */}
-      {walletData !== undefined && (
-        <div className="bg-gradient-to-r from-[#1A2340] to-[#2a3660] rounded-2xl p-5 text-white shadow-[0_4px_24px_rgba(26,35,64,0.2)]">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-white/60 font-medium uppercase tracking-widest mb-1">Includly Wallet</p>
-              <p className="text-3xl font-bold font-serif">₹{walletData.balanceInr}</p>
-              <p className="text-xs text-white/50 mt-1">Available balance</p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
-              <Wallet size={22} className="text-[#2EC4A5]" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      <ReferralCard />
-
-      {/* Quick stats */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* ── Quick stats ──────────────────────────────────────────────── */}
+      <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Sessions Booked", value: (sessions ?? []).length, icon: <CalendarCheck size={16} className="text-violet-600" />, bg: "bg-violet-50" },
-          { label: "Upcoming", value: upcoming.length, icon: <Clock size={16} className="text-orange-500" />, bg: "bg-orange-50" },
-          { label: "Professionals", value: dashData?.totalUnlocks ?? 0, icon: <User size={16} className="text-teal-600" />, bg: "bg-teal-50" },
+          { label: "Sessions", value: (sessions ?? []).length, icon: <CalendarCheck size={14} className="text-violet-500" />, bg: "bg-violet-50", border: "border-violet-100" },
+          { label: "Upcoming", value: upcoming.length, icon: <Clock size={14} className="text-amber-500" />, bg: "bg-amber-50", border: "border-amber-100" },
+          { label: "Connected", value: dashData?.totalUnlocks ?? 0, icon: <User size={14} className="text-teal-600" />, bg: "bg-teal-50", border: "border-teal-100" },
         ].map((stat) => (
-          <div key={stat.label} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-            <div className={`w-9 h-9 ${stat.bg} rounded-xl flex items-center justify-center mb-3`}>{stat.icon}</div>
-            <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{stat.label}</p>
+          <div key={stat.label} className="bg-white border border-gray-100 rounded-2xl p-3.5 shadow-sm text-center">
+            <div className={`w-8 h-8 ${stat.bg} border ${stat.border} rounded-xl flex items-center justify-center mx-auto mb-2`}>{stat.icon}</div>
+            <p className="text-[1.35rem] font-bold text-[#1A2340] leading-none">{stat.value}</p>
+            <p className="text-[10px] text-gray-400 mt-1 font-medium">{stat.label}</p>
           </div>
         ))}
       </div>
 
-      {/* Child profile quick-edit */}
+      {/* ── Child profile quick-edit ─────────────────────────────────── */}
       {primaryChild && (
         <Link href={`/children/${primaryChild.id}/edit`}>
-          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center gap-3 hover:shadow-md transition-shadow cursor-pointer">
-            <div className="w-9 h-9 bg-violet-50 rounded-xl flex items-center justify-center shrink-0">
-              <User size={16} className="text-violet-500" />
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center gap-3 hover:border-violet-200 hover:shadow-md transition-all cursor-pointer">
+            <div className="w-10 h-10 bg-gradient-to-br from-violet-100 to-violet-50 border border-violet-100 rounded-xl flex items-center justify-center shrink-0">
+              <User size={15} className="text-violet-500" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900">{primaryChild.name}'s profile</p>
-              <p className="text-xs text-gray-400 mt-0.5">Update conditions, goals, availability & budget</p>
+              <p className="text-sm font-bold text-[#1A2340]">{primaryChild.name}'s Profile</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">Update conditions, goals & availability</p>
             </div>
-            <span className="text-xs text-teal-600 font-semibold whitespace-nowrap">Edit →</span>
+            <div className="w-7 h-7 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
+              <ArrowRight size={13} className="text-gray-400" />
+            </div>
           </div>
         </Link>
       )}
 
-      {/* Shadow Teacher Matching */}
+      {/* ── Shadow Teacher CTA ───────────────────────────────────────── */}
       <Link href="/shadow-teacher">
-        <div className="bg-white border border-teal-100 rounded-2xl p-5 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow cursor-pointer">
-          <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center shrink-0">
-            <User size={22} className="text-teal-600" />
+        <div className="bg-gradient-to-r from-[#2EC4A5] to-[#26a88d] rounded-2xl p-5 shadow-[0_4px_18px_rgba(46,196,165,0.28)] flex items-center gap-4 hover:shadow-[0_6px_24px_rgba(46,196,165,0.38)] transition-shadow cursor-pointer">
+          <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
+            <Sparkles size={20} className="text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 text-sm">Request a Shadow Teacher</p>
-            <p className="text-xs text-gray-500 mt-0.5">Get matched with a verified shadow teacher for your child's classroom support.</p>
+            <p className="font-bold text-white text-sm">Request a Shadow Teacher</p>
+            <p className="text-xs text-white/70 mt-0.5">Get matched with a verified teacher for your child.</p>
           </div>
-          <ArrowRight size={16} className="text-teal-500 shrink-0" />
+          <div className="w-8 h-8 bg-white/15 rounded-xl flex items-center justify-center shrink-0">
+            <ArrowRight size={14} className="text-white" />
+          </div>
         </div>
       </Link>
 
-      {/* Recommendations */}
+      {/* ── Upcoming sessions ────────────────────────────────────────── */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900">{city ? `Professionals near ${city}` : "Recommended Professionals"}</h2>
-          <button onClick={() => onTabChange("find")} className="text-xs text-teal-600 flex items-center gap-1 hover:underline">
-            See all <ArrowRight size={13} />
+          <h2 className="font-bold text-[#1A2340] text-sm">Upcoming Sessions</h2>
+          <button onClick={() => onTabChange("bookings")} className="text-xs text-teal-600 font-semibold hover:text-teal-700 flex items-center gap-0.5">
+            View all <ArrowRight size={11} />
           </button>
         </div>
-        {recommendations.length === 0 ? (
-          <div className="bg-white border border-gray-100 rounded-2xl p-6 text-center text-sm text-gray-400">
-            {city ? "No professionals found nearby yet — " : "Browse all "}<button onClick={() => onTabChange("find")} className="text-teal-600 underline">search all</button>.
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4">
-            {recommendations.map((p) => <ProfCard key={p.id} p={p} />)}
-          </div>
-        )}
-      </div>
-
-      {/* Upcoming sessions */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900">Upcoming Sessions</h2>
-          <button onClick={() => onTabChange("bookings")} className="text-xs text-teal-600 hover:underline">View all</button>
-        </div>
         {upcoming.length === 0 ? (
-          <div className="bg-white border border-gray-100 rounded-2xl p-6 text-center text-sm text-gray-400">
-            No upcoming sessions. <button onClick={() => onTabChange("find")} className="text-teal-600 underline">Find a professional</button> to book.
+          <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-6 text-center">
+            <div className="w-10 h-10 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <CalendarCheck size={18} className="text-gray-300" />
+            </div>
+            <p className="text-sm font-semibold text-gray-600">No upcoming sessions</p>
+            <button onClick={() => onTabChange("find")} className="text-xs text-teal-600 font-semibold underline mt-1">Find a professional</button>
           </div>
         ) : (
           <div className="space-y-3">{upcoming.map((s) => <SessionCard key={s.id} s={s} />)}</div>
         )}
       </div>
 
+      {/* ── Recommendations ──────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-bold text-[#1A2340] text-sm">{city ? `Near ${city}` : "Recommended Professionals"}</h2>
+          <button onClick={() => onTabChange("find")} className="text-xs text-teal-600 font-semibold hover:text-teal-700 flex items-center gap-0.5">
+            See all <ArrowRight size={11} />
+          </button>
+        </div>
+        {recommendations.length === 0 ? (
+          <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-6 text-center">
+            <div className="w-10 h-10 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <Search size={17} className="text-teal-300" />
+            </div>
+            <p className="text-sm font-semibold text-gray-600">{city ? "No professionals nearby yet" : "Browse professionals"}</p>
+            <button onClick={() => onTabChange("find")} className="text-xs text-teal-600 font-semibold underline mt-1">Search all</button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {recommendations.map((p) => <ProfCard key={p.id} p={p} />)}
+          </div>
+        )}
+      </div>
+
+      {/* ── Progress notes ───────────────────────────────────────────── */}
       <ProgressTimeline />
 
+      {/* ── Recent activity ──────────────────────────────────────────── */}
       {activity.length > 0 && (
         <div>
-          <h2 className="font-semibold text-gray-900 mb-3">Recent Activity</h2>
-          <div className="bg-white border border-gray-100 rounded-2xl divide-y divide-gray-50 shadow-sm">
+          <h2 className="font-bold text-[#1A2340] text-sm mb-3">Recent Activity</h2>
+          <div className="bg-white border border-gray-100 rounded-2xl divide-y divide-gray-50 shadow-sm overflow-hidden">
             {activity.map((a) => (
-              <div key={a.id} className="flex items-center gap-3 px-4 py-3">
-                <div className="w-7 h-7 bg-gray-50 rounded-full flex items-center justify-center shrink-0">{a.icon}</div>
-                <p className="text-sm text-gray-700 flex-1">{a.text}</p>
-                <span className="text-xs text-gray-400 shrink-0">{timeAgo(a.time)}</span>
+              <div key={a.id} className="flex items-center gap-3 px-4 py-3.5">
+                <div className="w-8 h-8 bg-gray-50 border border-gray-100 rounded-xl flex items-center justify-center shrink-0">{a.icon}</div>
+                <p className="text-sm text-gray-700 flex-1 leading-snug">{a.text}</p>
+                <span className="text-[11px] text-gray-400 shrink-0 tabular-nums">{timeAgo(a.time)}</span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      <div className="bg-gradient-to-r from-teal-600 to-teal-500 rounded-2xl p-5 text-white flex items-center justify-between gap-4">
-        <div>
-          <div className="text-xs font-medium opacity-80 mb-1">Featured Resource</div>
-          <h3 className="font-semibold">How to choose the right shadow teacher for your child</h3>
-          <p className="text-xs opacity-80 mt-1 max-w-xs">A parent's guide to evaluating qualifications, communication style, and approach.</p>
+      {/* ── Referral ─────────────────────────────────────────────────── */}
+      <ReferralCard />
+
+      {/* ── Featured resource ────────────────────────────────────────── */}
+      <div className="bg-gradient-to-br from-[#2EC4A5] to-[#1a9a82] rounded-2xl p-5 text-white flex items-center gap-5 shadow-[0_4px_16px_rgba(46,196,165,0.22)]">
+        <div className="flex-1 min-w-0">
+          <div className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest bg-white/15 rounded-full px-2.5 py-1 mb-2.5">
+            <BookOpen size={10} /> Resource
+          </div>
+          <h3 className="font-bold text-[15px] leading-snug">How to choose the right shadow teacher</h3>
+          <p className="text-xs text-white/65 mt-1.5 leading-relaxed">A parent's guide to qualifications, communication style, and approach.</p>
         </div>
-        <Link href="/support">
-          <Button size="sm" className="bg-white text-teal-700 hover:bg-gray-50 shrink-0 gap-1">Read <ArrowRight size={13} /></Button>
+        <Link href="/support" className="shrink-0">
+          <Button size="sm" className="bg-white text-[#1a9a82] hover:bg-teal-50 gap-1 font-bold shadow-sm">
+            Read <ArrowRight size={12} />
+          </Button>
         </Link>
       </div>
     </div>
