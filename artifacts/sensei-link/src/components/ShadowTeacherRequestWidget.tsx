@@ -299,6 +299,15 @@ function CandidateCard({
   const p = candidate.profile;
   const displayName = committed && p.fullName ? p.fullName : (p.firstName ?? `Teacher #${candidate.rank}`);
 
+  // Share the same query key as OfferSection — React Query deduplicates, no extra request.
+  const { data: cardOffers = [] } = useQuery<NegotiationOffer[]>({
+    queryKey: ["offers", matchId, candidate.id],
+    queryFn: () => fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/offers`).then(r => r.json() as Promise<NegotiationOffer[]>),
+    enabled: myUserId > 0 && !committed && !trialMode && !!matchStatus && ["shortlisted", "trial_done"].includes(matchStatus ?? ""),
+    refetchInterval: 15_000,
+  });
+  const myPendingOffer = cardOffers.find(o => o.status === "pending" && o.raisedByUserId === myUserId);
+
   return (
     <>
       <div className={`bg-white border rounded-2xl p-4 shadow-sm space-y-3 ${selected ? "border-[#2EC4A5]" : "border-gray-100"}`}>
@@ -384,14 +393,20 @@ function CandidateCard({
             Chat
           </Button>
           {!committed && !trialMode && (
-            <Button
-              size="sm"
-              className="gap-1 text-xs flex-1 bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl"
-              onClick={() => onChoose(candidate.professionalId)}
-            >
-              <ChevronRight size={12} />
-              Choose
-            </Button>
+            myPendingOffer ? (
+              <div className="flex-1 rounded-xl border border-amber-200 bg-amber-50 px-2 py-2 text-center text-[10px] font-medium text-amber-800 leading-tight">
+                Waiting for {displayName} to accept your offer of ₹{myPendingOffer.amountInr.toLocaleString("en-IN")} before you can commit
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                className="gap-1 text-xs flex-1 bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl"
+                onClick={() => onChoose(candidate.professionalId)}
+              >
+                <ChevronRight size={12} />
+                Choose
+              </Button>
+            )
           )}
         </div>
         {!committed && !trialMode && onRequestTrial && (

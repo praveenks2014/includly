@@ -893,6 +893,30 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
     return;
   }
 
+  // Block commit while any offer for this match+candidate is still pending —
+  // the teacher must accept (or the parent must withdraw) before committing.
+  const [pendingOffer] = await db
+    .select({ amountInr: negotiationOffersTable.amountInr })
+    .from(negotiationOffersTable)
+    .where(
+      and(
+        eq(negotiationOffersTable.matchId, matchId),
+        eq(negotiationOffersTable.candidateId, candidate.id),
+        eq(negotiationOffersTable.status, "pending"),
+      ),
+    )
+    .limit(1);
+
+  if (pendingOffer) {
+    res.status(409).json({
+      error: "commitment_blocked_pending_offer",
+      message: `Waiting for ${teacher.fullName ?? "the teacher"} to accept your offer of ₹${pendingOffer.amountInr.toLocaleString("en-IN")} before you can commit.`,
+      pendingAmountInr: pendingOffer.amountInr,
+      teacherName: teacher.fullName,
+    });
+    return;
+  }
+
   // Use accepted negotiated price if one exists, else fall back to teacher's listed minimum.
   const [acceptedOffer] = await db
     .select({ amountInr: negotiationOffersTable.amountInr })
