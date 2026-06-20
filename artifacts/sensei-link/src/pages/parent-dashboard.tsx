@@ -1131,11 +1131,13 @@ function ShadowTeacherTab() {
   const [logExtraSupport, setLogExtraSupport] = useState("");
   const [logMood, setLogMood] = useState("");
   const [postingLog, setPostingLog] = useState(false);
-  const [lifecycleType, setLifecycleType] = useState<"stop" | "pause" | "buyout" | "">("");
+  const [lifecycleType, setLifecycleType] = useState<"stop" | "pause" | "buyout" | "full_buyout" | "">("");
   const [lifecycleNotes, setLifecycleNotes] = useState("");
   const [pauseReason, setPauseReason] = useState("");
   const [postingLifecycle, setPostingLifecycle] = useState(false);
   const [buyoutPaid, setBuyoutPaid] = useState(false);
+  const [fullBuyoutPaid, setFullBuyoutPaid] = useState(false);
+  const [fullBuyoutDate, setFullBuyoutDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [payingMonth, setPayingMonth] = useState("");
   const [payingInProgress, setPayingInProgress] = useState(false);
   const [stTab, setStTab] = useState<"overview" | "logs" | "goals" | "trends" | "payments" | "lifecycle">("overview");
@@ -1323,27 +1325,30 @@ function ShadowTeacherTab() {
         body: JSON.stringify(
           lifecycleType === "buyout"
             ? { type: "stop", method: "buyout", reason: lifecycleNotes || undefined }
-            : lifecycleType === "pause"
-              ? { type: "change", reason: lifecycleNotes || undefined }
-              : { type: "stop", method: "notice", reason: lifecycleNotes || undefined }
+            : lifecycleType === "full_buyout"
+              ? { type: "stop", method: "full_buyout", endDate: fullBuyoutDate, reason: lifecycleNotes || undefined }
+              : lifecycleType === "pause"
+                ? { type: "change", reason: lifecycleNotes || undefined }
+                : { type: "stop", method: "notice", reason: lifecycleNotes || undefined }
         ),
       });
       if (!resp.ok) { const e = await resp.json() as { error?: string }; throw new Error(e.error ?? "Failed to submit"); }
       const data = await resp.json() as { id: number; buyoutOrderId?: string; buyoutFeeInr?: number; keyId?: string };
 
-      if (lifecycleType === "buyout" && data.buyoutOrderId && data.buyoutFeeInr && data.keyId) {
+      if ((lifecycleType === "buyout" || lifecycleType === "full_buyout") && data.buyoutOrderId && data.buyoutFeeInr && data.keyId) {
         const script = document.createElement("script");
         script.src = "https://checkout.razorpay.com/v1/checkout.js";
         document.body.appendChild(script);
         await new Promise<void>(resolve => { script.onload = () => resolve(); });
 
+        const capturedType = lifecycleType;
         await new Promise<void>((resolve, reject) => {
           const rzp = new (window as unknown as { Razorpay: new (opts: unknown) => { open: () => void } }).Razorpay({
             key: data.keyId,
             amount: data.buyoutFeeInr! * 100,
             currency: "INR",
             name: "Includly",
-            description: "Early Exit Buyout Fee",
+            description: capturedType === "full_buyout" ? "Full Buyout Fee" : "Early Exit Buyout Fee",
             order_id: data.buyoutOrderId,
             handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
               try {
@@ -1357,8 +1362,13 @@ function ShadowTeacherTab() {
                   }),
                 });
                 if (!vResp.ok) { const e = await vResp.json() as { error?: string }; throw new Error(e.error ?? "Verification failed"); }
-                setBuyoutPaid(true);
-                toast({ title: "Buyout payment confirmed ✓" });
+                if (capturedType === "full_buyout") {
+                  setFullBuyoutPaid(true);
+                  toast({ title: "Full buyout payment confirmed ✓" });
+                } else {
+                  setBuyoutPaid(true);
+                  toast({ title: "Buyout payment confirmed ✓" });
+                }
                 resolve();
               } catch (e) { reject(e); }
             },
@@ -1371,7 +1381,7 @@ function ShadowTeacherTab() {
 
       queryClient.invalidateQueries({ queryKey: ["parent-engagements"] });
       setLifecycleType(""); setLifecycleNotes("");
-      if (lifecycleType !== "buyout") toast({ title: "Request submitted ✓" });
+      if (lifecycleType !== "buyout" && lifecycleType !== "full_buyout") toast({ title: "Request submitted ✓" });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed";
       if (msg !== "dismissed") toast({ title: msg, variant: "destructive" });
@@ -1485,7 +1495,7 @@ function ShadowTeacherTab() {
           <p className="text-sm text-gray-500">
             {active.endDate
               ? <>Ended on <span className="font-semibold">{new Date(active.endDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
-                {active.endedReason === "buyout" ? " via early exit." : active.endedReason === "stop" ? " after the notice period." : "."}</>
+                {active.endedReason === "buyout" ? " via early exit." : active.endedReason === "full_buyout" ? " via full buyout." : active.endedReason === "stop" ? " after the notice period." : "."}</>
               : "This engagement is no longer active."}
             {" "}You can still view logs, goals, and payment history above.
           </p>
@@ -1733,10 +1743,12 @@ function ShadowTeacherTab() {
 
       {visibleStTab === "lifecycle" && (
         <div className="space-y-4">
-          {/* Buyout wind-down banner */}
-          {active.status === "notice_period" && active.endedReason === "buyout" && (
+          {/* Buyout / Full-buyout wind-down banner */}
+          {active.status === "notice_period" && ["buyout", "full_buyout"].includes(active.endedReason ?? "") && (
             <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-1">
-              <p className="text-sm font-bold text-amber-900">Early exit confirmed</p>
+              <p className="text-sm font-bold text-amber-900">
+                {active.endedReason === "full_buyout" ? "Full buyout confirmed" : "Early exit confirmed"}
+              </p>
               <p className="text-sm text-amber-800">
                 {active.professionalName ?? "Your teacher"} will continue working until{" "}
                 <span className="font-semibold">
@@ -1749,7 +1761,7 @@ function ShadowTeacherTab() {
           )}
 
           {/* Standard notice period banner */}
-          {active.status === "notice_period" && active.endedReason !== "buyout" && (
+          {active.status === "notice_period" && !["buyout", "full_buyout"].includes(active.endedReason ?? "") && (
             <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-1">
               <p className="text-sm font-bold text-blue-900">Notice period active</p>
               <p className="text-sm text-blue-800">
@@ -1851,7 +1863,7 @@ function ShadowTeacherTab() {
                     </p>
                   )}
 
-                  {/* Early Exit / Buyout */}
+                  {/* Early Exit / 15-day Buyout */}
                   <button onClick={() => setLifecycleType(lifecycleType === "buyout" ? "" : "buyout")}
                     className={`w-full py-2.5 px-3 rounded-xl border text-sm font-semibold transition-colors text-left ${lifecycleType === "buyout" ? "border-[#FF6B6B] bg-[#FF6B6B]/10 text-[#FF6B6B]" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}>
                     Early Exit (15 days) — one-time fee of ₹{buyoutFee.toLocaleString("en-IN")}
@@ -1860,6 +1872,29 @@ function ShadowTeacherTab() {
                     <p className="text-xs text-gray-500 px-1">
                       Ends this engagement in 15 days by paying a one-time fee of ₹{buyoutFee.toLocaleString("en-IN")}. {teacherName} continues working until {buyoutEndStr}. The engagement ends automatically on that date. The fee is non-refundable.
                     </p>
+                  )}
+
+                  {/* Full Buyout */}
+                  <button onClick={() => setLifecycleType(lifecycleType === "full_buyout" ? "" : "full_buyout")}
+                    className={`w-full py-2.5 px-3 rounded-xl border text-sm font-semibold transition-colors text-left ${lifecycleType === "full_buyout" ? "border-[#FF6B6B] bg-[#FF6B6B]/10 text-[#FF6B6B]" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}>
+                    Full Buyout — ₹{parseFloat(active.monthlyFeeInr).toLocaleString("en-IN")} — end on a date you choose
+                  </button>
+                  {lifecycleType === "full_buyout" && (
+                    <div className="space-y-2 px-1">
+                      <p className="text-xs text-gray-500">
+                        Pay one full month's salary (₹{parseFloat(active.monthlyFeeInr).toLocaleString("en-IN")}) to end the engagement on any date — including today. {teacherName} is compensated for the full month regardless. No notice period required. The fee is non-refundable.
+                      </p>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-gray-700">Engagement ends on:</label>
+                        <input
+                          type="date"
+                          min={new Date().toISOString().slice(0, 10)}
+                          value={fullBuyoutDate}
+                          onChange={(e) => setFullBuyoutDate(e.target.value)}
+                          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]"
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
 
@@ -1876,7 +1911,16 @@ function ShadowTeacherTab() {
                 )}
                 {buyoutPaid && (
                   <div className="flex items-center gap-2 p-3 bg-green-50 rounded-xl border border-green-200 text-sm text-green-700 font-medium">
-                    <CheckCircle2 size={16} /> Buyout payment confirmed — {teacherName} continues until {buyoutEndStr}. The engagement ends automatically on that date.
+                    <CheckCircle2 size={16} /> Early exit confirmed — {teacherName} continues until {buyoutEndStr}. The engagement ends automatically on that date.
+                  </div>
+                )}
+                {fullBuyoutPaid && (
+                  <div className="flex items-center gap-2 p-3 bg-green-50 rounded-xl border border-green-200 text-sm text-green-700 font-medium">
+                    <CheckCircle2 size={16} />
+                    {fullBuyoutDate === new Date().toISOString().slice(0, 10)
+                      ? "Full buyout confirmed — this engagement has ended immediately."
+                      : `Full buyout confirmed — engagement ends on ${new Date(fullBuyoutDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}.`
+                    }
                   </div>
                 )}
               </div>

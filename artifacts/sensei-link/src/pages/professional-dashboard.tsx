@@ -2586,8 +2586,8 @@ function EngagementTab() {
       {/* ── Manage / Lifecycle ── */}
       {visibleEngTab === "lifecycle" && (
         <div className="space-y-4">
-          {/* Buyout wind-down banner */}
-          {active.status === "notice_period" && active.endedReason === "buyout" && (
+          {/* Buyout / Full-buyout wind-down banner */}
+          {active.status === "notice_period" && ["buyout", "full_buyout"].includes(active.endedReason ?? "") && (
             <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-1">
               <p className="text-sm font-bold text-amber-900">Engagement ending early</p>
               <p className="text-sm text-amber-800">
@@ -2602,7 +2602,7 @@ function EngagementTab() {
           )}
 
           {/* Standard notice period banner */}
-          {active.status === "notice_period" && active.endedReason !== "buyout" && (
+          {active.status === "notice_period" && !["buyout", "full_buyout"].includes(active.endedReason ?? "") && (
             <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-1">
               <p className="text-sm font-bold text-blue-900">Notice period active</p>
               <p className="text-sm text-blue-800">

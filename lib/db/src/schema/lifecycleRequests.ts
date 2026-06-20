@@ -5,7 +5,7 @@ import { shadowTeacherEngagementsTable } from "./engagements";
 import { usersTable } from "./users";
 
 export const lifecycleRequestTypeEnum = pgEnum("lifecycle_request_type", ["stop", "change", "pause", "resume"]);
-export const lifecycleRequestMethodEnum = pgEnum("lifecycle_request_method", ["notice", "buyout"]);
+export const lifecycleRequestMethodEnum = pgEnum("lifecycle_request_method", ["notice", "buyout", "full_buyout"]);
 export const lifecycleRequestStatusEnum = pgEnum("lifecycle_request_status", ["pending", "approved", "rejected", "completed"]);
 export const lifecycleRaisedByRoleEnum = pgEnum("lifecycle_raised_by_role", ["parent", "teacher"]);
 

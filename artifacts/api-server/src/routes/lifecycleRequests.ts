@@ -54,8 +54,9 @@ async function getEngagementWithAccess(engagementId: number, userId: number, use
 
 const RaiseLifecycleBody = z.object({
   type: z.enum(["stop", "change", "pause", "resume"]),
-  method: z.enum(["notice", "buyout"]).optional(),
+  method: z.enum(["notice", "buyout", "full_buyout"]).optional(),
   reason: z.string().max(1000).optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 router.post("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise<void> => {
@@ -174,6 +175,12 @@ router.post("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise
   let effectiveEndDate: string;
   if (resolvedMethod === "buyout") {
     effectiveEndDate = addDays(today, settings.parentBuyoutDays);
+  } else if (resolvedMethod === "full_buyout") {
+    const chosenDate = parsed.data.endDate ?? today;
+    if (chosenDate < today) {
+      res.status(400).json({ error: "endDate cannot be in the past" }); return;
+    }
+    effectiveEndDate = chosenDate;
   } else {
     effectiveEndDate = addDays(today, settings.noticePeriodDays);
   }
@@ -223,7 +230,7 @@ router.post("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise
         });
       }
     } else if (resolvedMethod === "buyout") {
-      // Notify teacher that a buyout was initiated (payment pending)
+      // Notify teacher that a 15-day buyout was initiated (payment pending)
       const [profRow] = await db.select({ userId: professionalProfilesTable.userId })
         .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, eng.professionalId)).limit(1);
       if (profRow) await createInAppNotification(profRow.userId, {
@@ -232,14 +239,26 @@ router.post("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise
         body: `The parent has initiated an early exit buyout (ending ${effectiveEndDate}). Payment is pending.`,
         relatedType: "engagement", relatedId: id,
       });
+    } else if (resolvedMethod === "full_buyout") {
+      // Notify teacher that a full buyout was initiated (payment pending)
+      const [profRow] = await db.select({ userId: professionalProfilesTable.userId })
+        .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, eng.professionalId)).limit(1);
+      if (profRow) await createInAppNotification(profRow.userId, {
+        type: "buyout_initiated",
+        title: "Parent initiated full buyout",
+        body: `The parent has initiated a full buyout. Your engagement ends on ${effectiveEndDate === today ? "today" : effectiveEndDate}. Payment is pending.`,
+        relatedType: "engagement", relatedId: id,
+      });
     }
   } catch { /* non-blocking */ }
 
-  if (resolvedMethod === "buyout" && role === "parent") {
+  if ((resolvedMethod === "buyout" || resolvedMethod === "full_buyout") && role === "parent") {
     const razorpay = getRazorpay();
     if (!razorpay) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
 
-    const buyoutFeeInr = Math.round(settings.parentBuyoutDays * eng.monthlyFeeInr / 30);
+    const buyoutFeeInr = resolvedMethod === "full_buyout"
+      ? eng.monthlyFeeInr
+      : Math.round(settings.parentBuyoutDays * eng.monthlyFeeInr / 30);
     const order = await razorpay.orders.create({
       amount: buyoutFeeInr * 100,
       currency: "INR",
@@ -417,7 +436,7 @@ router.post("/engagements/:id/lifecycle/:reqId/verify-buyout-payment", requireAu
     ))
     .limit(1);
   if (!existing) { res.status(404).json({ error: "Request not found" }); return; }
-  if (existing.method !== "buyout") { res.status(400).json({ error: "Not a buyout request" }); return; }
+  if (!["buyout", "full_buyout"].includes(existing.method ?? "")) { res.status(400).json({ error: "Not a buyout request" }); return; }
   if (existing.buyoutOrderId !== razorpay_order_id) { res.status(400).json({ error: "Order ID mismatch" }); return; }
 
   const keySecret = process.env["RAZORPAY_KEY_SECRET"];
@@ -443,25 +462,44 @@ router.post("/engagements/:id/lifecycle/:reqId/verify-buyout-payment", requireAu
     .where(eq(engagementLifecycleRequestsTable.id, reqId))
     .returning();
 
-  // Move engagement to notice_period — scheduler transitions to ended on effectiveEndDate
+  // Full-buyout with today as the end date ends the engagement immediately.
+  // All other buyouts enter notice_period and the scheduler fires the final transition on effectiveEndDate.
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const endedReason = existing.method === "full_buyout" ? "full_buyout" : "buyout";
+  const isImmediate = existing.method === "full_buyout" && existing.effectiveEndDate === todayStr;
+
   await db
     .update(shadowTeacherEngagementsTable)
-    .set({ status: "notice_period", endDate: existing.effectiveEndDate, endedReason: "buyout", updatedAt: new Date() })
+    .set({
+      status: isImmediate ? "ended" : "notice_period",
+      endDate: existing.effectiveEndDate,
+      endedReason,
+      updatedAt: new Date(),
+    })
     .where(eq(shadowTeacherEngagementsTable.id, engId));
 
-  // Notify teacher that payment cleared and engagement is winding down
+  // Notify teacher that payment cleared — always, including the immediate case
   try {
     const [engRow] = await db.select({ professionalId: shadowTeacherEngagementsTable.professionalId })
       .from(shadowTeacherEngagementsTable).where(eq(shadowTeacherEngagementsTable.id, engId)).limit(1);
     if (engRow) {
       const [prof] = await db.select({ userId: professionalProfilesTable.userId })
         .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, engRow.professionalId)).limit(1);
-      if (prof) await createInAppNotification(prof.userId, {
-        type: "buyout_paid",
-        title: "Buyout payment confirmed",
-        body: `The parent's early-exit fee has been paid. Your engagement ends on ${existing.effectiveEndDate ?? "the scheduled date"}.`,
-        relatedType: "engagement", relatedId: engId,
-      });
+      if (prof) {
+        const endDateDisplay = existing.effectiveEndDate
+          ? new Date(existing.effectiveEndDate + "T00:00:00Z").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+          : "the scheduled date";
+        await createInAppNotification(prof.userId, {
+          type: "buyout_paid",
+          title: isImmediate ? "Engagement ended — full buyout" : "Buyout payment confirmed",
+          body: isImmediate
+            ? "The parent has paid a full buyout. Your engagement has ended effective today."
+            : existing.method === "full_buyout"
+              ? `The parent has paid a full buyout. Your engagement ends on ${endDateDisplay}.`
+              : `The parent's early-exit fee has been paid. Your engagement ends on ${endDateDisplay}.`,
+          relatedType: "engagement", relatedId: engId,
+        });
+      }
     }
   } catch { /* non-blocking */ }
 
@@ -485,7 +523,7 @@ router.patch("/admin/lifecycle/:reqId", requireAuth, requireRole("admin"), async
     .limit(1);
   if (!existing) { res.status(404).json({ error: "Request not found" }); return; }
 
-  if (existing.method === "buyout" && status === "approved" && !existing.buyoutPaymentId) {
+  if (["buyout", "full_buyout"].includes(existing.method ?? "") && status === "approved" && !existing.buyoutPaymentId) {
     res.status(409).json({ error: "Buyout payment not yet confirmed" });
     return;
   }
@@ -496,8 +534,8 @@ router.patch("/admin/lifecycle/:reqId", requireAuth, requireRole("admin"), async
     .where(eq(engagementLifecycleRequestsTable.id, reqId))
     .returning();
 
-  if ((status === "approved" || status === "completed") && existing.method === "buyout") {
-    // For buyout: if engagement is not already in notice_period (i.e., verify-buyout-payment
+  if ((status === "approved" || status === "completed") && ["buyout", "full_buyout"].includes(existing.method ?? "")) {
+    // For buyout/full_buyout: if engagement is not already in notice_period (i.e., verify-buyout-payment
     // hasn't run yet — edge case for legacy/manual admin flow), move it to notice_period.
     // If it's already in notice_period the scheduler will fire the final transition on effectiveEndDate.
     const [engNow] = await db
@@ -509,7 +547,7 @@ router.patch("/admin/lifecycle/:reqId", requireAuth, requireRole("admin"), async
     if (engNow && engNow.status !== "notice_period" && engNow.status !== "ended") {
       await db
         .update(shadowTeacherEngagementsTable)
-        .set({ status: "notice_period", endDate: existing.effectiveEndDate, endedReason: "buyout", updatedAt: new Date() })
+        .set({ status: "notice_period", endDate: existing.effectiveEndDate, endedReason: existing.method === "full_buyout" ? "full_buyout" : "buyout", updatedAt: new Date() })
         .where(eq(shadowTeacherEngagementsTable.id, existing.engagementId));
     }
     // Push notification to teacher

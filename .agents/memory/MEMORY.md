@@ -10,3 +10,4 @@
 - [Children V2 schema pattern](children-v2-schema.md) — text[].array() for filterable arrays, jsonb for structured objects; children API: completionPct from 8 fields; professional GET/:id needs paid_held+ booking + consent.intakeShare
 - [Goal-based logging pattern](goal-based-logging.md) — goalRatings/behaviorCounts/durations/photoKey are additive JSON inside log content; photoKey server-gated by consent.media; candidateId via LEFT JOIN shadow_match_candidates on matchRequestId+professionalId
 - [Trial credit pinning pattern](trial-credit-pinning.md) — credit amount stored in salary payment record at first order creation; retries reuse existing.trialCreditInr, never recompute from eng; trialCreditApplied flips at verify only
+- [Full buyout exit pattern](full-buyout-pattern.md) — reuses buyout columns/verify endpoint; endDate param sets effectiveEndDate; if today → ended immediately in verify handler; endedReason="full_buyout"; migration 0025
