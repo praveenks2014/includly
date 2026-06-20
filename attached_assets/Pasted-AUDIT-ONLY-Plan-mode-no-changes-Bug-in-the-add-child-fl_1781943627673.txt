@@ -1,0 +1,40 @@
+AUDIT ONLY — Plan mode, no changes. Bug in the add-child flow:
+
+1. After login, the add-child wizard loads EVEN WHEN the parent
+already has children. It should only load when the parent has ZERO
+children. Diagnose: what is the current logic in RequireChildProfile
+(or whatever guard routes to add-child)? What condition sends a parent
+to the add-child wizard, and why is it firing for parents who already
+have children?
+
+2. After successfully adding a child, the flow loads ANOTHER add-child
+wizard instead of going to the dashboard. It should navigate to the
+dashboard after a successful add. Diagnose: what happens after the
+add-child wizard completes — where does it navigate, and why is it
+landing back on add-child instead of the dashboard?
+
+3. Is this related to the recent intake redesign changes (the
+choose-role.tsx restructure, the childCount field, the add-child
+wizard changes)? Did any of those touch the RequireChildProfile guard,
+the post-add navigation, or how children are counted/detected? This
+loop may be a regression from the intake redesign.
+
+4. Check specifically: is this the same cache-race class as before —
+where after adding a child, the guard checks children before the
+new child appears in the cache (isLoading vs isFetching), sees zero,
+and redirects back to add-child? Confirm whether the
+isLoading||isFetching guard fix from before is still in place or got
+reverted.
+
+5. CRITICAL — the childCount field: the intake redesign added a
+childCount on the user. Is the add-child routing now incorrectly
+keyed off childCount instead of the actual children count? E.g. if
+a parent said "2 children" at onboarding but has added 0, is the
+guard trying to force them to add children up to their stated count?
+That would explain "keeps loading add-child" — it might be looping
+until children.length matches childCount. If so, that's wrong — the
+soft-prompt was never supposed to FORCE adding children, only gently
+prompt. Confirm whether childCount is wrongly driving the add-child
+routing.
+
+Report the root cause. No changes yet.

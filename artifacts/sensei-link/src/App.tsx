@@ -15,6 +15,7 @@ import { RequireRole } from "@/guards/RequireRole";
 import { RequireChildProfile } from "@/guards/RequireChildProfile";
 import { SHELL_ROOT, isShellPath, type Role } from "@/nav/config";
 import { useGetMe } from "@workspace/api-client-react";
+import { SelectedChildProvider } from "@/contexts/SelectedChildContext";
 
 import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home";
@@ -192,6 +193,23 @@ function RoleRedirect({ parentTo, proTo, defaultTo }: { parentTo: string; proTo:
   return null;
 }
 
+// ─── Parent shell wrapper ──────────────────────────────────────────────────────
+// Provides SelectedChildProvider ABOVE RequireChildProfile so the guard
+// can actually read the children context (previously the provider was inside
+// AppShell which is a child of RequireChildProfile — always empty defaults).
+
+function ParentShell({ children }: { children: React.ReactNode }) {
+  return (
+    <RequireAuth>
+      <RequireRole allow={["parent"]}>
+        <SelectedChildProvider>
+          {children}
+        </SelectedChildProvider>
+      </RequireRole>
+    </RequireAuth>
+  );
+}
+
 // ─── Coming-soon pages ─────────────────────────────────────────────────────────
 
 function JourneyComingSoon() {
@@ -353,62 +371,50 @@ function Router() {
 
         {/* ── Parent shell ── */}
         <Route path="/home">
-          <RequireAuth>
-            <RequireRole allow={["parent"]}>
-              <RequireChildProfile>
-                <AppShell>
-                  <ParentDashboard />
-                </AppShell>
-              </RequireChildProfile>
-            </RequireRole>
-          </RequireAuth>
+          <ParentShell>
+            <RequireChildProfile>
+              <AppShell>
+                <ParentDashboard />
+              </AppShell>
+            </RequireChildProfile>
+          </ParentShell>
         </Route>
         <Route path="/explore">
-          <RequireAuth>
-            <RequireRole allow={["parent"]}>
-              <AppShell>
-                <ParentDashboard />
-              </AppShell>
-            </RequireRole>
-          </RequireAuth>
+          <ParentShell>
+            <AppShell>
+              <ParentDashboard />
+            </AppShell>
+          </ParentShell>
         </Route>
         <Route path="/bookings/:id?">
-          <RequireAuth>
-            <RequireRole allow={["parent"]}>
-              <AppShell>
-                <ParentDashboard />
-              </AppShell>
-            </RequireRole>
-          </RequireAuth>
+          <ParentShell>
+            <AppShell>
+              <ParentDashboard />
+            </AppShell>
+          </ParentShell>
         </Route>
         <Route path="/journey">
-          <RequireAuth>
-            <RequireRole allow={["parent"]}>
-              <AppShell>
-                <JourneyComingSoon />
-              </AppShell>
-            </RequireRole>
-          </RequireAuth>
+          <ParentShell>
+            <AppShell>
+              <JourneyComingSoon />
+            </AppShell>
+          </ParentShell>
         </Route>
         <Route path="/inbox/:threadId?">
-          <RequireAuth>
-            <RequireRole allow={["parent"]}>
+          <ParentShell>
+            <AppShell>
+              <ParentDashboard />
+            </AppShell>
+          </ParentShell>
+        </Route>
+        <Route path="/shadow-teacher">
+          <ParentShell>
+            <RequireChildProfile>
               <AppShell>
                 <ParentDashboard />
               </AppShell>
-            </RequireRole>
-          </RequireAuth>
-        </Route>
-        <Route path="/shadow-teacher">
-          <RequireAuth>
-            <RequireRole allow={["parent"]}>
-              <RequireChildProfile>
-                <AppShell>
-                  <ParentDashboard />
-                </AppShell>
-              </RequireChildProfile>
-            </RequireRole>
-          </RequireAuth>
+            </RequireChildProfile>
+          </ParentShell>
         </Route>
 
         {/* ── Professional shell ── */}
