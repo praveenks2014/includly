@@ -82,6 +82,7 @@ interface MatchWithCandidates {
   childBudgetMaxInr: number | null;
   trialStartOtp: string | null;
   trialEndOtp: string | null;
+  trialLocation: string | null;
   candidates: Candidate[];
 }
 
@@ -482,6 +483,7 @@ export function ShadowTeacherRequestWidget() {
   const [trialModalProfId, setTrialModalProfId] = useState<number | null>(null);
   const [trialPreMeetingChecked, setTrialPreMeetingChecked] = useState(false);
   const [trialPreMeetingNote, setTrialPreMeetingNote] = useState("");
+  const [trialLocation, setTrialLocation] = useState("");
 
   const status = match?.status ?? null;
   const isActive = status && !["cancelled", "refunded"].includes(status);
@@ -624,7 +626,7 @@ export function ShadowTeacherRequestWidget() {
 
   // ── handleRequestTrial — pay trial fee → trial_pending ──────────────────
   // Called from the modal's confirm button with pre-meeting preferences.
-  async function handleRequestTrial(professionalId: number, preMeetingRequested: boolean, preMeetingNote: string | null) {
+  async function handleRequestTrial(professionalId: number, preMeetingRequested: boolean, preMeetingNote: string | null, trialLoc: string | null) {
     if (!match) return;
     setTrialModalOpen(false);
     setRequestingTrial(true);
@@ -667,6 +669,7 @@ export function ShadowTeacherRequestWidget() {
                   selectedProfessionalId: professionalId,
                   preMeetingRequested,
                   preMeetingNote,
+                  trialLocation: trialLoc,
                 }),
               });
               if (!vRes.ok) {
@@ -1156,6 +1159,19 @@ export function ShadowTeacherRequestWidget() {
                 If you commit afterwards, this amount is credited against the first month&apos;s salary.
                 The fee is <strong>non-refundable</strong> if you walk away.
               </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-gray-700">
+                  Trial location <span className="font-normal text-gray-400 text-xs">(where will the trial take place?)</span>
+                </Label>
+                <input
+                  type="text"
+                  className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-orange-300 bg-white"
+                  placeholder="e.g. St. Mary's School, Bandra, Mumbai"
+                  maxLength={300}
+                  value={trialLocation}
+                  onChange={(e) => setTrialLocation(e.target.value)}
+                />
+              </div>
               <div className="flex items-start gap-3">
                 <input
                   type="checkbox"
@@ -1202,10 +1218,11 @@ export function ShadowTeacherRequestWidget() {
                 disabled={requestingTrial}
                 onClick={() => {
                   if (!trialModalProfId) return;
-                  handleRequestTrial(
+                  void handleRequestTrial(
                     trialModalProfId,
                     trialPreMeetingChecked,
                     trialPreMeetingChecked && trialPreMeetingNote.trim() ? trialPreMeetingNote.trim() : null,
+                    trialLocation.trim() || null,
                   );
                 }}
               >

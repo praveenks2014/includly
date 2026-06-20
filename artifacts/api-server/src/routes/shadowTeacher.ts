@@ -481,6 +481,7 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       childGoalsAreas:        shadowTeacherMatchesTable.childGoalsAreas,
       preMeetingRequested:    shadowTeacherMatchesTable.preMeetingRequested,
       preMeetingNote:         shadowTeacherMatchesTable.preMeetingNote,
+      trialLocation:          shadowTeacherMatchesTable.trialLocation,
     })
     .from(shadowMatchCandidatesTable)
     .innerJoin(shadowTeacherMatchesTable, eq(shadowMatchCandidatesTable.matchId, shadowTeacherMatchesTable.id))
@@ -537,6 +538,7 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       childGoalsAreas:        c.childGoalsAreas       ?? null,
       preMeetingRequested:    c.preMeetingRequested   ?? false,
       preMeetingNote:         c.preMeetingNote        ?? null,
+      trialLocation:          c.trialLocation         ?? null,
       threadId:        thread?.threadId ?? null,
       messageCount:    counts ? Number(counts.messageCount) : 0,
       lastMessageAt:   counts?.lastMessageAt ?? null,
@@ -605,13 +607,21 @@ router.get("/shadow-teacher/:matchId/thread/:candidateId", requireAuth, async (r
 
   const maskedMessages = committed
     ? messages
-    : messages.map((m) => ({ ...m, body: maskBody(m.body) }));
+    : messages.map((m) => m.msgType === "location" ? m : { ...m, body: maskBody(m.body) });
 
   res.json({ threadId: thread.id, committed, messages: maskedMessages });
 });
 
 // ── POST /shadow-teacher/:matchId/thread/:candidateId — send message ─
-const SendMessageBody = z.object({ body: z.string().min(1).max(5000) });
+const PHONE_LEAK_RE = /(\+?91[\s-]?)?[6-9]\d{9}/;
+function looksLikePhone(s: string): boolean {
+  return PHONE_LEAK_RE.test(s.replace(/[\s().\-]/g, ""));
+}
+const SendMessageBody = z.object({
+  body: z.string().min(1).max(5000),
+  type: z.enum(["text", "location"]).optional(),
+  mapsUrl: z.string().max(1000).optional(),
+});
 
 router.post("/shadow-teacher/:matchId/thread/:candidateId", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const matchId = parseInt(req.params["matchId"] as string, 10);
@@ -668,9 +678,26 @@ router.post("/shadow-teacher/:matchId/thread/:candidateId", requireAuth, async (
     thread = created!;
   }
 
+  const rawBody = parsed.data.body;
+  const msgType = parsed.data.type ?? "text";
+  const mapsUrl = parsed.data.mapsUrl;
+
+  // Guard: location messages must not contain phone numbers
+  if (msgType === "location") {
+    const combined = (rawBody + " " + (mapsUrl ?? "")).replace(/[\s().\-]/g, "");
+    if (looksLikePhone(combined)) {
+      res.status(400).json({ error: "Location appears to contain a phone number. Contact details are shared only after you commit to this teacher." });
+      return;
+    }
+  }
+
+  const storedBody = msgType === "location"
+    ? JSON.stringify({ text: rawBody, mapsUrl: mapsUrl ?? null })
+    : rawBody;
+
   const [message] = await db
     .insert(shadowMatchMessagesTable)
-    .values({ threadId: thread.id, senderId: req.userId!, body: parsed.data.body })
+    .values({ threadId: thread.id, senderId: req.userId!, body: storedBody, msgType })
     .returning();
 
   // Push notify recipient (fire-and-forget)
@@ -688,7 +715,7 @@ router.post("/shadow-teacher/:matchId/thread/:candidateId", requireAuth, async (
     ).catch(() => {});
   }
 
-  const body = committed ? message!.body : maskBody(message!.body);
+  const body = (committed || message!.msgType === "location") ? message!.body : maskBody(message!.body);
   res.status(201).json({ ...message, body });
 });
 
@@ -1105,6 +1132,7 @@ const VerifyTrialPaymentBody = z.object({
   selectedProfessionalId: z.number().int().positive(),
   preMeetingRequested: z.boolean().default(false),
   preMeetingNote: z.string().max(500).nullable().default(null),
+  trialLocation: z.string().max(500).nullable().default(null),
 });
 
 router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
@@ -1117,7 +1145,7 @@ router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requir
   const keySecret = process.env["RAZORPAY_KEY_SECRET"];
   if (!keySecret) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
 
-  const { razorpayOrderId, razorpayPaymentId, razorpaySignature, selectedProfessionalId, preMeetingRequested, preMeetingNote } = parsed.data;
+  const { razorpayOrderId, razorpayPaymentId, razorpaySignature, selectedProfessionalId, preMeetingRequested, preMeetingNote, trialLocation } = parsed.data;
 
   const [match] = await db
     .select()
@@ -1158,6 +1186,7 @@ router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requir
       preMeetingRequested,
       preMeetingNote: preMeetingRequested ? (preMeetingNote ?? null) : null,
       trialStartOtp,
+      trialLocation: trialLocation ?? null,
       updatedAt: new Date(),
     })
     .where(eq(shadowTeacherMatchesTable.id, matchId));

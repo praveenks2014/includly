@@ -34,6 +34,7 @@ export const shadowMatchMessagesTable = pgTable(
       .notNull()
       .references(() => usersTable.id, { onDelete: "cascade" }),
     body: text("body").notNull(),
+    msgType: text("msg_type").notNull().default("text"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("shadow_match_messages_thread_id_created_at_idx").on(t.threadId, t.createdAt)],

@@ -54,6 +54,7 @@ export const shadowTeacherMatchesTable = pgTable("shadow_teacher_matches", {
   preMeetingNote: text("pre_meeting_note"),
   trialStartOtp: text("trial_start_otp"),
   trialEndOtp: text("trial_end_otp"),
+  trialLocation: text("trial_location"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -2927,6 +2927,7 @@ interface Candidacy {
   childGoalsAreas:     string | null;
   preMeetingRequested: boolean;
   preMeetingNote:      string | null;
+  trialLocation:       string | null;
   threadId:            number | null;
   messageCount:        number;
   lastMessageAt:       string | null;
@@ -3086,6 +3087,12 @@ function CandidacyCard({ candidacy: c, onOpen, myUserId }: { candidacy: Candidac
         )}
       </div>
 
+      {c.matchStatus === "trial_pending" && c.isSelected && c.trialLocation && (
+        <div className="mb-2 p-3 bg-orange-50 border border-orange-200 rounded-xl space-y-1">
+          <p className="text-xs font-semibold text-orange-800">📍 Trial location</p>
+          <p className="text-xs text-orange-700">{c.trialLocation}</p>
+        </div>
+      )}
       {c.matchStatus === "trial_pending" && c.isSelected && c.preMeetingRequested && (
         <div className="mb-2 p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-1">
           <p className="text-xs font-semibold text-blue-800">📅 Parent requested a pre-meeting</p>

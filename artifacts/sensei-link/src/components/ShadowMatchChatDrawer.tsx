@@ -2,13 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import { fetchWithAuth } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, X, Send, Lock, ShieldCheck } from "lucide-react";
+import { Loader2, X, Send, Lock, ShieldCheck, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ChatMessage {
   id: number;
   senderId: number;
   body: string;
+  msgType?: string;
   createdAt: string;
 }
 
@@ -19,6 +20,11 @@ interface ShadowMatchChatDrawerProps {
   committed: boolean;
   myUserId: number;
   onClose: () => void;
+}
+
+const PHONE_RE = /(\+?91[\s-]?)?[6-9]\d{9}/;
+function inputLooksLikePhone(s: string): boolean {
+  return PHONE_RE.test(s.replace(/[\s().\-]/g, ""));
 }
 
 export function ShadowMatchChatDrawer({
@@ -35,6 +41,12 @@ export function ShadowMatchChatDrawer({
   const [loading, setLoading] = useState(true);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
+
+  const [showLocationInput, setShowLocationInput] = useState(false);
+  const [locationText, setLocationText] = useState("");
+  const [locationMapsUrl, setLocationMapsUrl] = useState("");
+  const [sendingLocation, setSendingLocation] = useState(false);
+
   const bottomRef = useRef<HTMLDivElement>(null);
 
   async function loadThread() {
@@ -86,6 +98,39 @@ export function ShadowMatchChatDrawer({
     }
   }
 
+  async function handleSendLocation() {
+    const text = locationText.trim();
+    if (!text || sendingLocation) return;
+    setSendingLocation(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/thread/${candidateId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          body: text,
+          type: "location",
+          mapsUrl: locationMapsUrl.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        toast({ title: d.error ?? "Could not share location", variant: "destructive" });
+        return;
+      }
+      const msg = await res.json() as ChatMessage;
+      setMessages((prev) => [...prev, msg]);
+      setLocationText("");
+      setLocationMapsUrl("");
+      setShowLocationInput(false);
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setSendingLocation(false);
+    }
+  }
+
+  const phoneWarning = locationText.length > 0 && inputLooksLikePhone(locationText);
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
@@ -126,6 +171,44 @@ export function ShadowMatchChatDrawer({
           ) : (
             messages.map((m) => {
               const isMe = m.senderId === myUserId;
+              if (m.msgType === "location") {
+                let locText = m.body;
+                let mapsHref: string | undefined;
+                try {
+                  const loc = JSON.parse(m.body) as { text?: string; mapsUrl?: string | null };
+                  locText = loc.text ?? m.body;
+                  mapsHref = loc.mapsUrl ?? undefined;
+                } catch { /* malformed — render raw */ }
+                const href = mapsHref || `https://maps.google.com/?q=${encodeURIComponent(locText)}`;
+                return (
+                  <div key={m.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed flex items-start gap-2 no-underline ${
+                        isMe
+                          ? "bg-[#2EC4A5] text-white rounded-br-sm"
+                          : "bg-gray-100 text-[#1A2340] rounded-bl-sm"
+                      }`}
+                    >
+                      <MapPin size={14} className={`shrink-0 mt-0.5 ${isMe ? "text-white/80" : "text-[#2EC4A5]"}`} />
+                      <div>
+                        <p className={`text-[10px] font-semibold uppercase tracking-wide mb-0.5 ${isMe ? "text-white/70" : "text-gray-400"}`}>
+                          Meeting location
+                        </p>
+                        <p className="text-sm">{locText}</p>
+                        <p className={`text-[10px] mt-1 underline ${isMe ? "text-white/60" : "text-[#2EC4A5]"}`}>
+                          Open in Maps ↗
+                        </p>
+                        <p className={`text-[10px] mt-0.5 ${isMe ? "text-white/50 text-right" : "text-gray-400"}`}>
+                          {new Date(m.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                    </a>
+                  </div>
+                );
+              }
               return (
                 <div key={m.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
                   <div
@@ -155,8 +238,67 @@ export function ShadowMatchChatDrawer({
           </div>
         )}
 
+        {/* Location input panel */}
+        {showLocationInput && (
+          <div className="px-4 pt-3 pb-2 border-t border-gray-100 space-y-2 bg-gray-50">
+            <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+              <MapPin size={12} className="text-[#2EC4A5]" />
+              Share a meeting location
+            </p>
+            <input
+              type="text"
+              placeholder="e.g. Tata Memorial Hospital, Parel, Mumbai"
+              value={locationText}
+              onChange={(e) => setLocationText(e.target.value)}
+              maxLength={300}
+              className="w-full text-sm border border-gray-200 rounded-xl px-3 py-1.5 outline-none focus:ring-1 focus:ring-[#2EC4A5] bg-white"
+            />
+            <input
+              type="url"
+              placeholder="Google Maps link (optional)"
+              value={locationMapsUrl}
+              onChange={(e) => setLocationMapsUrl(e.target.value)}
+              maxLength={500}
+              className="w-full text-sm border border-gray-200 rounded-xl px-3 py-1.5 outline-none focus:ring-1 focus:ring-[#2EC4A5] bg-white"
+            />
+            {phoneWarning && (
+              <p className="text-[10px] text-red-500">
+                ⚠️ Location looks like a phone number — contact details are only shared after you commit to this teacher.
+              </p>
+            )}
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-xs text-gray-400 hover:text-gray-600 px-2"
+                onClick={() => { setShowLocationInput(false); setLocationText(""); setLocationMapsUrl(""); }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1 bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl text-xs gap-1"
+                onClick={() => void handleSendLocation()}
+                disabled={!locationText.trim() || sendingLocation || phoneWarning}
+              >
+                {sendingLocation ? <Loader2 size={12} className="animate-spin" /> : <MapPin size={12} />}
+                Share location
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Input */}
         <div className="flex items-end gap-2 px-4 py-3 border-t border-gray-100">
+          <Button
+            size="sm"
+            variant="outline"
+            className={`rounded-xl h-10 w-10 p-0 border-gray-200 shrink-0 ${showLocationInput ? "bg-[#2EC4A5]/10 border-[#2EC4A5]" : ""}`}
+            onClick={() => setShowLocationInput((v) => !v)}
+            title="Share a meeting location"
+          >
+            <MapPin size={14} className={showLocationInput ? "text-[#2EC4A5]" : "text-gray-400"} />
+          </Button>
           <Textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
@@ -172,7 +314,7 @@ export function ShadowMatchChatDrawer({
           />
           <Button
             size="sm"
-            className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl h-10 w-10 p-0"
+            className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl h-10 w-10 p-0 shrink-0"
             onClick={() => void handleSend()}
             disabled={!body.trim() || sending}
             aria-label="Send message"
