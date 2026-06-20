@@ -1518,34 +1518,48 @@ function ShadowTeacherTab() {
   const MOODS = ["😊 Great", "🙂 Good", "😐 Okay", "😔 Difficult"];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-4">
       {/* Header card */}
-      <div className={`rounded-2xl p-5 text-white ${active.status === "ended" ? "bg-gradient-to-br from-gray-500 to-gray-600" : "bg-gradient-to-br from-[#2EC4A5] to-[#26a88d]"}`}>
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide opacity-75">
-              {active.status === "ended" ? "Past Engagement" : "Active Engagement"}
+      <div className={`rounded-2xl p-5 text-white shadow-[0_4px_20px_rgba(0,0,0,0.13)] ${active.status === "ended" ? "bg-gradient-to-br from-gray-500 to-gray-600" : active.status === "paused" ? "bg-gradient-to-br from-amber-500 to-amber-600" : "bg-gradient-to-br from-[#2EC4A5] to-[#1a9a82]"}`}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] opacity-65">
+              {active.status === "ended" ? "Past Engagement" : active.status === "paused" ? "Engagement Paused" : "Active Engagement"}
             </p>
-            <p className="text-xl font-bold mt-1">{active.professionalName ?? `Teacher #${active.professionalId}`}</p>
-            {active.childName && <p className="text-sm opacity-80 mt-0.5">For {active.childName}</p>}
+            <p className="text-[1.2rem] font-bold mt-1 leading-tight">{active.professionalName ?? `Teacher #${active.professionalId}`}</p>
+            {active.childName && <p className="text-sm opacity-75 mt-0.5">Supporting {active.childName}</p>}
           </div>
-          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/20 uppercase tracking-wide">
-            {active.status.replace("_", " ")}
-          </span>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="w-10 h-10 rounded-2xl bg-white/20 border border-white/20 flex items-center justify-center text-white font-bold text-sm">
+              {initials(active.professionalName)}
+            </div>
+            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/20 border border-white/15 uppercase tracking-wide whitespace-nowrap">
+              {active.status.replace(/_/g, " ")}
+            </span>
+          </div>
         </div>
-        <div className="mt-4 flex items-center gap-4 text-sm">
-          <div><span className="opacity-70">Monthly</span><br /><strong>₹{Number(active.monthlyFeeInr).toLocaleString("en-IN")}</strong></div>
+        <div className="mt-4 flex items-center gap-4">
+          <div>
+            <p className="text-[10px] opacity-60 uppercase tracking-wide mb-0.5">Monthly</p>
+            <p className="font-bold text-base">₹{Number(active.monthlyFeeInr).toLocaleString("en-IN")}</p>
+          </div>
           <div className="w-px h-8 bg-white/20" />
-          <div><span className="opacity-70">Since</span><br /><strong>{new Date(active.startDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</strong></div>
+          <div>
+            <p className="text-[10px] opacity-60 uppercase tracking-wide mb-0.5">Since</p>
+            <p className="font-bold text-sm">{new Date(active.startDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+          </div>
           {active.tier && <>
             <div className="w-px h-8 bg-white/20" />
-            <div><span className="opacity-70">Tier</span><br /><strong>{active.tier}</strong></div>
+            <div>
+              <p className="text-[10px] opacity-60 uppercase tracking-wide mb-0.5">Tier</p>
+              <p className="font-bold text-sm">{active.tier}</p>
+            </div>
           </>}
         </div>
       </div>
 
       {/* Sub-tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
+      <div className="flex gap-1 bg-gray-100 rounded-2xl p-1 overflow-x-auto">
         {(([["overview", "Overview"], ["logs", "Daily Logs"], ["goals", "Goals"], ["trends", "Trends"], ["payments", "Payments"], ["lifecycle", "Manage"]] as [string, string][])
           .filter(([id]) =>
             !(active.status === "ended" && id === "lifecycle") &&
@@ -1558,12 +1572,12 @@ function ShadowTeacherTab() {
             : "Available once the engagement starts";
           return isPendingDisabled ? (
             <button key={id} disabled title={tipText}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap text-gray-300 cursor-not-allowed select-none">
+              className="px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap text-gray-300 cursor-not-allowed select-none">
               {label}
             </button>
           ) : (
             <button key={id} onClick={() => setStTab(id as typeof stTab)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${stTab === id ? "bg-white text-[#1A2340] shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+              className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${stTab === id ? "bg-white text-[#1A2340] shadow-sm" : "text-gray-400 hover:text-gray-600"}`}>
               {label}
             </button>
           );
@@ -1571,17 +1585,22 @@ function ShadowTeacherTab() {
       </div>
 
       {stTab === "overview" && active.status === "ended" && (
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 space-y-1.5">
-          <p className="text-sm font-bold text-gray-700">This engagement has ended</p>
-          <p className="text-sm text-gray-500">
+        <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gray-100 rounded-2xl flex items-center justify-center shrink-0">
+              <CheckCircle2 size={18} className="text-gray-400" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-[#1A2340]">This engagement has ended</p>
+              <p className="text-xs text-gray-400 mt-0.5">Logs, goals and payments are preserved</p>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 leading-relaxed pl-[52px]">
             {active.endDate
-              ? <>Ended on <span className="font-semibold">{new Date(active.endDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+              ? <>Ended on <span className="font-semibold text-gray-700">{new Date(active.endDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
                 {active.endedReason === "buyout" ? " via early exit." : active.endedReason === "full_buyout" ? " via full buyout." : active.endedReason === "stop" ? " after the notice period." : "."}</>
               : "This engagement is no longer active."}
-            {" "}You can still view logs, goals, and payment history above.
-          </p>
-          <p className="text-sm text-[#2EC4A5] font-medium mt-2 cursor-pointer" onClick={() => setStTab("overview")}>
-            Want to start a new engagement? Use the <span className="underline">Find a Teacher</span> tab.
+            {" "}Switch to the Find tab to start a new engagement.
           </p>
         </div>
       )}
@@ -1674,13 +1693,13 @@ function ShadowTeacherTab() {
             <>
               <p className="text-sm font-bold text-[#1A2340]">Engagement Summary</p>
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-xs text-gray-400">Total Logs</p>
-                  <p className="text-2xl font-bold text-[#1A2340] mt-0.5">{logs.length}</p>
+                <div className="bg-teal-50/60 border border-teal-100 rounded-2xl p-3.5">
+                  <p className="text-[10px] font-bold text-teal-600 uppercase tracking-[0.1em]">Total Logs</p>
+                  <p className="text-2xl font-bold text-[#1A2340] mt-1">{logs.length}</p>
                 </div>
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-xs text-gray-400">Payments Made</p>
-                  <p className="text-2xl font-bold text-[#1A2340] mt-0.5">{payments.filter(p => p.status === "paid").length}</p>
+                <div className="bg-violet-50/60 border border-violet-100 rounded-2xl p-3.5">
+                  <p className="text-[10px] font-bold text-violet-600 uppercase tracking-[0.1em]">Payments Made</p>
+                  <p className="text-2xl font-bold text-[#1A2340] mt-1">{payments.filter(p => p.status === "paid").length}</p>
                 </div>
               </div>
               {active.notes && <p className="text-xs text-gray-500 bg-gray-50 rounded-xl p-3">{active.notes}</p>}
@@ -1692,8 +1711,9 @@ function ShadowTeacherTab() {
       {visibleStTab === "logs" && (
         <div className="space-y-4">
           {active.status === "ended" && (
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <p className="text-xs text-gray-500">📋 This engagement has ended — records are read-only.</p>
+            <div className="flex items-center gap-2.5 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+              <CheckCircle2 size={13} className="text-gray-400 shrink-0" />
+              <p className="text-xs text-gray-500 font-medium">This engagement has ended — records are read-only.</p>
             </div>
           )}
           {active.status !== "ended" && (
@@ -1732,7 +1752,13 @@ function ShadowTeacherTab() {
             </div>
           )}
           {logs.length === 0 ? (
-            <p className="text-center text-sm text-gray-400 py-8">No logs yet. Post the first one above.</p>
+            <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-10 text-center">
+              <div className="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <BookOpen size={20} className="text-teal-300" />
+              </div>
+              <p className="text-sm font-semibold text-gray-600">No logs yet</p>
+              <p className="text-xs text-gray-400 mt-1">Post today's update above — your teacher will see it before the session.</p>
+            </div>
           ) : (
             <div className="space-y-3">
               {[...logs].reverse().map(log => {
@@ -1809,8 +1835,9 @@ function ShadowTeacherTab() {
       {visibleStTab === "payments" && (
         <div className="space-y-4">
           {active.status === "ended" && (
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <p className="text-xs text-gray-500">📋 This engagement has ended — records are read-only.</p>
+            <div className="flex items-center gap-2.5 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+              <CheckCircle2 size={13} className="text-gray-400 shrink-0" />
+              <p className="text-xs text-gray-500 font-medium">This engagement has ended — records are read-only.</p>
             </div>
           )}
           {active.status !== "ended" && (
@@ -1830,16 +1857,25 @@ function ShadowTeacherTab() {
             </div>
           )}
           {payments.length === 0 ? (
-            <p className="text-center text-sm text-gray-400 py-8">No salary payments yet.</p>
+            <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-10 text-center">
+              <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <IndianRupee size={20} className="text-gray-300" />
+              </div>
+              <p className="text-sm font-semibold text-gray-600">No salary payments yet</p>
+              <p className="text-xs text-gray-400 mt-1">Payments will appear here once the engagement starts.</p>
+            </div>
           ) : (
             <div className="space-y-3">
               {payments.map(pmt => (
-                <div key={pmt.id} className="bg-white rounded-xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)] flex items-center gap-4">
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-[#1A2340]">{pmt.month}</p>
-                    <p className="text-xs text-gray-400">₹{Number(pmt.grossInr).toLocaleString("en-IN")} gross{pmt.paidAt ? ` · Paid ${new Date(pmt.paidAt).toLocaleDateString("en-IN")}` : ""}</p>
+                <div key={pmt.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${pmt.status === "paid" ? "bg-green-50" : "bg-amber-50"}`}>
+                    <IndianRupee size={15} className={pmt.status === "paid" ? "text-green-600" : "text-amber-500"} />
                   </div>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${pmt.status === "paid" ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}`}>{pmt.status}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-[#1A2340]">{pmt.month}</p>
+                    <p className="text-xs text-gray-400">₹{Number(pmt.grossInr).toLocaleString("en-IN")} gross{pmt.paidAt ? ` · ${new Date(pmt.paidAt).toLocaleDateString("en-IN")}` : ""}</p>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${pmt.status === "paid" ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>{pmt.status}</span>
                 </div>
               ))}
             </div>
@@ -2039,8 +2075,9 @@ function ShadowTeacherTab() {
       {visibleStTab === "goals" && (
         <div className="space-y-4">
           {active.status === "ended" && (
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <p className="text-xs text-gray-500">📋 This engagement has ended — records are read-only.</p>
+            <div className="flex items-center gap-2.5 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+              <CheckCircle2 size={13} className="text-gray-400 shrink-0" />
+              <p className="text-xs text-gray-500 font-medium">This engagement has ended — records are read-only.</p>
             </div>
           )}
           <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
@@ -2071,22 +2108,29 @@ function ShadowTeacherTab() {
               </div>
             )}
             {childGoals.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-4">No goals set yet. Tap "Add Goal" to create the first one.</p>
+              <div className="text-center py-6">
+                <div className="w-10 h-10 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-2.5">
+                  <TrendingUp size={16} className="text-gray-300" />
+                </div>
+                <p className="text-xs font-semibold text-gray-500">No goals yet</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">Tap "Add Goal" to create the first one.</p>
+              </div>
             ) : (
               <div className="space-y-2">
                 {childGoals.map(g => (
-                  <div key={g.id} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg">
+                  <div key={g.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                    <div className={`w-1.5 h-8 rounded-full shrink-0 ${g.isActive ? "bg-teal-400" : "bg-gray-200"}`} />
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium truncate ${g.isActive ? "text-[#1A2340]" : "text-gray-400 line-through"}`}>{g.label}</p>
-                      {g.category && <p className="text-xs text-gray-400">{g.category}</p>}
+                      <p className={`text-sm font-semibold truncate ${g.isActive ? "text-[#1A2340]" : "text-gray-400 line-through"}`}>{g.label}</p>
+                      {g.category && <p className="text-[11px] text-gray-400 mt-0.5">{g.category}</p>}
                     </div>
                     {active.status !== "ended" ? (
                       <button onClick={() => void handleToggleParentGoal(g.id, g.isActive)}
-                        className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold border transition-colors ${g.isActive ? "bg-green-50 text-green-600 border-green-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200" : "bg-gray-100 text-gray-400 border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200"}`}>
+                        className={`shrink-0 text-[10px] px-2.5 py-1 rounded-full font-bold border transition-all ${g.isActive ? "bg-green-50 text-green-600 border-green-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200" : "bg-gray-100 text-gray-400 border-gray-200 hover:bg-green-50 hover:text-green-600 hover:border-green-200"}`}>
                         {g.isActive ? "Active" : "Inactive"}
                       </button>
                     ) : (
-                      <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-semibold border ${g.isActive ? "bg-green-50 text-green-600 border-green-200" : "bg-gray-100 text-gray-400 border-gray-200"}`}>
+                      <span className={`shrink-0 text-[10px] px-2.5 py-1 rounded-full font-bold border ${g.isActive ? "bg-green-50 text-green-600 border-green-200" : "bg-gray-100 text-gray-400 border-gray-200"}`}>
                         {g.isActive ? "Active" : "Inactive"}
                       </span>
                     )}
@@ -2158,8 +2202,12 @@ function ShadowTeacherTab() {
             )}
           </div>
         ) : (
-          <div className="bg-white rounded-xl p-8 text-center shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
-            <p className="text-sm text-gray-400">No trend data yet — your teacher's daily logs with goal ratings will appear here as charts.</p>
+          <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-12 text-center">
+            <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <TrendingUp size={20} className="text-gray-300" />
+            </div>
+            <p className="text-sm font-semibold text-gray-600">No trend data yet</p>
+            <p className="text-xs text-gray-400 mt-1">Charts will appear as your teacher logs goal ratings each session.</p>
           </div>
         )
       )}
