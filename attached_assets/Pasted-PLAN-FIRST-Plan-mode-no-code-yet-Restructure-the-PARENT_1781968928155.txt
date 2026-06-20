@@ -1,0 +1,73 @@
+PLAN FIRST — Plan mode, no code yet. Restructure the PARENT navigation
+from "shadow teacher bolted onto Home" into a proper hub-and-tabs
+architecture that reflects the full Includly product vision, with
+unbuilt areas as polished "coming soon." This is information
+architecture + routing, NOT visual restyling (that comes after, as a
+separate pass).
+
+THE NEW PARENT NAVIGATION:
+Built & launching (fully functional):
+- HOME — a summary hub. Shows cards summarizing: active engagement(s)
+  (teacher, status, next salary, latest log) linking to Progress;
+  upcoming sessions/bookings linking to Bookings; unread messages
+  linking to Inbox; selected child snapshot linking to Child Profile.
+  Home no longer contains the shadow-teacher request directly — it
+  links out to Services. Each summary card taps through to its tab.
+- SERVICES (or "Request") — a dedicated area where the parent chooses
+  what they need: Shadow Teacher (built), Therapist / OT / Speech /
+  Specialist (built via existing search+V2 booking), Art/Games/Skills
+  coach (built via coaching), Therapy Centre (coming soon — parent
+  booking is a stub), Tutor (coming soon — not built). Each option
+  routes to its existing flow; the unbuilt ones show "coming soon."
+- PROGRESS (or "Logs") — daily logs + goals + trends from active
+  engagements. (This is the shadow-teacher engagement workspace's
+  log/goal/trend content, surfaced as its own destination. The Journey
+  tab's "coming soon" can be replaced/merged here.)
+- INBOX — all chats and messages (already built).
+- CHILD PROFILE — switches based on the existing top-left child
+  dropdown. Its own destination.
+
+Coming soon (polished placeholders, NOT functional yet — reuse the
+existing coming-soon component pattern):
+- COMMUNITY — discussion forum.
+- RESOURCES — parent guide, teaching materials (life skills / academic
+  / methods), inclusive school directory.
+- ASK INCLUDLY — AI assistant (tantrum help, recommendations).
+
+NAV REAL ESTATE — handle mobile carefully:
+This is many destinations. On the MOBILE bottom nav (phone-primary),
+show ~4-5 primary items (e.g. Home, Services, Progress, Inbox) plus a
+"More" that contains the rest (Community, Resources, Ask Includly,
+Child Profile if not in the dropdown). On DESKTOP sidebar, more can be
+shown. Propose the exact primary-vs-more split for both mobile and
+desktop. Child Profile is reachable via the top-left dropdown
+regardless.
+
+WHAT THIS REQUIRES (the plan must cover):
+- Nav config changes (nav/config.ts) — the new parent nav items.
+- New routes in App.tsx for any new destinations (Services, Progress,
+  Child Profile as a tab, and the coming-soon areas).
+- Moving the shadow-teacher request OFF Home and INTO Services.
+- Home becomes a summary dashboard: which data each summary card reads
+  (active engagement, bookings, unread count, child) and where each
+  card links.
+- The coming-soon areas use the existing StubPage/coming-soon pattern.
+- Confirm what happens to the current Explore/Bookings/Journey tabs —
+  do they fold into the new structure (Explore → Services? Bookings
+  stays? Journey → Progress?) or remain? Propose the cleanest mapping.
+
+CRITICAL — DO NOT BREAK EXISTING FUNCTIONALITY:
+- All the underlying flows (shadow teacher match/engagement, V2 booking,
+  search, chat, the child switcher, childId scoping) must still work —
+  this moves WHERE they're reached from, not how they work.
+- The SelectedChildProvider / child switcher (just fixed) must not be
+  disturbed.
+- Do NOT restyle anything yet — this is structure + routing only.
+  Keep the existing visual styling; the visual redesign is the next
+  separate pass on top of this new structure.
+- Existing engagements, bookings, and data must remain reachable.
+
+Show me the full plan: the nav config, the route additions, the Home
+summary-card data sources and links, the mobile primary-vs-more split,
+the mapping of current tabs (Explore/Bookings/Journey) to the new
+structure, and every file touched. No code until I approve.

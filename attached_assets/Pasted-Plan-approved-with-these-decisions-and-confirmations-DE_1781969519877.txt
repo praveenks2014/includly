@@ -1,0 +1,44 @@
+Plan approved with these decisions and confirmations:
+
+DECISION 1 — Community & Resources: before wiring forum.tsx and
+resources.tsx in as LIVE nav destinations, VERIFY they actually work
+end to end. Show me what each does:
+- Forum: can a parent view threads, post, reply? Is it functional or a
+shell?
+- Resources: does it show real content, or is it a placeholder page?
+If BOTH genuinely work → wire them in as live (good, more to launch
+with). If either is a half-built shell → mark THAT one coming-soon
+instead. Don't wire a non-functional page in as a live destination. Tell
+me the real state of each, then wire accordingly. Ask Includly stays a
+coming-soon stub regardless.
+
+DECISION 2 — confirmed: shadow-teacher flow stays intact at its current
+route, reached from Services; Progress surfaces logs/goals/trends by
+EXTRACTING those sub-views into a SHARED component reused by both the
+workspace and Progress. CRITICAL: when you extract the log/goal/trend
+views into a shared component, the childId scoping, the data queries,
+and the React Query keys must work identically in BOTH places. Confirm
+the extraction is a pure refactor (same data, same scoping) — the
+shared component must not break scoping in either the workspace or
+Progress. This is the highest-risk part of the plan.
+
+DECISION 3 — confirmed: Bookings stays at /bookings, dropped from
+primary nav, reached via Home card + Services flows.
+
+CONFIRMATIONS:
+1. The redirects (/explore→/services, /journey→/progress) must not
+cause a redirect loop or a navbar flash. Confirm SHELL_PREFIXES covers
+them so they render inside the shell.
+2. The child switcher / SelectedChildProvider (just fixed) must not be
+disturbed by adding the new routes. Confirm the provider still wraps all
+parent routes including the new /services and /progress.
+3. This is STRUCTURE + ROUTING ONLY — no restyling. Confirm the existing
+visual styling is untouched (the visual redesign is the next separate
+pass).
+4. Zero TypeScript errors, and every existing engagement/booking/chat
+reachable from the new IA.
+
+Show me the nav config, the route changes, and especially the shared
+log/goal/trend component extraction (confirming scoping works in both
+places) before deploying. This auto-deploys to dev; no manual production
+deploy.
