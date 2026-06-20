@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { useGetMe, useGetMyProfessionalProfile } from "@workspace/api-client-react";
+import { useGetMe, useGetMyProfessionalProfile, getGetMyProfessionalProfileQueryKey } from "@workspace/api-client-react";
 import { NAV, SHELL_ROOT, type Role, type NavItem } from "@/nav/config";
 
 export function SideNav() {
@@ -8,7 +8,7 @@ export function SideNav() {
   const role = me?.role as Role | undefined;
 
   const { data: proProfile } = useGetMyProfessionalProfile({
-    query: { enabled: role === "professional" },
+    query: { queryKey: getGetMyProfessionalProfileQueryKey(), enabled: role === "professional" },
   });
 
   if (!role || role === "admin") return null;

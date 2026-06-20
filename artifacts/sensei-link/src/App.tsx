@@ -109,11 +109,19 @@ function ClerkQueryClientCacheInvalidator() {
 const HIDE_NAVBAR_PATHS = ["/sign-in", "/sign-up", "/sso-callback", "/onboarding"];
 
 // Wraps children in AppShell when signed in, bare layout otherwise.
-// Used for pages that are public but should show the shell to authenticated users.
+// Used for public pages (e.g. /resources, /support) that should show the parent
+// shell chrome to authenticated users. SelectedChildProvider is included so the
+// AppShell nav (child switcher + "More → Child Profile" link) has child context.
 function AuthShell({ children }: { children: React.ReactNode }) {
   const { isSignedIn, isLoaded } = useAuth();
   if (!isLoaded) return null;
-  if (isSignedIn) return <AppShell>{children}</AppShell>;
+  if (isSignedIn) {
+    return (
+      <SelectedChildProvider>
+        <AppShell>{children}</AppShell>
+      </SelectedChildProvider>
+    );
+  }
   return <>{children}</>;
 }
 

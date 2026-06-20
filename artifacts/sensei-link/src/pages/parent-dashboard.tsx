@@ -4,12 +4,10 @@ import { useUser } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useGetMe,
-  useGetParentDashboard,
   useGetMySessions,
   useSearchProfessionals,
   useCreateRating,
   useGetWalletBalance,
-  useGetMyChildren,
   getGetMeQueryKey,
 } from "@workspace/api-client-react";
 import type { ProfessionalSearchResult, SessionBookingWithDetails } from "@workspace/api-client-react";
@@ -418,191 +416,52 @@ function ChatModal({ professionalId, professionalName, onClose }: { professional
   );
 }
 
-// ─── Progress timeline ─────────────────────────────────────────────────────────
-function ProgressTimeline() {
-  const { data: notes, isLoading } = useQuery<ProgressNote[]>({
-    queryKey: ["sessions-progress"],
-    queryFn: () => fetchWithAuth("/api/sessions/progress").then((r) => r.json()),
-  });
-
-  if (isLoading) return <div className="flex items-center justify-center py-6"><Loader2 size={18} className="animate-spin text-teal-400" /></div>;
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-bold text-[#1A2340] text-sm">Progress Notes</h2>
-        {notes && notes.length > 0 && (
-          <span className="text-[11px] text-gray-400 font-medium">{notes.length} update{notes.length !== 1 ? "s" : ""}</span>
-        )}
-      </div>
-      {!notes || notes.length === 0 ? (
-        <div className="bg-white border border-dashed border-teal-200 rounded-2xl p-6 text-center">
-          <div className="w-10 h-10 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
-            <Sparkles size={18} className="text-teal-400" />
-          </div>
-          <p className="text-sm font-semibold text-gray-700">Progress notes will appear here</p>
-          <p className="text-xs text-gray-400 mt-1">After each session, your specialist leaves a note on your child's progress.</p>
-        </div>
-      ) : (
-        <div className="relative">
-          <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-gradient-to-b from-teal-200 to-teal-50" aria-hidden />
-          <div className="space-y-3">
-            {notes.slice(0, 5).map((note) => (
-              <div key={note.bookingId} className="flex gap-4">
-                <div className="w-9 h-9 rounded-2xl bg-teal-100 flex items-center justify-center shrink-0 z-10 border-2 border-white shadow-sm mt-0.5">
-                  <TrendingUp size={13} className="text-teal-600" />
-                </div>
-                <div className="flex-1 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <p className="text-xs font-bold text-teal-700">{note.professionalName ?? "Your specialist"}</p>
-                    <time className="text-[11px] text-gray-400 shrink-0">
-                      {new Date(note.noteCreatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                    </time>
-                  </div>
-                  {note.parentSummary && <p className="text-sm text-gray-700 leading-relaxed">{note.parentSummary}</p>}
-                  {note.progressMarkers && (
-                    <div className="mt-2.5 flex flex-wrap gap-1.5">
-                      {note.progressMarkers.split(",").filter(Boolean).map((m) => (
-                        <span key={m.trim()} className="text-[11px] bg-teal-50 text-teal-700 border border-teal-100 rounded-full px-2.5 py-0.5 font-medium">{m.trim()}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Referral card ─────────────────────────────────────────────────────────────
-function ReferralCard() {
-  const { toast } = useToast();
-  const [claimCode, setClaimCode] = useState("");
-  const [claiming, setClaiming] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  const { data, refetch } = useQuery<ReferralStats>({
-    queryKey: ["referral-my-code"],
-    queryFn: () => fetchWithAuth("/api/referrals/my-code").then((r) => r.json()),
-  });
-
-  function copyCode() {
-    if (!data?.code) return;
-    navigator.clipboard.writeText(data.shareUrl).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  async function claimReferral() {
-    if (!claimCode.trim()) return;
-    setClaiming(true);
-    try {
-      await fetchWithAuth("/api/referrals/claim", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: claimCode.trim().toUpperCase() }),
-      });
-      toast({ title: "Code claimed! You'll earn ₹100 on your first session." });
-      setClaimCode("");
-      void refetch();
-    } catch {
-      toast({ title: "Could not claim code — check it and try again.", variant: "destructive" });
-    } finally {
-      setClaiming(false);
-    }
-  }
-
-  return (
-    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-teal-200 rounded-2xl p-5">
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-teal-100 flex items-center justify-center shrink-0">
-          <Gift size={18} className="text-teal-600" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900 text-sm">Refer a friend, earn ₹100</p>
-          <p className="text-xs text-gray-500 mt-0.5">Both you and your friend get ₹100 wallet credit when they book their first session.</p>
-        </div>
-      </div>
-      {data && (
-        <>
-          <div className="mt-4 flex items-center gap-2">
-            <div className="flex-1 bg-white border border-teal-200 rounded-xl px-3 py-2 flex items-center justify-between">
-              <span className="font-mono font-bold text-teal-700 tracking-widest text-sm">{data.code}</span>
-              <button onClick={copyCode} className="text-teal-500 hover:text-teal-700 transition-colors" title="Copy share link">
-                {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-              </button>
-            </div>
-          </div>
-          {(data.convertedReferrals > 0 || data.totalEarnedInr > 0) && (
-            <div className="mt-3 flex gap-4 text-center">
-              <div className="flex-1 bg-white rounded-xl border border-teal-100 py-2">
-                <p className="text-lg font-bold text-teal-700">{data.convertedReferrals}</p>
-                <p className="text-[10px] text-gray-500">Friends joined</p>
-              </div>
-              <div className="flex-1 bg-white rounded-xl border border-teal-100 py-2">
-                <p className="text-lg font-bold text-teal-700">₹{data.totalEarnedInr}</p>
-                <p className="text-[10px] text-gray-500">Earned</p>
-              </div>
-            </div>
-          )}
-          <div className="mt-3 flex gap-2">
-            <Input
-              value={claimCode}
-              onChange={(e) => setClaimCode(e.target.value.toUpperCase())}
-              placeholder="Have a friend's code? Enter it"
-              className="h-9 text-sm border-teal-200 bg-white"
-              maxLength={10}
-            />
-            <Button size="sm" className="h-9 bg-teal-600 hover:bg-teal-700 text-white shrink-0" onClick={claimReferral} disabled={claiming || !claimCode.trim()}>
-              {claiming ? <Loader2 size={14} className="animate-spin" /> : "Claim"}
-            </Button>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: HOME
 // ═══════════════════════════════════════════════════════════════════════════════
 function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?: string | null; onTabChange: (t: Tab) => void }) {
-  const { data: dashData } = useGetParentDashboard();
+  const { selectedChildId, selectedChild, childProfiles } = useSelectedChild();
   const { data: sessions } = useGetMySessions();
   const { data: walletData } = useGetWalletBalance();
-  const { data: myChildren = [] } = useGetMyChildren();
-  const primaryChild = (myChildren as Array<{ id: number; name: string }>)[0];
 
-  const { data: recsData } = useSearchProfessionals(
-    { city: city ?? undefined, limit: 4 },
-    { query: { enabled: !!city } as any }
+  // Active shadow-teacher engagement for the selected child → Progress destination.
+  interface HomeEngagement {
+    id: number;
+    childId: number | null;
+    childName: string | null;
+    professionalName: string | null;
+    status: string;
+  }
+  const { data: engagements = [] } = useQuery<HomeEngagement[]>({
+    queryKey: ["parent-engagements"],
+    queryFn: () => fetchWithAuth("/api/engagements").then((r) => r.json()),
+  });
+  const activeEngagement = engagements.find(
+    (e) =>
+      ["active", "notice_period", "paused", "pending_start", "pending_teacher_acceptance"].includes(e.status) &&
+      e.childId === selectedChildId
   );
-  const recommendations = recsData?.professionals ?? [];
 
+  // Upcoming sessions → Bookings destination.
   const upcoming = (sessions ?? [])
     .filter((s) => ["confirmed", "pending_payment"].includes(s.status) && new Date(s.bookedDate) >= new Date())
-    .sort((a, b) => new Date(a.bookedDate).getTime() - new Date(b.bookedDate).getTime())
-    .slice(0, 2);
+    .sort((a, b) => new Date(a.bookedDate).getTime() - new Date(b.bookedDate).getTime());
+  const nextSession = upcoming[0];
 
-  const activity = [
-    ...(dashData?.recentUnlocks ?? []).map((u) => ({
-      id: `unlock-${u.id}`,
-      text: `Connected with ${u.professional?.fullName ?? "a professional"}`,
-      time: u.unlockedAt,
-      icon: <User size={13} className="text-teal-600" />,
-    })),
-    ...(sessions ?? []).slice(0, 3).map((s) => ({
-      id: `session-${s.id}`,
-      text: `Booked a session with ${s.professionalName ?? "a professional"}`,
-      time: s.createdAt ?? s.bookedDate,
-      icon: <CalendarCheck size={13} className="text-violet-600" />,
-    })),
-  ]
-    .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-    .slice(0, 5);
+  // Unread messages → Inbox destination.
+  const { data: threads = [] } = useQuery<ThreadSummary[]>({
+    queryKey: ["connect-inbox"],
+    queryFn: async () => {
+      const data = await fetchWithAuth("/api/connect/inbox").then((r) => r.json()).catch(() => []);
+      return Array.isArray(data) ? data : [];
+    },
+  });
+  const unreadCount = threads.reduce((sum, t) => sum + (t.unread ?? 0), 0);
+
+  // Selected-child snapshot → Child Profile destination.
+  const snapshotChild = selectedChild ?? childProfiles[0];
+
+  const nothingActive = !activeEngagement && upcoming.length === 0 && unreadCount === 0;
 
   return (
     <div className="space-y-5 pb-4">
@@ -628,30 +487,81 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
         </div>
       </div>
 
-      {/* ── Quick stats ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: "Sessions", value: (sessions ?? []).length, icon: <CalendarCheck size={14} className="text-violet-500" />, bg: "bg-violet-50", border: "border-violet-100" },
-          { label: "Upcoming", value: upcoming.length, icon: <Clock size={14} className="text-amber-500" />, bg: "bg-amber-50", border: "border-amber-100" },
-          { label: "Connected", value: dashData?.totalUnlocks ?? 0, icon: <User size={14} className="text-teal-600" />, bg: "bg-teal-50", border: "border-teal-100" },
-        ].map((stat) => (
-          <div key={stat.label} className="bg-white border border-gray-100 rounded-2xl p-3.5 shadow-sm text-center">
-            <div className={`w-8 h-8 ${stat.bg} border ${stat.border} rounded-xl flex items-center justify-center mx-auto mb-2`}>{stat.icon}</div>
-            <p className="text-[1.35rem] font-bold text-[#1A2340] leading-none">{stat.value}</p>
-            <p className="text-[10px] text-gray-400 mt-1 font-medium">{stat.label}</p>
+      {/* ── Active engagement → Progress ── */}
+      {activeEngagement && (
+        <Link href="/progress">
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center gap-3 hover:border-teal-200 hover:shadow-md transition-all cursor-pointer">
+            <div className="w-10 h-10 bg-gradient-to-br from-teal-100 to-teal-50 border border-teal-100 rounded-xl flex items-center justify-center shrink-0">
+              <TrendingUp size={15} className="text-teal-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-[#1A2340] truncate">
+                {activeEngagement.childName ? `${activeEngagement.childName}'s progress` : "Active engagement"}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5 truncate capitalize">
+                {activeEngagement.professionalName ?? "Shadow teacher"} · {activeEngagement.status.replace(/_/g, " ")}
+              </p>
+            </div>
+            <div className="w-7 h-7 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
+              <ArrowRight size={13} className="text-gray-400" />
+            </div>
           </div>
-        ))}
-      </div>
+        </Link>
+      )}
 
-      {/* ── Child profile quick-edit ─────────────────────────────────── */}
-      {primaryChild && (
-        <Link href={`/children/${primaryChild.id}/edit`}>
+      {/* ── Upcoming sessions → Bookings ── */}
+      {upcoming.length > 0 && (
+        <Link href="/bookings">
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center gap-3 hover:border-violet-200 hover:shadow-md transition-all cursor-pointer">
+            <div className="w-10 h-10 bg-gradient-to-br from-violet-100 to-violet-50 border border-violet-100 rounded-xl flex items-center justify-center shrink-0">
+              <CalendarCheck size={15} className="text-violet-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-[#1A2340]">
+                {upcoming.length} upcoming session{upcoming.length !== 1 ? "s" : ""}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                {nextSession
+                  ? `Next: ${nextSession.professionalName ?? "Professional"} · ${new Date(nextSession.bookedDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
+                  : "View your schedule"}
+              </p>
+            </div>
+            <div className="w-7 h-7 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
+              <ArrowRight size={13} className="text-gray-400" />
+            </div>
+          </div>
+        </Link>
+      )}
+
+      {/* ── Unread messages → Inbox ── */}
+      {unreadCount > 0 && (
+        <Link href="/inbox">
+          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center gap-3 hover:border-teal-200 hover:shadow-md transition-all cursor-pointer">
+            <div className="w-10 h-10 bg-gradient-to-br from-teal-100 to-teal-50 border border-teal-100 rounded-xl flex items-center justify-center shrink-0">
+              <MessageCircle size={15} className="text-teal-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-[#1A2340]">
+                {unreadCount} unread message{unreadCount !== 1 ? "s" : ""}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">Open your inbox to reply</p>
+            </div>
+            <div className="w-7 h-7 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
+              <ArrowRight size={13} className="text-gray-400" />
+            </div>
+          </div>
+        </Link>
+      )}
+
+      {/* ── Selected-child snapshot → Child Profile ── */}
+      {snapshotChild && (
+        <Link href={`/children/${snapshotChild.id}/edit`}>
           <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center gap-3 hover:border-violet-200 hover:shadow-md transition-all cursor-pointer">
             <div className="w-10 h-10 bg-gradient-to-br from-violet-100 to-violet-50 border border-violet-100 rounded-xl flex items-center justify-center shrink-0">
               <User size={15} className="text-violet-500" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-[#1A2340]">{primaryChild.name}'s Profile</p>
+              <p className="text-sm font-bold text-[#1A2340] truncate">{snapshotChild.name}'s Profile</p>
               <p className="text-[11px] text-gray-400 mt-0.5">Update conditions, goals & availability</p>
             </div>
             <div className="w-7 h-7 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
@@ -661,7 +571,20 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
         </Link>
       )}
 
-      {/* ── Shadow Teacher CTA ───────────────────────────────────────── */}
+      {/* ── Empty state when nothing is active ── */}
+      {nothingActive && (
+        <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-8 text-center">
+          <div className="w-12 h-12 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+            <Sparkles size={20} className="text-teal-400" />
+          </div>
+          <p className="text-sm font-semibold text-gray-700">Your support hub is ready</p>
+          <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
+            Once you start a service, your engagement, upcoming sessions and messages will show up here at a glance.
+          </p>
+        </div>
+      )}
+
+      {/* ── Request a Shadow Teacher → Services ── */}
       <Link href="/services">
         <div className="bg-gradient-to-r from-[#2EC4A5] to-[#26a88d] rounded-2xl p-5 shadow-[0_4px_18px_rgba(46,196,165,0.28)] flex items-center gap-4 hover:shadow-[0_6px_24px_rgba(46,196,165,0.38)] transition-shadow cursor-pointer">
           <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
@@ -669,95 +592,13 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-bold text-white text-sm">Request a Shadow Teacher</p>
-            <p className="text-xs text-white/70 mt-0.5">Get matched with a verified teacher for your child.</p>
+            <p className="text-xs text-white/70 mt-0.5">Get matched with a verified teacher, or find a specialist.</p>
           </div>
           <div className="w-8 h-8 bg-white/15 rounded-xl flex items-center justify-center shrink-0">
             <ArrowRight size={14} className="text-white" />
           </div>
         </div>
       </Link>
-
-      {/* ── Upcoming sessions ────────────────────────────────────────── */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-bold text-[#1A2340] text-sm">Upcoming Sessions</h2>
-          <button onClick={() => onTabChange("bookings")} className="text-xs text-teal-600 font-semibold hover:text-teal-700 flex items-center gap-0.5">
-            View all <ArrowRight size={11} />
-          </button>
-        </div>
-        {upcoming.length === 0 ? (
-          <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-6 text-center">
-            <div className="w-10 h-10 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <CalendarCheck size={18} className="text-gray-300" />
-            </div>
-            <p className="text-sm font-semibold text-gray-600">No upcoming sessions</p>
-            <button onClick={() => onTabChange("find")} className="text-xs text-teal-600 font-semibold underline mt-1">Find a professional</button>
-          </div>
-        ) : (
-          <div className="space-y-3">{upcoming.map((s) => <SessionCard key={s.id} s={s} />)}</div>
-        )}
-      </div>
-
-      {/* ── Recommendations ──────────────────────────────────────────── */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-bold text-[#1A2340] text-sm">{city ? `Near ${city}` : "Recommended Professionals"}</h2>
-          <button onClick={() => onTabChange("find")} className="text-xs text-teal-600 font-semibold hover:text-teal-700 flex items-center gap-0.5">
-            See all <ArrowRight size={11} />
-          </button>
-        </div>
-        {recommendations.length === 0 ? (
-          <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-6 text-center">
-            <div className="w-10 h-10 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <Search size={17} className="text-teal-300" />
-            </div>
-            <p className="text-sm font-semibold text-gray-600">{city ? "No professionals nearby yet" : "Browse professionals"}</p>
-            <button onClick={() => onTabChange("find")} className="text-xs text-teal-600 font-semibold underline mt-1">Search all</button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {recommendations.map((p) => <ProfCard key={p.id} p={p} />)}
-          </div>
-        )}
-      </div>
-
-      {/* ── Progress notes ───────────────────────────────────────────── */}
-      <ProgressTimeline />
-
-      {/* ── Recent activity ──────────────────────────────────────────── */}
-      {activity.length > 0 && (
-        <div>
-          <h2 className="font-bold text-[#1A2340] text-sm mb-3">Recent Activity</h2>
-          <div className="bg-white border border-gray-100 rounded-2xl divide-y divide-gray-50 shadow-sm overflow-hidden">
-            {activity.map((a) => (
-              <div key={a.id} className="flex items-center gap-3 px-4 py-3.5">
-                <div className="w-8 h-8 bg-gray-50 border border-gray-100 rounded-xl flex items-center justify-center shrink-0">{a.icon}</div>
-                <p className="text-sm text-gray-700 flex-1 leading-snug">{a.text}</p>
-                <span className="text-[11px] text-gray-400 shrink-0 tabular-nums">{timeAgo(a.time)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Referral ─────────────────────────────────────────────────── */}
-      <ReferralCard />
-
-      {/* ── Featured resource ────────────────────────────────────────── */}
-      <div className="bg-gradient-to-br from-[#2EC4A5] to-[#1a9a82] rounded-2xl p-5 text-white flex items-center gap-5 shadow-[0_4px_16px_rgba(46,196,165,0.22)]">
-        <div className="flex-1 min-w-0">
-          <div className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest bg-white/15 rounded-full px-2.5 py-1 mb-2.5">
-            <BookOpen size={10} /> Resource
-          </div>
-          <h3 className="font-bold text-[15px] leading-snug">How to choose the right shadow teacher</h3>
-          <p className="text-xs text-white/65 mt-1.5 leading-relaxed">A parent's guide to qualifications, communication style, and approach.</p>
-        </div>
-        <Link href="/support" className="shrink-0">
-          <Button size="sm" className="bg-white text-[#1a9a82] hover:bg-teal-50 gap-1 font-bold shadow-sm">
-            Read <ArrowRight size={12} />
-          </Button>
-        </Link>
-      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
-import { useGetMe, useGetMyProfessionalProfile } from "@workspace/api-client-react";
+import { useGetMe, useGetMyProfessionalProfile, getGetMyProfessionalProfileQueryKey } from "@workspace/api-client-react";
 import { NAV, type Role } from "@/nav/config";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import {
@@ -20,7 +20,7 @@ export function BottomNav() {
   const [moreOpen, setMoreOpen] = useState(false);
 
   const { data: proProfile } = useGetMyProfessionalProfile({
-    query: { enabled: role === "professional" },
+    query: { queryKey: getGetMyProfessionalProfileQueryKey(), enabled: role === "professional" },
   });
 
   if (!role || role === "admin") return null;
