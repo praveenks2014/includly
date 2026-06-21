@@ -14,3 +14,4 @@
 - [Trial credit pinning pattern](trial-credit-pinning.md) — credit amount stored in salary payment record at first order creation; retries reuse existing.trialCreditInr, never recompute from eng; trialCreditApplied flips at verify only
 - [Full buyout exit pattern](full-buyout-pattern.md) — reuses buyout columns/verify endpoint; endDate param sets effectiveEndDate; if today → ended immediately in verify handler; endedReason="full_buyout"; migration 0025
 - [fetchWithAuth non-2xx](fetchwithauth-nonok.md) — fetchWithAuth never throws on non-2xx; queryFns doing .then(r=>r.json()) treat 403/500 bodies as success → guard with Array.isArray/r.ok before .reduce/.find/.map
+- [pnpm monorepo dep removal](pnpm-monorepo-dep-removal.md) — uninstallLanguagePackages targets the workspace ROOT (reports success but no-op on artifact deps); remove artifact deps with `pnpm --filter @workspace/<x> remove <pkg>`

@@ -1,0 +1,47 @@
+The wheel date/time pickers (react-mobile-picker) have cross-platform
+problems: on desktop they're hard to scroll with a mouse; on mobile the
+whole PAGE scrolls along with the picker (the picker isn't trapping the
+scroll/touch event). Fix this so the date and time inputs work cleanly
+on BOTH mobile and desktop.
+
+RECOMMENDED APPROACH — replace the wheel pickers with DROPDOWN SELECTS
+(works robustly on both platforms, no scroll-trapping issues,
+accessible):
+
+DATE OF BIRTH (WheelDatePicker.tsx → replace):
+- Three side-by-side shadcn Select dropdowns: Day (1-31), Month
+  (Jan-Dec), Year (descending from current year back ~18 years, or to
+  1990 — whatever the current range is).
+- On both desktop and mobile, native/shadcn dropdowns work cleanly: a
+  mouse user clicks and picks; a mobile user gets the OS-native picker.
+- Saves in the SAME format as now ("YYYY-MM-DD") so nothing downstream
+  changes. Keep the existing legacy-value parsing (an existing DOB
+  pre-selects the right day/month/year).
+- Handle invalid combinations gracefully (e.g. if Day=31 and Month=Feb,
+  clamp or validate — don't allow an impossible date).
+
+SCHOOL HOURS TIME PICKER (WheelTimePicker.tsx → replace):
+- Two dropdowns: Hour (00-23) and Minute (00/15/30/45 — keep the
+  quarter-hour snapping).
+- Same format as now ("HH:MM"). Keep the existing snapping of legacy
+  non-quarter values.
+- One pair for Start, one for End.
+
+REQUIREMENTS:
+- Must work identically and cleanly on BOTH desktop (mouse) and mobile
+  (touch) — this is the whole point. No page-scroll bleed, no awkward
+  drag.
+- Keep the SAME data format and the SAME legacy-value handling that the
+  wheel pickers had (don't lose the existing-data preservation).
+- Remove react-mobile-picker if it's no longer used anywhere else
+  (check first — if nothing else imports it, uninstall it).
+- This is a control swap only — do NOT change the surrounding form
+  logic, validation, the fields' DB columns, or anything else in the
+  add-child wizard. Only the date and time input controls change.
+
+If you think dropdowns are NOT the best fit for some reason, tell me
+your alternative and why before building — but the hard requirement is
+that it works cleanly on both mobile and desktop without the
+scroll-bleed problem.
+
+Show me the two replaced components. This auto-deploys to dev.

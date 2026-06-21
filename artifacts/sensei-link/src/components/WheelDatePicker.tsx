@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
-import Picker from "react-mobile-picker";
-import { X } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface WheelDatePickerProps {
   value: string;
@@ -9,135 +14,113 @@ interface WheelDatePickerProps {
 }
 
 const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  { value: "01", label: "Jan" },
+  { value: "02", label: "Feb" },
+  { value: "03", label: "Mar" },
+  { value: "04", label: "Apr" },
+  { value: "05", label: "May" },
+  { value: "06", label: "Jun" },
+  { value: "07", label: "Jul" },
+  { value: "08", label: "Aug" },
+  { value: "09", label: "Sep" },
+  { value: "10", label: "Oct" },
+  { value: "11", label: "Nov" },
+  { value: "12", label: "Dec" },
 ];
-
-const MONTH_TO_NUM: Record<string, string> = Object.fromEntries(
-  MONTHS.map((m, i) => [m, String(i + 1).padStart(2, "0")])
-);
-const NUM_TO_MONTH: Record<string, string> = Object.fromEntries(
-  MONTHS.map((m, i) => [String(i + 1).padStart(2, "0"), m])
-);
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: CURRENT_YEAR - 1990 + 1 }, (_, i) =>
   String(CURRENT_YEAR - i)
 );
-const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"));
 
-function parseIso(iso: string): { day: string; month: string; year: string } {
+interface DateParts {
+  day: string;
+  month: string;
+  year: string;
+}
+
+function parseIso(iso: string): DateParts {
   if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
     const [y, m, d] = iso.split("-");
-    return {
-      year: y,
-      month: NUM_TO_MONTH[m] ?? "Jan",
-      day: d,
-    };
+    return { year: y, month: m, day: d };
   }
-  return { day: "01", month: "Jan", year: String(CURRENT_YEAR - 5) };
+  return { day: "", month: "", year: "" };
 }
 
-function toIso(day: string, month: string, year: string): string {
-  const m = MONTH_TO_NUM[month] ?? "01";
-  return `${year}-${m}-${day}`;
-}
-
-function formatDisplay(iso: string): string {
-  if (!iso) return "";
-  const [y, m, d] = iso.split("-");
-  const monthName = NUM_TO_MONTH[m] ?? m;
-  return `${parseInt(d)} ${monthName} ${y}`;
+function daysInMonth(month: string, year: string): number {
+  const m = parseInt(month, 10);
+  const y = parseInt(year, 10);
+  if (!m || !y) return 31;
+  return new Date(y, m, 0).getDate();
 }
 
 export function WheelDatePicker({ value, onChange }: WheelDatePickerProps) {
-  const [open, setOpen] = useState(false);
-  const [pickerValue, setPickerValue] = useState(() => parseIso(value));
+  const [parts, setParts] = useState<DateParts>(() => parseIso(value));
 
   useEffect(() => {
-    if (open) setPickerValue(parseIso(value));
-  }, [open, value]);
+    setParts(parseIso(value));
+  }, [value]);
 
-  function handleConfirm() {
-    onChange(toIso(pickerValue.day, pickerValue.month, pickerValue.year));
-    setOpen(false);
+  const maxDay =
+    parts.month && parts.year ? daysInMonth(parts.month, parts.year) : 31;
+  const days = Array.from({ length: maxDay }, (_, i) =>
+    String(i + 1).padStart(2, "0")
+  );
+
+  function handleChange(field: keyof DateParts, val: string) {
+    const next: DateParts = { ...parts, [field]: val };
+    // Clamp an impossible day (e.g. 31 Feb) down to the month's last valid day.
+    const max =
+      next.month && next.year ? daysInMonth(next.month, next.year) : 31;
+    if (next.day && parseInt(next.day, 10) > max) {
+      next.day = String(max).padStart(2, "0");
+    }
+    setParts(next);
+    if (next.day && next.month && next.year) {
+      onChange(`${next.year}-${next.month}-${next.day}`);
+    }
   }
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={`w-full rounded-lg border px-3 py-2.5 text-sm text-left transition-colors focus:outline-none focus:ring-1 focus:ring-teal-500 ${
-          value
-            ? "border-gray-200 text-gray-900 bg-white focus:border-teal-500"
-            : "border-gray-200 text-gray-400 bg-white focus:border-teal-500"
-        }`}
-      >
-        {value ? formatDisplay(value) : "Select date of birth"}
-      </button>
+    <div className="grid grid-cols-3 gap-2">
+      <Select value={parts.day} onValueChange={(v) => handleChange("day", v)}>
+        <SelectTrigger className="rounded-lg" aria-label="Day">
+          <SelectValue placeholder="Day" />
+        </SelectTrigger>
+        <SelectContent>
+          {days.map((d) => (
+            <SelectItem key={d} value={d}>
+              {parseInt(d, 10)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end">
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setOpen(false)}
-          />
-          <div className="relative z-10 rounded-t-2xl bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100"
-              >
-                <X size={16} />
-              </button>
-              <p className="text-sm font-semibold text-gray-800">Date of birth</p>
-              <button
-                type="button"
-                onClick={handleConfirm}
-                className="rounded-lg bg-teal-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-teal-700 active:bg-teal-800"
-              >
-                Done
-              </button>
-            </div>
+      <Select value={parts.month} onValueChange={(v) => handleChange("month", v)}>
+        <SelectTrigger className="rounded-lg" aria-label="Month">
+          <SelectValue placeholder="Month" />
+        </SelectTrigger>
+        <SelectContent>
+          {MONTHS.map((m) => (
+            <SelectItem key={m.value} value={m.value}>
+              {m.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
-            <div className="px-4 py-2">
-              <Picker
-                value={pickerValue}
-                onChange={(v) => setPickerValue(v as typeof pickerValue)}
-                height={210}
-                itemHeight={42}
-                wheelMode="natural"
-              >
-                <Picker.Column name="day">
-                  {DAYS.map((d) => (
-                    <Picker.Item key={d} value={d}>
-                      <span className="text-base font-medium">{parseInt(d)}</span>
-                    </Picker.Item>
-                  ))}
-                </Picker.Column>
-                <Picker.Column name="month">
-                  {MONTHS.map((m) => (
-                    <Picker.Item key={m} value={m}>
-                      <span className="text-base font-medium">{m}</span>
-                    </Picker.Item>
-                  ))}
-                </Picker.Column>
-                <Picker.Column name="year">
-                  {YEARS.map((y) => (
-                    <Picker.Item key={y} value={y}>
-                      <span className="text-base font-medium">{y}</span>
-                    </Picker.Item>
-                  ))}
-                </Picker.Column>
-              </Picker>
-            </div>
-
-            <div className="h-safe-bottom pb-6" />
-          </div>
-        </div>
-      )}
-    </>
+      <Select value={parts.year} onValueChange={(v) => handleChange("year", v)}>
+        <SelectTrigger className="rounded-lg" aria-label="Year">
+          <SelectValue placeholder="Year" />
+        </SelectTrigger>
+        <SelectContent>
+          {YEARS.map((y) => (
+            <SelectItem key={y} value={y}>
+              {y}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
