@@ -239,7 +239,7 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       .where(and(
         isNotNull(shadowTeacherMatchesTable.selectedProfessionalId),
         inArray(shadowTeacherMatchesTable.status, [
-          "committed", "pending_commitment",
+          "pending_commitment",
           "trial_pending", "trial_started", "trial_done",
         ]),
       ));

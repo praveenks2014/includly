@@ -277,7 +277,7 @@ router.post("/shadow-teacher/:matchId/verify-request-payment", requireAuth, requ
     .where(and(
       isNotNull(shadowTeacherMatchesTable.selectedProfessionalId),
       inArray(shadowTeacherMatchesTable.status, [
-        "committed", "pending_commitment",
+        "pending_commitment",
         "trial_pending", "trial_started", "trial_done",
       ]),
     ));
