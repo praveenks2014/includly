@@ -1,0 +1,84 @@
+PLAN FIRST — Plan mode. Four targeted fixes based on the audit of
+task #90. Show me the plan for each before building.
+
+═══ FIX 1 — INBOX: surface the real error ═══
+The parent inbox endpoint and component are correctly wired. But
+.catch(() => {}) in MessagesTab silently swallows all errors, making
+auth failures and network errors indistinguishable from a genuine
+empty inbox. Two changes:
+
+1a. Remove the silent catch — replace with proper error state so if
+the fetch fails, the parent sees a meaningful message ("Couldn't load
+conversations — please try again") instead of the empty-state copy.
+
+1b. Separately: call GET /api/connect/parent-inbox as a parent user
+RIGHT NOW in Plan mode and show me the raw response (status code +
+body). I need to know whether the endpoint actually returns data or
+returns an error — this tells us whether the inbox is genuinely empty
+or whether there's a real auth/data bug to fix. Do not assume it
+works; actually call it and show me the response.
+
+═══ FIX 2 — NEW REQUEST AFTER ENGAGEMENT ENDS ═══
+Root cause: when an engagement ends, the shadow_teacher_matches row
+is NOT updated to a terminal status (cancelled/refunded/committed),
+so the duplicate-request guard (lines 157-188 shadowTeacher.ts)
+returns 409 and blocks a new request for that child.
+
+Fix: when an engagement transitions to "ended" status (wherever that
+transition is set — the lifecycle endpoint / scheduler / verify-
+buyout-payment), also update the corresponding shadow_teacher_matches
+row to status "committed" (or a new terminal status if more
+appropriate) so the guard allows a new request. The fix must cover
+ALL the paths that end an engagement:
+- Notice period expiry (scheduler)
+- 15-day buyout payment confirmed
+- Full buyout payment confirmed (immediate + future-date)
+- Admin override ending an engagement
+- Teacher decline (pending_teacher_acceptance → ended)
+
+Show me every place engagement status is set to "ended" and confirm
+the match-row update is added to ALL of them. Do not change the
+guard logic itself — fix the state transition to correctly close
+the match row.
+
+═══ FIX 3 — MATCHING FILTER: close the committed-match gap ═══
+Current filter: status != 'ended' in shadow_teacher_engagements.
+Gap: a teacher who has a committed match row (shadow_teacher_matches)
+but whose engagement hasn't been created yet slips through.
+
+Fix: extend the exclusion in BOTH queries (shadowTeacher.ts and
+professionals.ts) to ALSO exclude teachers whose most recent
+shadow_teacher_matches row has status "committed" (or equivalent
+pre-engagement-creation status). The teacher is effectively
+unavailable from commit onwards, not just from engagement creation.
+Do NOT change scoring weights.
+
+═══ FIX 4 — CHILD PROFILE IN DESKTOP SIDEBAR ═══
+Child Profile does not appear in the desktop SideNav — it's only in
+the mobile More sheet via a BottomNav hardcoded injection. Add it to
+the desktop sidebar.
+
+Add Child Profile as a nav item in nav/config.ts with mobileHidden:
+true (so it doesn't appear in the mobile bottom nav, where it's
+already handled by the BottomNav injection). The desktop SideNav
+reads from NAV[role] so adding it there makes it appear on desktop.
+Use the same child-aware label/icon as the mobile version (the
+selected child's name if available, else "Child Profile").
+
+CRITICAL: do NOT disturb the BottomNav hardcoded injection (mobile
+More sheet still works as before) or the top-left child dropdown
+(still works everywhere). This is an additive nav config change only.
+
+═══ CONFIRM ═══
+None of these touch: childId scoping, engagement lifecycle OTP,
+payments/Razorpay, matching scoring weights, or the community/
+resources pages. Fix 2 touches lifecycle state transitions — confirm
+it covers ALL paths that end an engagement (list them). Fix 3 touches
+candidate filtering only.
+
+Show me the plan for each, especially:
+- The raw /api/connect/parent-inbox response (Fix 1)
+- Every code path where engagement status → "ended" (Fix 2, the
+  critical one)
+- The updated filter condition for both queries (Fix 3)
+No code until I approve.

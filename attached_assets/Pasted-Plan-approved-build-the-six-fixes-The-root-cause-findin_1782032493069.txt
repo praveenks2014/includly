@@ -1,0 +1,43 @@
+Plan approved — build the six fixes. The root-cause findings are good
+(G5 = mis-pathed list query not broken posting; G4 = inbox endpoint is
+professional-only so parents need a new path). A few watch-points:
+
+1. G1b (Home cross-engagement summary) — you flagged this aggregates
+across ALL engagements, not just the selected child, and "preserve
+childId scoping when aggregating." This is the subtle one: aggregating
+across children must still attribute each engagement's data to the
+right child. Confirm the aggregation reads each engagement's own
+childId correctly and doesn't mix one child's logs/trends into
+another's. The "owed log derived from whether a parent log exists for
+today" logic must be per-engagement/per-child, not global.
+
+2. G3 (exclude engaged teachers) — confirm the active-status list is
+COMPLETE: pending_start, active, paused, notice_period,
+pending_teacher_acceptance excluded; ended (and any fully-terminal
+status) available. Double-check: a teacher in notice_period is ending
+soon but still engaged — correctly excluded for the overlap period.
+And apply the exclusion to BOTH the shadow-match candidate query AND
+the professional search (you noted both — confirm both are done).
+Do NOT touch scoring weights.
+
+3. G4 (parent inbox) — the largest group. The chattable-vs-read-only
+rule must be correct: a parent should be able to chat where messaging
+is currently allowed (active match/engagement) and see past/non-active
+ones read-only. Confirm the rule is derived from real engagement/
+booking state, and that the existing connect-access gate (masking)
+still applies — the new parent inbox path must NOT bypass the chat
+masking rules. This is important: a new endpoint is a chance to
+accidentally leak unmasked contact info. Confirm masking holds on the
+parent inbox.
+
+4. G2c — confirm (don't duplicate): an ended engagement frees the
+teacher via the G3 filter (non-ended statuses). Verify the parent can
+actually start a new request after ending one, end to end.
+
+5. No migration (G6 reuses careNotes jsonb) — confirm. And G6 is
+additive to the intake only — don't disturb the rest of the wizard.
+
+Confirm none of these touch childId scoping rules, lifecycle/OTP,
+payments, or matching scoring. Show me the new parent inbox endpoint
+(G4), the G3 filter change, and the G1b aggregation before deploying.
+This auto-deploys to dev; no manual production deploy.

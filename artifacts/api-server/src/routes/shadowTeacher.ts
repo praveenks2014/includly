@@ -265,12 +265,27 @@ router.post("/shadow-teacher/:matchId/verify-request-payment", requireAuth, requ
     .where(eq(shadowTeacherMatchesTable.id, matchId));
 
   // Exclude shadow teachers who already have an active (non-ended) engagement
-  const busyProfIds = (
-    await db
-      .select({ professionalId: shadowTeacherEngagementsTable.professionalId })
-      .from(shadowTeacherEngagementsTable)
-      .where(sql`${shadowTeacherEngagementsTable.status} != 'ended'`)
-  ).map((r) => r.professionalId);
+  const engBusyRows = await db
+    .select({ professionalId: shadowTeacherEngagementsTable.professionalId })
+    .from(shadowTeacherEngagementsTable)
+    .where(sql`${shadowTeacherEngagementsTable.status} != 'ended'`);
+
+  // Also exclude teachers selected in an in-flight match (no engagement created yet)
+  const matchBusyRows = await db
+    .select({ professionalId: shadowTeacherMatchesTable.selectedProfessionalId })
+    .from(shadowTeacherMatchesTable)
+    .where(and(
+      isNotNull(shadowTeacherMatchesTable.selectedProfessionalId),
+      inArray(shadowTeacherMatchesTable.status, [
+        "committed", "pending_commitment",
+        "trial_pending", "trial_started", "trial_done",
+      ]),
+    ));
+
+  const busyProfIds = [...new Set([
+    ...engBusyRows.map((r) => r.professionalId),
+    ...matchBusyRows.map((r) => r.professionalId!),
+  ])];
 
   // Run scoring and surface up to 3 candidates
   const allProfessionals = await db

@@ -1,6 +1,8 @@
 import { useLocation, Link } from "wouter";
 import { useGetMe, useGetMyProfessionalProfile, getGetMyProfessionalProfileQueryKey } from "@workspace/api-client-react";
 import { NAV, SHELL_ROOT, type Role, type NavItem } from "@/nav/config";
+import { useSelectedChild } from "@/contexts/SelectedChildContext";
+import { UserCircle2 } from "lucide-react";
 
 export function SideNav() {
   const [loc] = useLocation();
@@ -11,6 +13,8 @@ export function SideNav() {
     query: { queryKey: getGetMyProfessionalProfileQueryKey(), enabled: role === "professional" },
   });
 
+  const { selectedChildId } = useSelectedChild();
+
   if (!role || role === "admin") return null;
   const allTabs = NAV[role].filter(
     (item) => !item.specialtyFilter || proProfile?.specialty === item.specialtyFilter,
@@ -18,6 +22,7 @@ export function SideNav() {
   const primaryTabs = allTabs.filter((item) => !item.mobileHidden);
   const secondaryTabs = allTabs.filter((item) => item.mobileHidden);
   const shellRoot = SHELL_ROOT[role];
+  const showChildProfile = role === "parent" && selectedChildId != null;
 
   const renderItem = (item: NavItem) => {
     const active = item.match(loc);
@@ -64,6 +69,24 @@ export function SideNav() {
           <div className="my-3 border-t border-border" />
         )}
         {secondaryTabs.map(renderItem)}
+        {showChildProfile && (
+          <>
+            {secondaryTabs.length === 0 && <div className="my-3 border-t border-border" />}
+            <Link
+              href={`/children/${selectedChildId}/edit`}
+              replace
+              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                loc.startsWith("/children")
+                  ? "bg-teal-50 text-teal-700"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+              }`}
+              style={{ minHeight: 44 }}
+            >
+              <UserCircle2 size={18} strokeWidth={loc.startsWith("/children") ? 2.5 : 1.8} />
+              Child Profile
+            </Link>
+          </>
+        )}
       </nav>
     </aside>
   );

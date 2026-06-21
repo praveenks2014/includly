@@ -867,17 +867,28 @@ interface ThreadSummary {
 function MessagesTab() {
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [chatProfessional, setChatProfessional] = useState<{ id: number; name: string } | null>(null);
 
   useEffect(() => {
     fetchWithAuth("/api/connect/parent-inbox")
       .then((r) => r.json())
       .then((data) => setThreads(Array.isArray(data) ? data : []))
-      .catch(() => {})
+      .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-teal-600" /></div>;
+
+  if (fetchError) return (
+    <div className="bg-white border border-dashed border-red-200 rounded-2xl p-12 text-center">
+      <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+        <MessageCircle size={20} className="text-red-300" />
+      </div>
+      <p className="text-sm font-semibold text-gray-600">Couldn't load conversations</p>
+      <p className="text-xs text-gray-400 mt-1">Please try again in a moment.</p>
+    </div>
+  );
 
   return (
     <div className="space-y-5 pb-4">

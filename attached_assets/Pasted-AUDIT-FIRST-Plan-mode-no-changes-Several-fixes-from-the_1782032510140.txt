@@ -1,0 +1,44 @@
+AUDIT FIRST — Plan mode, no changes. Several fixes from the previous
+build (Groups G2b, G3, G4) appear not to be working. Diagnose each
+before I write a fix prompt.
+
+1. INBOX BLANK (G4 — parent inbox endpoint):
+The parent Inbox is still blank. Was the parent-facing inbox endpoint
+actually built? The plan required a NEW parent inbox API route because
+the existing inbox is professional-only. 
+- Does a parent-facing inbox endpoint exist? What route?
+- What does the parent Inbox tab currently render — what component,
+  what API call does it make?
+- Why is it blank — is the endpoint missing, returning empty, or is
+  the frontend not wired to the right endpoint?
+Show me the actual code for the Inbox tab and its data source.
+
+2. NEW SHADOW TEACHER REQUEST AFTER ENGAGEMENT ENDS (G2b/G2c):
+A parent cannot request a new shadow teacher after their current
+engagement ends. 
+- What does the ended-engagement state currently show? Is there a CTA
+  to start a new request?
+- When an engagement is ended, is the parent able to navigate to
+  Services → Shadow Teacher to start a fresh match request?
+- Is the dead "Switch to the Find tab" text still present on ended
+  engagements?
+Show me what the ended-engagement UI currently renders.
+
+3. MATCHING — ENGAGED TEACHERS STILL APPEARING (G3):
+Teachers with an active engagement should be excluded from matching.
+- Was the candidate-filtering change applied to BOTH the shadow-match
+  candidate query AND the professional search query?
+- Show me the current WHERE clause / filter in both queries — confirm
+  the exclusion of active-status teachers is actually there.
+
+4. CHILD PROFILE TAB — DESKTOP SIDEBAR:
+Child Profile is not visible as a nav link on desktop (only accessible
+via the top-left dropdown). 
+- Show me the current nav/config.ts parent nav items — is Child
+  Profile listed as a nav item for the desktop sidebar?
+- The plan said it's in the mobile "More" sheet but not the desktop
+  sidebar. Confirm where it currently appears.
+
+For each: tell me if it was BUILT & WORKING, BUILT BUT BROKEN, or NOT
+BUILT. Show me the relevant code. No changes yet — just the honest
+state of each.

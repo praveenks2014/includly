@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc, arrayOverlaps, notInArray, type SQL } from "drizzle-orm";
-import { db, usersTable, professionalProfilesTable, adminSettingsTable, specialtyEnum, coachingSubTypeEnum, professionalSubscriptionsTable, professionalCertificationsTable, contactUnlocksTable, shadowTeacherEngagementsTable } from "@workspace/db";
+import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc, arrayOverlaps, notInArray, isNotNull, inArray, type SQL } from "drizzle-orm";
+import { db, usersTable, professionalProfilesTable, adminSettingsTable, specialtyEnum, coachingSubTypeEnum, professionalSubscriptionsTable, professionalCertificationsTable, contactUnlocksTable, shadowTeacherEngagementsTable, shadowTeacherMatchesTable } from "@workspace/db";
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
 import { notifyParentsOnProfileUpdate } from "../lib/notificationService";
 import {
@@ -226,12 +226,28 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
   }
 
   // Exclude shadow teachers who already have an active (non-ended) engagement
+  // or who are selected in an in-flight match (pre-engagement-creation)
   if (specialty === "shadow_teacher") {
-    const busyRows = await db
+    const engBusyRows = await db
       .select({ professionalId: shadowTeacherEngagementsTable.professionalId })
       .from(shadowTeacherEngagementsTable)
       .where(sql`${shadowTeacherEngagementsTable.status} != 'ended'`);
-    const busyIds = [...new Set(busyRows.map((r) => r.professionalId))];
+
+    const matchBusyRows = await db
+      .select({ professionalId: shadowTeacherMatchesTable.selectedProfessionalId })
+      .from(shadowTeacherMatchesTable)
+      .where(and(
+        isNotNull(shadowTeacherMatchesTable.selectedProfessionalId),
+        inArray(shadowTeacherMatchesTable.status, [
+          "committed", "pending_commitment",
+          "trial_pending", "trial_started", "trial_done",
+        ]),
+      ));
+
+    const busyIds = [...new Set([
+      ...engBusyRows.map((r) => r.professionalId),
+      ...matchBusyRows.map((r) => r.professionalId!),
+    ])];
     if (busyIds.length > 0) {
       conditions.push(notInArray(professionalProfilesTable.id, busyIds));
     }
