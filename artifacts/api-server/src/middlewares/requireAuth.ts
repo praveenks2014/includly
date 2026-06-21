@@ -48,8 +48,10 @@ function buildTrustedJwksSets(): Map<string, ReturnType<typeof createRemoteJWKSe
   const keySources = [
     process.env.VITE_CLERK_PUBLISHABLE_KEY,
     process.env.CLERK_PUBLISHABLE_KEY,
-    // DEV key hardcoded in App.tsx (choice-lion-57.clerk.accounts.dev)
-    "pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA",
+    // DEV key hardcoded in App.tsx — only trust outside production
+    ...(process.env.NODE_ENV !== "production"
+      ? ["pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA"]
+      : []),
   ].filter(Boolean) as string[];
 
   for (const pk of keySources) {

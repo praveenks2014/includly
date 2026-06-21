@@ -42,13 +42,14 @@ import ChildOnboardingPage from "@/pages/onboarding-child";
 
 const DEV_CLERK_KEY = "pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA";
 
-const clerkPubKey = import.meta.env.DEV
-  ? DEV_CLERK_KEY
-  : import.meta.env.VITE_CLERK_PK;
+const clerkPubKey =
+  (import.meta.env.DEV && !import.meta.env.PROD)
+    ? (import.meta.env.VITE_CLERK_PUBLISHABLE_KEY ?? DEV_CLERK_KEY)
+    : import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 if (!clerkPubKey) {
   throw new Error(
-    "VITE_CLERK_PK is not set. Add it as a shared environment variable with your Clerk publishable key."
+    "VITE_CLERK_PUBLISHABLE_KEY is not set. Add it as a deployment secret with your Clerk publishable key."
   );
 }
 
