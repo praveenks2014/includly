@@ -1,19 +1,18 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@clerk/react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { BookingWidget } from "@/components/BookingWidget";
 import {
-  MessageCircle, ThumbsUp, ShieldCheck, Plus, ChevronDown, ChevronUp,
-  Flag, Send, Loader2, Users, Sparkles, ArrowLeft,
+  MessageCircle, ThumbsUp, ShieldCheck, Plus, Flag, Send, Loader2,
+  Users, Sparkles, ArrowLeft, Bot, AlertCircle, ChevronRight,
 } from "lucide-react";
 import {
   useGetCommunityPosts,
@@ -25,11 +24,10 @@ import {
   useReportPost,
   useReportAnswer,
   useGetMe,
-  getCommunityPostsQueryKey,
   getCommunityPostDetailQueryKey,
   type CommunityPostListItem,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { fetchWithAuth, getApiBase } from "@/lib/api";
 
 const TOPICS = [
   { id: "all", label: "All Topics" },
@@ -85,6 +83,14 @@ function specialtyLabel(s: string) {
   return MAP[s] ?? s;
 }
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface SimilarPost {
+  id: number;
+  title: string;
+  topicTag: string;
+  answerCount: number;
+}
+
 // ─── Report Modal ─────────────────────────────────────────────────────────────
 function ReportModal({
   open,
@@ -131,14 +137,108 @@ function ReportModal({
   );
 }
 
+// ─── Similar Threads Banner ───────────────────────────────────────────────────
+function SimilarThreadsBanner({
+  posts,
+  onSelect,
+  onDismiss,
+}: {
+  posts: SimilarPost[];
+  onSelect: (id: number) => void;
+  onDismiss: () => void;
+}) {
+  if (posts.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 mb-4">
+      <div className="flex items-start gap-2.5 mb-3">
+        <AlertCircle size={16} className="text-amber-600 mt-0.5 shrink-0" />
+        <div>
+          <p className="text-sm font-semibold text-amber-800">Similar questions already exist</p>
+          <p className="text-xs text-amber-600 mt-0.5">Your question may already have answers. Check these threads first:</p>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {posts.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => onSelect(p.id)}
+            className="w-full text-left flex items-center justify-between gap-2 rounded-lg bg-white border border-amber-200 px-3 py-2 hover:border-amber-400 transition-colors"
+          >
+            <span className="text-xs text-gray-700 font-medium line-clamp-1 flex-1">{p.title}</span>
+            <span className="text-xs text-gray-400 shrink-0">{p.answerCount} answer{p.answerCount !== 1 ? "s" : ""}</span>
+            <ChevronRight size={13} className="text-gray-400 shrink-0" />
+          </button>
+        ))}
+      </div>
+      <button
+        onClick={onDismiss}
+        className="mt-3 text-xs text-amber-700 hover:text-amber-900 underline underline-offset-2"
+      >
+        My question is different — post anyway
+      </button>
+    </div>
+  );
+}
+
 // ─── Ask Question Modal ───────────────────────────────────────────────────────
-function AskModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function AskModal({
+  open,
+  onClose,
+  onPostCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onPostCreated: (postId: number) => void;
+}) {
   const { toast } = useToast();
   const { mutateAsync, isPending } = useCreatePost();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [topicTag, setTopicTag] = useState("general");
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [similarPosts, setSimilarPosts] = useState<SimilarPost[]>([]);
+  const [similarDismissed, setSimilarDismissed] = useState(false);
+  const [checkingsimilar, setCheckingSimilar] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function reset() {
+    setTitle(""); setBody(""); setTopicTag("general"); setIsAnonymous(false);
+    setSimilarPosts([]); setSimilarDismissed(false);
+  }
+
+  function handleClose() {
+    reset();
+    onClose();
+  }
+
+  async function checkSimilar(t: string, b: string) {
+    if (t.trim().length < 10) return;
+    setCheckingSimilar(true);
+    try {
+      const res = await fetchWithAuth(`${getApiBase()}/community/ai/similar`, {
+        method: "POST",
+        body: JSON.stringify({ title: t.trim(), body: b.trim() }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { similar: SimilarPost[] };
+        setSimilarPosts(data.similar ?? []);
+      }
+    } catch {
+    } finally {
+      setCheckingSimilar(false);
+    }
+  }
+
+  function handleTitleChange(v: string) {
+    setTitle(v);
+    setSimilarDismissed(false);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => checkSimilar(v, body), 900);
+  }
+
+  useEffect(() => {
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -149,31 +249,46 @@ function AskModal({ open, onClose }: { open: boolean; onClose: () => void }) {
       toast({ title: "Please add more detail to your question", variant: "destructive" }); return;
     }
     try {
-      await mutateAsync({ title: title.trim(), body: body.trim(), topicTag, isAnonymous });
+      const post = await mutateAsync({ title: title.trim(), body: body.trim(), topicTag, isAnonymous });
       toast({ title: "Question posted!", description: "Experts will be notified." });
-      setTitle(""); setBody(""); setTopicTag("general"); setIsAnonymous(false);
+      reset();
       onClose();
+      onPostCreated((post as { id: number }).id);
     } catch {
       toast({ title: "Failed to post question", variant: "destructive" });
     }
   }
 
+  const showSimilar = similarPosts.length > 0 && !similarDismissed;
+
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="font-serif">Ask a question</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          {showSimilar && (
+            <SimilarThreadsBanner
+              posts={similarPosts}
+              onSelect={(id) => { handleClose(); onPostCreated(-1); setTimeout(() => onPostCreated(id), 0); }}
+              onDismiss={() => setSimilarDismissed(true)}
+            />
+          )}
           <div>
             <Label className="text-xs text-gray-500 font-medium">Your question *</Label>
-            <Input
-              placeholder="e.g. How do I help my son focus during OT sessions?"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="mt-1 focus-visible:ring-[#2EC4A5]"
-              maxLength={200}
-            />
+            <div className="relative mt-1">
+              <Input
+                placeholder="e.g. How do I help my son focus during OT sessions?"
+                value={title}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                className="focus-visible:ring-[#2EC4A5] pr-8"
+                maxLength={200}
+              />
+              {checkingsimilar && (
+                <Loader2 size={13} className="animate-spin absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              )}
+            </div>
           </div>
           <div>
             <Label className="text-xs text-gray-500 font-medium">Add context (optional but helpful) *</Label>
@@ -212,7 +327,7 @@ function AskModal({ open, onClose }: { open: boolean; onClose: () => void }) {
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="ghost" size="sm" onClick={handleClose}>Cancel</Button>
             <Button
               type="submit"
               disabled={isPending}
@@ -269,8 +384,165 @@ function AnswerForm({ postId, onDone }: { postId: number; onDone: () => void }) 
   );
 }
 
+// ─── AI Key Takeaways Block ───────────────────────────────────────────────────
+function AiSummaryBlock({ postId, answerCount }: { postId: number; answerCount: number }) {
+  const MIN_ANSWERS = 5;
+  const [summary, setSummary] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [revealed, setRevealed] = useState(false);
+
+  if (answerCount < MIN_ANSWERS) return null;
+
+  async function handleGenerate() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${getApiBase()}/community/posts/${postId}/summary`);
+      if (!res.ok) {
+        setError("Couldn't generate summary right now. Try again.");
+        return;
+      }
+      const data = await res.json() as { summary: string };
+      setSummary(data.summary);
+      setRevealed(true);
+    } catch {
+      setError("Couldn't generate summary right now. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (revealed && summary) {
+    const bullets = summary.split("\n").filter((l) => l.trim().length > 0);
+    return (
+      <div className="bg-gradient-to-br from-[#1A2340]/5 to-[#2EC4A5]/5 rounded-xl border border-[#2EC4A5]/20 p-5 mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-7 h-7 rounded-lg bg-[#2EC4A5]/15 flex items-center justify-center">
+            <Sparkles size={14} className="text-[#2EC4A5]" />
+          </div>
+          <span className="font-semibold text-sm text-[#1A2340]">AI Key Takeaways</span>
+          <span className="text-xs text-gray-400 ml-auto">Generated from expert answers</span>
+        </div>
+        <div className="space-y-2">
+          {bullets.map((line, i) => (
+            <p key={i} className="text-sm text-gray-700 leading-relaxed">{line}</p>
+          ))}
+        </div>
+        <p className="text-xs text-gray-400 mt-3 pt-3 border-t border-[#2EC4A5]/10">
+          AI-generated summary — always consult a qualified specialist for medical decisions.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-[#2EC4A5]/20 p-4 mb-6 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-[#2EC4A5]/10 flex items-center justify-center shrink-0">
+          <Sparkles size={15} className="text-[#2EC4A5]" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-[#1A2340]">AI Key Takeaways available</p>
+          <p className="text-xs text-gray-500">Summarise {answerCount} expert answers in seconds</p>
+        </div>
+      </div>
+      <div className="shrink-0">
+        {error ? (
+          <div className="text-right">
+            <p className="text-xs text-red-500 mb-1">{error}</p>
+            <Button size="sm" variant="outline" className="border-[#2EC4A5] text-[#2EC4A5] text-xs" onClick={handleGenerate}>
+              Retry
+            </Button>
+          </div>
+        ) : (
+          <Button
+            size="sm"
+            disabled={loading}
+            className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white border-0 gap-1.5 text-xs"
+            onClick={handleGenerate}
+          >
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+            {loading ? "Generating…" : "Get Summary"}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── AI Personalised Answer Block ─────────────────────────────────────────────
+function AiPersonalisedAnswer({ postId }: { postId: number }) {
+  const [answer, setAnswer] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetch_() {
+      try {
+        const res = await fetchWithAuth(`${getApiBase()}/community/ai/personalised-answer`, {
+          method: "POST",
+          body: JSON.stringify({ postId }),
+        });
+        if (res.ok && !cancelled) {
+          const data = await res.json() as { answer: string };
+          setAnswer(data.answer);
+        }
+      } catch {
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void fetch_();
+    return () => { cancelled = true; };
+  }, [postId]);
+
+  if (dismissed) return null;
+
+  return (
+    <div className="bg-gradient-to-br from-[#1A2340] to-[#2a3660] rounded-xl p-5 mb-6 text-white">
+      <div className="flex items-center gap-2.5 mb-3">
+        <div className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center">
+          <Bot size={14} className="text-[#2EC4A5]" />
+        </div>
+        <span className="font-semibold text-sm">Includly AI — just for you</span>
+        <button
+          onClick={() => setDismissed(true)}
+          className="ml-auto text-white/40 hover:text-white/70 text-xs transition-colors"
+          aria-label="Dismiss"
+        >
+          ✕
+        </button>
+      </div>
+      {loading ? (
+        <div className="space-y-2">
+          <div className="h-3.5 bg-white/10 rounded animate-pulse w-full" />
+          <div className="h-3.5 bg-white/10 rounded animate-pulse w-5/6" />
+          <div className="h-3.5 bg-white/10 rounded animate-pulse w-4/6" />
+        </div>
+      ) : answer ? (
+        <>
+          <p className="text-sm text-white/85 leading-relaxed whitespace-pre-wrap">{answer}</p>
+          <p className="text-xs text-white/35 mt-3 pt-3 border-t border-white/10">
+            AI-generated — not a substitute for professional advice. Experts will answer below.
+          </p>
+        </>
+      ) : (
+        <p className="text-sm text-white/60">Experts will answer your question below. Check back soon!</p>
+      )}
+    </div>
+  );
+}
+
 // ─── Post Detail (expanded inline) ───────────────────────────────────────────
-function PostDetail({ postId, onBack }: { postId: number; onBack: () => void }) {
+function PostDetail({
+  postId,
+  onBack,
+}: {
+  postId: number;
+  onBack: () => void;
+}) {
   const { isSignedIn } = useAuth();
   const { data: me } = useGetMe();
   const { toast } = useToast();
@@ -287,6 +559,7 @@ function PostDetail({ postId, onBack }: { postId: number; onBack: () => void }) 
   } | null>(null);
 
   const isProfessional = me?.role === "professional";
+  const isAuthor = !!(me && post && me.id === (post as { authorUserId?: number }).authorUserId);
 
   async function handleReport(reason: string) {
     if (!reportTarget) return;
@@ -362,6 +635,12 @@ function PostDetail({ postId, onBack }: { postId: number; onBack: () => void }) 
         </div>
       </div>
 
+      {/* AI Personalised Answer — only shown to the post author */}
+      {isAuthor && <AiPersonalisedAnswer postId={post.id} />}
+
+      {/* AI Key Takeaways — on-demand for other viewers, shown when 5+ answers */}
+      {!isAuthor && <AiSummaryBlock postId={post.id} answerCount={post.answerCount} />}
+
       {/* Answers */}
       <div className="mb-6">
         <h3 className="font-serif text-lg font-bold text-[#1A2340] mb-4">
@@ -382,7 +661,6 @@ function PostDetail({ postId, onBack }: { postId: number; onBack: () => void }) 
               key={answer.id}
               className="bg-white rounded-xl border border-gray-100 p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)]"
             >
-              {/* Professional header */}
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-sm text-[#1A2340]">
@@ -413,10 +691,8 @@ function PostDetail({ postId, onBack }: { postId: number; onBack: () => void }) 
                 </div>
               </div>
 
-              {/* Answer body */}
               <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{answer.body}</p>
 
-              {/* Footer: upvote + book */}
               <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-50">
                 <button
                   onClick={() => isSignedIn ? upvoteAnswer({ answerId: answer.id, postId: post.id }) : void 0}
@@ -531,7 +807,15 @@ function PostCard({
         <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border ${topicColor(post.topicTag)}`}>
           {TOPICS.find((t) => t.id === post.topicTag)?.label ?? post.topicTag}
         </span>
-        <span className="text-xs text-gray-400 shrink-0">{timeAgo(post.createdAt as unknown as string)}</span>
+        <div className="flex items-center gap-2 shrink-0">
+          {post.answerCount >= 5 && (
+            <span className="inline-flex items-center gap-1 text-xs text-[#2EC4A5] font-medium">
+              <Sparkles size={10} />
+              AI Summary
+            </span>
+          )}
+          <span className="text-xs text-gray-400">{timeAgo(post.createdAt as unknown as string)}</span>
+        </div>
       </div>
       <h3 className="font-semibold text-[#1A2340] text-sm leading-snug mb-3">{post.title}</h3>
       <div className="flex items-center gap-4 text-xs text-gray-400">
@@ -570,6 +854,20 @@ export default function ForumPage() {
     setShowAskModal(true);
   }
 
+  function handlePostCreated(postId: number) {
+    if (postId > 0) {
+      setSelectedPostId(postId);
+    }
+  }
+
+  function handleSelectPost(postId: number) {
+    setSelectedPostId(postId);
+  }
+
+  function handleBack() {
+    setSelectedPostId(null);
+  }
+
   return (
     <div className="min-h-screen bg-[#F5F7FA]">
       {/* Hero */}
@@ -602,7 +900,10 @@ export default function ForumPage() {
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
         {selectedPostId ? (
-          <PostDetail postId={selectedPostId} onBack={() => setSelectedPostId(null)} />
+          <PostDetail
+            postId={selectedPostId}
+            onBack={handleBack}
+          />
         ) : (
           <>
             {/* Topic filters */}
@@ -648,7 +949,7 @@ export default function ForumPage() {
             ) : (
               <div className="space-y-3">
                 {posts.map((post) => (
-                  <PostCard key={post.id} post={post} onSelect={() => setSelectedPostId(post.id)} />
+                  <PostCard key={post.id} post={post} onSelect={() => handleSelectPost(post.id)} />
                 ))}
               </div>
             )}
@@ -667,7 +968,11 @@ export default function ForumPage() {
         )}
       </div>
 
-      <AskModal open={showAskModal} onClose={() => setShowAskModal(false)} />
+      <AskModal
+        open={showAskModal}
+        onClose={() => setShowAskModal(false)}
+        onPostCreated={handlePostCreated}
+      />
     </div>
   );
 }

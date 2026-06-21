@@ -178,6 +178,7 @@ router.get("/community/posts/:id", async (req: Request, res: Response): Promise<
     topicTag: post.topicTag,
     isAnonymous: post.isAnonymous,
     authorName: post.isAnonymous ? null : post.authorName,
+    authorUserId: post.authorUserId,
     upvoteCount: post.upvoteCount,
     answerCount: post.answerCount,
     hasVoted: votedPostIds.has(id),

@@ -34,3 +34,4 @@ export * from "./shadowMatchCandidates";
 export * from "./shadowMatchChat";
 export * from "./childGoals";
 export * from "./negotiationOffers";
+export * from "./communityAi";

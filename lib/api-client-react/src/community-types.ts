@@ -27,6 +27,7 @@ export interface CommunityAnswerItem {
 
 export interface CommunityPostDetail extends CommunityPostListItem {
   body: string;
+  authorUserId: number;
   answers: CommunityAnswerItem[];
 }
 
