@@ -559,7 +559,7 @@ function PostDetail({
   } | null>(null);
 
   const isProfessional = me?.role === "professional";
-  const isAuthor = !!(me && post && me.id === (post as { authorUserId?: number }).authorUserId);
+  const isAuthor = !!(post && (post as { isAuthor?: boolean }).isAuthor);
 
   async function handleReport(reason: string) {
     if (!reportTarget) return;
