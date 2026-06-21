@@ -1,0 +1,84 @@
+PLAN FIRST — Plan mode, no code yet. A set of bugs and gaps, mostly
+from the parent IA restructure. Investigate each and show me the plan
+before building. Group them as below.
+
+═══ GROUP 1 — HOME PAGE (finish the summary hub) ═══
+
+1a. Home still shows "Request a Shadow Teacher" as the CTA. Change it to
+"Request a Service" linking to the Services page (the IA restructure
+moved service selection to Services; Home should point there, not
+directly at shadow teacher).
+
+1b. The Home "support hub" summary is not actually summarizing. It
+should show: (a) a summary of TRENDS/progress across all services/
+engagements the parent is enrolled in, and (b) a reminder of any
+pending daily logs the parent owes. Use the existing engagement/log
+data sources. If there are no engagements, show the welcoming empty
+state. (This finishes the Home-as-hub work the restructure started.)
+
+═══ GROUP 2 — SHADOW TEACHER FLOW NAV + RE-ENGAGEMENT ═══
+
+2a. BACK BUTTON MISSING: when a parent clicks Shadow Teacher from
+Services, there's no back button to return to Services. Add it.
+
+2b. DEAD "FIND TAB" REFERENCE: after ending an engagement, the app says
+"switch to the Find tab to start a new engagement" — but the Find tab
+no longer exists after the restructure. Fix this: the message and the
+path should route the parent to start a NEW shadow teacher request via
+the current structure (Services → Shadow Teacher). A parent must be
+able to start a fresh shadow-teacher request after an engagement ends.
+
+2c. RE-ENGAGEMENT AVAILABILITY: after a parent gives notice / ends an
+engagement, both sides should be able to enter a new match: the parent
+can search for a new shadow teacher, AND the teacher (once not in any
+active engagement) becomes available to receive new match requests.
+Confirm the end-of-engagement flow frees both parties for new matches.
+
+═══ GROUP 3 — MATCHING BUG (important) ═══
+
+3. Shadow teachers who have an ACTIVE engagement during the period the
+parent is searching should be EXCLUDED from the matching list — but
+they're currently still appearing. Fix the matching/candidate query to
+exclude teachers who are already in an active engagement (or otherwise
+unavailable) for the searched period. Show me the current
+candidate-filtering logic and where the availability exclusion is
+missing.
+
+═══ GROUP 4 — INBOX (blank, should show conversations) ═══
+
+4. The parent Inbox is BLANK. It should list the parent's
+conversations: matched people / professionals from upcoming sessions,
+available for chatting. Past sessions for non-active engagements should
+appear as READ-ONLY. None of this is showing. Investigate why the inbox
+is empty and wire it to show: active conversations (chattable) +
+past/non-active ones (read-only). Show me what data source the inbox
+should read and why it's currently empty.
+
+═══ GROUP 5 — COMMUNITY (basic posting broken) ═══
+
+5. The community forum does NOT allow posting a question — the basic
+post flow is broken. Investigate why. NOTE: AI features were recently
+added to this forum, but the BASIC post must work first. Diagnose the
+posting failure and fix it so a parent can post a question. (Do not add
+more AI features — just make basic posting work.)
+
+═══ GROUP 6 — CHILD ONBOARDING (one field) ═══
+
+6. The child onboarding does not capture the parent's MAIN CONCERN about
+the child. Add a single field: "What's your main concern about your
+child right now?" (a textarea, optional). Store it on the child record
+(reuse care_notes jsonb or add a column — propose which). This is a
+small additive field to the existing intake — do NOT re-open or
+restructure the rest of the intake wizard.
+
+═══ NOT IN THIS BUILD ═══
+Resources personalization (clinical deep-research content tailored to
+diagnosis) is a separate larger initiative — NOT part of this build.
+Resources stays coming-soon for now.
+
+For each group, show me: the root cause (for bugs) or approach (for
+additions), the files touched, and any migration. Flag anything that's
+bigger than it looks. No code until I approve. Confirm none of these
+touch the childId scoping, the engagement lifecycle, payments, or the
+matching engine's core scoring (Group 3 changes candidate FILTERING/
+availability, not the scoring weights).

@@ -41,6 +41,7 @@ type WizardData = {
     communicationMode: string[];
     communicationModeOther: string;
     favorites: string;
+    mainConcern?: string;
   };
   consent: { intakeShare: boolean; media: boolean; reports: boolean };
 };
@@ -65,7 +66,7 @@ const DEFAULT: WizardData = {
   budgetKey: "",
   budgetMinInr: null,
   budgetMaxInr: null,
-  careNotes: { calming: "", triggers: "", communicationMode: [], communicationModeOther: "", favorites: "" },
+  careNotes: { calming: "", triggers: "", communicationMode: [], communicationModeOther: "", favorites: "", mainConcern: "" },
   consent: { intakeShare: false, media: false, reports: false },
 };
 
@@ -303,6 +304,7 @@ export default function ChildOnboardingPage() {
         communicationMode:       commMode,
         communicationModeOther:  commModeOther,
         favorites:               (rawCareNotes.favorites as string) ?? "",
+        mainConcern:             (rawCareNotes.mainConcern as string) ?? "",
       },
       consent: (c.consent as WizardData["consent"]) ?? DEFAULT.consent,
     });
@@ -378,6 +380,7 @@ export default function ChildOnboardingPage() {
         triggers:  data.careNotes.triggers,
         communicationMode: data.careNotes.communicationMode.join(", "),
         favorites: data.careNotes.favorites,
+        ...(data.careNotes.mainConcern?.trim() && { mainConcern: data.careNotes.mainConcern.trim() }),
       },
       consent: data.consent,
     };
@@ -761,6 +764,14 @@ export default function ChildOnboardingPage() {
                 value={data.careNotes.favorites}
                 onChange={(v) => update("careNotes", { ...data.careNotes, favorites: v })}
                 placeholder="e.g. Trains, dinosaurs, Peppa Pig, cricket"
+              />
+            </Field>
+
+            <Field label="What is your main concern right now?">
+              <TextArea
+                value={data.careNotes.mainConcern ?? ""}
+                onChange={(v) => update("careNotes", { ...data.careNotes, mainConcern: v })}
+                placeholder="e.g. Difficulty staying focused in class, frequent meltdowns, delayed speech…"
               />
             </Field>
 

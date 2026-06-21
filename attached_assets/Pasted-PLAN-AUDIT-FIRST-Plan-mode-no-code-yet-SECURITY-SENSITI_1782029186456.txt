@@ -1,0 +1,46 @@
+PLAN/AUDIT FIRST — Plan mode, no code yet. SECURITY-SENSITIVE: this is
+about separating PRODUCTION secrets from DEV secrets for Razorpay,
+Clerk, and Google OAuth. Production (includly.in) is currently running
+with DEV/TEST keys for these, which is a launch blocker.
+
+IMPORTANT: I already have all the live credentials (Razorpay live keys
+KYC-verified, Clerk production instance keys, Google OAuth production
+credentials). I will enter the actual live secret VALUES myself — do
+NOT fetch, generate, paste, or handle any live secret values. Your job
+is to (a) audit the current state, (b) fix the CODE so it reads the
+right values per environment and NEVER falls back to a dev key in
+production, and (c) tell me EXACTLY which secrets I need to set in
+Replit's production/deployment secrets, by name.
+
+═══ AUDIT — show me the current state ═══
+
+1. RAZORPAY:
+- Which env var(s) does the code read for the Razorpay key id and
+secret (frontend and backend)?
+- Is the same secret value currently shared between the dev workspace
+and the deployed production app? Confirm whether Replit deployment
+secrets are separate from workspace secrets here.
+- Show every place the Razorpay key is read so I can confirm production
+will use the live key once I set it.
+
+2. CLERK:
+- Known issue: the code reads VITE_CLERK_PK but the secret may be named
+VITE_CLERK_PUBLISHABLE_KEY — a mismatch that breaks prod login. Confirm
+the exact env var name the code reads vs the secret name that exists,
+and fix them to match.
+- App.tsx reportedly HARDCODES a dev Clerk publishable key (pk_test_...,
+choice-lion-57.clerk.accounts.dev) as a Replit-preview fallback. Show
+me this fallback and propose how to ensure production NEVER falls back
+to it (only use the hardcoded dev key when clearly in the Replit
+preview/dev environment, never in the deployed app).
+- BACKEND: the earlier audit found the backend trusts all three key
+sources (dev hardcoded + two env vars), meaning prod could accept dev-
+instance tokens. Show how the backend selects which Clerk key to verify
+against, and propose making production verify ONLY against the prod
+Clerk key — never accept dev tokens in prod.
+
+3. GOOGLE OAUTH (configured via Clerk as a social connection):
+- Confirm the production Clerk instance uses PRODUCTION Google OAuth
+credentials (client id/secret), not the dev ones.
+- Tell me the EXACT redirect URI that Clerk's PRODUCTION instance
+expects for Google OAuth, so I can confirm it's

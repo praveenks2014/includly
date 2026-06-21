@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import {
   db,
   shadowTeacherEngagementsTable,
   shadowTeacherMatchesTable,
   engagementLogsTable,
+  engagementDailyLogsTable,
   professionalProfilesTable,
   usersTable,
   childrenTable,
@@ -38,6 +39,56 @@ function addMonths(dateStr: string, months: number): string {
   d.setUTCMonth(d.getUTCMonth() + months);
   return d.toISOString().slice(0, 10);
 }
+
+// GET /engagements/home-summary — cross-engagement summary for parent HomeTab
+// Returns all active (non-ended) engagements with todayParentLogOwed flag per engagement.
+// Each engagement uses its own childId for attribution — no cross-child mixing.
+router.get("/engagements/home-summary", requireAuth, requireRole("parent"), async (req, res): Promise<void> => {
+  const userId = req.userId!;
+  const today = new Date().toISOString().slice(0, 10);
+
+  const rows = await db
+    .select({
+      id: shadowTeacherEngagementsTable.id,
+      childId: shadowTeacherEngagementsTable.childId,
+      childName: childrenTable.name,
+      professionalName: professionalProfilesTable.fullName,
+      status: shadowTeacherEngagementsTable.status,
+      startDate: shadowTeacherEngagementsTable.startDate,
+    })
+    .from(shadowTeacherEngagementsTable)
+    .leftJoin(childrenTable, eq(shadowTeacherEngagementsTable.childId, childrenTable.id))
+    .leftJoin(professionalProfilesTable, eq(shadowTeacherEngagementsTable.professionalId, professionalProfilesTable.id))
+    .where(
+      and(
+        eq(shadowTeacherEngagementsTable.parentId, userId),
+        sql`${shadowTeacherEngagementsTable.status} != 'ended'`,
+      ),
+    )
+    .orderBy(desc(shadowTeacherEngagementsTable.createdAt));
+
+  if (rows.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  // Per-engagement: derive whether today's parent-authored log is missing
+  const engagementIds = rows.map((r) => r.id);
+  const todayParentLogs = await db
+    .select({ engagementId: engagementDailyLogsTable.engagementId })
+    .from(engagementDailyLogsTable)
+    .where(
+      and(
+        inArray(engagementDailyLogsTable.engagementId, engagementIds),
+        eq(engagementDailyLogsTable.logDate, today),
+        eq(engagementDailyLogsTable.authorRole, "parent"),
+      ),
+    );
+
+  const loggedSet = new Set(todayParentLogs.map((l) => l.engagementId));
+
+  res.json(rows.map((r) => ({ ...r, todayParentLogOwed: !loggedSet.has(r.id) })));
+});
 
 router.get("/engagements", requireAuth, async (req, res): Promise<void> => {
   const isParent = req.userRole === "parent";

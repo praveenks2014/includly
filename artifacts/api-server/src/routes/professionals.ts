@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc, arrayOverlaps, type SQL } from "drizzle-orm";
-import { db, usersTable, professionalProfilesTable, adminSettingsTable, specialtyEnum, coachingSubTypeEnum, professionalSubscriptionsTable, professionalCertificationsTable, contactUnlocksTable } from "@workspace/db";
+import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc, arrayOverlaps, notInArray, type SQL } from "drizzle-orm";
+import { db, usersTable, professionalProfilesTable, adminSettingsTable, specialtyEnum, coachingSubTypeEnum, professionalSubscriptionsTable, professionalCertificationsTable, contactUnlocksTable, shadowTeacherEngagementsTable } from "@workspace/db";
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
 import { notifyParentsOnProfileUpdate } from "../lib/notificationService";
 import {
@@ -223,6 +223,18 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
 
   if (budgetMaxINR !== undefined) {
     conditions.push(lte(professionalProfilesTable.pricingMinINR, budgetMaxINR));
+  }
+
+  // Exclude shadow teachers who already have an active (non-ended) engagement
+  if (specialty === "shadow_teacher") {
+    const busyRows = await db
+      .select({ professionalId: shadowTeacherEngagementsTable.professionalId })
+      .from(shadowTeacherEngagementsTable)
+      .where(sql`${shadowTeacherEngagementsTable.status} != 'ended'`);
+    const busyIds = [...new Set(busyRows.map((r) => r.professionalId))];
+    if (busyIds.length > 0) {
+      conditions.push(notInArray(professionalProfilesTable.id, busyIds));
+    }
   }
 
   const useGeo = lat !== undefined && lng !== undefined && radiusKm !== undefined;

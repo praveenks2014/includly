@@ -10,6 +10,7 @@ export interface CareNotesType {
   triggers: string;
   communicationMode: string;
   favorites: string;
+  mainConcern?: string;
 }
 
 export interface ExistingTherapyType {

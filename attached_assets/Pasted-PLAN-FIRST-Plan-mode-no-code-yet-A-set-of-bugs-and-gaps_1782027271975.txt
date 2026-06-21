@@ -1,0 +1,71 @@
+PLAN FIRST — Plan mode, no code yet. A set of bugs and gaps from the
+parent IA restructure, plus one small field addition. Investigate each,
+show me the plan (root cause for bugs, approach for additions, files
+touched, any migration), and flag anything bigger than it looks. No
+code until I approve.
+
+═══ GROUP 1 — HOME PAGE (finish the summary hub) ═══
+1a. Home CTA still says "Request a Shadow Teacher." Change it to
+"Request a Service" linking to the Services page (service selection now
+lives in Services; Home points there, not directly at shadow teacher).
+1b. The Home "support hub" summary doesn't summarize anything yet. It
+should show: (a) a summary of trends/progress across all the
+services/engagements the parent is enrolled in, and (b) a reminder of
+any pending daily logs the parent owes. Use the existing engagement/log
+data sources. No engagements → the welcoming empty state.
+
+═══ GROUP 2 — SHADOW TEACHER NAV + RE-ENGAGEMENT ═══
+2a. BACK BUTTON MISSING: clicking Shadow Teacher from Services gives no
+back button to return to Services. Add it.
+2b. DEAD "FIND TAB" REFERENCE: after an engagement ends, the app says
+"switch to the Find tab to start a new engagement" — the Find tab no
+longer exists post-restructure. Fix the message and the path so it
+routes the parent to start a NEW shadow teacher request via the current
+structure (Services → Shadow Teacher).
+2c. RE-ENGAGEMENT: after a parent gives notice / ends an engagement,
+both sides free up for new matches — the parent can search for a new
+shadow teacher, AND a teacher no longer in any active engagement becomes
+available to receive new match requests. Confirm the end-of-engagement
+flow frees both parties.
+
+═══ GROUP 3 — MATCHING BUG (important) ═══
+3. Shadow teachers who have an ACTIVE engagement during the period the
+parent is searching must be EXCLUDED from the matching list — currently
+they still appear. Show me the current candidate-filtering logic and
+where the availability exclusion is missing, then fix it. This changes
+candidate FILTERING/availability only — do NOT change the matching
+engine's scoring weights.
+
+═══ GROUP 4 — INBOX (blank) ═══
+4. The parent Inbox is BLANK. It should list the parent's conversations:
+matched people / professionals from upcoming sessions (chattable), with
+past sessions for non-active engagements shown READ-ONLY. None of this
+shows. Investigate WHY it's empty, identify the correct data source, and
+wire it to show active (chattable) + past (read-only) conversations.
+
+═══ GROUP 5 — COMMUNITY (basic posting broken) ═══
+5. The community forum does NOT allow posting a question — basic posting
+is broken. Diagnose why and fix it so a parent can post. Do NOT add more
+AI features — just make basic posting work. (If basic posting can't be
+made reliable quickly, propose cleanly marking Community coming-soon
+instead — tell me which.)
+
+═══ GROUP 6 — CHILD ONBOARDING (one field) ═══
+6. Child onboarding doesn't capture the parent's MAIN CONCERN. Add a
+single optional field: "What's your main concern about your child right
+now?" (textarea). Store on the child record (propose: care_notes jsonb
+vs a new column). Additive only — do NOT re-open or restructure the rest
+of the intake wizard.
+
+═══ EXPLICITLY NOT IN THIS BUILD ═══
+- LEAVE MANAGEMENT (teacher leave requests, parent approval, school
+holiday calendar, 2-leaves-then-loss-of-pay) — this is a substantial
+feature with salary/proration implications, NOT part of this build. Do
+not build or scaffold it now.
+- RESOURCES personalization (clinical deep-research content by
+diagnosis) — separate larger initiative. Resources stays coming-soon.
+
+CONFIRM none of these touch: the childId scoping, the engagement
+lifecycle/OTP, payments/Razorpay, or the matching engine's scoring
+weights (Group 3 changes availability filtering only). Show me the plan
+for each group. No code until I approve.

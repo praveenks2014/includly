@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, isNull, isNotNull, sql, count, max, inArray } from "drizzle-orm";
+import { eq, and, desc, isNull, isNotNull, sql, count, max, inArray, notInArray } from "drizzle-orm";
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import {
@@ -264,6 +264,14 @@ router.post("/shadow-teacher/:matchId/verify-request-payment", requireAuth, requ
     .set({ status: "shortlisted", providerPaymentId: razorpayPaymentId, feePaidAt: new Date(), updatedAt: new Date() })
     .where(eq(shadowTeacherMatchesTable.id, matchId));
 
+  // Exclude shadow teachers who already have an active (non-ended) engagement
+  const busyProfIds = (
+    await db
+      .select({ professionalId: shadowTeacherEngagementsTable.professionalId })
+      .from(shadowTeacherEngagementsTable)
+      .where(sql`${shadowTeacherEngagementsTable.status} != 'ended'`)
+  ).map((r) => r.professionalId);
+
   // Run scoring and surface up to 3 candidates
   const allProfessionals = await db
     .select()
@@ -273,6 +281,7 @@ router.post("/shadow-teacher/:matchId/verify-request-payment", requireAuth, requ
         eq(professionalProfilesTable.specialty, "shadow_teacher"),
         eq(professionalProfilesTable.verificationStatus, "verified"),
         isNotNull(professionalProfilesTable.pricingMinINR),
+        ...(busyProfIds.length > 0 ? [notInArray(professionalProfilesTable.id, busyProfIds)] : []),
       ),
     );
 

@@ -66,7 +66,7 @@ export function useGetCommunityPosts(
       if (page && page > 1) params.set("page", String(page));
       const qs = params.toString();
       return customFetch<{ posts: CommunityPostListItem[]; page: number; hasMore: boolean }>(
-        `/community/posts${qs ? `?${qs}` : ""}`,
+        `/api/community/posts${qs ? `?${qs}` : ""}`,
       );
     },
     ...options,

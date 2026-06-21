@@ -442,6 +442,22 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
       e.childId === selectedChildId
   );
 
+  // Cross-engagement summary + pending parent logs (G1b)
+  interface HomeSummaryRow {
+    id: number;
+    childId: number | null;
+    childName: string | null;
+    professionalName: string | null;
+    status: string;
+    startDate: string;
+    todayParentLogOwed: boolean;
+  }
+  const { data: homeSummary = [] } = useQuery<HomeSummaryRow[]>({
+    queryKey: ["home-summary"],
+    queryFn: () => fetchWithAuth("/api/engagements/home-summary").then((r) => r.json()),
+  });
+  const pendingLogs = homeSummary.filter((e) => e.todayParentLogOwed);
+
   // Upcoming sessions → Bookings destination.
   const upcoming = (sessions ?? [])
     .filter((s) => ["confirmed", "pending_payment"].includes(s.status) && new Date(s.bookedDate) >= new Date())
@@ -450,9 +466,9 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
 
   // Unread messages → Inbox destination.
   const { data: threads = [] } = useQuery<ThreadSummary[]>({
-    queryKey: ["connect-inbox"],
+    queryKey: ["parent-inbox"],
     queryFn: async () => {
-      const data = await fetchWithAuth("/api/connect/inbox").then((r) => r.json()).catch(() => []);
+      const data = await fetchWithAuth("/api/connect/parent-inbox").then((r) => r.json()).catch(() => []);
       return Array.isArray(data) ? data : [];
     },
   });
@@ -584,14 +600,49 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
         </div>
       )}
 
-      {/* ── Request a Shadow Teacher → Services ── */}
+      {/* ── Cross-engagement progress + pending logs ── */}
+      {homeSummary.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-gray-400">
+              {homeSummary.length} active engagement{homeSummary.length !== 1 ? "s" : ""}
+            </p>
+            {pendingLogs.length > 0 && (
+              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                {pendingLogs.length} log{pendingLogs.length !== 1 ? "s" : ""} due today
+              </span>
+            )}
+          </div>
+          {homeSummary.map((e) => (
+            <Link key={e.id} href="/progress">
+              <div className="bg-white border border-gray-100 rounded-xl p-3.5 flex items-center gap-3 hover:border-teal-200 transition-colors cursor-pointer shadow-sm">
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${e.todayParentLogOwed ? "bg-amber-50 border border-amber-200" : "bg-teal-50 border border-teal-100"}`}>
+                  {e.todayParentLogOwed ? <BookOpen size={13} className="text-amber-500" /> : <TrendingUp size={13} className="text-teal-500" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-[#1A2340] truncate">
+                    {e.childName ?? "Child"} · {e.professionalName ?? "Teacher"}
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5 capitalize">
+                    {e.status.replace(/_/g, " ")} · since {new Date(e.startDate + "T00:00:00").toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
+                    {e.todayParentLogOwed && <span className="text-amber-500 font-semibold"> · Log due today</span>}
+                  </p>
+                </div>
+                <ArrowRight size={12} className="text-gray-300 shrink-0" />
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {/* ── Request a Service → Services ── */}
       <Link href="/services">
         <div className="bg-gradient-to-r from-[#2EC4A5] to-[#26a88d] rounded-2xl p-5 shadow-[0_4px_18px_rgba(46,196,165,0.28)] flex items-center gap-4 hover:shadow-[0_6px_24px_rgba(46,196,165,0.38)] transition-shadow cursor-pointer">
           <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
             <Sparkles size={20} className="text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-white text-sm">Request a Shadow Teacher</p>
+            <p className="font-bold text-white text-sm">Request a Service</p>
             <p className="text-xs text-white/70 mt-0.5">Get matched with a verified teacher, or find a specialist.</p>
           </div>
           <div className="w-8 h-8 bg-white/15 rounded-xl flex items-center justify-center shrink-0">
@@ -806,6 +857,8 @@ interface ThreadSummary {
   threadId: number;
   professionalId: number;
   professionalName: string | null;
+  specialty?: string | null;
+  chattable?: boolean;
   lastMessage: string | null;
   lastAt: string | null;
   unread: number;
@@ -817,7 +870,7 @@ function MessagesTab() {
   const [chatProfessional, setChatProfessional] = useState<{ id: number; name: string } | null>(null);
 
   useEffect(() => {
-    fetchWithAuth("/api/connect/inbox")
+    fetchWithAuth("/api/connect/parent-inbox")
       .then((r) => r.json())
       .then((data) => setThreads(Array.isArray(data) ? data : []))
       .catch(() => {})
@@ -848,13 +901,18 @@ function MessagesTab() {
               onClick={() => setChatProfessional({ id: t.professionalId, name: t.professionalName ?? "Professional" })}
               className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50/80 transition-colors text-left"
             >
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-teal-100 to-teal-50 border border-teal-100 flex items-center justify-center text-teal-700 font-bold text-sm shrink-0">
+              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-sm shrink-0 ${t.chattable === false ? "bg-gradient-to-br from-gray-100 to-gray-50 border border-gray-200 text-gray-400" : "bg-gradient-to-br from-teal-100 to-teal-50 border border-teal-100 text-teal-700"}`}>
                 {initials(t.professionalName)}
               </div>
               <div className="flex-1 min-w-0">
-                <p className={`text-sm truncate ${t.unread > 0 ? "font-bold text-[#1A2340]" : "font-semibold text-gray-700"}`}>
-                  {t.professionalName ?? "Professional"}
-                </p>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className={`text-sm truncate ${t.unread > 0 ? "font-bold text-[#1A2340]" : "font-semibold text-gray-700"}`}>
+                    {t.professionalName ?? "Professional"}
+                  </p>
+                  {t.chattable === false && (
+                    <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">Past</span>
+                  )}
+                </div>
                 {t.lastMessage && (
                   <p className={`text-[11px] truncate mt-0.5 ${t.unread > 0 ? "text-gray-600 font-medium" : "text-gray-400"}`}>
                     {t.lastMessage}
@@ -1276,6 +1334,14 @@ function ShadowTeacherTab() {
 
   return (
     <div className="space-y-5 pb-4">
+      {/* Back to Services */}
+      <Link href="/services">
+        <button className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-teal-600 transition-colors -mb-1">
+          <ArrowLeft size={13} />
+          <span>Back to Services</span>
+        </button>
+      </Link>
+
       {/* Header card */}
       <div className={`rounded-2xl p-5 text-white shadow-[0_4px_20px_rgba(0,0,0,0.13)] ${active.status === "ended" ? "bg-gradient-to-br from-gray-500 to-gray-600" : active.status === "paused" ? "bg-gradient-to-br from-amber-500 to-amber-600" : "bg-gradient-to-br from-[#2EC4A5] to-[#1a9a82]"}`}>
         <div className="flex items-start justify-between gap-3">
@@ -1357,8 +1423,13 @@ function ShadowTeacherTab() {
               ? <>Ended on <span className="font-semibold text-gray-700">{new Date(active.endDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
                 {active.endedReason === "buyout" ? " via early exit." : active.endedReason === "full_buyout" ? " via full buyout." : active.endedReason === "stop" ? " after the notice period." : "."}</>
               : "This engagement is no longer active."}
-            {" "}Switch to the Find tab to start a new engagement.
           </p>
+          <Link href="/services">
+            <button className="mt-2 pl-[52px] flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 transition-colors">
+              <ArrowRight size={12} />
+              Start a new engagement
+            </button>
+          </Link>
         </div>
       )}
 

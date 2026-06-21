@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import {
   db,
   connectThreadsTable,
@@ -7,6 +7,7 @@ import {
   contactUnlocksTable,
   professionalProfilesTable,
   usersTable,
+  shadowTeacherEngagementsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { z } from "zod";
@@ -287,6 +288,85 @@ router.post(
       .where(eq(connectMessagesTable.id, message!.id));
 
     res.status(201).json(withSender);
+  },
+);
+
+// GET /connect/parent-inbox — list all connect threads for the signed-in parent
+// Returns thread metadata only (no contact info / phone / email) with chattable flag
+// derived from whether there is an active (non-ended) shadow-teacher engagement.
+// Masking is preserved: the underlying /connect/thread/:threadId/messages route
+// already enforces thread.parentId === userId before serving messages.
+router.get(
+  "/connect/parent-inbox",
+  requireAuth,
+  requireRole("parent", "admin"),
+  async (req, res): Promise<void> => {
+    const userId = req.userId!;
+
+    const threads = await db
+      .select({
+        threadId: connectThreadsTable.id,
+        professionalId: connectThreadsTable.professionalId,
+        professionalName: professionalProfilesTable.fullName,
+        specialty: professionalProfilesTable.specialty,
+        createdAt: connectThreadsTable.createdAt,
+      })
+      .from(connectThreadsTable)
+      .innerJoin(professionalProfilesTable, eq(connectThreadsTable.professionalId, professionalProfilesTable.id))
+      .where(eq(connectThreadsTable.parentId, userId))
+      .orderBy(desc(connectThreadsTable.createdAt));
+
+    if (threads.length === 0) {
+      res.json([]);
+      return;
+    }
+
+    // Chattable = this parent has a non-ended engagement with that professional
+    const activeEngProfIds = (
+      await db
+        .select({ professionalId: shadowTeacherEngagementsTable.professionalId })
+        .from(shadowTeacherEngagementsTable)
+        .where(
+          and(
+            eq(shadowTeacherEngagementsTable.parentId, userId),
+            sql`${shadowTeacherEngagementsTable.status} != 'ended'`,
+          ),
+        )
+    ).map((r) => r.professionalId);
+    const chattableSet = new Set(activeEngProfIds);
+
+    // Last message per thread (ordered desc so first occurrence per thread is the latest)
+    const threadIds = threads.map((t) => t.threadId);
+    const allMsgs = await db
+      .select({
+        threadId: connectMessagesTable.threadId,
+        body: connectMessagesTable.body,
+        createdAt: connectMessagesTable.createdAt,
+      })
+      .from(connectMessagesTable)
+      .where(inArray(connectMessagesTable.threadId, threadIds))
+      .orderBy(desc(connectMessagesTable.id));
+
+    const lastMsgMap = new Map<number, { body: string; createdAt: string }>();
+    for (const m of allMsgs) {
+      if (!lastMsgMap.has(m.threadId)) {
+        const at = m.createdAt instanceof Date ? m.createdAt.toISOString() : String(m.createdAt);
+        lastMsgMap.set(m.threadId, { body: m.body, createdAt: at });
+      }
+    }
+
+    res.json(
+      threads.map((t) => ({
+        threadId: t.threadId,
+        professionalId: t.professionalId,
+        professionalName: t.professionalName,
+        specialty: t.specialty,
+        chattable: chattableSet.has(t.professionalId),
+        lastMessage: lastMsgMap.get(t.threadId)?.body ?? null,
+        lastAt: lastMsgMap.get(t.threadId)?.createdAt ?? null,
+        unread: 0,
+      })),
+    );
   },
 );
 

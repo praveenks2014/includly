@@ -43,6 +43,7 @@ const CareNotesBody = z.object({
   triggers: z.string().default(""),
   communicationMode: z.string().default(""),
   favorites: z.string().default(""),
+  mainConcern: z.string().optional(),
 });
 
 const ChildBody = z.object({
