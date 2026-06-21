@@ -28,7 +28,7 @@ import {
   Clock, Video, Navigation, ArrowRight, HelpCircle,
   Phone, Mail, MessageSquarePlus, Check, X, Wallet,
   TrendingUp, Gift, Copy, Sparkles, Menu, MessageCircle,
-  User, IndianRupee, ArrowLeft, Building2,
+  User, IndianRupee, ArrowLeft, Building2, AlertTriangle,
 } from "lucide-react";
 
 type Tab = "home" | "find" | "services" | "progress" | "bookings" | "messages" | "notifications" | "shadow-teacher";
@@ -442,6 +442,19 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
       e.childId === selectedChildId
   );
 
+  // Behavior weekly summary for selected child
+  interface BehaviorWeeklySummary {
+    weekCount: number;
+    topTrigger: string | null;
+    topStrategy: string | null;
+  }
+  const { data: behaviorWeekly } = useQuery<BehaviorWeeklySummary | null>({
+    queryKey: ["behavior-weekly-summary", selectedChildId],
+    queryFn: () =>
+      fetchWithAuth(`/api/behavior-logs/weekly-summary?childId=${selectedChildId}`).then((r) => r.json()),
+    enabled: !!selectedChildId,
+  });
+
   // Cross-engagement summary + pending parent logs (G1b)
   interface HomeSummaryRow {
     id: number;
@@ -633,6 +646,30 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
             </Link>
           ))}
         </div>
+      )}
+
+      {/* ── Behavior weekly summary ── */}
+      {behaviorWeekly && behaviorWeekly.weekCount > 0 && (
+        <Link href="/progress">
+          <div className="bg-white border border-rose-100 rounded-2xl p-4 shadow-sm flex items-center gap-3 hover:border-rose-200 hover:shadow-md transition-all cursor-pointer">
+            <div className="w-10 h-10 bg-rose-50 border border-rose-100 rounded-xl flex items-center justify-center shrink-0">
+              <AlertTriangle size={15} className="text-rose-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-[#1A2340]">
+                {behaviorWeekly.weekCount} behavior incident{behaviorWeekly.weekCount !== 1 ? "s" : ""} this week
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                {behaviorWeekly.topTrigger && <span>Top trigger: {behaviorWeekly.topTrigger}</span>}
+                {behaviorWeekly.topTrigger && behaviorWeekly.topStrategy && <span> · </span>}
+                {behaviorWeekly.topStrategy && <span className="text-green-600">✓ {behaviorWeekly.topStrategy} worked</span>}
+              </p>
+            </div>
+            <div className="w-7 h-7 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
+              <ArrowRight size={13} className="text-gray-400" />
+            </div>
+          </div>
+        </Link>
       )}
 
       {/* ── Request a Service → Services ── */}

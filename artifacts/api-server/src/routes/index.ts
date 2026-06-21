@@ -30,6 +30,7 @@ import salaryPaymentsRouter from "./salaryPayments";
 import parentNeedsRouter from "./parentNeeds";
 import centresRouter from "./centres";
 import goalsRouter from "./goals";
+import behaviorLogsRouter from "./behaviorLogs";
 
 const router: IRouter = Router();
 
@@ -64,5 +65,6 @@ router.use(salaryPaymentsRouter);
 router.use(parentNeedsRouter);
 router.use(centresRouter);
 router.use(goalsRouter);
+router.use(behaviorLogsRouter);
 
 export default router;
