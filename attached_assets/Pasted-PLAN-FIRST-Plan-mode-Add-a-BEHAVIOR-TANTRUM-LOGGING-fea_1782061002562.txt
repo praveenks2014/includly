@@ -1,0 +1,163 @@
+PLAN FIRST — Plan mode. Add a BEHAVIOR & TANTRUM LOGGING feature to
+the parent daily-log flow. This is a structured addition that sits
+alongside the existing daily log — parents can optionally record
+behavior incidents with triggers, strategies tried, and outcomes.
+
+WHAT TO BUILD:
+
+A behavior incident is logged as a SEPARATE OPTIONAL SECTION within
+(or alongside) the daily log entry. When a parent is adding/viewing
+a log, they see an "Add behavior incident" panel they can expand.
+A behavior incident can also be created standalone (not tied to a
+session log) since tantrums happen outside sessions too.
+
+═══ DATA MODEL ═══
+New table: behavior_logs
+- id
+- childId (FK → children)
+- engagementId (FK → shadow_teacher_engagements, nullable — can be
+  standalone)
+- dailyLogId (FK → daily_logs, nullable — can be standalone)
+- loggedBy: userId (parent who logged it)
+- occurredAt: timestamp (when the incident happened)
+- tantrumTypes: text[] — one or more from the standardized list + any
+  custom values
+- triggers: text[] — one or more from the standardized list + custom
+- durationMinutes: integer nullable — how long it lasted
+- intensity: text — "mild" | "moderate" | "severe" (simple 3-level)
+- notes: text nullable — freetext context
+- strategies: jsonb — array of { strategy: string, worked: boolean }
+  (each strategy tried, with whether it worked or not)
+- createdAt, updatedAt
+
+Migration: next free number after current highest (confirm before
+applying). Additive only.
+
+═══ STANDARDIZED LISTS (use exactly these — clinically grounded) ═══
+
+TANTRUM / BEHAVIOR TYPES:
+"Physical aggression" (hitting, biting, kicking)
+"Self-injurious behavior" (hitting self, head-banging)
+"Property destruction"
+"Elopement" (running away / bolting)
+"Screaming / vocal outburst"
+"Drop and refuse" (dropping to floor, refusing to move)
+"Throwing objects"
+"Emotional meltdown" (sensory/overwhelm-driven, distinct from
+  a demand-based tantrum)
+"Non-compliance / task refusal"
+"Repetitive behavior escalation" (stimming escalating to distress)
+"Social withdrawal / shutdown"
+"Breath-holding"
+"Other" (reveals a freetext field)
+
+TRIGGERS:
+"Sensory overload" (noise, light, crowds, textures)
+"Transition / routine change"
+"Demand or task presented"
+"Preferred item or activity removed"
+"Attention-seeking"
+"Hunger or fatigue"
+"Pain or physical discomfort"
+"Communication frustration"
+"Unexpected change"
+"Social interaction difficulty"
+"Waiting"
+"Other" (reveals a freetext field)
+
+STRATEGIES:
+"Redirection"
+"Sensory break"
+"Visual schedule or cue"
+"First-then board"
+"Deep pressure / proprioceptive input"
+"Calm-down space / safe space"
+"Token economy / reward offered"
+"Planned ignoring"
+"Verbal de-escalation"
+"Physical guidance / hand-over-hand"
+"Social story reviewed"
+"Choice offered"
+"Wait and observe"
+"Other" (reveals a freetext field)
+
+For ALL THREE lists: selecting "Other" reveals an inline freetext
+input so the parent can type a custom value. Custom values are stored
+in the same array alongside the standard ones.
+
+═══ UI — PARENT SIDE ═══
+
+In the daily log view (parent-dashboard.tsx, the Logs tab):
+
+1. When ADDING a log: after the existing log fields, add a
+collapsible section: "Record a behavior incident (optional)" with a
+chevron toggle. Collapsed by default — zero friction when nothing
+happened. When expanded, shows the full behavior log form.
+
+2. BEHAVIOR LOG FORM fields:
+- "What behaviors occurred?" — multi-select chips from the tantrum
+  types list. "Other" chip reveals freetext. Multiple selectable.
+- "Do you know what triggered it?" — optional multi-select chips from
+  triggers list. "Other" reveals freetext.
+- "How long did it last?" — optional: simple chip select (Under 5
+  min / 5–15 min / 15–30 min / Over 30 min). Maps to durationMinutes
+  as midpoint (2, 10, 22, 45).
+- "Intensity" — 3 chips: Mild / Moderate / Severe.
+- "Strategies tried" — the strategies list rendered as a checklist.
+  Each item has: [ ] checkbox to select (tried this) + when checked,
+  a secondary toggle or radio: "✓ Worked" / "✗ Didn't work" /
+  "⟳ Too early to tell". "Other" reveals freetext + same worked/
+  didn't-work toggle.
+- "Any other notes?" — optional freetext textarea.
+
+3. VIEWING LOGS: in the log feed, behavior incidents appear as a
+distinct visual section within the log card — clearly labelled
+"Behavior incident recorded." Shows: behavior types as chips,
+trigger chips if recorded, intensity badge, strategies with their
+worked/didn't-work outcome badges (green ✓ / red ✗ / grey ⟳).
+
+4. STANDALONE BEHAVIOR LOG: in the Progress tab (or the Logs tab
+header), add a secondary CTA: "Log a behavior incident" that opens
+the same form standalone (not attached to a session log). This is
+for incidents that happen outside sessions — at home, at school
+without the teacher present.
+
+5. BEHAVIOR SUMMARY (in the Home summary hub): if any behavior
+incidents have been logged in the last 7 days, show a small summary
+card: "X behavior incidents this week" with the most common trigger
+and most effective strategy if determinable. Links to the full log.
+
+═══ BACKEND ROUTES ═══
+POST /api/behavior-logs — create a behavior log (parent only)
+  Body: childId, engagementId?, dailyLogId?, tantrumTypes[],
+  triggers[], durationMinutes?, intensity, notes?, strategies[]
+GET /api/behavior-logs?childId=X — list behavior logs for a child
+  (parent only, scoped to their own children)
+GET /api/behavior-logs/:id — single log detail
+
+Auth: parent only. childId scoping: verify the child belongs to the
+requesting parent before any read or write. This is critical — the
+same childId scoping pattern used everywhere else.
+
+═══ WHAT NOT TO TOUCH ═══
+- The existing daily_logs table and its fields — behavior logs are
+  a SEPARATE table linked optionally. Don't modify existing log
+  schema.
+- childId scoping rules anywhere else.
+- The shadow-teacher matching engine, OTP, payments, Razorpay.
+- The professional/teacher side — teachers do not see behavior logs
+  (this is parent-private data about their child's behavior).
+  Behavior logs are parent-only. Do not expose them to professionals.
+
+═══ PLAN MUST INCLUDE ═══
+- Migration SQL (next free number — confirm current highest first)
+- The behavior_logs schema
+- The three API routes
+- The UI component plan (collapsible section in log form, viewing in
+  log feed, standalone CTA, home summary card)
+- Confirmation that behavior logs are parent-private (not exposed to
+  teachers/professionals)
+- Confirmation that childId scoping verifies child ownership before
+  any read/write
+
+No code until I approve the plan.
