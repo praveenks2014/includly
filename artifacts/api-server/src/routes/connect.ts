@@ -335,11 +335,13 @@ router.get(
     ).map((r) => r.professionalId);
     const chattableSet = new Set(activeEngProfIds);
 
-    // Last message per thread (ordered desc so first occurrence per thread is the latest)
+    // Last message per thread + unread count (msgs from professional after parent's last sent msg)
     const threadIds = threads.map((t) => t.threadId);
     const allMsgs = await db
       .select({
+        id: connectMessagesTable.id,
         threadId: connectMessagesTable.threadId,
+        senderId: connectMessagesTable.senderId,
         body: connectMessagesTable.body,
         createdAt: connectMessagesTable.createdAt,
       })
@@ -348,24 +350,44 @@ router.get(
       .orderBy(desc(connectMessagesTable.id));
 
     const lastMsgMap = new Map<number, { body: string; createdAt: string }>();
+    // Track the max message id sent by the parent per thread (proxy for "last read")
+    const lastParentMsgId = new Map<number, number>();
+    // Count messages from the other party (professional) per thread
+    const professionalMsgCount = new Map<number, { id: number }[]>();
+
     for (const m of allMsgs) {
       if (!lastMsgMap.has(m.threadId)) {
         const at = m.createdAt instanceof Date ? m.createdAt.toISOString() : String(m.createdAt);
         lastMsgMap.set(m.threadId, { body: m.body, createdAt: at });
       }
+      if (m.senderId === userId) {
+        // allMsgs is desc by id, so first occurrence is the latest parent msg
+        if (!lastParentMsgId.has(m.threadId)) {
+          lastParentMsgId.set(m.threadId, m.id);
+        }
+      } else {
+        if (!professionalMsgCount.has(m.threadId)) professionalMsgCount.set(m.threadId, []);
+        professionalMsgCount.get(m.threadId)!.push({ id: m.id });
+      }
     }
 
     res.json(
-      threads.map((t) => ({
-        threadId: t.threadId,
-        professionalId: t.professionalId,
-        professionalName: t.professionalName,
-        specialty: t.specialty,
-        chattable: chattableSet.has(t.professionalId),
-        lastMessage: lastMsgMap.get(t.threadId)?.body ?? null,
-        lastAt: lastMsgMap.get(t.threadId)?.createdAt ?? null,
-        unread: 0,
-      })),
+      threads.map((t) => {
+        const lastSentById = lastParentMsgId.get(t.threadId) ?? 0;
+        const profMsgs = professionalMsgCount.get(t.threadId) ?? [];
+        // Unread = professional messages with id > parent's last sent message id
+        const unread = profMsgs.filter((m) => m.id > lastSentById).length;
+        return {
+          threadId: t.threadId,
+          professionalId: t.professionalId,
+          professionalName: t.professionalName,
+          specialty: t.specialty,
+          chattable: chattableSet.has(t.professionalId),
+          lastMessage: lastMsgMap.get(t.threadId)?.body ?? null,
+          lastAt: lastMsgMap.get(t.threadId)?.createdAt ?? null,
+          unread,
+        };
+      }),
     );
   },
 );
