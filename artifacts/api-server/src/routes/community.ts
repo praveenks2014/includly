@@ -198,7 +198,7 @@ const createPostSchema = z.object({
 
 // POST /community/posts
 router.post("/community/posts", requireAuth, async (req: Request, res: Response): Promise<void> => {
-  const userId: number = res.locals["userId"];
+  const userId = req.userId!;
   const parsed = createPostSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() }); return; }
 
@@ -214,7 +214,7 @@ router.post("/community/posts", requireAuth, async (req: Request, res: Response)
 // POST /community/posts/:id/upvote — toggle upvote
 router.post("/community/posts/:id/upvote", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const postId = parseInt(String(req.params["id"] ?? ""), 10);
-  const userId: number = res.locals["userId"];
+  const userId = req.userId!;
   if (isNaN(postId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const existing = await db
@@ -245,7 +245,7 @@ router.post("/community/posts/:id/upvote", requireAuth, async (req: Request, res
 // POST /community/posts/:id/report
 router.post("/community/posts/:id/report", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const targetId = parseInt(String(req.params["id"] ?? ""), 10);
-  const reporterUserId: number = res.locals["userId"];
+  const reporterUserId = req.userId!;
   const reason = (req.body as { reason?: string }).reason?.trim() ?? "";
   if (!reason) { res.status(400).json({ error: "Reason required" }); return; }
 
@@ -263,7 +263,7 @@ router.post("/community/posts/:id/report", requireAuth, async (req: Request, res
 // POST /community/answers/:id/upvote — toggle upvote
 router.post("/community/answers/:id/upvote", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const answerId = parseInt(String(req.params["id"] ?? ""), 10);
-  const userId: number = res.locals["userId"];
+  const userId = req.userId!;
   if (isNaN(answerId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const existing = await db
@@ -294,7 +294,7 @@ router.post("/community/answers/:id/upvote", requireAuth, async (req: Request, r
 // POST /community/answers/:id/report
 router.post("/community/answers/:id/report", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const targetId = parseInt(String(req.params["id"] ?? ""), 10);
-  const reporterUserId: number = res.locals["userId"];
+  const reporterUserId = req.userId!;
   const reason = (req.body as { reason?: string }).reason?.trim() ?? "";
   if (!reason) { res.status(400).json({ error: "Reason required" }); return; }
 
@@ -320,7 +320,7 @@ router.post(
   requireRole("professional", "admin"),
   async (req: Request, res: Response): Promise<void> => {
     const postId = parseInt(String(req.params["id"] ?? ""), 10);
-    const userId: number = res.locals["userId"];
+    const userId = req.userId!;
     if (isNaN(postId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
     const parsed = createAnswerSchema.safeParse(req.body);

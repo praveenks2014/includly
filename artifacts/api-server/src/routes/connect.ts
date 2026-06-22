@@ -8,29 +8,34 @@ import {
   professionalProfilesTable,
   usersTable,
   shadowTeacherEngagementsTable,
+  childrenTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { z } from "zod";
 
 const router: IRouter = Router();
 
-async function getOrCreateThread(parentId: number, professionalId: number) {
+async function getOrCreateThread(parentId: number, professionalId: number, childId?: number | null) {
+  const conditions = [
+    eq(connectThreadsTable.parentId, parentId),
+    eq(connectThreadsTable.professionalId, professionalId),
+  ];
+  if (childId != null) {
+    conditions.push(eq(connectThreadsTable.childId, childId));
+  }
+
   const [existing] = await db
     .select()
     .from(connectThreadsTable)
-    .where(
-      and(
-        eq(connectThreadsTable.parentId, parentId),
-        eq(connectThreadsTable.professionalId, professionalId),
-      ),
-    )
+    .where(and(...conditions))
+    .orderBy(connectThreadsTable.id)
     .limit(1);
 
   if (existing) return existing;
 
   const [created] = await db
     .insert(connectThreadsTable)
-    .values({ parentId, professionalId })
+    .values({ parentId, professionalId, childId: childId ?? null })
     .returning();
   return created!;
 }
@@ -39,7 +44,6 @@ async function assertConnectAccess(
   parentId: number,
   professionalId: number,
 ): Promise<boolean> {
-  const now = new Date();
   const [unlock] = await db
     .select({ chatAccessOnly: contactUnlocksTable.chatAccessOnly })
     .from(contactUnlocksTable)
@@ -50,7 +54,20 @@ async function assertConnectAccess(
       ),
     )
     .limit(1);
-  return !!unlock;
+  if (unlock) return true;
+
+  const [eng] = await db
+    .select({ id: shadowTeacherEngagementsTable.id })
+    .from(shadowTeacherEngagementsTable)
+    .where(
+      and(
+        eq(shadowTeacherEngagementsTable.parentId, parentId),
+        eq(shadowTeacherEngagementsTable.professionalId, professionalId),
+        sql`${shadowTeacherEngagementsTable.status} != 'ended'`,
+      ),
+    )
+    .limit(1);
+  return !!eng;
 }
 
 router.get(
@@ -171,11 +188,14 @@ router.get(
       .select({
         id: connectThreadsTable.id,
         parentId: connectThreadsTable.parentId,
+        childId: connectThreadsTable.childId,
         createdAt: connectThreadsTable.createdAt,
         parentName: usersTable.fullName,
+        childName: childrenTable.name,
       })
       .from(connectThreadsTable)
       .leftJoin(usersTable, eq(connectThreadsTable.parentId, usersTable.id))
+      .leftJoin(childrenTable, eq(connectThreadsTable.childId, childrenTable.id))
       .where(eq(connectThreadsTable.professionalId, prof.id))
       .orderBy(desc(connectThreadsTable.createdAt));
 
@@ -303,17 +323,27 @@ router.get(
   async (req, res): Promise<void> => {
     const userId = req.userId!;
 
+    const childIdParam = req.query["childId"] ? parseInt(req.query["childId"] as string, 10) : null;
+    const childIdFilter = childIdParam != null && !isNaN(childIdParam) ? childIdParam : null;
+
     const threads = await db
       .select({
         threadId: connectThreadsTable.id,
         professionalId: connectThreadsTable.professionalId,
+        childId: connectThreadsTable.childId,
         professionalName: professionalProfilesTable.fullName,
         specialty: professionalProfilesTable.specialty,
+        childName: childrenTable.name,
         createdAt: connectThreadsTable.createdAt,
       })
       .from(connectThreadsTable)
       .innerJoin(professionalProfilesTable, eq(connectThreadsTable.professionalId, professionalProfilesTable.id))
-      .where(eq(connectThreadsTable.parentId, userId))
+      .leftJoin(childrenTable, eq(connectThreadsTable.childId, childrenTable.id))
+      .where(
+        childIdFilter != null
+          ? and(eq(connectThreadsTable.parentId, userId), eq(connectThreadsTable.childId, childIdFilter))
+          : eq(connectThreadsTable.parentId, userId),
+      )
       .orderBy(desc(connectThreadsTable.createdAt));
 
     if (threads.length === 0) {
@@ -380,6 +410,8 @@ router.get(
         return {
           threadId: t.threadId,
           professionalId: t.professionalId,
+          childId: t.childId,
+          childName: t.childName,
           professionalName: t.professionalName,
           specialty: t.specialty,
           chattable: chattableSet.has(t.professionalId),

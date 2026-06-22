@@ -114,8 +114,9 @@ async function seedAdmin(): Promise<void> {
 async function backfillConnectThreads() {
   try {
     await db.execute(sql`
-      INSERT INTO connect_threads (parent_id, professional_id, created_at)
-      SELECT DISTINCT stm.parent_id, stm.selected_professional_id, COALESCE(stm.matched_at, NOW())
+      INSERT INTO connect_threads (parent_id, professional_id, child_id)
+      SELECT DISTINCT ON (stm.parent_id, stm.selected_professional_id, stm.child_id)
+        stm.parent_id, stm.selected_professional_id, stm.child_id
       FROM shadow_teacher_matches stm
       WHERE stm.status = 'committed'
         AND stm.selected_professional_id IS NOT NULL
@@ -123,6 +124,7 @@ async function backfillConnectThreads() {
           SELECT 1 FROM connect_threads ct
           WHERE ct.parent_id = stm.parent_id
             AND ct.professional_id = stm.selected_professional_id
+            AND ct.child_id IS NOT DISTINCT FROM stm.child_id
         )
     `);
     logger.info("connect_threads backfill complete");

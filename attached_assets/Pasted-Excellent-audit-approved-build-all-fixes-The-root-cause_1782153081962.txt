@@ -1,0 +1,62 @@
+Excellent audit — approved, build all fixes. The root causes are
+precise. Notes and one decision:
+
+═══ TRIVIAL / NON-CODE ═══
+#1 PAYMENT: confirmed RAZORPAY_KEY_ID is empty in the env. I'll set the
+value in the Secrets panel myself — no code change needed. (Confirm:
+once set, all payments including buyout work.)
+
+#7 RESOURCES: swap /resources to render ComingSoon. Trivial.
+
+═══ ONE-LINE / SMALL FIXES ═══
+#3 PHOTO: add avatarUrl to UpdateProfessionalProfileBody (the Zod
+schema) so it isn't stripped. Confirm the save branch then writes it.
+
+#6 POST QUESTION 500: replace res.locals["userId"] with req.userId in
+community.ts — AND fix ALL the other occurrences (lines 217, 248, 266,
+297, 323), not just the post handler, since every write has the same
+bug. Confirm all six are fixed so answers/upvotes don't 500 too.
+
+═══ INBOX — the real work ═══
+
+INBOX C (messaging — the core fix): modify assertConnectAccess to grant
+access if EITHER a contact_unlock row exists OR there is a committed/
+active shadow-teacher engagement between this parent and professional.
+A committed/active engagement must grant messaging access. Show me the
+updated assertConnectAccess. Confirm both the thread-open (GET) and
+send-message (POST) endpoints then work for committed engagements.
+
+INBOX A (duplicate threads): fix the backfill SQL so DISTINCT collapses
+to ONE row per (parent_id, professional_id, childId) — remove matched_at
+from the DISTINCT projection. AND add a unique constraint on the
+relevant columns so duplicates can't be created again. Then DEDUPE the
+existing duplicate rows already in the DB (a cleanup query — there are
+already 6-per-teacher rows in there from the bad backfill).
+
+INBOX B + childId — DECISION NEEDED:
+The clean fix is adding childId to connect_threads (so threads are
+per parent-professional-CHILD, labels show the child, and parent inbox
+can scope by selectedChild). This is the right model but it's a schema
+migration touching the table, the backfill, the on-commit insert, and
+both inbox queries. Confirm:
+- Add childId to connect_threads (migration, next free number).
+- The unique constraint becomes (parent_id, professional_id, child_id).
+- On-commit insert includes childId (from the engagement's child).
+- The backfill populates childId from each engagement.
+- Parent inbox query: filter by selectedChildId, label by child + teacher.
+- Teacher inbox query: join children, label each thread by the CHILD's
+  name (not just "Parent").
+Confirm this is the approach and show me the migration + both updated
+queries before applying.
+
+CONFIRMATIONS:
+- The childId scoping on the parent inbox must use selectedChildId from
+  SelectedChildContext.
+- None of this touches the masked PRE-commitment shadow_match chat
+  (that's separate and works) — only the post-commitment connect threads.
+- Migration numbered after current highest — confirm.
+
+Show me before deploying: updated assertConnectAccess (Inbox C), the
+backfill fix + dedupe query (Inbox A), and the connect_threads childId
+migration + both inbox queries (Inbox B). I'll set the Razorpay key
+myself.

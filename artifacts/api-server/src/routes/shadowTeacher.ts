@@ -1122,19 +1122,24 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
     })
     .where(eq(shadowTeacherMatchesTable.id, matchId));
 
-  // Auto-create connect thread for in-app inbox (idempotent — no unique constraint on table)
+  // Auto-create connect thread for in-app inbox (idempotent — unique on parent+professional+child)
+  const matchChildId = match.childId ?? null;
   const [existingThread] = await db
     .select({ id: connectThreadsTable.id })
     .from(connectThreadsTable)
     .where(and(
       eq(connectThreadsTable.parentId, match.parentId),
       eq(connectThreadsTable.professionalId, selectedProfessionalId),
+      matchChildId != null
+        ? eq(connectThreadsTable.childId, matchChildId)
+        : sql`${connectThreadsTable.childId} IS NULL`,
     ))
     .limit(1);
   if (!existingThread) {
     await db.insert(connectThreadsTable).values({
       parentId: match.parentId,
       professionalId: selectedProfessionalId,
+      childId: matchChildId,
     });
   }
 

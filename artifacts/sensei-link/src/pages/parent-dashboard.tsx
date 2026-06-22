@@ -304,7 +304,7 @@ function ReviewModal({ professionalId, onClose }: { professionalId: number; onCl
 }
 
 // ─── Chat modal ────────────────────────────────────────────────────────────────
-function ChatModal({ professionalId, professionalName, onClose }: { professionalId: number; professionalName: string; onClose: () => void }) {
+function ChatModal({ professionalId, professionalName, threadId, childName, onClose }: { professionalId: number; professionalName: string; threadId?: number; childName?: string | null; onClose: () => void }) {
   const { toast } = useToast();
   const { data: me } = useGetMe();
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -315,7 +315,10 @@ function ChatModal({ professionalId, professionalName, onClose }: { professional
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetchWithAuth(`/api/connect/${professionalId}/thread`)
+    const url = threadId != null
+      ? `/api/connect/thread/${threadId}/messages`
+      : `/api/connect/${professionalId}/thread`;
+    fetchWithAuth(url)
       .then(async (r) => {
         if (r.status === 403) {
           const d = await r.json() as { error?: string };
@@ -328,7 +331,7 @@ function ChatModal({ professionalId, professionalName, onClose }: { professional
       })
       .catch(() => setAccessError("Could not load messages. Please try again."))
       .finally(() => setLoading(false));
-  }, [professionalId]);
+  }, [professionalId, threadId]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -339,7 +342,10 @@ function ChatModal({ professionalId, professionalName, onClose }: { professional
     if (!trimmed || sending || accessError) return;
     setSending(true);
     try {
-      const res = await fetchWithAuth(`/api/connect/${professionalId}/messages`, {
+      const sendUrl = threadId != null
+        ? `/api/connect/thread/${threadId}/messages`
+        : `/api/connect/${professionalId}/messages`;
+      const res = await fetchWithAuth(sendUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ body: trimmed }),
@@ -363,7 +369,7 @@ function ChatModal({ professionalId, professionalName, onClose }: { professional
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <div>
             <p className="font-semibold text-[#1A2340] text-sm">{professionalName}</p>
-            <p className="text-xs text-gray-400">Message</p>
+            <p className="text-xs text-gray-400">{childName ? `For ${childName}` : "Message"}</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
             <X size={18} className="text-gray-500" />
@@ -482,9 +488,12 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
 
   // Unread messages → Inbox destination.
   const { data: threads = [] } = useQuery<ThreadSummary[]>({
-    queryKey: ["parent-inbox"],
+    queryKey: ["parent-inbox", selectedChildId],
     queryFn: async () => {
-      const data = await fetchWithAuth("/api/connect/parent-inbox").then((r) => r.json()).catch(() => []);
+      const url = selectedChildId != null
+        ? `/api/connect/parent-inbox?childId=${selectedChildId}`
+        : "/api/connect/parent-inbox";
+      const data = await fetchWithAuth(url).then((r) => r.json()).catch(() => []);
       return Array.isArray(data) ? data : [];
     },
   });
@@ -810,6 +819,7 @@ function FindTab() {
       {reviewingId && <ReviewModal professionalId={reviewingId} onClose={() => setReviewingId(null)} />}
     </div>
   );
+
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -875,6 +885,8 @@ function BookingsTab() {
 interface ThreadSummary {
   threadId: number;
   professionalId: number;
+  childId: number | null;
+  childName: string | null;
   professionalName: string | null;
   specialty?: string | null;
   chattable?: boolean;
@@ -884,18 +896,23 @@ interface ThreadSummary {
 }
 
 function MessagesTab() {
+  const { selectedChildId } = useSelectedChild();
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
-  const [chatProfessional, setChatProfessional] = useState<{ id: number; name: string } | null>(null);
+  const [chatProfessional, setChatProfessional] = useState<{ id: number; name: string; threadId?: number; childName?: string | null } | null>(null);
 
   useEffect(() => {
-    fetchWithAuth("/api/connect/parent-inbox")
+    setLoading(true);
+    const url = selectedChildId != null
+      ? `/api/connect/parent-inbox?childId=${selectedChildId}`
+      : "/api/connect/parent-inbox";
+    fetchWithAuth(url)
       .then((r) => r.json())
       .then((data) => setThreads(Array.isArray(data) ? data : []))
       .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
-  }, []);
+  }, [selectedChildId]);
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-teal-600" /></div>;
 
@@ -928,7 +945,7 @@ function MessagesTab() {
           {threads.map((t) => (
             <button
               key={t.threadId}
-              onClick={() => setChatProfessional({ id: t.professionalId, name: t.professionalName ?? "Professional" })}
+              onClick={() => setChatProfessional({ id: t.professionalId, name: t.professionalName ?? "Professional", threadId: t.threadId, childName: t.childName })}
               className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50/80 transition-colors text-left"
             >
               <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-sm shrink-0 ${t.chattable === false ? "bg-gradient-to-br from-gray-100 to-gray-50 border border-gray-200 text-gray-400" : "bg-gradient-to-br from-teal-100 to-teal-50 border border-teal-100 text-teal-700"}`}>
@@ -943,6 +960,9 @@ function MessagesTab() {
                     <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">Past</span>
                   )}
                 </div>
+                {t.childName && (
+                  <p className="text-[10px] text-teal-600 font-medium truncate mt-0.5">For {t.childName}</p>
+                )}
                 {t.lastMessage && (
                   <p className={`text-[11px] truncate mt-0.5 ${t.unread > 0 ? "text-gray-600 font-medium" : "text-gray-400"}`}>
                     {t.lastMessage}
@@ -963,6 +983,8 @@ function MessagesTab() {
         <ChatModal
           professionalId={chatProfessional.id}
           professionalName={chatProfessional.name}
+          threadId={chatProfessional.threadId}
+          childName={chatProfessional.childName}
           onClose={() => setChatProfessional(null)}
         />
       )}

@@ -1,0 +1,70 @@
+PLAN/AUDIT FIRST — Plan mode, no code. Screenshots reveal the inbox is
+mis-modeled and several bugs persist. For each, show me the REAL root
+cause (actual code/error), not a restatement.
+
+═══ INBOX — MIS-MODELED (the big one) ═══
+Screenshots show: parent inbox lists "Global pitstop" SIX times (one
+row per engagement, same teacher); teacher inbox lists "Parent" SIX
+times (one per engagement, no child name); and opening a thread shows
+"No connect access — please connect first" so messaging is blocked.
+
+Three problems to diagnose and fix:
+
+A. TOO MANY THREADS: the #98 backfill created a connect_threads row
+per match/engagement, so one parent-teacher relationship has many
+duplicate threads. Fix: there should be ONE conversation per
+parent–professional–child relationship (one per engagement is
+acceptable IF labeled by child, but duplicates for the SAME
+child+teacher must be collapsed). Show me how connect_threads rows
+were created and dedupe them — both the backfill and the on-commit
+creation must be idempotent per (parentId, professionalId, childId).
+
+B. USELESS LABELS: parent inbox shows the teacher name (ok) but
+duplicated; teacher inbox shows only "Parent" with no child name. Fix:
+- Parent side: one row per teacher (or per child-teacher engagement),
+  labeled with teacher name + which child it's about.
+- Teacher side: one row per child-engagement, labeled with the CHILD's
+  name (not just "Parent"), so the teacher knows which child/family.
+Show me the inbox queries for both sides and the label fields.
+
+C. MESSAGING BLOCKED — "No connect access": opening a thread shows
+"please connect first" and the message box says "Connect first to
+message." The thread exists but the connect-access gate fails. Show me:
+- What is the connect_access check that gates messaging?
+- Why does a COMMITTED/ACTIVE engagement not have connect access?
+- Fix: a committed/active shadow-teacher engagement MUST grant connect
+  access so both parties can message. Show me the gate and how access
+  is (or isn't) granted on commit.
+
+Also confirm the parent inbox is scoped to the SELECTED child
+(selectedChildId) — switching child should change which conversations
+show.
+
+═══ #1 — PAYMENT GATEWAY NOT CONFIGURED ═══
+Full buyout (dev workspace) shows "Payment gateway not configured."
+Diagnose: do ALL payments fail in dev with this, or only buyout? Is
+RAZORPAY_KEY_ID/SECRET set in WORKSPACE secrets? Did the recent
+secret-separation code change regress key reading? Tell me: missing
+dev key, or code regression.
+
+═══ #3 — PHOTO "Could not save photo" (save step, not upload) ═══
+Screenshot shows "Uploaded ✓" but then "Could not save photo" on Save.
+So upload to storage SUCCEEDS but persisting the URL to the profile
+FAILS. Show me:
+- The "Save Photo" action — what PATCH/endpoint writes the photo URL
+  to the professional profile, and what's the actual error?
+- Root cause of the save failure (not the upload).
+
+═══ #6 — POST QUESTION 500 (server error) ═══
+Show me the actual server exception/stack for POST /api/community/
+posts. A 500 means a server-side crash — DB constraint, missing field,
+null ref? Show the real error.
+
+═══ #7 — RESOURCES → COMING SOON ═══
+Resources shows posted questions; it should show ComingSoon. Change
+/resources to render ComingSoon, no question content.
+
+For the reopened items (inbox messaging, #6 500), show the ACTUAL
+error/response — these have been "fixed" before. No code until I
+approve. Confirm none touch childId scoping rules elsewhere, matching
+scoring, or OTP.
