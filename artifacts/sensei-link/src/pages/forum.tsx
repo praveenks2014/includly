@@ -191,6 +191,7 @@ function AskModal({
   onPostCreated: (postId: number) => void;
 }) {
   const { toast } = useToast();
+  const { isSignedIn } = useAuth();
   const { mutateAsync, isPending } = useCreatePost();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -254,8 +255,9 @@ function AskModal({
       reset();
       onClose();
       onPostCreated((post as { id: number }).id);
-    } catch {
-      toast({ title: "Failed to post question", variant: "destructive" });
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      toast({ title: `Failed to post question${status ? ` (${status})` : ""}`, variant: "destructive" });
     }
   }
 
@@ -330,7 +332,7 @@ function AskModal({
             <Button type="button" variant="ghost" size="sm" onClick={handleClose}>Cancel</Button>
             <Button
               type="submit"
-              disabled={isPending}
+              disabled={isPending || !isSignedIn}
               className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white border-0 gap-1"
             >
               {isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}

@@ -490,9 +490,6 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
   });
   const unreadCount = threads.reduce((sum, t) => sum + (t.unread ?? 0), 0);
 
-  // Selected-child snapshot → Child Profile destination.
-  const snapshotChild = selectedChild ?? childProfiles[0];
-
   const nothingActive = !activeEngagement && upcoming.length === 0 && unreadCount === 0;
 
   return (
@@ -577,24 +574,6 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
                 {unreadCount} unread message{unreadCount !== 1 ? "s" : ""}
               </p>
               <p className="text-[11px] text-gray-400 mt-0.5">Open your inbox to reply</p>
-            </div>
-            <div className="w-7 h-7 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
-              <ArrowRight size={13} className="text-gray-400" />
-            </div>
-          </div>
-        </Link>
-      )}
-
-      {/* ── Selected-child snapshot → Child Profile ── */}
-      {snapshotChild && (
-        <Link href={`/children/${snapshotChild.id}/edit`}>
-          <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center gap-3 hover:border-violet-200 hover:shadow-md transition-all cursor-pointer">
-            <div className="w-10 h-10 bg-gradient-to-br from-violet-100 to-violet-50 border border-violet-100 rounded-xl flex items-center justify-center shrink-0">
-              <User size={15} className="text-violet-500" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-[#1A2340] truncate">{snapshotChild.name}'s Profile</p>
-              <p className="text-[11px] text-gray-400 mt-0.5">Update conditions, goals & availability</p>
             </div>
             <div className="w-7 h-7 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
               <ArrowRight size={13} className="text-gray-400" />
@@ -1554,7 +1533,7 @@ function ShadowTeacherTab() {
     return <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-14 bg-white rounded-xl animate-pulse shadow-sm" />)}</div>;
   }
 
-  if (!active) {
+  if (!active || active.status === "ended") {
     return <ShadowTeacherRequestWidget key={selectedChildId ?? "no-child"} />;
   }
 

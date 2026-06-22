@@ -18,7 +18,7 @@ export function ComingSoon({
 }: {
   icon: LucideIcon;
   title: string;
-  description: string;
+  description?: string;
   accent?: Accent;
   children?: ReactNode;
 }) {
@@ -29,7 +29,7 @@ export function ComingSoon({
         <Icon size={28} className={a.text} />
       </div>
       <h2 className="text-xl font-semibold text-gray-900 mb-2">{title}</h2>
-      <p className="text-sm text-muted-foreground mb-6 leading-relaxed max-w-sm">{description}</p>
+      {description && <p className="text-sm text-muted-foreground mb-6 leading-relaxed max-w-sm">{description}</p>}
       {children}
     </div>
   );

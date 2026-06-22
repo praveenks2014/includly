@@ -15,6 +15,7 @@ import {
   childrenTable,
   negotiationOffersTable,
   professionalAvailabilityTable,
+  connectThreadsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { z } from "zod/v4";
@@ -1120,6 +1121,22 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
       updatedAt: new Date(),
     })
     .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  // Auto-create connect thread for in-app inbox (idempotent — no unique constraint on table)
+  const [existingThread] = await db
+    .select({ id: connectThreadsTable.id })
+    .from(connectThreadsTable)
+    .where(and(
+      eq(connectThreadsTable.parentId, match.parentId),
+      eq(connectThreadsTable.professionalId, selectedProfessionalId),
+    ))
+    .limit(1);
+  if (!existingThread) {
+    await db.insert(connectThreadsTable).values({
+      parentId: match.parentId,
+      professionalId: selectedProfessionalId,
+    });
+  }
 
   // Notify parent: waiting for teacher to accept
   try {

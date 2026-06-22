@@ -314,7 +314,11 @@ function Router() {
             <ResourcesPage />
           </AuthShell>
         </Route>
-        <Route path="/forum" component={ForumPage} />
+        <Route path="/forum">
+          <RequireAuth>
+            <ForumPage />
+          </RequireAuth>
+        </Route>
         <Route path="/privacy" component={PrivacyPage} />
         <Route path="/terms" component={TermsPage} />
         <Route path="/support">

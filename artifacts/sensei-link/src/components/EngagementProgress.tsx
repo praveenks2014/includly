@@ -199,11 +199,8 @@ export function EngagementProgress({
   const [newGoalCategory, setNewGoalCategory] = useState("");
   const [savingGoal, setSavingGoal] = useState(false);
 
-  // ── Behavior form state (shared between attached-to-log and standalone modes) ──
-  // bOpen = incident panel shown inside the log form (no separate submit — fires on "Post Update")
-  // sbOpen = standalone incident form (its own submit button)
+  // ── Behavior form state (attached to session log — fires on "Post Update") ──
   const [bOpen, setBOpen] = useState(false);
-  const [sbOpen, setSbOpen] = useState(false);
   const [bTypes, setBTypes] = useState<string[]>([]);
   const [bTypesOther, setBTypesOther] = useState("");
   const [bTriggers, setBTriggers] = useState<string[]>([]);
@@ -213,7 +210,6 @@ export function EngagementProgress({
   const [bStrategies, setBStrategies] = useState<Record<string, "yes" | "no" | "too_early">>({});
   const [bStrategiesOther, setBStrategiesOther] = useState("");
   const [bNotes, setBNotes] = useState("");
-  const [postingBehavior, setPostingBehavior] = useState(false);
 
   function resetBehaviorForm() {
     setBTypes([]); setBTypesOther("");
@@ -287,22 +283,6 @@ export function EngagementProgress({
       toast({ title: "Update posted ✓" });
     } catch { toast({ title: "Failed to post update", variant: "destructive" }); }
     finally { setPostingLog(false); }
-  }
-
-  async function handleStandaloneBehavior() {
-    if (!active.childId || bTypes.length === 0 || !bIntensity) return;
-    setPostingBehavior(true);
-    try {
-      await fetchWithAuth("/api/behavior-logs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildBehaviorPayload()),
-      });
-      queryClient.invalidateQueries({ queryKey: ["behavior-logs", active.childId] });
-      setSbOpen(false); resetBehaviorForm();
-      toast({ title: "Behavior incident logged ✓" });
-    } catch { toast({ title: "Failed to log incident", variant: "destructive" }); }
-    finally { setPostingBehavior(false); }
   }
 
   async function handleAddGoal() {
@@ -535,7 +515,7 @@ export function EngagementProgress({
             {/* ── Collapsible behavior incident panel ── */}
             <button type="button"
               onClick={() => {
-                if (!bOpen) { setSbOpen(false); resetBehaviorForm(); }
+                if (!bOpen) { resetBehaviorForm(); }
                 setBOpen((p) => !p);
               }}
               className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-rose-50 border border-rose-100 hover:border-rose-200 transition-colors">
@@ -558,33 +538,6 @@ export function EngagementProgress({
           </div>
         )}
 
-        {/* ── Standalone: Log a behavior incident ── */}
-        {active.status !== "ended" && (
-          <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(26,35,64,0.06)] overflow-hidden">
-            <button type="button"
-              onClick={() => {
-                if (!sbOpen) { setBOpen(false); resetBehaviorForm(); }
-                setSbOpen((p) => !p);
-              }}
-              className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors">
-              <span className="flex items-center gap-2 text-sm font-semibold text-[#1A2340]">
-                <div className="w-7 h-7 rounded-lg bg-rose-100 flex items-center justify-center">
-                  <AlertTriangle size={13} className="text-rose-500" />
-                </div>
-                Log a behavior incident
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="text-[10px] text-gray-400">Not tied to a session</span>
-                {sbOpen ? <ChevronUp size={14} className="text-gray-400 ml-1" /> : <ChevronDown size={14} className="text-gray-400 ml-1" />}
-              </span>
-            </button>
-            {sbOpen && (
-              <div className="px-5 pb-5 pt-1">
-                {renderBehaviorForm("Log Incident", () => void handleStandaloneBehavior(), postingBehavior, false)}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* ── Log feed ── */}
         {logs.length === 0 && standaloneBehaviorLogs.length === 0 ? (

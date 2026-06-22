@@ -1,7 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
-import { db, usersTable } from "@workspace/db";
-import { eq, or } from "drizzle-orm";
+import { db, usersTable, connectThreadsTable, shadowTeacherMatchesTable } from "@workspace/db";
+import { eq, or, and, isNotNull, sql } from "drizzle-orm";
 import { initNudgeScheduler } from "./lib/nudgeScheduler";
 import { runAutoCancelJob } from "./routes/sessionsV2";
 
@@ -111,6 +111,26 @@ async function seedAdmin(): Promise<void> {
   }
 }
 
+async function backfillConnectThreads() {
+  try {
+    await db.execute(sql`
+      INSERT INTO connect_threads (parent_id, professional_id, created_at)
+      SELECT DISTINCT stm.parent_id, stm.selected_professional_id, COALESCE(stm.matched_at, NOW())
+      FROM shadow_teacher_matches stm
+      WHERE stm.status = 'committed'
+        AND stm.selected_professional_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM connect_threads ct
+          WHERE ct.parent_id = stm.parent_id
+            AND ct.professional_id = stm.selected_professional_id
+        )
+    `);
+    logger.info("connect_threads backfill complete");
+  } catch (err) {
+    logger.error({ err }, "connect_threads backfill failed (non-fatal)");
+  }
+}
+
 app.listen(port, (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
@@ -124,6 +144,7 @@ app.listen(port, (err) => {
 
   seedAdmin().catch((e) => logger.warn({ e }, "Admin seed failed"));
   initNudgeScheduler();
+  backfillConnectThreads().catch((e) => logger.warn({ e }, "connect_threads backfill error"));
   // Auto-cancel unpaid confirmed bookings every 5 minutes
   setInterval(() => { runAutoCancelJob().catch((e) => logger.warn({ e }, "AutoCancel job error")); }, 5 * 60 * 1000);
 });

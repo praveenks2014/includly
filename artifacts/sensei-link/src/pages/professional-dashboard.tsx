@@ -38,6 +38,7 @@ import {
   Users, Minus, Camera, Share2,
 } from "lucide-react";
 import { ShadowMatchChatDrawer } from "@/components/ShadowMatchChatDrawer";
+import { ComingSoon } from "@/components/ComingSoon";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ProTab = "home" | "profile" | "availability" | "bookings" | "earnings" | "certifications" | "verification" | "notifications" | "messages" | "engagement" | "enquiries";
@@ -297,45 +298,7 @@ function HomeTab({ profile, firstName, onTabChange }: {
         <h2 className="font-semibold text-[#1A2340]">Quick Edit</h2>
 
         {/* Session fee */}
-        <div>
-          <Label className="text-sm font-medium text-gray-700 mb-2 block">Session Fee (₹)</Label>
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₹</span>
-              <Input
-                type="number"
-                min={0}
-                placeholder="Min"
-                value={feeMin}
-                onChange={(e) => setFeeMin(e.target.value === "" ? "" : Number(e.target.value))}
-                className="pl-7 rounded-lg focus-visible:ring-[#2EC4A5]"
-                aria-label="Minimum session fee"
-              />
-            </div>
-            <span className="text-gray-400 text-sm">–</span>
-            <div className="relative flex-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₹</span>
-              <Input
-                type="number"
-                min={0}
-                placeholder="Max"
-                value={feeMax}
-                onChange={(e) => setFeeMax(e.target.value === "" ? "" : Number(e.target.value))}
-                className="pl-7 rounded-lg focus-visible:ring-[#2EC4A5]"
-                aria-label="Maximum session fee"
-              />
-            </div>
-            <Button
-              size="sm"
-              onClick={saveFee}
-              disabled={feeSaving}
-              className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white shrink-0 focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
-              aria-label="Save session fee"
-            >
-              {feeSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-            </Button>
-          </div>
-        </div>
+        <ComingSoon icon={IndianRupee} title="Session fee editing coming soon" accent="teal" />
 
         {/* Home visits toggle */}
         {showHomeVisits && profile && (
@@ -1889,21 +1852,21 @@ function EngagementTab() {
   // ── Logs ───────────────────────────────────────────────────────────────────
   const { data: logs = [] } = useQuery<DailyLog[]>({
     queryKey: ["pro-engagement-logs", active?.id],
-    queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/daily-logs`).then(r => r.json()),
+    queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/daily-logs`).then(r => { if (!r.ok) throw new Error(r.statusText); return r.json() as Promise<DailyLog[]>; }),
     enabled: !!active,
   });
 
   // ── Goals ─────────────────────────────────────────────────────────────────
   const { data: goals = [], refetch: refetchGoals } = useQuery<ChildGoal[]>({
     queryKey: ["child-goals", active?.childId],
-    queryFn: () => fetchWithAuth(`/api/children/${active!.childId}/goals`).then(r => r.json()),
+    queryFn: () => fetchWithAuth(`/api/children/${active!.childId}/goals`).then(r => { if (!r.ok) throw new Error(r.statusText); return r.json() as Promise<ChildGoal[]>; }),
     enabled: !!active?.childId && (engTab === "child" || engTab === "log"),
   });
 
   // ── Lifecycle requests ─────────────────────────────────────────────────────
   const { data: lifecycleRequests = [] } = useQuery<LifecycleRequest[]>({
     queryKey: ["engagement-lifecycle", active?.id],
-    queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/lifecycle`).then(r => r.json()),
+    queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/lifecycle`).then(r => { if (!r.ok) throw new Error(r.statusText); return r.json() as Promise<LifecycleRequest[]>; }),
     enabled: !!active,
   });
 
@@ -3391,7 +3354,7 @@ export default function ProfessionalDashboard() {
       <main className="px-4 sm:px-6 py-6 max-w-[900px] w-full mx-auto">
         {activeTab === "home"          && <HomeTab profile={profileTyped} firstName={firstName} onTabChange={handleTabChange} />}
         {activeTab === "profile"       && <ProfileTab profile={profileTyped} />}
-        {activeTab === "availability"  && <AvailabilityTab />}
+        {activeTab === "availability"  && <ComingSoon icon={CalendarCheck} title="Availability calendar coming soon" accent="teal" />}
         {activeTab === "bookings"      && <BookingsTab />}
         {activeTab === "earnings"      && <EarningsTab />}
         {activeTab === "certifications"&& <CertificationsTab />}
