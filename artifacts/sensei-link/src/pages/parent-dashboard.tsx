@@ -14,6 +14,9 @@ import type { ProfessionalSearchResult, SessionBookingWithDetails } from "@works
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
 import { StarRating } from "@/components/StarRating";
 import { ShadowTeacherRequestWidget } from "@/components/ShadowTeacherRequestWidget";
 import { ComingSoon } from "@/components/ComingSoon";
@@ -1060,6 +1063,166 @@ function NotificationsTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: SHADOW TEACHER
 // ═══════════════════════════════════════════════════════════════════════════════
+interface ReRequestEligibility {
+  waived: boolean;
+  childName: string;
+  previousMatch: {
+    extraNotes: string | null;
+    childGoalsAreas: string[] | null;
+    childPreferredModes: string[] | null;
+  } | null;
+}
+
+function ReRequestSheet({
+  childId,
+  childName,
+  eligibility,
+  onClose,
+  onSuccess,
+}: {
+  childId: number;
+  childName: string;
+  eligibility: ReRequestEligibility;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const [extraNotes, setExtraNotes] = useState(eligibility.previousMatch?.extraNotes ?? "");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    try {
+      if (!eligibility.waived) {
+        const loaded = await loadRazorpayScript();
+        if (!loaded) { toast({ title: "Payment gateway unavailable", variant: "destructive" }); return; }
+      }
+
+      const res = await fetchWithAuth("/api/shadow-teacher/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ childId, extraNotes: extraNotes.trim() || undefined }),
+      });
+      const data = await res.json() as {
+        matchId?: number;
+        waived?: boolean;
+        orderId?: string;
+        amount?: number;
+        keyId?: string;
+        error?: string;
+      };
+
+      if (!res.ok) {
+        toast({ title: data.error ?? "Could not submit request", variant: "destructive" });
+        return;
+      }
+
+      if (data.waived) {
+        toast({ title: "Request submitted!", description: "We're finding matched teachers for you." });
+        onSuccess();
+        return;
+      }
+
+      if (!data.orderId || !data.amount || !data.keyId || !data.matchId) {
+        toast({ title: "Could not start payment", variant: "destructive" });
+        return;
+      }
+
+      const matchId = data.matchId;
+      await new Promise<void>((resolve, reject) => {
+        const rzp = new window.Razorpay({
+          key: data.keyId!,
+          amount: data.amount!,
+          currency: "INR",
+          order_id: data.orderId!,
+          name: "Includly",
+          description: "Shadow teacher matching fee",
+          handler: async (response: RazorpayPaymentResponse) => {
+            try {
+              const vRes = await fetchWithAuth(`/api/shadow-teacher/${matchId}/verify-request-payment`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySignature: response.razorpay_signature,
+                }),
+              });
+              if (!vRes.ok) {
+                const vd = await vRes.json() as { error?: string };
+                toast({ title: vd.error ?? "Payment verification failed", variant: "destructive" });
+                reject(new Error("verify"));
+                return;
+              }
+              const vd = await vRes.json() as { candidateCount?: number };
+              toast({ title: "Payment confirmed!", description: `Found ${vd.candidateCount ?? 0} teacher${vd.candidateCount === 1 ? "" : "s"} for you.` });
+              onSuccess();
+              resolve();
+            } catch { reject(new Error("verify")); }
+          },
+          modal: { ondismiss: () => reject(new Error("dismissed")) },
+        });
+        rzp.open();
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg !== "dismissed") toast({ title: "Request failed", description: msg, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto rounded-t-2xl p-6">
+        <SheetHeader className="mb-4">
+          <SheetTitle className="text-base font-bold text-[#1A2340]">Start a new engagement</SheetTitle>
+        </SheetHeader>
+
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 mb-4 text-xs space-y-0.5">
+          <p className="font-semibold text-[11px] uppercase tracking-wide text-foreground">Matching for</p>
+          <p className="font-medium text-foreground">{childName}</p>
+        </div>
+
+        {eligibility.waived ? (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4 flex items-start gap-3">
+            <CheckCircle2 size={16} className="text-green-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs font-bold text-green-800">Matching fee waived ✓</p>
+              <p className="text-xs text-green-700 mt-1 leading-relaxed">
+                You paid within the last 3 months for {childName}. Review your notes and confirm to get matched.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+            <p className="text-xs font-semibold text-amber-800">Matching fee: ₹500</p>
+            <p className="text-xs text-amber-700 mt-0.5">Review your notes and pay ₹500 to get matched.</p>
+          </div>
+        )}
+
+        <div className="mb-5">
+          <label className="text-sm font-medium block mb-1.5">
+            Anything to tell us? <span className="text-muted-foreground font-normal">(optional)</span>
+          </label>
+          <Textarea
+            placeholder="School type, specific goals, timing preferences…"
+            value={extraNotes}
+            onChange={(e) => setExtraNotes(e.target.value)}
+            rows={3}
+            className="resize-none text-sm"
+          />
+        </div>
+
+        <Button className="w-full gap-2" onClick={() => void handleSubmit()} disabled={submitting}>
+          {submitting ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
+          {submitting ? "Submitting…" : eligibility.waived ? "Confirm & Get Matched" : "Pay ₹500 & Get Matched"}
+        </Button>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 function ShadowTeacherTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1152,6 +1315,21 @@ function ShadowTeacherTab() {
   const [payingInProgress, setPayingInProgress] = useState(false);
   const [stTab, setStTab] = useState<"overview" | "logs" | "goals" | "trends" | "payments" | "lifecycle">("overview");
   const [editingStartDate, setEditingStartDate] = useState(false);
+  const [reRequestLoading, setReRequestLoading] = useState(false);
+  const [reRequestData, setReRequestData] = useState<ReRequestEligibility | null>(null);
+
+  async function handleStartNewEngagement(childId: number) {
+    setReRequestLoading(true);
+    try {
+      const r = await fetchWithAuth(`/api/shadow-teacher/re-request-eligibility?childId=${childId}`);
+      const data = await r.json() as ReRequestEligibility;
+      setReRequestData(data);
+    } catch {
+      toast({ title: "Could not load eligibility", variant: "destructive" });
+    } finally {
+      setReRequestLoading(false);
+    }
+  }
   const [newStartDate, setNewStartDate] = useState("");
   const [changingStartDate, setChangingStartDate] = useState(false);
 
@@ -1472,12 +1650,27 @@ function ShadowTeacherTab() {
                 {active.endedReason === "buyout" ? " via early exit." : active.endedReason === "full_buyout" ? " via full buyout." : active.endedReason === "stop" ? " after the notice period." : "."}</>
               : "This engagement is no longer active."}
           </p>
-          <Link href="/services">
-            <button className="mt-2 pl-[52px] flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 transition-colors">
-              <ArrowRight size={12} />
-              Start a new engagement
-            </button>
-          </Link>
+          <button
+            onClick={() => active.childId ? void handleStartNewEngagement(active.childId) : undefined}
+            disabled={reRequestLoading || !active.childId}
+            className="mt-2 pl-[52px] flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 transition-colors disabled:opacity-50"
+          >
+            {reRequestLoading ? <Loader2 size={12} className="animate-spin" /> : <ArrowRight size={12} />}
+            Start a new engagement
+          </button>
+          {reRequestData && active.childId && (
+            <ReRequestSheet
+              childId={active.childId}
+              childName={active.childName ?? reRequestData.childName}
+              eligibility={reRequestData}
+              onClose={() => setReRequestData(null)}
+              onSuccess={() => {
+                setReRequestData(null);
+                queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request", active.childId] });
+                queryClient.invalidateQueries({ queryKey: ["parent-engagements"] });
+              }}
+            />
+          )}
         </div>
       )}
 

@@ -465,8 +465,32 @@ export function ShadowTeacherRequestWidget() {
   // selectedChildId comes from context — no internal child-selection state.
   const loadingChildren = childrenLoading || loadingChildrenLocal;
 
+  // Compute effectiveChildId at component level so eligibility query can use it.
+  const effectiveChildIdForEligibility = selectedChildId ?? match?.childId ?? null;
+  const hasActiveMatch = !!match && !["cancelled", "refunded"].includes(match.status);
+
+  // Re-request waiver eligibility — only queried when there is no active match.
+  const { data: eligibility } = useQuery<{
+    waived: boolean;
+    childName: string;
+    previousMatch: { extraNotes: string | null; childGoalsAreas: string[] | null; childPreferredModes: string[] | null } | null;
+  }>({
+    queryKey: ["re-request-eligibility", effectiveChildIdForEligibility],
+    queryFn: () =>
+      fetchWithAuth(`/api/shadow-teacher/re-request-eligibility?childId=${effectiveChildIdForEligibility}`)
+        .then((r) => r.json()),
+    enabled: !!effectiveChildIdForEligibility && !hasActiveMatch,
+    staleTime: 30_000,
+  });
+
   const [extraNotes, setExtraNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Pre-fill extra notes from the most recent previous request when the eligibility data loads.
+  useEffect(() => {
+    const prev = eligibility?.previousMatch?.extraNotes;
+    if (prev) setExtraNotes((current) => current || prev);
+  }, [eligibility]);
   const [choosingId, setChoosingId] = useState<number | null>(null);
   const [refunding, setRefunding] = useState(false);
   const [requestingTrial, setRequestingTrial] = useState(false);
@@ -508,6 +532,7 @@ export function ShadowTeacherRequestWidget() {
       const data = await res.json() as {
         error?: string;
         matchId?: number;
+        waived?: boolean;
         orderId?: string;
         providerOrderId?: string;
         amount?: number;
@@ -516,6 +541,14 @@ export function ShadowTeacherRequestWidget() {
 
       if (!res.ok && res.status !== 409) {
         toast({ title: data.error ?? "Could not submit request", variant: "destructive" });
+        return;
+      }
+
+      // Waived path: no Razorpay step — candidates were already surfaced server-side
+      if (res.ok && data.waived) {
+        toast({ title: "Request submitted!", description: "We're finding matched teachers for you." });
+        queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+        await refetch();
         return;
       }
 
@@ -817,6 +850,18 @@ export function ShadowTeacherRequestWidget() {
               </div>
             )}
 
+            {eligibility?.waived && (
+              <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-start gap-2.5">
+                <CheckCircle2 size={15} className="text-green-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs font-bold text-green-800">Matching fee waived ✓</p>
+                  <p className="text-xs text-green-700 mt-0.5 leading-relaxed">
+                    You paid within the last 3 months for {eligibility.childName}. Confirm your details to get matched — no payment needed.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div>
               <Label className="text-sm mb-1.5 block">Anything else to tell us? <span className="text-muted-foreground font-normal">(optional)</span></Label>
               <Textarea
@@ -836,12 +881,18 @@ export function ShadowTeacherRequestWidget() {
           disabled={submitting || selectedChildId === null || children.length === 0}
         >
           {submitting ? <Loader2 size={14} className="animate-spin" /> : <IndianRupee size={14} />}
-          {submitting ? "Opening payment…" : `Find My Shadow Teacher — ₹${matchingFee.toLocaleString("en-IN")}`}
+          {submitting
+            ? (eligibility?.waived ? "Submitting…" : "Opening payment…")
+            : eligibility?.waived
+              ? "Confirm & Get Matched — Free"
+              : `Find My Shadow Teacher — ₹${matchingFee.toLocaleString("en-IN")}`}
         </Button>
 
-        <p className="text-[11px] text-center text-muted-foreground">
-          A one-time matching fee of ₹{matchingFee.toLocaleString("en-IN")} is charged now. Choosing your teacher later is free.
-        </p>
+        {!eligibility?.waived && (
+          <p className="text-[11px] text-center text-muted-foreground">
+            A one-time matching fee of ₹{matchingFee.toLocaleString("en-IN")} is charged now. Choosing your teacher later is free.
+          </p>
+        )}
       </div>
     );
   }

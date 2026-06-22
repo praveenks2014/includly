@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, isNull, isNotNull, sql, count, max, inArray, notInArray } from "drizzle-orm";
+import { eq, and, desc, isNull, isNotNull, sql, count, max, inArray, notInArray, gte, gt } from "drizzle-orm";
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import {
@@ -123,147 +123,12 @@ function maskProfile(
   };
 }
 
-// ── GET /shadow-teacher/pricing — public: returns matching fee + trial fee ────
-router.get("/shadow-teacher/pricing", async (_req: Request, res: Response): Promise<void> => {
-  const s = await getSettings();
-  res.json({ matchingFeeInr: s.matchingFeeInr, trialFeeInr: (s as Record<string, unknown>)["trialFeeInr"] as number ?? 500 });
-});
+type MatchRow = typeof shadowTeacherMatchesTable.$inferSelect;
 
-// ── POST /shadow-teacher/request — parent submits (deposit-at-request model) ─
-const NewRequestBody = z.object({
-  childId: z.number().int().positive(),
-  extraNotes: z.string().max(2000).optional(),
-});
-
-router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
-  const parsed = NewRequestBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "childId (number) is required" });
-    return;
-  }
-
-  const { childId, extraNotes } = parsed.data;
-
-  // Load child (must belong to this parent)
-  const [child] = await db
-    .select()
-    .from(childrenTable)
-    .where(and(eq(childrenTable.id, childId), eq(childrenTable.parentId, req.userId!)));
-  if (!child) {
-    res.status(404).json({ error: "Child not found or does not belong to you" });
-    return;
-  }
-
-  // Prevent duplicate active requests — scoped to THIS child only
-  const existing = await db
-    .select()
-    .from(shadowTeacherMatchesTable)
-    .where(
-      and(
-        eq(shadowTeacherMatchesTable.parentId, req.userId!),
-        eq(shadowTeacherMatchesTable.childId, childId),
-      )
-    )
-    .orderBy(desc(shadowTeacherMatchesTable.createdAt))
-    .limit(1);
-
-  if (existing[0] && !["cancelled", "refunded", "committed"].includes(existing[0].status)) {
-    // Existing pending_payment match: return the existing order so the widget can reopen the modal
-    if (
-      existing[0].status === "pending_payment" &&
-      existing[0].providerOrderId &&
-      existing[0].matchingFeeInr > 0
-    ) {
-      res.status(409).json({
-        error: "You already have an active shadow teacher request",
-        matchId: existing[0].id,
-        providerOrderId: existing[0].providerOrderId,
-        amount: existing[0].matchingFeeInr * 100,
-        keyId: process.env["RAZORPAY_KEY_ID"]!,
-      });
-      return;
-    }
-    res.status(409).json({ error: "You already have an active shadow teacher request", matchId: existing[0].id });
-    return;
-  }
-
-  const settings = await getSettings();
-  const razorpay = getRazorpay();
-  if (!razorpay) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
-
-  // Create Razorpay order for the matching fee
-  const amount = settings.matchingFeeInr * 100;
-  const order = await razorpay.orders.create({
-    amount,
-    currency: "INR",
-    receipt: `streq_${Date.now()}`,
-    notes: { childId: String(childId) },
-  });
-
-  // Insert match in pending_payment state (candidates surfaced only after payment verified)
-  const [match] = await db
-    .insert(shadowTeacherMatchesTable)
-    .values({
-      parentId: req.userId!,
-      status: "pending_payment",
-      matchingFeeInr: settings.matchingFeeInr,
-      childId: child.id,
-      childCity: child.city ?? null,
-      childConditions: child.conditions ?? null,
-      childLanguages: child.languages ?? null,
-      childBudgetMinInr: child.budgetMinInr ?? null,
-      childBudgetMaxInr: child.budgetMaxInr ?? null,
-      childGoalsAreas: child.goalsAreas ?? null,
-      childPreferredModes: child.preferredModes ?? null,
-      extraNotes: extraNotes ?? null,
-      providerOrderId: order.id as string,
-    })
-    .returning();
-
-  res.status(201).json({
-    matchId: match.id,
-    orderId: order.id,
-    amount,
-    keyId: process.env["RAZORPAY_KEY_ID"]!,
-  });
-});
-
-// ── POST /shadow-teacher/:matchId/verify-request-payment — HMAC verify, surface candidates ─
-const VerifyRequestPaymentBody = z.object({
-  razorpayOrderId: z.string(),
-  razorpayPaymentId: z.string(),
-  razorpaySignature: z.string(),
-});
-
-router.post("/shadow-teacher/:matchId/verify-request-payment", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
-  const matchId = parseInt(req.params["matchId"] as string, 10);
-  if (isNaN(matchId)) { res.status(400).json({ error: "Invalid matchId" }); return; }
-
-  const parsed = VerifyRequestPaymentBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-
-  const keySecret = process.env["RAZORPAY_KEY_SECRET"];
-  if (!keySecret) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
-
-  const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = parsed.data;
-
-  const [match] = await db
-    .select()
-    .from(shadowTeacherMatchesTable)
-    .where(and(eq(shadowTeacherMatchesTable.id, matchId), eq(shadowTeacherMatchesTable.parentId, req.userId!)));
-  if (!match) { res.status(404).json({ error: "Match not found" }); return; }
-  if (match.status !== "pending_payment") { res.status(400).json({ error: "Match is not awaiting payment" }); return; }
-  if (match.providerOrderId !== razorpayOrderId) { res.status(400).json({ error: "Order ID mismatch" }); return; }
-
-  const expectedSig = crypto.createHmac("sha256", keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");
-  if (expectedSig !== razorpaySignature) { res.status(400).json({ error: "Payment signature verification failed" }); return; }
-
-  // Payment confirmed — record fee paid timestamp and transition to shortlisted
-  await db
-    .update(shadowTeacherMatchesTable)
-    .set({ status: "shortlisted", providerPaymentId: razorpayPaymentId, feePaidAt: new Date(), updatedAt: new Date() })
-    .where(eq(shadowTeacherMatchesTable.id, matchId));
-
+// ── Shared helper: surface candidates for a newly-shortlisted match ────────
+// Called from both the paid verify-request-payment path and the waived request path.
+// Returns the number of candidates surfaced.
+async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
   // Exclude shadow teachers who already have an active (non-ended) engagement
   const engBusyRows = await db
     .select({ professionalId: shadowTeacherEngagementsTable.professionalId })
@@ -352,8 +217,249 @@ router.post("/shadow-teacher/:matchId/verify-request-payment", requireAuth, requ
   await db
     .update(shadowTeacherMatchesTable)
     .set({ distinctTeachersShown: candidateCount })
+    .where(eq(shadowTeacherMatchesTable.id, match.id));
+
+  return candidateCount;
+}
+
+// ── GET /shadow-teacher/pricing — public: returns matching fee + trial fee ────
+router.get("/shadow-teacher/pricing", async (_req: Request, res: Response): Promise<void> => {
+  const s = await getSettings();
+  res.json({ matchingFeeInr: s.matchingFeeInr, trialFeeInr: (s as Record<string, unknown>)["trialFeeInr"] as number ?? 500 });
+});
+
+// ── GET /shadow-teacher/re-request-eligibility — waiver check for re-requests ─
+router.get("/shadow-teacher/re-request-eligibility", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const childId = parseInt(req.query["childId"] as string, 10);
+  if (isNaN(childId)) { res.status(400).json({ error: "childId required" }); return; }
+
+  const [child] = await db
+    .select()
+    .from(childrenTable)
+    .where(and(eq(childrenTable.id, childId), eq(childrenTable.parentId, req.userId!)));
+  if (!child) { res.status(404).json({ error: "Child not found" }); return; }
+
+  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+  // Most recent qualifying paid match within 90 days (non-refunded)
+  const [recentPaid] = await db
+    .select()
+    .from(shadowTeacherMatchesTable)
+    .where(and(
+      eq(shadowTeacherMatchesTable.parentId, req.userId!),
+      eq(shadowTeacherMatchesTable.childId, childId),
+      isNotNull(shadowTeacherMatchesTable.feePaidAt),
+      gte(shadowTeacherMatchesTable.feePaidAt, since),
+      gt(shadowTeacherMatchesTable.matchingFeeInr, 0),
+      notInArray(shadowTeacherMatchesTable.status, ["refunded", "cancelled", "pending_payment", "payment_failed"]),
+    ))
+    .orderBy(desc(shadowTeacherMatchesTable.feePaidAt))
+    .limit(1);
+
+  // Most recent match (any status) — for pre-filling extra notes
+  const [latestMatch] = await db
+    .select()
+    .from(shadowTeacherMatchesTable)
+    .where(and(
+      eq(shadowTeacherMatchesTable.parentId, req.userId!),
+      eq(shadowTeacherMatchesTable.childId, childId),
+    ))
+    .orderBy(desc(shadowTeacherMatchesTable.createdAt))
+    .limit(1);
+
+  res.json({
+    waived: !!recentPaid,
+    childName: child.name,
+    previousMatch: latestMatch ? {
+      extraNotes: latestMatch.extraNotes ?? null,
+      childGoalsAreas: latestMatch.childGoalsAreas ?? null,
+      childPreferredModes: latestMatch.childPreferredModes ?? null,
+    } : null,
+  });
+});
+
+// ── POST /shadow-teacher/request — parent submits (deposit-at-request model) ─
+const NewRequestBody = z.object({
+  childId: z.number().int().positive(),
+  extraNotes: z.string().max(2000).optional(),
+});
+
+router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const parsed = NewRequestBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "childId (number) is required" });
+    return;
+  }
+
+  const { childId, extraNotes } = parsed.data;
+
+  // Load child (must belong to this parent)
+  const [child] = await db
+    .select()
+    .from(childrenTable)
+    .where(and(eq(childrenTable.id, childId), eq(childrenTable.parentId, req.userId!)));
+  if (!child) {
+    res.status(404).json({ error: "Child not found or does not belong to you" });
+    return;
+  }
+
+  // Prevent duplicate active requests — scoped to THIS child only
+  const existing = await db
+    .select()
+    .from(shadowTeacherMatchesTable)
+    .where(
+      and(
+        eq(shadowTeacherMatchesTable.parentId, req.userId!),
+        eq(shadowTeacherMatchesTable.childId, childId),
+      )
+    )
+    .orderBy(desc(shadowTeacherMatchesTable.createdAt))
+    .limit(1);
+
+  if (existing[0] && !["cancelled", "refunded", "committed"].includes(existing[0].status)) {
+    // Existing pending_payment match: return the existing order so the widget can reopen the modal
+    if (
+      existing[0].status === "pending_payment" &&
+      existing[0].providerOrderId &&
+      existing[0].matchingFeeInr > 0
+    ) {
+      res.status(409).json({
+        error: "You already have an active shadow teacher request",
+        matchId: existing[0].id,
+        providerOrderId: existing[0].providerOrderId,
+        amount: existing[0].matchingFeeInr * 100,
+        keyId: process.env["RAZORPAY_KEY_ID"]!,
+      });
+      return;
+    }
+    res.status(409).json({ error: "You already have an active shadow teacher request", matchId: existing[0].id });
+    return;
+  }
+
+  // ── Server-side waiver check — never trust frontend ──────────────────────
+  // Waiver applies if the parent has a non-refunded paid match for THIS child
+  // with fee_paid_at within the last 90 days.
+  const waiverSince = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const [waiverRow] = await db
+    .select({ id: shadowTeacherMatchesTable.id })
+    .from(shadowTeacherMatchesTable)
+    .where(and(
+      eq(shadowTeacherMatchesTable.parentId, req.userId!),
+      eq(shadowTeacherMatchesTable.childId, childId),
+      isNotNull(shadowTeacherMatchesTable.feePaidAt),
+      gte(shadowTeacherMatchesTable.feePaidAt, waiverSince),
+      gt(shadowTeacherMatchesTable.matchingFeeInr, 0),
+      notInArray(shadowTeacherMatchesTable.status, ["refunded", "cancelled", "pending_payment", "payment_failed"]),
+    ))
+    .limit(1);
+  const isWaived = !!waiverRow;
+
+  if (isWaived) {
+    // Waived path: insert directly as shortlisted (no Razorpay), surface candidates immediately.
+    // matchingFeeInr=0 ensures the refund guard correctly returns "no_payment_to_refund".
+    const [waivedMatch] = await db
+      .insert(shadowTeacherMatchesTable)
+      .values({
+        parentId:            req.userId!,
+        status:              "shortlisted",
+        matchingFeeInr:      0,
+        providerOrderId:     null,
+        providerPaymentId:   "waived_rematch",
+        feePaidAt:           new Date(),
+        childId:             child.id,
+        childCity:           child.city ?? null,
+        childConditions:     child.conditions ?? null,
+        childLanguages:      child.languages ?? null,
+        childBudgetMinInr:   child.budgetMinInr ?? null,
+        childBudgetMaxInr:   child.budgetMaxInr ?? null,
+        childGoalsAreas:     child.goalsAreas ?? null,
+        childPreferredModes: child.preferredModes ?? null,
+        extraNotes:          extraNotes ?? null,
+      })
+      .returning();
+    await surfaceCandidatesForMatch(waivedMatch);
+    res.status(201).json({ matchId: waivedMatch.id, waived: true });
+    return;
+  }
+
+  const settings = await getSettings();
+  const razorpay = getRazorpay();
+  if (!razorpay) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
+
+  // Create Razorpay order for the matching fee
+  const amount = settings.matchingFeeInr * 100;
+  const order = await razorpay.orders.create({
+    amount,
+    currency: "INR",
+    receipt: `streq_${Date.now()}`,
+    notes: { childId: String(childId) },
+  });
+
+  // Insert match in pending_payment state (candidates surfaced only after payment verified)
+  const [match] = await db
+    .insert(shadowTeacherMatchesTable)
+    .values({
+      parentId: req.userId!,
+      status: "pending_payment",
+      matchingFeeInr: settings.matchingFeeInr,
+      childId: child.id,
+      childCity: child.city ?? null,
+      childConditions: child.conditions ?? null,
+      childLanguages: child.languages ?? null,
+      childBudgetMinInr: child.budgetMinInr ?? null,
+      childBudgetMaxInr: child.budgetMaxInr ?? null,
+      childGoalsAreas: child.goalsAreas ?? null,
+      childPreferredModes: child.preferredModes ?? null,
+      extraNotes: extraNotes ?? null,
+      providerOrderId: order.id as string,
+    })
+    .returning();
+
+  res.status(201).json({
+    matchId: match.id,
+    orderId: order.id,
+    amount,
+    keyId: process.env["RAZORPAY_KEY_ID"]!,
+  });
+});
+
+// ── POST /shadow-teacher/:matchId/verify-request-payment — HMAC verify, surface candidates ─
+const VerifyRequestPaymentBody = z.object({
+  razorpayOrderId: z.string(),
+  razorpayPaymentId: z.string(),
+  razorpaySignature: z.string(),
+});
+
+router.post("/shadow-teacher/:matchId/verify-request-payment", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  if (isNaN(matchId)) { res.status(400).json({ error: "Invalid matchId" }); return; }
+
+  const parsed = VerifyRequestPaymentBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const keySecret = process.env["RAZORPAY_KEY_SECRET"];
+  if (!keySecret) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
+
+  const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = parsed.data;
+
+  const [match] = await db
+    .select()
+    .from(shadowTeacherMatchesTable)
+    .where(and(eq(shadowTeacherMatchesTable.id, matchId), eq(shadowTeacherMatchesTable.parentId, req.userId!)));
+  if (!match) { res.status(404).json({ error: "Match not found" }); return; }
+  if (match.status !== "pending_payment") { res.status(400).json({ error: "Match is not awaiting payment" }); return; }
+  if (match.providerOrderId !== razorpayOrderId) { res.status(400).json({ error: "Order ID mismatch" }); return; }
+
+  const expectedSig = crypto.createHmac("sha256", keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");
+  if (expectedSig !== razorpaySignature) { res.status(400).json({ error: "Payment signature verification failed" }); return; }
+
+  // Payment confirmed — record fee paid timestamp and transition to shortlisted
+  await db
+    .update(shadowTeacherMatchesTable)
+    .set({ status: "shortlisted", providerPaymentId: razorpayPaymentId, feePaidAt: new Date(), updatedAt: new Date() })
     .where(eq(shadowTeacherMatchesTable.id, matchId));
 
+  const candidateCount = await surfaceCandidatesForMatch(match);
   res.json({ matchId: match.id, candidateCount });
 });
 
