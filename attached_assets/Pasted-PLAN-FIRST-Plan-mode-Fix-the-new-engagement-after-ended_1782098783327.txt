@@ -1,0 +1,133 @@
+PLAN FIRST — Plan mode. Fix the "new engagement after ended" flow for
+shadow teachers, and add a 3-month matching-fee waiver for re-requests.
+Currently: the ended-engagement CTA links to /services with no clear
+path to actually request a new shadow teacher. This fix makes the CTA
+open a new match request form directly, with the fee waived if the
+parent paid within the last 3 months for this same child.
+
+═══ THE FLOW ═══
+
+1. Parent's engagement ends → they see "Start a new engagement" CTA
+   (already built). Clicking it now navigates to the new match request
+   form directly (not /services), pre-filled with the previous match's
+   data for this child.
+
+2. Before showing the form, the backend checks whether this parent has
+   a non-refunded ₹500 matching payment for this specific child within
+   the last 3 months (90 days), anchored to the PAYMENT DATE (not the
+   engagement end date).
+
+3. If waiver applies (payment within 90 days, non-refunded):
+   - Show the pre-filled form with a green banner: "Your matching fee
+     is waived — you paid within the last 3 months for [child name].
+     Review your details and confirm to get matched."
+   - Submitting the form creates a new match request WITHOUT a Razorpay
+     order. No payment step. Goes straight to matching.
+
+4. If waiver does NOT apply (>90 days or no prior payment or refunded):
+   - Show the pre-filled form with the normal ₹500 CTA: "Review your
+     details and pay ₹500 to get matched."
+   - Normal payment flow as today.
+
+5. After submission (waived or paid), the new match request is created
+   and the parent sees the candidate list as normal.
+
+═══ WAIVER CHECK LOGIC ═══
+Query: does a row exist in the payments table where:
+- userId = current parent
+- plan = "shadow_teacher_match" (or whatever the ₹500 matching plan
+  is named — confirm the exact plan value)
+- status = "paid" (or equivalent confirmed status)
+- professionalId or childId scoped to THIS child (confirm which
+  column ties the payment to a child — if payments doesn't have
+  childId, check shadow_teacher_matches for the link)
+- createdAt >= NOW() - INTERVAL '90 days'
+- NOT refunded (status != "refunded")
+
+If the payments table doesn't have a direct childId, join via
+shadow_teacher_matches: payments.razorpayOrderId →
+shadow_teacher_matches where childId = requested child.
+
+New backend endpoint: GET /api/shadow-teacher/re-request-eligibility
+?childId=X
+- Auth: parent only
+- Returns: { waived: boolean, previousMatch?: { city, conditions,
+  languages, budget, goals, preferredModes, extraNotes } }
+- waived: true if non-refunded ₹500 payment within 90 days for this
+  child
+- previousMatch: the most recent match request data for this child
+  (for pre-filling the form) — always returned regardless of waiver
+  status, since the form always pre-fills
+
+The existing POST /api/shadow-teacher/request endpoint:
+- Add a server-side waiver check BEFORE creating the Razorpay order.
+  If waived=true (verified server-side, not just from frontend), skip
+  order creation and create the match request directly with
+  paymentId = "waived_rematch" (or a clear marker).
+- Do NOT trust the frontend to declare the waiver — always verify
+  server-side. The frontend passes childId; the backend independently
+  checks the 90-day window.
+- If not waived, normal flow (Razorpay order → verify → create match).
+
+═══ FRONTEND CHANGES ═══
+
+1. ENDED-ENGAGEMENT CTA: change the existing "Start a new engagement"
+   button from linking to /services to instead:
+   - Calling GET /api/shadow-teacher/re-request-eligibility?childId=X
+     (X = the ended engagement's childId)
+   - Opening the pre-filled new request form inline or as a modal/sheet
+     (same component as the original ShadowTeacherRequestWidget, but
+     pre-filled and with waiver-aware payment UI)
+
+2. PRE-FILLED FORM: the request form opens with:
+   - Child details shown (name, conditions, city) — read-only summary
+     at top (not re-editable inline — child profile editing is via
+     Child Profile tab)
+   - Budget, preferred modes, languages, goals pre-filled from
+     previousMatch (editable — parent may want to adjust)
+   - Extra notes pre-filled from previousMatch (editable)
+   - Waiver banner OR normal ₹500 CTA depending on waived value
+
+3. WAIVER BANNER (when waived=true):
+   Green banner: "Matching fee waived ✓ — you paid within the last
+   3 months for [child name]. Your previous preferences are pre-filled
+   below. Review and confirm to get matched."
+   CTA: "Confirm & Get Matched" (no payment step).
+
+4. NORMAL FEE (when waived=false):
+   Same as current request widget but with pre-filled values.
+   CTA: "Pay ₹500 & Get Matched" — normal Razorpay flow.
+
+5. SERVICES PAGE: the Services → Shadow Teacher path should ALSO check
+   eligibility when a parent navigates there manually (not just from
+   the ended-engagement CTA). If a recent non-refunded payment exists
+   for the selected child, show the waiver banner there too. The
+   waiver applies regardless of HOW the parent reaches the request
+   form.
+
+═══ WHAT NOT TO TOUCH ═══
+- The matching/scoring engine — new requests go through exactly the
+  same scoring as paid requests. Waived just means no payment step.
+- The existing paid request flow for first-time requests — unchanged.
+- childId scoping — the waiver check must use the selected child's
+  childId from SelectedChildContext, not a parent-level check.
+- Any other payment flows (Razorpay for sessions, buyouts, etc.).
+- The shadow_teacher_matches duplicate-request guard — the existing
+  fix (from the earlier build) that closes the match row on engagement
+  end must already be in place for re-requests to work. Confirm this
+  is still working (engagement end updates match row to committed/
+  terminal so the guard allows a new request).
+
+═══ PLAN MUST INCLUDE ═══
+- The exact payments table query for the waiver check (confirm the
+  column that ties a payment to a child — payments.childId or via
+  shadow_teacher_matches join)
+- Confirmation that the waiver is verified SERVER-SIDE in the POST
+  /request handler (not trusted from frontend)
+- The new GET /re-request-eligibility endpoint
+- The frontend changes: ended-engagement CTA → eligibility check →
+  pre-filled form, and the Services path also checks eligibility
+- Confirmation the duplicate-request guard fix is still in place
+- Files touched
+
+No code until I approve.
