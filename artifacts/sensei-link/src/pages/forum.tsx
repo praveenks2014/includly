@@ -346,7 +346,7 @@ function AskModal({
 }
 
 // ─── Answer Form ──────────────────────────────────────────────────────────────
-function AnswerForm({ postId, onDone }: { postId: number; onDone: () => void }) {
+function AnswerForm({ postId, onDone, placeholder }: { postId: number; onDone: () => void; placeholder?: string }) {
   const { toast } = useToast();
   const { mutateAsync, isPending } = useCreateAnswer();
   const [body, setBody] = useState("");
@@ -354,22 +354,22 @@ function AnswerForm({ postId, onDone }: { postId: number; onDone: () => void }) 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (body.trim().length < 10) {
-      toast({ title: "Answer is too short", variant: "destructive" }); return;
+      toast({ title: "Response is too short", variant: "destructive" }); return;
     }
     try {
       await mutateAsync({ postId, body: { body: body.trim() } });
-      toast({ title: "Answer posted!" });
+      toast({ title: "Response posted!" });
       setBody("");
       onDone();
     } catch {
-      toast({ title: "Failed to post answer", variant: "destructive" });
+      toast({ title: "Failed to post response", variant: "destructive" });
     }
   }
 
   return (
     <form onSubmit={handleSubmit} className="mt-4 space-y-3">
       <Textarea
-        placeholder="Share your professional expertise..."
+        placeholder={placeholder ?? "Share your professional expertise..."}
         value={body}
         onChange={(e) => setBody(e.target.value)}
         rows={4}
@@ -643,95 +643,108 @@ function PostDetail({
       {/* AI Key Takeaways — on-demand for other viewers, shown when 5+ answers */}
       {!isAuthor && <AiSummaryBlock postId={post.id} answerCount={post.answerCount} />}
 
-      {/* Answers */}
+      {/* Responses */}
       <div className="mb-6">
         <h3 className="font-serif text-lg font-bold text-[#1A2340] mb-4">
-          {post.answers.length} Expert {post.answers.length === 1 ? "Answer" : "Answers"}
+          {post.answers.length} {post.answers.length === 1 ? "Response" : "Responses"}
         </h3>
 
-        {post.answers.length === 0 && !isProfessional && (
+        {post.answers.length === 0 && !isSignedIn && (
           <div className="bg-white rounded-xl border border-dashed border-gray-200 p-8 text-center">
             <Sparkles size={28} className="text-[#2EC4A5] mx-auto mb-3 opacity-60" />
-            <p className="text-gray-500 text-sm">No expert answers yet.</p>
-            <p className="text-gray-400 text-xs mt-1">Verified professionals can answer below.</p>
+            <p className="text-gray-500 text-sm">No responses yet.</p>
+            <p className="text-gray-400 text-xs mt-1">Sign in to be the first to respond.</p>
           </div>
         )}
 
         <div className="space-y-4">
-          {post.answers.map((answer) => (
-            <div
-              key={answer.id}
-              className="bg-white rounded-xl border border-gray-100 p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)]"
-            >
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold text-sm text-[#1A2340]">
-                    {answer.professional.fullName ?? "Expert"}
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    {specialtyLabel(answer.professional.specialty)}
-                  </span>
-                  {answer.professional.isVerified && (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-[#2EC4A5]/10 text-[#2EC4A5] border border-[#2EC4A5]/20">
-                      <ShieldCheck size={11} />
-                      Verified Expert
+          {post.answers.map((answer) => {
+            const isPro = !!(answer as { professional?: { id: number | null } | null }).professional?.id;
+            const pro = isPro ? (answer as { professional: { id: number; fullName: string | null; specialty: string; isVerified: boolean } }).professional : null;
+            return (
+              <div
+                key={answer.id}
+                className="bg-white rounded-xl border border-gray-100 p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)]"
+              >
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-sm text-[#1A2340]">
+                      {(answer as { authorName?: string | null }).authorName ?? (isPro ? "Expert" : "Community Member")}
                     </span>
-                  )}
+                    {isPro && pro && (
+                      <>
+                        <span className="text-xs text-gray-500">{specialtyLabel(pro.specialty)}</span>
+                        {pro.isVerified && (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-[#2EC4A5]/10 text-[#2EC4A5] border border-[#2EC4A5]/20">
+                            <ShieldCheck size={11} />
+                            Verified Expert
+                          </span>
+                        )}
+                      </>
+                    )}
+                    {!isPro && (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 border border-violet-100">
+                        Parent
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-xs text-gray-400">{timeAgo(answer.createdAt as unknown as string)}</span>
+                    {isSignedIn && (
+                      <button
+                        onClick={() => setReportTarget({ type: "answer", id: answer.id })}
+                        className="p-1 text-gray-300 hover:text-[#FF6B6B] transition-colors"
+                        aria-label="Report this response"
+                        title="Report"
+                      >
+                        <Flag size={12} />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-xs text-gray-400">{timeAgo(answer.createdAt as unknown as string)}</span>
-                  {isSignedIn && (
-                    <button
-                      onClick={() => setReportTarget({ type: "answer", id: answer.id })}
-                      className="p-1 text-gray-300 hover:text-[#FF6B6B] transition-colors"
-                      aria-label="Report this answer"
-                      title="Report"
+
+                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{answer.body}</p>
+
+                <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-50">
+                  <button
+                    onClick={() => isSignedIn ? upvoteAnswer({ answerId: answer.id, postId: post.id }) : void 0}
+                    disabled={!isSignedIn}
+                    className={`flex items-center gap-1.5 text-sm font-medium px-2.5 py-1 rounded-lg transition-colors ${
+                      answer.hasVoted
+                        ? "bg-[#2EC4A5]/15 text-[#2EC4A5]"
+                        : "text-gray-400 hover:bg-gray-50"
+                    } disabled:opacity-50`}
+                    aria-label="Upvote response"
+                  >
+                    <ThumbsUp size={13} />
+                    {answer.upvoteCount}
+                  </button>
+
+                  {isPro && pro && (
+                    <Button
+                      size="sm"
+                      className="text-xs bg-[#FF6B6B] hover:bg-[#ff5252] text-white border-0 gap-1.5"
+                      onClick={() =>
+                        setBookingProfessional({
+                          id: pro.id,
+                          name: pro.fullName,
+                          specialty: pro.specialty,
+                        })
+                      }
+                      aria-label={`Book ${pro.fullName ?? "this expert"}`}
                     >
-                      <Flag size={12} />
-                    </button>
+                      Book this expert →
+                    </Button>
                   )}
                 </div>
               </div>
-
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{answer.body}</p>
-
-              <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-50">
-                <button
-                  onClick={() => isSignedIn ? upvoteAnswer({ answerId: answer.id, postId: post.id }) : void 0}
-                  disabled={!isSignedIn}
-                  className={`flex items-center gap-1.5 text-sm font-medium px-2.5 py-1 rounded-lg transition-colors ${
-                    answer.hasVoted
-                      ? "bg-[#2EC4A5]/15 text-[#2EC4A5]"
-                      : "text-gray-400 hover:bg-gray-50"
-                  } disabled:opacity-50`}
-                  aria-label="Upvote answer"
-                >
-                  <ThumbsUp size={13} />
-                  {answer.upvoteCount}
-                </button>
-
-                <Button
-                  size="sm"
-                  className="text-xs bg-[#FF6B6B] hover:bg-[#ff5252] text-white border-0 gap-1.5"
-                  onClick={() =>
-                    setBookingProfessional({
-                      id: answer.professional.id,
-                      name: answer.professional.fullName,
-                      specialty: answer.professional.specialty,
-                    })
-                  }
-                  aria-label={`Book ${answer.professional.fullName ?? "this expert"}`}
-                >
-                  Book this expert →
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
-      {/* Answer form for professionals */}
-      {isProfessional && isSignedIn && (
+      {/* Response form — professionals get expert form, parents/others get experience form */}
+      {isSignedIn && isProfessional && (
         <div className="bg-white rounded-xl border border-[#2EC4A5]/20 p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
           <div className="flex items-center gap-2 mb-3">
             <ShieldCheck size={16} className="text-[#2EC4A5]" />
@@ -752,9 +765,30 @@ function PostDetail({
         </div>
       )}
 
+      {isSignedIn && !isProfessional && (
+        <div className="bg-white rounded-xl border border-violet-100 p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)]">
+          <div className="flex items-center gap-2 mb-3">
+            <Users size={16} className="text-violet-500" />
+            <span className="font-semibold text-sm text-[#1A2340]">Share your experience</span>
+          </div>
+          {showAnswerForm ? (
+            <AnswerForm postId={post.id} onDone={() => setShowAnswerForm(false)} placeholder="Share what worked for your child, resources you found helpful, or your own experience…" />
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-violet-300 text-violet-600 hover:bg-violet-50"
+              onClick={() => setShowAnswerForm(true)}
+            >
+              Write a response
+            </Button>
+          )}
+        </div>
+      )}
+
       {!isSignedIn && (
         <div className="bg-[#F5F7FA] rounded-xl border border-gray-200 p-5 text-center">
-          <p className="text-sm text-gray-600 mb-3">Sign in to upvote answers and book experts.</p>
+          <p className="text-sm text-gray-600 mb-3">Sign in to respond and upvote.</p>
           <a href="/sign-in">
             <Button size="sm" className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white border-0">Sign In</Button>
           </a>

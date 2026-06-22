@@ -1631,7 +1631,7 @@ function NotificationsTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: MESSAGES
 // ═══════════════════════════════════════════════════════════════════════════════
-interface ConnectThread { id: number; parentId: number; parentName: string | null; createdAt: string; }
+interface ConnectThread { id: number; parentId: number; parentName: string | null; childId: number | null; childName: string | null; createdAt: string; }
 interface ConnectMessage { id: number; threadId: number; senderId: number; senderName: string | null; body: string; createdAt: string; }
 
 function MessagesTab() {
@@ -1695,7 +1695,10 @@ function MessagesTab() {
         <button onClick={() => { setSelectedThread(null); setMessages([]); }} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#2EC4A5] transition-colors w-fit">
           <ChevronLeft size={16} /> Back to inbox
         </button>
-        <h2 className="font-serif font-semibold text-[#1A2340] text-lg">{selectedThread.parentName ?? "Parent"}</h2>
+        <div>
+          <h2 className="font-serif font-semibold text-[#1A2340] text-lg">{selectedThread.childName ?? selectedThread.parentName ?? "Parent"}</h2>
+          {selectedThread.childName && <p className="text-xs text-gray-400 mt-0.5">Parent: {selectedThread.parentName ?? "—"}</p>}
+        </div>
 
         <div className="flex-1 overflow-y-auto bg-gray-50 rounded-2xl p-4 space-y-3 min-h-0">
           {loadingMessages && <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-[#2EC4A5]" /></div>}
@@ -1754,11 +1757,11 @@ function MessagesTab() {
               className="w-full bg-white border border-gray-100 rounded-2xl p-4 shadow-[0_2px_12px_rgba(26,35,64,0.06)] flex items-center gap-3 hover:border-[#2EC4A5]/40 transition-colors text-left"
             >
               <div className="w-10 h-10 rounded-full bg-[#2EC4A5]/10 flex items-center justify-center shrink-0">
-                <span className="text-sm font-bold text-[#2EC4A5]">{(thread.parentName ?? "P")[0]?.toUpperCase()}</span>
+                <span className="text-sm font-bold text-[#2EC4A5]">{(thread.childName ?? thread.parentName ?? "P")[0]?.toUpperCase()}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-[#1A2340] text-sm">{thread.parentName ?? "Parent"}</p>
-                <p className="text-xs text-gray-400 mt-0.5">Tap to open conversation</p>
+                <p className="font-semibold text-[#1A2340] text-sm">{thread.childName ?? thread.parentName ?? "Parent"}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{thread.childName ? `Parent: ${thread.parentName ?? "—"}` : "Tap to open conversation"}</p>
               </div>
               <ChevronRight size={16} className="text-gray-300 shrink-0" />
             </button>

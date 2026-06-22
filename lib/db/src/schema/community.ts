@@ -22,7 +22,8 @@ export const communityPostsTable = pgTable("community_posts", {
 export const communityAnswersTable = pgTable("community_answers", {
   id: serial("id").primaryKey(),
   postId: integer("post_id").notNull().references(() => communityPostsTable.id, { onDelete: "cascade" }),
-  authorProfessionalId: integer("author_professional_id").notNull().references(() => professionalProfilesTable.id, { onDelete: "cascade" }),
+  authorProfessionalId: integer("author_professional_id").references(() => professionalProfilesTable.id, { onDelete: "cascade" }),
+  authorUserId: integer("author_user_id").references(() => usersTable.id, { onDelete: "cascade" }),
   body: text("body").notNull(),
   upvoteCount: integer("upvote_count").notNull().default(0),
   isHidden: boolean("is_hidden").notNull().default(false),

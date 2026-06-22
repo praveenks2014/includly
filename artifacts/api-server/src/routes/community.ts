@@ -133,6 +133,8 @@ router.get("/community/posts/:id", async (req: Request, res: Response): Promise<
   const post = postRows[0];
   if (post.isHidden) { res.status(404).json({ error: "Not found" }); return; }
 
+  // Use a table alias so we can join users twice (post author + answer author)
+  const answerAuthorAlias = usersTable;
   const answerRows = await db
     .select({
       id: communityAnswersTable.id,
@@ -140,6 +142,8 @@ router.get("/community/posts/:id", async (req: Request, res: Response): Promise<
       upvoteCount: communityAnswersTable.upvoteCount,
       isHidden: communityAnswersTable.isHidden,
       createdAt: communityAnswersTable.createdAt,
+      authorUserId: communityAnswersTable.authorUserId,
+      authorUserName: answerAuthorAlias.fullName,
       professionalId: professionalProfilesTable.id,
       professionalName: professionalProfilesTable.fullName,
       specialty: professionalProfilesTable.specialty,
@@ -147,6 +151,7 @@ router.get("/community/posts/:id", async (req: Request, res: Response): Promise<
     })
     .from(communityAnswersTable)
     .leftJoin(professionalProfilesTable, eq(communityAnswersTable.authorProfessionalId, professionalProfilesTable.id))
+    .leftJoin(answerAuthorAlias, eq(communityAnswersTable.authorUserId, answerAuthorAlias.id))
     .where(and(
       eq(communityAnswersTable.postId, id),
       eq(communityAnswersTable.isHidden, false),
@@ -163,12 +168,13 @@ router.get("/community/posts/:id", async (req: Request, res: Response): Promise<
     hasVoted: votedAnswerIds.has(a.id),
     isHidden: a.isHidden,
     createdAt: a.createdAt,
-    professional: {
+    authorName: a.professionalId ? (a.professionalName ?? null) : (a.authorUserName ?? null),
+    professional: a.professionalId ? {
       id: a.professionalId,
       fullName: a.professionalName,
       specialty: a.specialty,
       isVerified: a.isVerified ?? false,
-    },
+    } : null,
   }));
 
   res.json({
@@ -313,25 +319,18 @@ router.post("/community/answers/:id/report", requireAuth, async (req: Request, r
 
 const createAnswerSchema = z.object({ body: z.string().min(10).max(5000) });
 
-// POST /community/posts/:id/answers
+// POST /community/posts/:id/answers — any signed-in user can respond
 router.post(
   "/community/posts/:id/answers",
   requireAuth,
-  requireRole("professional", "admin"),
   async (req: Request, res: Response): Promise<void> => {
     const postId = parseInt(String(req.params["id"] ?? ""), 10);
     const userId = req.userId!;
+    const role = req.userRole!;
     if (isNaN(postId)) { res.status(400).json({ error: "Invalid id" }); return; }
 
     const parsed = createAnswerSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
-
-    const prof = await db
-      .select({ id: professionalProfilesTable.id, isVerified: professionalProfilesTable.isVerified })
-      .from(professionalProfilesTable)
-      .where(eq(professionalProfilesTable.userId, userId))
-      .limit(1);
-    if (prof.length === 0) { res.status(403).json({ error: "Professional profile not found" }); return; }
 
     const post = await db
       .select({ id: communityPostsTable.id, authorUserId: communityPostsTable.authorUserId })
@@ -340,9 +339,23 @@ router.post(
       .limit(1);
     if (post.length === 0) { res.status(404).json({ error: "Post not found" }); return; }
 
+    // Resolve professional profile (if any)
+    const prof = (role === "professional" || role === "admin")
+      ? await db
+          .select({ id: professionalProfilesTable.id, isVerified: professionalProfilesTable.isVerified })
+          .from(professionalProfilesTable)
+          .where(eq(professionalProfilesTable.userId, userId))
+          .limit(1)
+      : [];
+
     const [answer] = await db
       .insert(communityAnswersTable)
-      .values({ postId, authorProfessionalId: prof[0].id, body: parsed.data.body })
+      .values({
+        postId,
+        authorProfessionalId: prof.length > 0 ? prof[0].id : null,
+        authorUserId: prof.length === 0 ? userId : null,
+        body: parsed.data.body,
+      })
       .returning();
 
     await db
@@ -351,17 +364,21 @@ router.post(
       .where(eq(communityPostsTable.id, postId));
 
     // Notify the question author (fire-and-forget)
-    const [profUser] = await db
+    const [authorUser] = await db
       .select({ fullName: usersTable.fullName })
       .from(usersTable)
       .where(eq(usersTable.id, userId))
       .limit(1);
 
     if (post[0].authorUserId !== userId) {
-      void notifyCommunityReply(post[0].authorUserId, profUser?.fullName).catch(() => {});
+      void notifyCommunityReply(post[0].authorUserId, authorUser?.fullName).catch(() => {});
     }
 
-    res.status(201).json({ ...answer, professional: prof[0] });
+    res.status(201).json({
+      ...answer,
+      authorName: authorUser?.fullName ?? null,
+      professional: prof.length > 0 ? prof[0] : null,
+    });
   },
 );
 
