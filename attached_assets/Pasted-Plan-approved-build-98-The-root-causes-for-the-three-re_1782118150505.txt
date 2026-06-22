@@ -1,0 +1,49 @@
+Plan approved — build #98. The root causes for the three reopened bugs
+are credible and explain why the earlier fixes missed. A few
+watch-points and confirmations:
+
+1. G4-REOPEN (inbox — the most important): the fix creates a
+connect_threads row on shadow-teacher COMMIT. Confirm:
+- Does "commit" here mean the parent's commit, and does it fire for
+  BOTH a normal paid commit AND a waived re-request commit? Both must
+  create the thread.
+- What about EXISTING committed engagements (already committed before
+  this fix)? They won't have a connect_threads row, so their inboxes
+  stay blank. Propose a one-time backfill: create connect_threads rows
+  for all currently-committed/active engagements so existing users get
+  their threads too. (Otherwise only NEW commits get inboxes.)
+- Confirm the new connect_threads row respects masking rules — post-
+  commitment the contact may be unmasked, but confirm the inbox thread
+  doesn't leak anything it shouldn't.
+- The teacher inbox (GET /connect/inbox) — confirm it now also surfaces
+  these threads (the fix should make BOTH sides work, not just parent).
+
+2. G7-REOPEN (shortlisted filter): adding "shortlisted" to the filter
+array — confirm this doesn't break the EXISTING flow where a brand-new
+first-time match is also "shortlisted". A first-time shortlisted match
+and a re-request shortlisted match should both display candidates
+correctly. Test both. Also confirm the "prefer shortlisted over ended
+for the same child" sort is correct (a parent who ended one engagement
+and started a new one sees the NEW one, not the ended one).
+
+3. G3 + G4-SWITCHER (auto-select first child): the fix auto-selects
+childProfiles[0] when selectedChildId is null. CRITICAL — confirm this
+does NOT reintroduce any add-child loop or fight with the
+RequireChildProfile guard. Auto-selecting a child when children exist
+is fine; just confirm it interacts cleanly with the guard (which sends
+to add-child only when ZERO children) and doesn't auto-select before
+children have loaded (which could select undefined). Confirm the
+timing: only auto-select AFTER childProfiles has loaded and is
+non-empty.
+
+4. G4-SWITCHER (the pill component): confirm it REUSES SelectedChildContext
+(drives the same selectedChildId) and does NOT create a parallel
+selection state. Switching a pill must change the active child
+everywhere, and agree with any existing selection UI. Hidden for
+single-child parents — confirm.
+
+5. G5-REOPEN: confirm /community (and /forum if separate) are wrapped
+in RequireAuth so the token is always present. Confirm both routes.
+
+Confirm none of these touch: childId scoping rules (G4-SWITCHER reuses
+the context), payments/Razorpay, OTP, or matching scoring weights.

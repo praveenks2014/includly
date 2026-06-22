@@ -1,0 +1,99 @@
+PLAN/AUDIT FIRST — Plan mode, no code. A batch of bugs, including THREE
+that were previously reported as fixed but are still broken (verified
+by screenshots). For those three, I need the REAL root cause this time
+— do not just re-describe the previous fix. Show me the actual current
+code and why it's failing.
+
+═══ URGENT — RUNTIME CRASH ═══
+G-CRASH: Runtime error "goals.filter is not a function (goals.filter
+((g) => g.isActive), goals.filter is undefined)". Something expects
+`goals` to be an array but it's undefined. Find every goals.filter call
+and show me where `goals` can be undefined (API returning undefined vs
+[], a missing default, a renamed field). Fix so goals defaults to []
+before any .filter. Show me the actual line.
+
+═══ PREVIOUSLY "FIXED" BUT STILL BROKEN — audit the real cause ═══
+
+G5-REOPEN: "Failed to post question" in Community Ask-a-question is
+STILL failing (screenshot: red "Failed to post question" on submit).
+The earlier fix supposedly corrected a "mis-pathed list query" — but
+the POST itself is failing. Show me:
+- The exact POST request the Ask form makes (URL, body)
+- The server route that should handle it — does it exist, what does it
+  expect, what's the actual error/status returned?
+- Call it or trace it and show me WHY it 4xx/5xx's. Root cause, not a
+  restatement of the old fix.
+
+G4-REOPEN: The Inbox is STILL blank for BOTH parent AND teacher, and
+there's no way to start a chat. The earlier fix claimed a parent inbox
+endpoint was built. Show me:
+- Does GET /api/connect/parent-inbox actually return data? Call it as a
+  parent and show the raw response.
+- What does the TEACHER inbox call, and why is it blank too?
+- Is the issue no data (no threads exist because nothing creates them),
+  a broken endpoint, or unwired frontend? Show me the real reason BOTH
+  are empty.
+- Where are chat threads supposed to be CREATED? If matched/booked
+  professionals never get a thread row, the inbox is correctly empty
+  because the data was never created — confirm whether that's the
+  actual problem.
+
+G7-REOPEN: After "Start a new engagement" (waiver works — screenshot
+shows the waived form and "Confirm & Get Matched"), confirming does NOT
+generate the 3 shadow-teacher candidates. Show me:
+- What happens on submit of the re-request form — what endpoint fires,
+  what does it return?
+- Does it create a shadow_teacher_matches row and run the scoring/
+  candidate generation, or does it stop short?
+- Why are no candidates displayed after a waived re-request? Trace the
+  full path from confirm → match creation → candidate scoring →
+  display, and show me where it breaks.
+
+═══ NEW BUGS / REQUESTS ═══
+
+G2: Remove the child-profile card from the parent Home screen entirely
+(screenshot 3 — "Arsh Vihaan's Profile / Update conditions, goals &
+availability"). There's already a dedicated Child Profile page; Home
+shouldn't duplicate it. Remove the card from Home only.
+
+G3: Child Profile is STILL not shown on desktop (the earlier SideNav
+injection didn't work or wasn't applied). Show me the current SideNav
+code and why Child Profile isn't appearing on desktop, then fix it so
+it shows in the desktop sidebar (the mobile version works).
+
+G4-SWITCHER: Build a child switcher for the parent in the SAME pill/tab
+style as the teacher's engagement switcher (screenshot 5: horizontal
+pills "arjun pending start / Sudikesh active / Arsh Vihaan"). Apply it
+to ALL parent pages that show child-specific data (Home, Progress,
+Child Profile, shadow-teacher workspace, behavior logs — every place
+scoped to one child). It must drive the SAME selectedChildId that
+SelectedChildContext already uses — do NOT create a parallel selection
+state. Switching the pill switches the active child everywhere.
+CRITICAL: childId scoping must hold — switching to a child shows ONLY
+that child's data on every page.
+
+G10: Tantrum/behavior logging is showing TWICE for parents — once under
+the shadow-specific log and again below it (duplicate render). Find the
+duplicate and remove one so it renders once.
+
+═══ SCOPE-DOWN (good — narrowing for launch) ═══
+
+G9: The professional dashboard should show ONLY shadow-teacher-related
+activity for now (other verticals aren't built). Hide session-fee
+updates and any non-shadow-teacher use-case UI until those features
+exist. Show me what's currently shown and propose what to hide. (Hide,
+don't delete — same coming-soon pattern.)
+
+G11: The professional Calendar tab should show a "coming soon" state
+(not the current calendar) until it's built out. Use the existing
+coming-soon pattern.
+
+═══ CONFIRM ═══
+None of these touch childId scoping rules (G4-SWITCHER must REUSE
+SelectedChildContext, not replace it), payments/Razorpay, OTP, or
+matching scoring weights.
+
+For the three REOPENED bugs (G5, G4, G7): I need the actual root cause
+with real code/responses shown — these were "fixed" before and weren't,
+so a description of intent isn't enough. Show me why each is ACTUALLY
+failing. No code until I approve the plan.
