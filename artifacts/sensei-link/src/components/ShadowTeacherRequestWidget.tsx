@@ -521,9 +521,6 @@ export function ShadowTeacherRequestWidget() {
     if (!effectiveChildId) { toast({ title: "Please select a child profile from the child switcher above", variant: "destructive" }); return; }
     setSubmitting(true);
     try {
-      const loaded = await loadRazorpayScript();
-      if (!loaded) { toast({ title: "Payment gateway unavailable", variant: "destructive" }); return; }
-
       const res = await fetchWithAuth("/api/shadow-teacher/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -560,6 +557,10 @@ export function ShadowTeacherRequestWidget() {
         await refetch();
         return;
       }
+
+      // Only load Razorpay after confirming we have a payable (non-waived) order
+      const loaded = await loadRazorpayScript();
+      if (!loaded) { toast({ title: "Payment gateway unavailable", variant: "destructive" }); return; }
 
       const matchId = data.matchId;
       await new Promise<void>((resolve, reject) => {
