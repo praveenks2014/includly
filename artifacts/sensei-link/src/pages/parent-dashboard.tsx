@@ -1105,6 +1105,11 @@ function ReRequestSheet({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ childId, extraNotes: extraNotes.trim() || undefined }),
       });
+      const ct = res.headers.get("content-type") ?? "";
+      if (!ct.includes("application/json")) {
+        toast({ title: "Server unavailable", description: "Please try again in a moment.", variant: "destructive" });
+        return;
+      }
       const data = await res.json() as {
         matchId?: number;
         waived?: boolean;
