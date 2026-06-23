@@ -3262,6 +3262,9 @@ function EnquiriesTab() {
     );
   }
 
+  const ACTIONABLE_STATUSES = new Set(["shortlisted", "pending_payment", "trial_pending", "trial_started", "trial_done"]);
+  const actionable = candidacies.filter((c) => ACTIONABLE_STATUSES.has(c.matchStatus));
+
   if (candidacies.length === 0) {
     return (
       <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center shadow-sm">
@@ -3269,6 +3272,18 @@ function EnquiriesTab() {
         <p className="font-semibold text-gray-600">No match requests yet</p>
         <p className="text-sm text-gray-400 mt-1 max-w-xs mx-auto">
           Once a parent shortlists you as a shadow teacher candidate, their request will appear here.
+        </p>
+      </div>
+    );
+  }
+
+  if (actionable.length === 0) {
+    return (
+      <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center shadow-sm">
+        <Users size={36} className="mx-auto mb-3 text-gray-300" />
+        <p className="font-semibold text-gray-600">No active enquiries</p>
+        <p className="text-sm text-gray-400 mt-1 max-w-xs mx-auto">
+          All past match requests have been resolved. New shortlists will appear here.
         </p>
       </div>
     );
@@ -3283,7 +3298,7 @@ function EnquiriesTab() {
             Parents who have shortlisted you as a shadow teacher candidate.
           </p>
         </div>
-        {candidacies.map((c) => (
+        {actionable.map((c) => (
           <CandidacyCard key={c.candidateId} candidacy={c} onOpen={() => setSelected(c)} myUserId={(me as unknown as { id?: number })?.id ?? 0} />
         ))}
       </div>

@@ -478,7 +478,8 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
     queryKey: ["home-summary"],
     queryFn: () => fetchWithAuth("/api/engagements/home-summary").then((r) => r.json()),
   });
-  const pendingLogs = homeSummary.filter((e) => e.todayParentLogOwed);
+  const childSummary = homeSummary.filter((e) => e.childId === selectedChildId);
+  const pendingLogs = childSummary.filter((e) => e.todayParentLogOwed);
 
   // Upcoming sessions → Bookings destination.
   const upcoming = (sessions ?? [])
@@ -605,11 +606,11 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
       )}
 
       {/* ── Cross-engagement progress + pending logs ── */}
-      {homeSummary.length > 0 && (
+      {childSummary.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <p className="text-xs font-bold uppercase tracking-wide text-gray-400">
-              {homeSummary.length} active engagement{homeSummary.length !== 1 ? "s" : ""}
+              {childSummary.length} active engagement{childSummary.length !== 1 ? "s" : ""}
             </p>
             {pendingLogs.length > 0 && (
               <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
@@ -617,7 +618,7 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
               </span>
             )}
           </div>
-          {homeSummary.map((e) => (
+          {childSummary.map((e) => (
             <Link key={e.id} href="/progress">
               <div className="bg-white border border-gray-100 rounded-xl p-3.5 flex items-center gap-3 hover:border-teal-200 transition-colors cursor-pointer shadow-sm">
                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${e.todayParentLogOwed ? "bg-amber-50 border border-amber-200" : "bg-teal-50 border border-teal-100"}`}>
