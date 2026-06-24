@@ -1,0 +1,50 @@
+PLAN FIRST — Plan mode. The shadow-teacher payment POST never reaches
+the API server — server logs confirm zero occurrences of
+POST /api/shadow-teacher/request. The HTML "<!DOCTYPE" error is the
+Replit proxy intercepting an unauthenticated request before it reaches
+port 8080.
+
+Root cause: ClerkAuthBridge sets the token getter in a useEffect.
+During Clerk session refresh or component remount, the cleanup
+temporarily sets the getter to null. Any request fired during this
+window goes out without a Bearer token → Replit proxy returns an HTML
+sign-in redirect → frontend gets "Unexpected token '<'" parsing it as
+JSON.
+
+This is a SYSTEMIC issue — it affects any fetchWithAuth call fired
+during a Clerk token refresh. The payment button is just where it's
+most visible because payment is high-stakes. The four 401s on
+POST /api/engagements/3/lifecycle at 18:24-18:34 are the same issue
+reaching the server (that route is on a different path the proxy
+doesn't intercept).
+
+AUDIT — show me:
+1. The exact ClerkAuthBridge implementation — how does it set and
+   clean up the token getter, and what is the cleanup function?
+2. The fetchWithAuth implementation — does it call the getter directly,
+   or does it have any fallback if the getter returns null?
+3. Any other payment or mutation calls that go through fetchWithAuth
+   and could hit the same race condition.
+
+PROPOSED FIX — evaluate and confirm before building:
+The root fix is: fetchWithAuth should get a FRESH token directly from
+Clerk on every call rather than relying on the cached getter — so it's
+never affected by the brief null window during refresh.
+
+Option A (preferred): modify fetchWithAuth to call
+clerk.session?.getToken() directly on each invocation (using the Clerk
+JS SDK's session object), bypassing the cached getter entirely. This
+eliminates the race condition at the source.
+
+Option B: in ClerkAuthBridge, do not null the getter during cleanup —
+keep the last valid getter in place (or use a ref instead of state)
+so there's never a null window between token refreshes.
+
+Propose which is cleaner given the current implementation, show me
+the change, and confirm it fixes the issue without breaking the
+existing auth flow for GET requests. Also fix the /lifecycle 401s if
+they're caused by the same race (confirm).
+
+Do NOT change the payment logic, Razorpay flow, or any server code —
+this is purely a client-side auth-token delivery fix. Show me the
+plan before building.
