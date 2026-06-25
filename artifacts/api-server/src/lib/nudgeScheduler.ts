@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, lte, ne, notInArray, sql } from "drizzle-orm";
+import { and, eq, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import {
   db,
   sessionBookingsTable,
@@ -212,11 +212,8 @@ async function expireNoticePeriods(): Promise<void> {
       if (eng.matchRequestId) {
         await db
           .update(shadowTeacherMatchesTable)
-          .set({ status: "committed", updatedAt: new Date() })
-          .where(and(
-            eq(shadowTeacherMatchesTable.id, eng.matchRequestId),
-            notInArray(shadowTeacherMatchesTable.status, ["cancelled", "refunded", "committed"]),
-          ));
+          .set({ status: "cancelled", updatedAt: new Date() })
+          .where(eq(shadowTeacherMatchesTable.id, eng.matchRequestId));
       }
 
       // Notify parent

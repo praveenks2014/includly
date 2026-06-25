@@ -1,0 +1,81 @@
+Build mode. Fix the match-row closure bug across all four engagement-
+ending paths. The audit is definitive — this is a precise fix.
+
+ROOT CAUSE: In both lifecycleRequests.ts and nudgeScheduler.ts, the
+match-row update sets status = "committed" (which the row already is)
+and has a notInArray guard that excludes "committed" rows — so the
+update is always silently skipped. The match row never moves to a
+genuinely terminal status, so the frontend reads the stale committed
+state and shows the post-commit UI instead of the re-engagement flow.
+
+THE FIX — two files, four locations:
+
+LOCATION 1 — lifecycleRequests.ts line ~494 (Path A: immediate full
+buyout):
+Change:
+  .set({ status: "committed", updatedAt: new Date() })
+  .where(and(
+    eq(shadowTeacherMatchesTable.id, engRow.matchRequestId),
+    notInArray(shadowTeacherMatchesTable.status,
+      ["cancelled", "refunded", "committed"]),  // ← skips committed rows
+  ))
+To:
+  .set({ status: "cancelled", updatedAt: new Date() })
+  .where(eq(shadowTeacherMatchesTable.id, engRow.matchRequestId))
+
+Rationale: drop the notInArray guard entirely (we WANT to update the
+committed row), and change target to "cancelled" (a genuinely terminal
+status the frontend recognises as ended). No migration needed.
+
+LOCATION 2 — lifecycleRequests.ts (Path B: 15-day buyout payment
+confirmed):
+The match-row update block is inside `if (isImmediate)` which is
+false for the 15-day buyout — so it never runs. Move the match-row
+update OUTSIDE the if(isImmediate) block so it runs for ALL buyout
+types (immediate and non-immediate). Same fix as Location 1:
+  .set({ status: "cancelled", updatedAt: new Date() })
+  .where(eq(shadowTeacherMatchesTable.id, engRow.matchRequestId))
+
+LOCATION 3 — nudgeScheduler.ts line ~215 (Path C: 30-day notice
+expires; Path D: future full buyout expires):
+Same broken update — changes "committed" with the same notInArray
+guard. Apply the identical fix:
+  .set({ status: "cancelled", updatedAt: new Date() })
+  .where(eq(shadowTeacherMatchesTable.id, eng.matchRequestId))
+
+(matchRequestId is already correctly selected at line 195 — confirmed
+by audit — so no select query changes needed here.)
+
+WHAT THE FRONTEND NEEDS TO DO WITH "cancelled" STATUS:
+After these fixes, ended engagements will have match_status =
+"cancelled". Confirm that:
+- ShadowTeacherTab treats "cancelled" match rows as ended (showing
+  the re-engagement CTA, not the post-commit screen).
+- The re-request-eligibility check (GET /api/shadow-teacher/
+  re-request-eligibility) allows a new request when the most recent
+  match is "cancelled" — confirm the guard in shadowTeacher.ts line
+  ~170 includes "cancelled" in its allowed-list (it should already,
+  since cancelled was already a terminal status before this fix).
+- The 3-month waiver check still works: a parent whose match was
+  recently cancelled via engagement end should see the waiver if they
+  paid within 90 days.
+
+SECONDARY FIX — duplicate children in ChildSwitcher:
+The duplicate child rows (Arsh Vihaan ×2, Sudikesh/sudiksh, arjun/
+Arjun) are test data in the DB. Two changes:
+1. Clean up the duplicate rows from the DB for parent_id=1874 —
+   keep the most recent row for each intended child, delete the others.
+   (List which rows you'll delete before running — I need to confirm.)
+2. Add defensive deduplication to ChildSwitcher.tsx: deduplicate by
+   child.id before rendering pills (in case of any future duplicates).
+   childProfiles should already be unique by id, but add:
+   const uniqueChildren = childProfiles.filter(
+     (c, i, arr) => arr.findIndex(x => x.id === c.id) === i
+   );
+
+DO NOT TOUCH: matching scoring, OTP flow, payments/Razorpay,
+engagement lifecycle transitions themselves (only the match-row
+update changes), childId scoping elsewhere.
+
+Show me the three changed code blocks (Locations 1, 2, 3) and the
+list of DB rows to delete before applying. This auto-deploys to dev.

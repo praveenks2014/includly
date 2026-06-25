@@ -1,0 +1,56 @@
+AUDIT ONLY — Plan mode, no changes. After paying for a 15-day OR
+30-day buyout, the parent sees "Teacher confirmed! Your engagement is
+being set up" — which is the post-commit success screen. This is
+completely wrong. The buyout payment should end the engagement and
+show the re-engagement flow, not the post-commit screen.
+
+Root cause to find: the match row (shadow_teacher_matches) is not
+being updated to a terminal status after buyout payment is confirmed,
+so ShadowTeacherTab reads the stale match row (still "committed" or
+similar) and renders the post-commit UI instead of the ended state.
+
+Show me the exact code for EACH of the four engagement-ending paths,
+and whether the match row is closed in each:
+
+PATH A — Full buyout, effectiveEndDate = today (immediate):
+- In lifecycleRequests.ts, after the engagement is set to "ended",
+  does the match row get updated to a terminal status?
+- Show me the exact lines.
+
+PATH B — 15-day buyout (early exit), payment confirmed:
+- Where is the engagement status set to ended/notice_period after
+  the 15-day buyout payment verifies?
+- Does the match row get updated here?
+- Show me the exact lines.
+
+PATH C — 30-day notice period (give notice):
+- Where is the engagement ended after the 30-day notice expires?
+  (likely in nudgeScheduler.ts)
+- Does nudgeScheduler update the match row when it expires the
+  engagement? Show me the select query — does it fetch matchRequestId?
+- Show me the exact lines.
+
+PATH D — Full buyout, effectiveEndDate = future date:
+- Where is the engagement ended when the future date arrives?
+  (likely nudgeScheduler.ts)
+- Does the match row get updated here?
+
+For EACH path: show me whether the match row update is PRESENT or
+ABSENT. I expect it's absent in most paths because the fix was only
+applied to Path A.
+
+ALSO: the ShadowTeacherTab filter — after a buyout, what status does
+the match row actually have? Show me the current status of the match
+row for the child where the buyout was just paid, by querying
+shadow_teacher_matches for that child. This confirms the stale state.
+
+SECONDARY BUG — duplicate children in the switcher:
+The child switcher shows "Arsh Vihaan" twice, "Sudikesh"/"sudiksh"
+as separate, "arjun"/"Arjun" as separate. These appear to be
+duplicate DB rows from test data. Show me how many child rows exist
+for this parent in the children table, and whether the ChildSwitcher
+component deduplicates by childId or just maps the array directly.
+
+Do not change anything — just show me which paths close the match row
+and which don't, the actual match row status after the buyout, and
+the duplicate-children root cause.

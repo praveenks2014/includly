@@ -252,7 +252,7 @@ router.get("/shadow-teacher/re-request-eligibility", requireAuth, requireRole("p
       isNotNull(shadowTeacherMatchesTable.feePaidAt),
       gte(shadowTeacherMatchesTable.feePaidAt, since),
       gt(shadowTeacherMatchesTable.matchingFeeInr, 0),
-      notInArray(shadowTeacherMatchesTable.status, ["refunded", "cancelled", "pending_payment", "payment_failed"]),
+      notInArray(shadowTeacherMatchesTable.status, ["refunded", "pending_payment", "payment_failed"]),
     ))
     .orderBy(desc(shadowTeacherMatchesTable.feePaidAt))
     .limit(1);
@@ -350,7 +350,7 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
       isNotNull(shadowTeacherMatchesTable.feePaidAt),
       gte(shadowTeacherMatchesTable.feePaidAt, waiverSince),
       gt(shadowTeacherMatchesTable.matchingFeeInr, 0),
-      notInArray(shadowTeacherMatchesTable.status, ["refunded", "cancelled", "pending_payment", "payment_failed"]),
+      notInArray(shadowTeacherMatchesTable.status, ["refunded", "pending_payment", "payment_failed"]),
     ))
     .limit(1);
   const isWaived = !!waiverRow;

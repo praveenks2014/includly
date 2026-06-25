@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc, isNull, notInArray } from "drizzle-orm";
+import { eq, and, desc, isNull } from "drizzle-orm";
 import crypto from "crypto";
 import Razorpay from "razorpay";
 import {
@@ -481,8 +481,8 @@ router.post("/engagements/:id/lifecycle/:reqId/verify-buyout-payment", requireAu
     })
     .where(eq(shadowTeacherEngagementsTable.id, engId));
 
-  // Close the match row when ending immediately — allows the parent to start a new request
-  if (isImmediate) {
+  // Close the match row for all buyout types — allows the parent to start a new request
+  {
     const [engRow] = await db
       .select({ matchRequestId: shadowTeacherEngagementsTable.matchRequestId })
       .from(shadowTeacherEngagementsTable)
@@ -491,11 +491,8 @@ router.post("/engagements/:id/lifecycle/:reqId/verify-buyout-payment", requireAu
     if (engRow?.matchRequestId) {
       await db
         .update(shadowTeacherMatchesTable)
-        .set({ status: "committed", updatedAt: new Date() })
-        .where(and(
-          eq(shadowTeacherMatchesTable.id, engRow.matchRequestId),
-          notInArray(shadowTeacherMatchesTable.status, ["cancelled", "refunded", "committed"]),
-        ));
+        .set({ status: "cancelled", updatedAt: new Date() })
+        .where(eq(shadowTeacherMatchesTable.id, engRow.matchRequestId));
     }
   }
 

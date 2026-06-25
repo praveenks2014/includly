@@ -2,10 +2,13 @@ import { useSelectedChild } from "@/contexts/SelectedChildContext";
 
 export function ChildSwitcher() {
   const { childProfiles, selectedChildId, setSelectedChildId } = useSelectedChild();
-  if (childProfiles.length <= 1) return null;
+  const uniqueChildren = childProfiles.filter(
+    (c, i, arr) => arr.findIndex((x) => x.id === c.id) === i,
+  );
+  if (uniqueChildren.length <= 1) return null;
   return (
     <div className="flex gap-1.5 overflow-x-auto px-3 py-2 bg-white border-b border-border shrink-0">
-      {childProfiles.map((child) => {
+      {uniqueChildren.map((child) => {
         const active = child.id === selectedChildId;
         return (
           <button
