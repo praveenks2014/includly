@@ -38,7 +38,16 @@ const CLERK_NPM_CDN = CLERK_FAPI;
 export const CLERK_PROXY_PATH = "/api/__clerk";
 
 const SKIP_REQ_HEADERS = new Set(["host", "connection", "transfer-encoding"]);
-const SKIP_RES_HEADERS = new Set(["connection", "transfer-encoding", "keep-alive"]);
+// content-encoding and content-length are stripped because Node's fetch()
+// auto-decompresses the upstream body. Forwarding content-encoding would
+// tell the browser to decompress an already-decoded body → ERR_CONTENT_DECODING_FAILED.
+const SKIP_RES_HEADERS = new Set([
+  "connection",
+  "transfer-encoding",
+  "keep-alive",
+  "content-encoding",
+  "content-length",
+]);
 
 async function fetchProxy(
   upstreamUrl: string,
