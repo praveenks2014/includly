@@ -109,10 +109,16 @@ export function clerkProxyMiddleware(): RequestHandler {
     const protocol = (Array.isArray(req.headers["x-forwarded-proto"])
       ? req.headers["x-forwarded-proto"][0]
       : req.headers["x-forwarded-proto"]) || "https";
+    // Prefer CLERK_PROXY_DOMAIN env var, then x-forwarded-host (set by Replit's
+    // ingress to the real public hostname, e.g. www.includly.in), then host header.
+    // Do NOT hardcode a bare domain — "includly.in" ≠ "www.includly.in" and Clerk
+    // will 400 "unable to attribute" if Clerk-Proxy-Url doesn't match the instance.
+    const xfh = req.headers["x-forwarded-host"];
     const host =
-      process.env.NODE_ENV === "production"
-        ? (process.env.CLERK_PROXY_DOMAIN || "includly.in")
-        : (req.headers.host || "");
+      process.env.CLERK_PROXY_DOMAIN ||
+      (Array.isArray(xfh) ? xfh[0] : xfh) ||
+      req.headers.host ||
+      "www.includly.in";
     const proxyUrl = `${protocol}://${host}${CLERK_PROXY_PATH}`;
 
     const xff = req.headers["x-forwarded-for"];
