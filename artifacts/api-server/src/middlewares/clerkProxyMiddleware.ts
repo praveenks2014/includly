@@ -89,9 +89,10 @@ export function clerkProxyMiddleware(): RequestHandler {
 
   return (req, res, next) => {
     // /npm/* — Clerk's JS SDK assets (clerk.browser.js, etc.)
+    // Keep the full /npm/... path — clerk.includly.in serves assets at /npm/...
     if (req.path.startsWith("/npm")) {
-      const cdnPath = req.path.replace(/^\/npm/, "") + (req.url.includes("?") ? `?${req.url.split("?")[1]}` : "");
-      fetchProxy(`${CLERK_NPM_CDN}${cdnPath}`, req, res).catch(next);
+      const query = req.url.includes("?") ? `?${req.url.split("?")[1]}` : "";
+      fetchProxy(`${CLERK_NPM_CDN}${req.path}${query}`, req, res).catch(next);
       return;
     }
 

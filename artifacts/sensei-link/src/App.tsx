@@ -557,7 +557,7 @@ function ClerkProviderWithRoutes() {
   return (
     <ClerkProvider
       publishableKey={clerkPubKey}
-      clerkJSUrl="https://clerk.includly.in/npm/@clerk/clerk-js@6/dist/clerk.browser.js"
+      proxyUrl={import.meta.env.PROD ? "https://www.includly.in/api/__clerk" : undefined}
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
       signInFallbackRedirectUrl="/dashboard"
