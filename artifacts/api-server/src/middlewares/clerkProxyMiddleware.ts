@@ -100,7 +100,10 @@ export function clerkProxyMiddleware(): RequestHandler {
     const protocol = (Array.isArray(req.headers["x-forwarded-proto"])
       ? req.headers["x-forwarded-proto"][0]
       : req.headers["x-forwarded-proto"]) || "https";
-    const host = req.headers.host || "";
+    const host =
+      process.env.NODE_ENV === "production"
+        ? (process.env.CLERK_PROXY_DOMAIN || "includly.in")
+        : (req.headers.host || "");
     const proxyUrl = `${protocol}://${host}${CLERK_PROXY_PATH}`;
 
     const xff = req.headers["x-forwarded-for"];
