@@ -57,7 +57,6 @@ async function fetchProxy(
   const upstream = await fetch(upstreamUrl, {
     method: req.method,
     headers: upstreamHeaders,
-    // @ts-expect-error — Node 18 fetch accepts a Readable body
     body: req.method !== "GET" && req.method !== "HEAD" ? req : undefined,
     redirect: "follow",
   });

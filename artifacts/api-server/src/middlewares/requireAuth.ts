@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { createRemoteJWKSet, jwtVerify, decodeJwt } from "jose";
+import { verifyToken } from "@clerk/backend";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
@@ -16,75 +16,27 @@ declare global {
 }
 
 /**
- * Derive the Clerk FAPI host from a publishable key.
- * Format: pk_live_<base64> or pk_test_<base64>
- * The base64 part decodes to "<fapi-host>$"
+ * Verify a Clerk JWT using @clerk/backend's verifyToken.
+ *
+ * verifyToken with secretKey fetches JWKS from the Clerk Backend API
+ * (https://api.clerk.com/v1/jwks) — NOT from the custom FAPI domain.
+ * This means JWT verification works even if clerk.includly.in is
+ * unreachable from the production server.
  */
-function fapiHostFromKey(pk: string): string | null {
-  const base64Part = pk.replace(/^pk_(live|test)_/, "");
+async function verifyClerkToken(token: string): Promise<string | null> {
+  const secretKey = process.env.CLERK_SECRET_KEY;
+  if (!secretKey) {
+    console.error("[requireAuth] CLERK_SECRET_KEY is not set");
+    return null;
+  }
   try {
-    const decoded = Buffer.from(base64Part, "base64").toString("utf8");
-    const host = decoded.replace(/\$+$/, "");
-    return host || null;
-  } catch {
+    const payload = await verifyToken(token, { secretKey });
+    return typeof payload.sub === "string" ? payload.sub : null;
+  } catch (err) {
+    console.error("[requireAuth] JWT verification failed:", (err as Error).message);
     return null;
   }
 }
-
-/**
- * Build the set of trusted Clerk issuers and their pre-cached JWKS instances.
- *
- * We always trust:
- *  1. The production/live issuer derived from CLERK_PUBLISHABLE_KEY / VITE_CLERK_PUBLISHABLE_KEY
- *  2. The development issuer derived from the hardcoded DEV_CLERK_KEY used by App.tsx
- *     when import.meta.env.DEV === true (pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA
- *     → choice-lion-57.clerk.accounts.dev)
- *
- * Using a whitelist means we never blindly trust an issuer from the JWT payload.
- */
-function buildTrustedJwksSets(): Map<string, ReturnType<typeof createRemoteJWKSet>> {
-  const map = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
-
-  const keySources = [
-    process.env.VITE_CLERK_PUBLISHABLE_KEY,
-    process.env.CLERK_PUBLISHABLE_KEY,
-    // DEV key hardcoded in App.tsx — only trust outside production
-    ...(process.env.NODE_ENV !== "production"
-      ? ["pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA"]
-      : []),
-  ].filter(Boolean) as string[];
-
-  for (const pk of keySources) {
-    const host = fapiHostFromKey(pk);
-    if (!host) continue;
-    const issuer = `https://${host}`;
-    if (map.has(issuer)) continue;
-    const jwksUrl = `${issuer}/.well-known/jwks.json`;
-    console.log(`[requireAuth] Trusting Clerk issuer: ${issuer}`);
-    map.set(issuer, createRemoteJWKSet(new URL(jwksUrl)));
-  }
-
-  // Always explicitly trust the production custom domain.
-  // When Clerk uses a custom domain (clerk.includly.in) the JWT iss claim is
-  // the custom domain, NOT the original clerk.accounts.dev host that the
-  // publishable key encodes — so we must add it directly.
-  const explicitHosts = [
-    process.env.CLERK_JWT_ISSUER,  // override via env if needed
-    "clerk.includly.in",           // Includly production custom domain
-  ].filter(Boolean) as string[];
-
-  for (const host of explicitHosts) {
-    const issuer = host.startsWith("https://") ? host : `https://${host}`;
-    if (map.has(issuer)) continue;
-    const jwksUrl = `${issuer}/.well-known/jwks.json`;
-    console.log(`[requireAuth] Trusting Clerk issuer (explicit): ${issuer}`);
-    map.set(issuer, createRemoteJWKSet(new URL(jwksUrl)));
-  }
-
-  return map;
-}
-
-const TRUSTED_JWKS = buildTrustedJwksSets();
 
 /**
  * Extract the Bearer token from the Authorization header.
@@ -94,36 +46,6 @@ function extractToken(req: Request): string | null {
   if (!header) return null;
   const match = header.match(/^Bearer\s+(.+)$/i);
   return match ? match[1] : null;
-}
-
-/**
- * Verify a Clerk JWT. Reads the `iss` claim to select the right JWKS from
- * the whitelist of trusted issuers, then verifies the signature.
- * Returns the Clerk user ID (the `sub` claim) or null on failure.
- */
-async function verifyClerkToken(token: string): Promise<string | null> {
-  try {
-    // Decode without verification to read the issuer claim
-    const unverified = decodeJwt(token);
-    const iss = typeof unverified.iss === "string" ? unverified.iss : null;
-
-    if (!iss) {
-      console.error("[requireAuth] JWT has no iss claim");
-      return null;
-    }
-
-    const jwks = TRUSTED_JWKS.get(iss);
-    if (!jwks) {
-      console.error(`[requireAuth] Untrusted JWT issuer: ${iss}`);
-      return null;
-    }
-
-    const { payload } = await jwtVerify(token, jwks);
-    return payload.sub ?? null;
-  } catch (err) {
-    console.error("[requireAuth] JWT verification failed:", (err as Error).message);
-    return null;
-  }
 }
 
 export const requireAuth = async (
@@ -166,7 +88,6 @@ export const requireAuth = async (
   }
 
   const adminEmail = process.env["ADMIN_EMAIL"] ?? "praveenece.mit@gmail.com";
-  // ADMIN_CLERK_ID: single ID (legacy). ADMIN_CLERK_IDS: comma-separated list.
   const adminClerkIdSet = new Set(
     [
       process.env["ADMIN_CLERK_ID"],
