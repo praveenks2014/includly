@@ -33,10 +33,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- Pre-load Clerk JS from the correct FAPI domain before React boots.
-         window.Clerk will already exist when @clerk/react initialises,
-         so it skips its own URL-derivation and uses this instance. -->
-    <script src="https://clerk.includly.in/npm/@clerk/clerk-js@6/dist/clerk.browser.js" crossorigin="anonymous"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
