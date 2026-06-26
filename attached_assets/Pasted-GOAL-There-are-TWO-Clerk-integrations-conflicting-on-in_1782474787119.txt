@@ -1,0 +1,54 @@
+GOAL: There are TWO Clerk integrations conflicting on includly.in. I got 
+the error "includly.in is already registered with a Clerk app outside of 
+Replit. To use Replit-managed Clerk auth on this domain, release it from 
+that Clerk app first."
+
+I want to KEEP MY OWN Clerk app and DISCONNECT Replit's MANAGED Clerk 
+integration. My own Clerk app is configured for includly.in (apex), with 
+clerk.includly.in verified, my Google OAuth, and my settings. Its key is 
+already in my code: VITE_CLERK_PK = pk_live_Y2xlcmsuaW5jbHVkbHkuaW4k 
+(decodes to clerk.includly.in).
+
+Do NOT release my domain from my own Clerk app. Instead, disconnect 
+Replit's managed Clerk.
+
+STEP 1 — CONFIRM HOSTING IS SAFE (before changing anything):
+Confirm that disconnecting Replit-MANAGED Clerk auth does NOT affect:
+- My deployment/hosting (includly.in still serves my code)
+- Publishing (still works the same way)
+- The custom domain config (www.includly.in / includly.in still routes 
+  to my deployment)
+- The DNS A record linking my domain to Replit
+Confirm the domain→hosting link is via DNS + custom domain config, NOT 
+via Clerk, so disconnecting managed Clerk leaves hosting fully intact.
+
+STEP 2 — FIND AND DISCONNECT REPLIT-MANAGED CLERK:
+- Where is the Replit-managed Clerk / Auth integration enabled for this 
+  project? (Likely an "Authentication" or "Clerk" integration in the 
+  tools/integrations panel.)
+- Disconnect / disable it so it stops injecting its own Clerk config and 
+  stops overriding my app's Clerk.
+- Show me exactly where it is and how to turn it off.
+
+STEP 3 — ENSURE MY OWN CLERK KEYS ARE IN PLACE:
+After disconnecting managed Clerk, my app needs MY Clerk app's keys in 
+the deployment secrets:
+- VITE_CLERK_PK = my pk_live_ apex key (already in .replit)
+- CLERK_SECRET_KEY = my own Clerk app's sk_live_ secret
+Confirm both are set for the deployment (the managed integration may have 
+been providing these automatically — once it's off, my own keys must be 
+present). Tell me if CLERK_SECRET_KEY needs to be added.
+
+STEP 4 — VERIFY THE FIX:
+After disconnecting managed Clerk and confirming my keys, this should be 
+true:
+- My app uses MY Clerk app (via VITE_CLERK_PK)
+- Clerk JS loads from clerk.includly.in (my verified instance), NOT 
+  clerk.www.includly.in
+- The production bundle should rebuild on the next publish (it's been 
+  stuck serving an old bundle — confirm a fresh deploy goes out after 
+  this change)
+
+Walk me through: confirm hosting is safe (Step 1), show me where to 
+disconnect Replit-managed Clerk (Step 2), confirm my own Clerk keys are 
+set (Step 3), then I'll redeploy and test includly.in/sign-in.
