@@ -4,6 +4,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import webhooksRouter from "./routes/webhooks";
 import { logger } from "./lib/logger";
+import { clerkProxyMiddleware, CLERK_PROXY_PATH } from "./middlewares/clerkProxyMiddleware";
 
 const app: Express = express();
 
@@ -43,6 +44,7 @@ app.use(
 
 app.use(express.urlencoded({ extended: true }));
 
+app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use("/api", webhooksRouter);
 app.use("/api", router);
 
