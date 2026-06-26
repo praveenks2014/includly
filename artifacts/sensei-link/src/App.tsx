@@ -557,6 +557,7 @@ function ClerkProviderWithRoutes() {
   return (
     <ClerkProvider
       publishableKey={clerkPubKey}
+      clerkJSUrl="https://clerk.includly.in/npm/@clerk/clerk-js@6/dist/clerk.browser.js"
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
       signInFallbackRedirectUrl="/dashboard"
