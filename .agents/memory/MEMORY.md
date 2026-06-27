@@ -15,4 +15,4 @@
 - [Full buyout exit pattern](full-buyout-pattern.md) — reuses buyout columns/verify endpoint; endDate param sets effectiveEndDate; if today → ended immediately in verify handler; endedReason="full_buyout"; migration 0025
 - [fetchWithAuth non-2xx](fetchwithauth-nonok.md) — fetchWithAuth never throws on non-2xx; queryFns doing .then(r=>r.json()) treat 403/500 bodies as success → guard with Array.isArray/r.ok before .reduce/.find/.map
 - [pnpm monorepo dep removal](pnpm-monorepo-dep-removal.md) — uninstallLanguagePackages targets the workspace ROOT (reports success but no-op on artifact deps); remove artifact deps with `pnpm --filter @workspace/<x> remove <pkg>`
-- [Clerk custom domain proxy pattern](clerk-custom-domain-proxy.md) — use proxyUrl+server proxy (not clerkJSUrl, doesn't exist in v6.4.5); verifyToken from @clerk/backend; /npm path must NOT be stripped in proxy
+- [Clerk key configuration](clerk-key-config.md) — VITE_CLERK_PUBLISHABLE_KEY env var (shared) holds the live key; dev preview uses hardcoded DEV_CLERK_KEY; server needs CLERK_SECRET_KEY + CLERK_SECRET_KEY_DEV for dual-instance JWT verify
