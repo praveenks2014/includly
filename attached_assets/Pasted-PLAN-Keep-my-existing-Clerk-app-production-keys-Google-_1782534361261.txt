@@ -1,0 +1,44 @@
+PLAN: Keep my existing Clerk app (production keys, Google OAuth, users 
+— all UNCHANGED). Rebuild ONLY the integration code in Replit that 
+connects to Clerk, cleanly, removing all the accumulated workarounds.
+
+My Clerk app: apex domain includly.in, clerk.includly.in verified with 
+valid SSL, instance di0ig13tpa0c. Publishable key: 
+pk_live_Y2xlcmsuaW5jbHVkbHkuaW4k. These do NOT change.
+
+STEP 1 — Remove ALL the accumulated Clerk workarounds from the code:
+- Remove clerkProxyMiddleware.ts and its mounting in app.ts
+- Remove proxyUrl from ClerkProvider
+- Remove any clerkJSUrl, domain props
+- Remove any Clerk <script> tags from index.html
+- Simplify the key selection in App.tsx to just use the publishable 
+  key directly
+Goal: a clean, standard @clerk/react integration with NO custom 
+proxy/domain handling.
+
+STEP 2 — Disconnect Replit-MANAGED Clerk:
+There's a Replit-managed Clerk integration conflicting with my own 
+Clerk app (it blocks adding my apex domain: "already registered with a 
+Clerk app outside Replit"). Find and DISCONNECT Replit-managed Clerk so 
+only my own Clerk app is used. Where is this integration and how do I 
+turn it off?
+
+STEP 3 — Serve the app on the APEX domain (includly.in):
+After disconnecting Replit-managed Clerk, add includly.in (apex) as a 
+custom domain in Replit (the apex A record → 34.111.179.208 already 
+exists in DNS). This makes the app serve on includly.in, where my Clerk 
+app is configured.
+
+STEP 4 — Clean ClerkProvider:
+<ClerkProvider publishableKey={VITE_CLERK_PK} signInUrl="/sign-in" ...>
+Standard setup. On the apex, Clerk loads JS from clerk.includly.in 
+(valid SSL) directly. No proxy needed.
+
+STEP 5 — Redirect www → apex.
+
+Result: clean integration code + app on apex + my existing Clerk app = 
+Clerk loads from clerk.includly.in, sign-in works, users/OAuth intact.
+
+Confirm the plan, then start with Step 1 (clean the code) and Step 2 
+(disconnect Replit-managed Clerk). Tell me where the Replit-managed 
+Clerk integration is.
