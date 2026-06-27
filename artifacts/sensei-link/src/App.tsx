@@ -40,8 +40,13 @@ import ProfessionalDashboard from "@/pages/professional-dashboard";
 import CentreDashboard from "@/pages/centre-dashboard";
 import ChildOnboardingPage from "@/pages/onboarding-child";
 
-const clerkPubKey =
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || import.meta.env.VITE_CLERK_PK;
+// Production live keys are domain-locked to includly.in and cannot load on
+// the Replit dev preview domain. Use the test key in dev so the preview works.
+const DEV_CLERK_KEY = "pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA";
+
+const clerkPubKey = import.meta.env.DEV
+  ? DEV_CLERK_KEY
+  : (import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || import.meta.env.VITE_CLERK_PK);
 
 if (!clerkPubKey) {
   throw new Error(
