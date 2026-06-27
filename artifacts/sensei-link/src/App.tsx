@@ -44,15 +44,12 @@ import ChildOnboardingPage from "@/pages/onboarding-child";
 // the Replit dev preview domain. Use the test key in dev so the preview works.
 const DEV_CLERK_KEY = "pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA";
 
+// Hardcoded prod key (encodes clerk.includly.in — safe to commit, it's public)
+const PROD_CLERK_KEY = "pk_live_Y2xlcmsuaW5jbHVkbHkuaW4k";
+
 const clerkPubKey = import.meta.env.DEV
   ? DEV_CLERK_KEY
-  : (import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || import.meta.env.VITE_CLERK_PK);
-
-if (!clerkPubKey) {
-  throw new Error(
-    "VITE_CLERK_PUBLISHABLE_KEY is not set. Add it as a userenv entry in .replit."
-  );
-}
+  : (import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || import.meta.env.VITE_CLERK_PK || PROD_CLERK_KEY);
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
