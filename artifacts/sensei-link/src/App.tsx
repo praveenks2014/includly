@@ -44,12 +44,12 @@ import ChildOnboardingPage from "@/pages/onboarding-child";
 // the Replit dev preview domain. Use the test key in dev so the preview works.
 const DEV_CLERK_KEY = "pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA";
 
-// Hardcoded prod key (encodes clerk.includly.in — safe to commit, it's public)
+// Hardcoded prod key (encodes clerk.includly.in — safe to commit, it's public).
+// Do NOT read VITE_CLERK_PUBLISHABLE_KEY here: an external Clerk integration
+// secret can inject a stale www.includly.in key that overrides the correct value.
 const PROD_CLERK_KEY = "pk_live_Y2xlcmsuaW5jbHVkbHkuaW4k";
 
-const clerkPubKey = import.meta.env.DEV
-  ? DEV_CLERK_KEY
-  : (import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || import.meta.env.VITE_CLERK_PK || PROD_CLERK_KEY);
+const clerkPubKey = import.meta.env.DEV ? DEV_CLERK_KEY : PROD_CLERK_KEY;
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
