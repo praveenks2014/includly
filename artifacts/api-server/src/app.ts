@@ -4,8 +4,6 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import webhooksRouter from "./routes/webhooks";
 import { logger } from "./lib/logger";
-import { clerkProxyMiddleware, CLERK_PROXY_PATH } from "./middlewares/clerkProxyMiddleware";
-
 const app: Express = express();
 
 app.use(
@@ -44,7 +42,16 @@ app.use(
 
 app.use(express.urlencoded({ extended: true }));
 
-app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+// Redirect www → apex so Clerk loads from clerk.includly.in (the domain
+// the publishable key is configured for) without any proxy needed.
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.hostname === "www.includly.in") {
+    const proto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim() ?? "https";
+    return res.redirect(301, `${proto}://includly.in${req.url}`);
+  }
+  next();
+});
+
 app.use("/api", webhooksRouter);
 app.use("/api", router);
 

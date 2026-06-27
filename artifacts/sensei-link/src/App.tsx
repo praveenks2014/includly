@@ -40,12 +40,8 @@ import ProfessionalDashboard from "@/pages/professional-dashboard";
 import CentreDashboard from "@/pages/centre-dashboard";
 import ChildOnboardingPage from "@/pages/onboarding-child";
 
-const DEV_CLERK_KEY = "pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA";
-
 const clerkPubKey =
-  (import.meta.env.DEV && !import.meta.env.PROD)
-    ? DEV_CLERK_KEY
-    : (import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || import.meta.env.VITE_CLERK_PK);
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || import.meta.env.VITE_CLERK_PK;
 
 if (!clerkPubKey) {
   throw new Error(
@@ -557,7 +553,6 @@ function ClerkProviderWithRoutes() {
   return (
     <ClerkProvider
       publishableKey={clerkPubKey}
-      proxyUrl={import.meta.env.PROD ? `${window.location.origin}/api/__clerk` : undefined}
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
       signInFallbackRedirectUrl="/dashboard"
