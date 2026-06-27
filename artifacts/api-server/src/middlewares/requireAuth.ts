@@ -22,20 +22,42 @@ declare global {
  * (https://api.clerk.com/v1/jwks) — NOT from the custom FAPI domain.
  * This means JWT verification works even if clerk.includly.in is
  * unreachable from the production server.
+ *
+ * In the Replit dev preview the browser uses a separate dev Clerk instance
+ * (DEV_CLERK_KEY / choice-lion-57.clerk.accounts.dev). If CLERK_SECRET_KEY_DEV
+ * is set, we fall back to it so the dev preview can make authenticated API
+ * calls without needing any proxy.
  */
 async function verifyClerkToken(token: string): Promise<string | null> {
   const secretKey = process.env.CLERK_SECRET_KEY;
-  if (!secretKey) {
+  const devSecretKey = process.env.CLERK_SECRET_KEY_DEV;
+
+  if (!secretKey && !devSecretKey) {
     console.error("[requireAuth] CLERK_SECRET_KEY is not set");
     return null;
   }
-  try {
-    const payload = await verifyToken(token, { secretKey });
-    return typeof payload.sub === "string" ? payload.sub : null;
-  } catch (err) {
-    console.error("[requireAuth] JWT verification failed:", (err as Error).message);
-    return null;
+
+  // Try primary (production) key first.
+  if (secretKey) {
+    try {
+      const payload = await verifyToken(token, { secretKey });
+      return typeof payload.sub === "string" ? payload.sub : null;
+    } catch {
+      // Fall through to dev key if available.
+    }
   }
+
+  // Fall back to dev Clerk instance key (Replit preview uses DEV_CLERK_KEY).
+  if (devSecretKey && devSecretKey !== secretKey) {
+    try {
+      const payload = await verifyToken(token, { secretKey: devSecretKey });
+      return typeof payload.sub === "string" ? payload.sub : null;
+    } catch (err) {
+      console.error("[requireAuth] JWT verification failed:", (err as Error).message);
+    }
+  }
+
+  return null;
 }
 
 /**
