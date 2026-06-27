@@ -2,6 +2,10 @@
 
 # compiled output
 dist
+# Commit the sensei-link production build so Replit serves it directly
+!artifacts/sensei-link/dist/
+!artifacts/sensei-link/dist/public/
+!artifacts/sensei-link/dist/public/**
 tmp
 out-tsc
 *.tsbuildinfo
