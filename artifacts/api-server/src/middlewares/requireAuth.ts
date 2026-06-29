@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { verifyToken } from "@clerk/backend";
+import { getAuth } from "@clerk/express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
@@ -15,74 +15,12 @@ declare global {
   }
 }
 
-/**
- * Verify a Clerk JWT using @clerk/backend's verifyToken.
- *
- * verifyToken with secretKey fetches JWKS from the Clerk Backend API
- * (https://api.clerk.com/v1/jwks) — NOT from the custom FAPI domain.
- * This means JWT verification works even if clerk.includly.in is
- * unreachable from the production server.
- *
- * In the Replit dev preview the browser uses a separate dev Clerk instance
- * (DEV_CLERK_KEY / choice-lion-57.clerk.accounts.dev). If CLERK_SECRET_KEY_DEV
- * is set, we fall back to it so the dev preview can make authenticated API
- * calls without needing any proxy.
- */
-async function verifyClerkToken(token: string): Promise<string | null> {
-  const secretKey = process.env.CLERK_SECRET_KEY;
-  const devSecretKey = process.env.CLERK_SECRET_KEY_DEV;
-
-  if (!secretKey && !devSecretKey) {
-    console.error("[requireAuth] CLERK_SECRET_KEY is not set");
-    return null;
-  }
-
-  // Try primary (production) key first.
-  if (secretKey) {
-    try {
-      const payload = await verifyToken(token, { secretKey });
-      return typeof payload.sub === "string" ? payload.sub : null;
-    } catch {
-      // Fall through to dev key if available.
-    }
-  }
-
-  // Fall back to dev Clerk instance key (Replit preview uses DEV_CLERK_KEY).
-  if (devSecretKey && devSecretKey !== secretKey) {
-    try {
-      const payload = await verifyToken(token, { secretKey: devSecretKey });
-      return typeof payload.sub === "string" ? payload.sub : null;
-    } catch (err) {
-      console.error("[requireAuth] JWT verification failed:", (err as Error).message);
-    }
-  }
-
-  return null;
-}
-
-/**
- * Extract the Bearer token from the Authorization header.
- */
-function extractToken(req: Request): string | null {
-  const header = req.headers["authorization"];
-  if (!header) return null;
-  const match = header.match(/^Bearer\s+(.+)$/i);
-  return match ? match[1] : null;
-}
-
 export const requireAuth = async (
   req: Request,
   res: Response,
   next: NextFunction,
 ): Promise<void> => {
-  const token = extractToken(req);
-
-  if (!token) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-
-  const clerkId = await verifyClerkToken(token);
+  const { userId: clerkId } = getAuth(req);
 
   if (!clerkId) {
     res.status(401).json({ error: "Unauthorized" });
@@ -91,9 +29,6 @@ export const requireAuth = async (
 
   req.clerkId = clerkId;
 
-  // Use upsert to avoid a race condition where two concurrent requests for a
-  // brand-new user both see no row and both attempt INSERT, causing the second
-  // one to fail with a unique-constraint violation.
   const inserted = await db
     .insert(usersTable)
     .values({ clerkId, role: "parent" })
@@ -119,8 +54,6 @@ export const requireAuth = async (
       .filter(Boolean) as string[],
   );
 
-  // Fetch email + fullName from Clerk for any user whose email or fullName is
-  // not yet stored. Covers brand-new inserts and rows created before sync was added.
   let resolvedEmail = user.email ?? null;
   const needsClerkSync = (!resolvedEmail || !user.fullName) && user.role !== "admin";
   if (needsClerkSync) {
@@ -153,8 +86,6 @@ export const requireAuth = async (
     }
   }
 
-  // Self-heal: ensure the admin account always has role=admin regardless of
-  // how they log in (email+password or Google OAuth) and in both dev/prod.
   const isAdmin =
     adminClerkIdSet.has(clerkId) ||
     (resolvedEmail != null && resolvedEmail === adminEmail);
@@ -175,10 +106,6 @@ export const requireAuth = async (
   next();
 };
 
-/**
- * Middleware that requires the user to have one of the specified roles.
- * Must be used AFTER requireAuth.
- */
 export function requireRole(...roles: UserRole[]) {
   return (_req: Request, res: Response, next: NextFunction): void => {
     const req = _req;
@@ -195,20 +122,17 @@ export const optionalAuth = async (
   _res: Response,
   next: NextFunction,
 ): Promise<void> => {
-  const token = extractToken(req);
+  const { userId: clerkId } = getAuth(req);
 
-  if (token) {
-    const clerkId = await verifyClerkToken(token);
-    if (clerkId) {
-      req.clerkId = clerkId;
-      const [user] = await db
-        .select()
-        .from(usersTable)
-        .where(eq(usersTable.clerkId, clerkId));
-      if (user) {
-        req.userId = user.id;
-        req.userRole = user.role as UserRole;
-      }
+  if (clerkId) {
+    req.clerkId = clerkId;
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.clerkId, clerkId));
+    if (user) {
+      req.userId = user.id;
+      req.userRole = user.role as UserRole;
     }
   }
 

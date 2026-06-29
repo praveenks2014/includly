@@ -1,8 +1,7 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, useClerk, useAuth } from "@clerk/react";
-import { setAuthTokenGetter } from "@workspace/api-client-react";
-import { setFetchAuthTokenGetter } from "@/lib/api";
+import { publishableKeyFromHost } from "@clerk/react/internal";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, useRef } from "react";
@@ -40,16 +39,22 @@ import ProfessionalDashboard from "@/pages/professional-dashboard";
 import CentreDashboard from "@/pages/centre-dashboard";
 import ChildOnboardingPage from "@/pages/onboarding-child";
 
-// Production live keys are domain-locked to includly.in and cannot load on
-// the Replit dev preview domain. Use the test key in dev so the preview works.
-const DEV_CLERK_KEY = "pk_test_Y2hvaWNlLWxpb24tNTcuY2xlcmsuYWNjb3VudHMuZGV2JA";
+// REQUIRED — copy verbatim per Replit-managed Clerk skill.
+// Resolves the key from window.location.hostname so the same build serves
+// multiple Clerk custom domains. Do not inline the env var or hardcode keys.
+const clerkPubKey = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
 
-// Hardcoded prod key (encodes clerk.includly.in — safe to commit, it's public).
-// Do NOT read VITE_CLERK_PUBLISHABLE_KEY here: an external Clerk integration
-// secret can inject a stale www.includly.in key that overrides the correct value.
-const PROD_CLERK_KEY = "pk_live_Y2xlcmsuaW5jbHVkbHkuaW4k";
+// REQUIRED — empty in dev (Clerk hits dev FAPI directly), auto-set in prod.
+// Do NOT gate on import.meta.env.PROD / NODE_ENV — the empty dev value is
+// intentional, and any branching breaks the prod proxy.
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 
-const clerkPubKey = import.meta.env.DEV ? DEV_CLERK_KEY : PROD_CLERK_KEY;
+if (!clerkPubKey) {
+  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
+}
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -67,22 +72,6 @@ const queryClient = new QueryClient({
     },
   },
 });
-
-function ClerkAuthBridge() {
-  const { getToken } = useAuth();
-
-  useEffect(() => {
-    const getter = () => getToken();
-    setAuthTokenGetter(getter);
-    setFetchAuthTokenGetter(getter);
-    return () => {
-      setAuthTokenGetter(null);
-      setFetchAuthTokenGetter(null);
-    };
-  }, [getToken]);
-
-  return null;
-}
 
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();
@@ -555,8 +544,9 @@ function ClerkProviderWithRoutes() {
   return (
     <ClerkProvider
       publishableKey={clerkPubKey}
-      signInUrl="/sign-in"
-      signUpUrl="/sign-up"
+      proxyUrl={clerkProxyUrl}
+      signInUrl={`${basePath}/sign-in`}
+      signUpUrl={`${basePath}/sign-up`}
       signInFallbackRedirectUrl="/dashboard"
       signUpFallbackRedirectUrl="/onboarding"
       routerPush={(to) => {
@@ -575,7 +565,6 @@ function ClerkProviderWithRoutes() {
       }}
     >
       <QueryClientProvider client={queryClient}>
-        <ClerkAuthBridge />
         <ClerkQueryClientCacheInvalidator />
         <TooltipProvider>
           <Router />

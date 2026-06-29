@@ -1,9 +1,17 @@
-import express, { type Express, type Request, type Response, type NextFunction } from "express";
+import express, { type Express, type Request, type Response } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
+import { clerkMiddleware } from "@clerk/express";
+import { publishableKeyFromHost } from "@clerk/shared/keys";
+import {
+  CLERK_PROXY_PATH,
+  clerkProxyMiddleware,
+  getClerkProxyHost,
+} from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
 import webhooksRouter from "./routes/webhooks";
 import { logger } from "./lib/logger";
+
 const app: Express = express();
 
 app.use(
@@ -26,6 +34,8 @@ app.use(
   }),
 );
 
+app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+
 app.use(cors({ credentials: true, origin: true }));
 
 const WEBHOOK_PATHS = ["/api/webhooks/stripe", "/api/webhooks/razorpay", "/api/payments/razorpay/webhook"];
@@ -42,15 +52,14 @@ app.use(
 
 app.use(express.urlencoded({ extended: true }));
 
-// Redirect www → apex so Clerk loads from clerk.includly.in (the domain
-// the publishable key is configured for) without any proxy needed.
-app.use((req: Request, res: Response, next: NextFunction) => {
-  if (req.hostname === "www.includly.in") {
-    const proto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim() ?? "https";
-    return res.redirect(301, `${proto}://includly.in${req.url}`);
-  }
-  next();
-});
+app.use(
+  clerkMiddleware((req) => ({
+    publishableKey: publishableKeyFromHost(
+      getClerkProxyHost(req) ?? "",
+      process.env.CLERK_PUBLISHABLE_KEY,
+    ),
+  })),
+);
 
 app.use("/api", webhooksRouter);
 app.use("/api", router);

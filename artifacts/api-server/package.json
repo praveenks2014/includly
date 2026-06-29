@@ -12,8 +12,8 @@
     "seed:demos": "node ./build-seed-demos.mjs && node --enable-source-maps ./dist/seed-demo-profiles.mjs"
   },
   "dependencies": {
-    "@clerk/backend": "^3.8.3",
-    "@clerk/express": "^2.1.9",
+    "@clerk/express": "^2.1.32",
+    "@clerk/shared": "^4.22.0",
     "@google-cloud/storage": "^7.19.0",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
