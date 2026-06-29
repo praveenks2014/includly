@@ -1,0 +1,176 @@
+index-BgKl2uLY.js:23  GET https://clerk.includly.in/npm/@clerk/clerk-js@6/dist/clerk.browser.js net::ERR_NAME_NOT_RESOLVED
+(anonymous) @ index-BgKl2uLY.js:23
+G6.oX.shouldRetry @ index-BgKl2uLY.js:23
+oX @ index-BgKl2uLY.js:23
+G6 @ index-BgKl2uLY.js:23
+xX @ index-BgKl2uLY.js:23
+getClerkJsEntryChunk @ index-BgKl2uLY.js:23
+getEntryChunks @ index-BgKl2uLY.js:23
+ez @ index-BgKl2uLY.js:23
+getOrCreateInstance @ index-BgKl2uLY.js:23
+MX @ index-BgKl2uLY.js:23
+kX @ index-BgKl2uLY.js:23
+qy @ index-BgKl2uLY.js:8
+av @ index-BgKl2uLY.js:8
+FE @ index-BgKl2uLY.js:8
+gO @ index-BgKl2uLY.js:8
+bH @ index-BgKl2uLY.js:8
+Ev @ index-BgKl2uLY.js:8
+dO @ index-BgKl2uLY.js:8
+OO @ index-BgKl2uLY.js:8
+P @ index-BgKl2uLY.js:1
+postMessage
+z @ index-BgKl2uLY.js:1
+e.unstable_scheduleCallback @ index-BgKl2uLY.js:1
+EO @ index-BgKl2uLY.js:8
+AO @ index-BgKl2uLY.js:8
+(anonymous) @ index-BgKl2uLY.js:8
+index-BgKl2uLY.js:23  GET https://clerk.includly.in/npm/@clerk/clerk-js@6/dist/clerk.browser.js net::ERR_NAME_NOT_RESOLVED
+(anonymous) @ index-BgKl2uLY.js:23
+G6.oX.shouldRetry @ index-BgKl2uLY.js:23
+oX @ index-BgKl2uLY.js:23
+await in oX
+G6 @ index-BgKl2uLY.js:23
+xX @ index-BgKl2uLY.js:23
+getClerkJsEntryChunk @ index-BgKl2uLY.js:23
+getEntryChunks @ index-BgKl2uLY.js:23
+ez @ index-BgKl2uLY.js:23
+getOrCreateInstance @ index-BgKl2uLY.js:23
+MX @ index-BgKl2uLY.js:23
+kX @ index-BgKl2uLY.js:23
+qy @ index-BgKl2uLY.js:8
+av @ index-BgKl2uLY.js:8
+FE @ index-BgKl2uLY.js:8
+gO @ index-BgKl2uLY.js:8
+bH @ index-BgKl2uLY.js:8
+Ev @ index-BgKl2uLY.js:8
+dO @ index-BgKl2uLY.js:8
+OO @ index-BgKl2uLY.js:8
+P @ index-BgKl2uLY.js:1
+postMessage
+z @ index-BgKl2uLY.js:1
+e.unstable_scheduleCallback @ index-BgKl2uLY.js:1
+EO @ index-BgKl2uLY.js:8
+AO @ index-BgKl2uLY.js:8
+(anonymous) @ index-BgKl2uLY.js:8
+index-BgKl2uLY.js:23  GET https://clerk.includly.in/npm/@clerk/clerk-js@6/dist/clerk.browser.js net::ERR_NAME_NOT_RESOLVED
+(anonymous) @ index-BgKl2uLY.js:23
+G6.oX.shouldRetry @ index-BgKl2uLY.js:23
+oX @ index-BgKl2uLY.js:23
+await in oX
+G6 @ index-BgKl2uLY.js:23
+xX @ index-BgKl2uLY.js:23
+getClerkJsEntryChunk @ index-BgKl2uLY.js:23
+getEntryChunks @ index-BgKl2uLY.js:23
+ez @ index-BgKl2uLY.js:23
+getOrCreateInstance @ index-BgKl2uLY.js:23
+MX @ index-BgKl2uLY.js:23
+kX @ index-BgKl2uLY.js:23
+qy @ index-BgKl2uLY.js:8
+av @ index-BgKl2uLY.js:8
+FE @ index-BgKl2uLY.js:8
+gO @ index-BgKl2uLY.js:8
+bH @ index-BgKl2uLY.js:8
+Ev @ index-BgKl2uLY.js:8
+dO @ index-BgKl2uLY.js:8
+OO @ index-BgKl2uLY.js:8
+P @ index-BgKl2uLY.js:1
+postMessage
+z @ index-BgKl2uLY.js:1
+e.unstable_scheduleCallback @ index-BgKl2uLY.js:1
+EO @ index-BgKl2uLY.js:8
+AO @ index-BgKl2uLY.js:8
+(anonymous) @ index-BgKl2uLY.js:8
+index-BgKl2uLY.js:23  GET https://clerk.includly.in/npm/@clerk/clerk-js@6/dist/clerk.browser.js net::ERR_NAME_NOT_RESOLVED
+(anonymous) @ index-BgKl2uLY.js:23
+G6.oX.shouldRetry @ index-BgKl2uLY.js:23
+oX @ index-BgKl2uLY.js:23
+await in oX
+G6 @ index-BgKl2uLY.js:23
+xX @ index-BgKl2uLY.js:23
+getClerkJsEntryChunk @ index-BgKl2uLY.js:23
+getEntryChunks @ index-BgKl2uLY.js:23
+ez @ index-BgKl2uLY.js:23
+getOrCreateInstance @ index-BgKl2uLY.js:23
+MX @ index-BgKl2uLY.js:23
+kX @ index-BgKl2uLY.js:23
+qy @ index-BgKl2uLY.js:8
+av @ index-BgKl2uLY.js:8
+FE @ index-BgKl2uLY.js:8
+gO @ index-BgKl2uLY.js:8
+bH @ index-BgKl2uLY.js:8
+Ev @ index-BgKl2uLY.js:8
+dO @ index-BgKl2uLY.js:8
+OO @ index-BgKl2uLY.js:8
+P @ index-BgKl2uLY.js:1
+postMessage
+z @ index-BgKl2uLY.js:1
+e.unstable_scheduleCallback @ index-BgKl2uLY.js:1
+EO @ index-BgKl2uLY.js:8
+AO @ index-BgKl2uLY.js:8
+(anonymous) @ index-BgKl2uLY.js:8
+index-BgKl2uLY.js:23  GET https://clerk.includly.in/npm/@clerk/clerk-js@6/dist/clerk.browser.js net::ERR_INTERNET_DISCONNECTED
+(anonymous) @ index-BgKl2uLY.js:23
+G6.oX.shouldRetry @ index-BgKl2uLY.js:23
+oX @ index-BgKl2uLY.js:23
+await in oX
+G6 @ index-BgKl2uLY.js:23
+xX @ index-BgKl2uLY.js:23
+getClerkJsEntryChunk @ index-BgKl2uLY.js:23
+getEntryChunks @ index-BgKl2uLY.js:23
+ez @ index-BgKl2uLY.js:23
+getOrCreateInstance @ index-BgKl2uLY.js:23
+MX @ index-BgKl2uLY.js:23
+kX @ index-BgKl2uLY.js:23
+qy @ index-BgKl2uLY.js:8
+av @ index-BgKl2uLY.js:8
+FE @ index-BgKl2uLY.js:8
+gO @ index-BgKl2uLY.js:8
+bH @ index-BgKl2uLY.js:8
+Ev @ index-BgKl2uLY.js:8
+dO @ index-BgKl2uLY.js:8
+OO @ index-BgKl2uLY.js:8
+P @ index-BgKl2uLY.js:1
+postMessage
+z @ index-BgKl2uLY.js:1
+e.unstable_scheduleCallback @ index-BgKl2uLY.js:1
+EO @ index-BgKl2uLY.js:8
+AO @ index-BgKl2uLY.js:8
+(anonymous) @ index-BgKl2uLY.js:8
+icon.png:1  GET https://www.includly.in/icon.png net::ERR_QUIC_PROTOCOL_ERROR 200 (OK)
+index-BgKl2uLY.js:23  GET https://clerk.includly.in/npm/@clerk/clerk-js@6/dist/clerk.browser.js net::ERR_INTERNET_DISCONNECTED
+(anonymous) @ index-BgKl2uLY.js:23
+G6.oX.shouldRetry @ index-BgKl2uLY.js:23
+oX @ index-BgKl2uLY.js:23
+await in oX
+G6 @ index-BgKl2uLY.js:23
+xX @ index-BgKl2uLY.js:23
+getClerkJsEntryChunk @ index-BgKl2uLY.js:23
+getEntryChunks @ index-BgKl2uLY.js:23
+ez @ index-BgKl2uLY.js:23
+getOrCreateInstance @ index-BgKl2uLY.js:23
+MX @ index-BgKl2uLY.js:23
+kX @ index-BgKl2uLY.js:23
+qy @ index-BgKl2uLY.js:8
+av @ index-BgKl2uLY.js:8
+FE @ index-BgKl2uLY.js:8
+gO @ index-BgKl2uLY.js:8
+bH @ index-BgKl2uLY.js:8
+Ev @ index-BgKl2uLY.js:8
+dO @ index-BgKl2uLY.js:8
+OO @ index-BgKl2uLY.js:8
+P @ index-BgKl2uLY.js:1
+postMessage
+z @ index-BgKl2uLY.js:1
+e.unstable_scheduleCallback @ index-BgKl2uLY.js:1
+EO @ index-BgKl2uLY.js:8
+AO @ index-BgKl2uLY.js:8
+(anonymous) @ index-BgKl2uLY.js:8
+index-BgKl2uLY.js:23 Uncaught (in promise) b6: Clerk: Failed to load Clerk JS, failed to load script: https://clerk.includly.in/npm/@clerk/clerk-js@6/dist/clerk.browser.js
+
+(code="failed_to_load_clerk_js")
+
+
+    at n (index-BgKl2uLY.js:23:3400)
+    at index-BgKl2uLY.js:23:3874Caused by: Error: failed to load script: https://clerk.includly.in/npm/@clerk/clerk-js@6/dist/clerk.browser.js
+    at HTMLScriptElement.<anonymous> (index-BgKl2uLY.js:23:2091)
