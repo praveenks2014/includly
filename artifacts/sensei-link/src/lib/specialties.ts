@@ -118,3 +118,26 @@ export function getCoachingSubTypeLabel(subType: string): string {
 export function getCoachingSubTypeIcon(subType: string): LucideIcon {
   return COACHING_SUB_TYPE_ICONS[subType] ?? Trophy;
 }
+
+export type ProfessionalVertical =
+  | 'shadow_teacher'
+  | 'tutor'
+  | 'therapist'
+  | 'coaching'
+  | 'centre';
+
+const SPECIALTY_TO_VERTICAL: Record<string, ProfessionalVertical> = {
+  shadow_teacher:             'shadow_teacher',
+  special_tutor:              'tutor',
+  speech_therapy:             'therapist',
+  occupational_therapy:       'therapist',
+  psychiatrist:               'therapist',
+  developmental_pediatrician: 'therapist',
+  neurologist:                'therapist',
+  coaching:                   'coaching',
+  therapy_centre:             'centre',
+};
+
+export function specialtyToVertical(specialty: string): ProfessionalVertical {
+  return SPECIALTY_TO_VERTICAL[specialty] ?? 'therapist';
+}
