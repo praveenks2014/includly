@@ -1,0 +1,61 @@
+BUILD — Step 3: Stage 2 — VERTICAL-SPECIFIC onboarding forms. This is
+where each vertical asks only its relevant questions. Do NOT touch
+auth/payments/parent dashboard. Plan first.
+
+Branch Stage 2 on professionals.vertical. Each writes to vertical_details
+(and compliance columns where noted). Ask ONLY these per vertical — remove
+the old generic clinical questions for shadow teachers.
+
+=== SHADOW TEACHER (light-touch) ===
+1. "Have you completed a shadow-teacher / special-needs training course?"
+   (yes/no) → if yes, institute name (optional)
+2. Highest education: 10th / 12th / Graduate / Postgraduate
+   → if Graduate+, field of study (optional; hint: Psychology, Education)
+3. ABA credential: None / RBT / ABAT / Other (optional)
+4. Conditions you can support (multi-select): Autism (ASD), ADHD,
+   Dyslexia, Dyscalculia, Dysgraphia, Intellectual disability,
+   Speech delay, Other
+5. Where you work: In school / At home (multi-select)
+6. Grade levels: Preschool / Primary / Middle / High (multi-select)
+7. Certifications upload (optional): training certificate, any others
+NOTE: Do NOT require RCI/CRR for shadow teachers. Do NOT ask clinical
+intake questions meant for therapists.
+
+=== HOME TUTOR (academic) ===
+1. Subjects taught (multi-select)
+2. Boards: CBSE / ICSE / State / IB / IGCSE (multi-select)
+3. Grade levels (multi-select)
+4. Mode: At home / Online (multi-select)
+5. "Do you have experience teaching children with special needs?" (yes/no)
+6. Certifications upload (optional)
+NOTE: No special-needs credential required for tutors.
+
+=== THERAPIST / SPECIAL EDUCATOR (regulated — strict) ===
+1. Discipline: Speech therapy / Occupational therapy /
+   Behavioural (ABA) / Special education / Clinical psychology / Other
+2. "Are you registered with the Rehabilitation Council of India (RCI)?"
+   (yes/no). Explain inline: "Therapists and special educators in India
+   are legally required to be RCI-registered with a CRR number."
+   → If NO: show a soft block — "An RCI/CRR registration is required to
+     offer therapy services on Includly." Allow them to save as draft but
+     mark profile as not-listable until provided.
+   → If YES: require CRR number (text). Store in rci_crr_number AND
+     vertical_details.crrNumber.
+3. Qualifications/degrees (multi-select or add-your-own)
+4. Conditions treated (multi-select)
+5. Settings: Clinic / At home / Online (multi-select)
+6. Age groups: Toddler / Child / Teen (multi-select)
+7. Certifications + RCI certificate upload (required for therapists)
+
+Cross-cutting:
+- A professional's profile is "listable / visible to parents" only when
+  its vertical's required fields are complete (therapist: CRR present;
+  shadow teacher/tutor: core fields present). Add a computed
+  `profileComplete` / `listable` flag.
+- Save drafts per step.
+- Reuse a shared multi-select chip component across all three forms for
+  consistency.
+
+Show me: the three form components, how branching works, and the
+listable-flag logic — BEFORE deploying. Keep each form to only the
+questions above.
