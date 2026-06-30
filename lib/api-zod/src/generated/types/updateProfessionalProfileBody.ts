@@ -33,4 +33,10 @@ export interface UpdateProfessionalProfileBody {
   languages?: string[];
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
   upiId?: string;
+  /** Vertical-specific Stage 2 answers (deep-merged on server) */
+  verticalDetails?: Record<string, unknown>;
+  /** RCI CRR number for therapists — required to appear in search */
+  rciCrrNumber?: string;
+  /** Uploaded certification documents */
+  certifications?: Record<string, unknown>[];
 }
