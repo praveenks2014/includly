@@ -36,6 +36,34 @@ router.get("/settings/public", async (_req, res): Promise<void> => {
   });
 });
 
+type VerticalValue = "shadow_teacher" | "home_tutor" | "therapist";
+
+function computeProfileComplete(profile: {
+  fullName: string | null | undefined;
+  vertical: VerticalValue;
+  verticalDetails: unknown;
+  rciCrrNumber: string | null | undefined;
+}): boolean {
+  if (!profile.fullName) return false;
+  const vd = (profile.verticalDetails ?? {}) as Record<string, unknown>;
+  const arr = (k: string) => Array.isArray(vd[k]) && (vd[k] as unknown[]).length > 0;
+  switch (profile.vertical) {
+    case "shadow_teacher":
+      return !!(vd.highestEducation && arr("conditionsSupported") && arr("settings") && arr("gradeLevels"));
+    case "home_tutor":
+      return !!(arr("subjects") && arr("boards") && arr("gradeLevels"));
+    case "therapist":
+      return !!(
+        vd.discipline &&
+        vd.rciRegistered === true &&
+        profile.rciCrrNumber &&
+        arr("conditionsTreated")
+      );
+    default:
+      return false;
+  }
+}
+
 router.get("/professionals/me", requireAuth, async (req, res): Promise<void> => {
   const [profile] = await db
     .select()
@@ -47,7 +75,8 @@ router.get("/professionals/me", requireAuth, async (req, res): Promise<void> => 
     return;
   }
 
-  res.json(GetMyProfessionalProfileResponse.parse(profile));
+  const profileComplete = computeProfileComplete(profile);
+  res.json(GetMyProfessionalProfileResponse.parse({ ...profile, profileComplete }));
 });
 
 router.post("/professionals/me", requireAuth, async (req, res): Promise<void> => {
@@ -85,11 +114,13 @@ router.post("/professionals/me", requireAuth, async (req, res): Promise<void> =>
     .insert(professionalProfilesTable)
     .values({
       userId: req.userId!,
+      vertical: "shadow_teacher" as const,
       ...parsed.data,
     })
     .returning();
 
-  res.status(201).json(GetMyProfessionalProfileResponse.parse(profile));
+  const profileComplete = computeProfileComplete(profile);
+  res.status(201).json(GetMyProfessionalProfileResponse.parse({ ...profile, profileComplete }));
 });
 
 router.patch("/professionals/me", requireAuth, requireRole("professional", "admin"), async (req, res): Promise<void> => {
@@ -107,12 +138,15 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
   // Enforce home-visit specialty invariant
   const HOME_VISIT_SPECIALTIES = ["shadow_teacher", "special_tutor", "occupational_therapy", "speech_therapy", "coaching"];
   const [existing] = await db
-    .select({ specialty: professionalProfilesTable.specialty, offersHomeVisits: professionalProfilesTable.offersHomeVisits })
+    .select({
+      specialty: professionalProfilesTable.specialty,
+      offersHomeVisits: professionalProfilesTable.offersHomeVisits,
+      verticalDetails: professionalProfilesTable.verticalDetails,
+    })
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.userId, req.userId!));
 
   if (parsed.data.offersHomeVisits === true) {
-    // Reject explicit attempt to enable home visits on ineligible specialty
     const effectiveSpecialty = parsed.data.specialty ?? existing?.specialty;
     if (!effectiveSpecialty || !HOME_VISIT_SPECIALTIES.includes(effectiveSpecialty)) {
       res.status(400).json({ error: "Home visits are only available for Shadow Teachers, Special Educators, Occupational Therapists, Speech Therapists, and Coaches." });
@@ -120,9 +154,10 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
     }
   }
 
-  // If specialty is changing to a non-eligible one while offersHomeVisits is currently true, auto-disable it
-  const { avatarUrl, ...profileData } = parsed.data;
-  const updateData = { ...profileData };
+  const { avatarUrl, verticalDetails: incomingVd, ...profileData } = parsed.data;
+  const updateData: typeof profileData & { offersHomeVisits?: boolean; verticalDetails?: unknown } = { ...profileData };
+
+  // Auto-disable home visits if specialty is changing to ineligible
   if (
     parsed.data.specialty &&
     !HOME_VISIT_SPECIALTIES.includes(parsed.data.specialty) &&
@@ -130,6 +165,12 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
     parsed.data.offersHomeVisits !== false
   ) {
     updateData.offersHomeVisits = false;
+  }
+
+  // Deep-merge verticalDetails so per-screen saves don't wipe earlier screens
+  if (incomingVd !== undefined) {
+    const existingVd = (existing?.verticalDetails ?? {}) as Record<string, unknown>;
+    updateData.verticalDetails = { ...existingVd, ...(incomingVd as Record<string, unknown>) };
   }
 
   const [profile] = await db
@@ -157,7 +198,8 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
     void notifyParentsOnProfileUpdate(parentIds).catch(() => {});
   }
 
-  res.json(UpdateProfessionalProfileResponse.parse(profile));
+  const profileComplete = computeProfileComplete(profile);
+  res.json(UpdateProfessionalProfileResponse.parse({ ...profile, profileComplete }));
 });
 
 router.get("/professionals/search", optionalAuth, async (req, res): Promise<void> => {

@@ -102,6 +102,7 @@ export const ProfessionalProfileSpecialty = {
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
   therapy_centre: "therapy_centre",
+  coaching: "coaching",
 } as const;
 
 export type ProfessionalProfileVerificationStatus =
@@ -171,6 +172,16 @@ export interface ProfessionalProfile {
   specializationTags?: string[];
   /** @nullable */
   rejectionReason?: string | null;
+  languages?: string[] | null;
+  /** @nullable */
+  vertical?: "shadow_teacher" | "home_tutor" | "therapist" | null;
+  /** @nullable */
+  verticalDetails?: Record<string, unknown> | null;
+  /** @nullable */
+  rciCrrNumber?: string | null;
+  certifications?: Record<string, unknown>[] | null;
+  profileComplete: boolean;
+  coachingSubType?: string | null;
   createdAt: string;
 }
 
@@ -323,6 +334,7 @@ export interface CreateProfessionalProfileBody {
   /** Has experience coaching children with special needs */
   inclusiveExperience?: boolean;
   specializationTags?: string[];
+  vertical?: "shadow_teacher" | "home_tutor" | "therapist";
 }
 
 export type UpdateProfessionalProfileBodySpecialty =
@@ -369,6 +381,12 @@ export interface UpdateProfessionalProfileBody {
   /** Has experience coaching children with special needs */
   inclusiveExperience?: boolean;
   specializationTags?: string[];
+  languages?: string[];
+  avatarUrl?: string;
+  vertical?: "shadow_teacher" | "home_tutor" | "therapist";
+  verticalDetails?: Record<string, unknown>;
+  rciCrrNumber?: string;
+  certifications?: Record<string, unknown>[];
 }
 
 export interface Rating {

@@ -3,6 +3,12 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 
+export const professionalVerticalEnum = pgEnum("professional_vertical", [
+  "shadow_teacher",
+  "home_tutor",
+  "therapist",
+]);
+
 export const specialtyEnum = pgEnum("specialty", [
   "shadow_teacher",
   "special_tutor",
@@ -69,9 +75,11 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   coachingSubType: coachingSubTypeEnum("coaching_sub_type"),
   inclusiveExperience: boolean("inclusive_experience").notNull().default(false),
   languages: text("languages").array(),
+  vertical: professionalVerticalEnum("vertical").notNull(),
   verticalDetails: json("vertical_details"),
   rciCrrNumber: text("rci_crr_number"),
   rciVerified: boolean("rci_verified").notNull().default(false),
+  certifications: json("certifications"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

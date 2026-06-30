@@ -16,68 +16,118 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { SPECIALTY_OPTIONS, SPECIALTY_ICONS, SPECIALTY_ICON_COLORS, COACHING_SUB_TYPE_OPTIONS, COACHING_SUB_TYPE_ICONS } from "@/lib/specialties";
-import { Loader2, CheckCircle2, IndianRupee, Heart } from "lucide-react";
 import { LocationPicker, type PickedLocation } from "@/components/LocationPicker";
+import {
+  Loader2,
+  CheckCircle2,
+  IndianRupee,
+  ChevronRight,
+  ChevronLeft,
+  ArrowRight,
+} from "lucide-react";
+
+const STEPS = ["Role", "About you", "Languages", "Location", "Pricing"];
+
+const VERTICAL_CARDS = [
+  {
+    value: "shadow_teacher",
+    emoji: "🧑‍🏫",
+    title: "Shadow Teacher",
+    desc: "I support children with special needs inside school, helping them participate in mainstream classrooms.",
+    bg: "bg-teal-50",
+    accent: "border-teal-500 ring-teal-200",
+    iconBg: "bg-teal-100",
+  },
+  {
+    value: "home_tutor",
+    emoji: "📚",
+    title: "Home Tutor",
+    desc: "I teach academic subjects to children with learning differences at home, at their pace.",
+    bg: "bg-blue-50",
+    accent: "border-blue-500 ring-blue-200",
+    iconBg: "bg-blue-100",
+  },
+  {
+    value: "therapist",
+    emoji: "🩺",
+    title: "Therapist / Special Educator",
+    desc: "I provide speech, OT, behavioural (ABA), or special education therapy. RCI registration required.",
+    bg: "bg-violet-50",
+    accent: "border-violet-500 ring-violet-200",
+    iconBg: "bg-violet-100",
+  },
+] as const;
+
+type VerticalValue = (typeof VERTICAL_CARDS)[number]["value"];
+
+const VERTICAL_TO_SPECIALTY: Record<VerticalValue, CreateProfessionalProfileBodySpecialty> = {
+  shadow_teacher: "shadow_teacher",
+  home_tutor: "special_tutor",
+  therapist: "speech_therapy",
+};
+
+const LANGUAGE_OPTIONS = [
+  "English", "Hindi", "Tamil", "Telugu", "Kannada", "Malayalam",
+  "Marathi", "Bengali", "Gujarati", "Punjabi", "Odia", "Urdu",
+];
 
 const TRAVEL_RADIUS_OPTIONS = [5, 10, 25, 50];
-const STEPS = ["Basic info", "Details", "Location", "Contact", "Pricing"];
-
-const TAG_OPTIONS = [
-  "ADHD",
-  "Autism",
-  "Dyslexia",
-  "Cerebral Palsy",
-  "Down Syndrome",
-  "Speech Delay",
-  "Learning Disabilities",
-];
 
 export default function OnboardPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: existingProfile, isLoading } = useGetMyProfessionalProfile();
+  const { data: existingProfile, isLoading: profileLoading } = useGetMyProfessionalProfile();
+  const { data: me, isError: meError } = useGetMe();
 
   const [step, setStep] = useState(0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [vertical, setVertical] = useState<VerticalValue | "">(
+    (existingProfile?.vertical as VerticalValue | undefined) ?? ""
+  );
   const [form, setForm] = useState({
     fullName: existingProfile?.fullName ?? "",
-    specialty: existingProfile?.specialty ?? "",
     bio: existingProfile?.bio ?? "",
-    qualifications: existingProfile?.qualifications ?? "",
     yearsExperience: existingProfile?.yearsExperience?.toString() ?? "0",
+    languages: (existingProfile?.languages ?? []) as string[],
     city: existingProfile?.city ?? "",
     country: existingProfile?.country ?? "India",
     latitude: existingProfile?.latitude ?? undefined as number | undefined,
     longitude: existingProfile?.longitude ?? undefined as number | undefined,
     displayArea: existingProfile?.displayArea ?? "",
-    clinicAddress: existingProfile?.clinicAddress ?? "",
     willingToTravel: existingProfile?.willingToTravel ?? false,
     travelRadiusKm: existingProfile?.travelRadiusKm?.toString() ?? "10",
-    phone: existingProfile?.phone ?? "",
-    email: existingProfile?.email ?? "",
     pricingMinINR: existingProfile?.pricingMinINR?.toString() ?? "",
     pricingMaxINR: existingProfile?.pricingMaxINR?.toString() ?? "",
     upiId: existingProfile?.upiId ?? "",
-    centreRegistrationNo: "",
-    numTherapists: "",
-    specializationTags: (existingProfile?.specializationTags ?? []) as string[],
-    coachingSubType: (existingProfile as { coachingSubType?: string } | undefined)?.coachingSubType ?? "",
-    inclusiveExperience: (existingProfile as { inclusiveExperience?: boolean } | undefined)?.inclusiveExperience ?? false,
   });
 
-  const { data: me, isError: meError } = useGetMe();
+  const profileExists = useRef(!!existingProfile);
+
+  useEffect(() => {
+    if (existingProfile) {
+      profileExists.current = true;
+      if (existingProfile.vertical && !vertical) {
+        setVertical(existingProfile.vertical as VerticalValue);
+      }
+      setForm((prev) => ({
+        ...prev,
+        fullName: prev.fullName || existingProfile.fullName || "",
+        bio: prev.bio || existingProfile.bio || "",
+        yearsExperience: prev.yearsExperience !== "0" ? prev.yearsExperience : existingProfile.yearsExperience?.toString() ?? "0",
+        languages: prev.languages.length > 0 ? prev.languages : (existingProfile.languages ?? []),
+        city: prev.city || existingProfile.city || "",
+        country: prev.country || existingProfile.country || "India",
+        displayArea: prev.displayArea || existingProfile.displayArea || "",
+        pricingMinINR: prev.pricingMinINR || existingProfile.pricingMinINR?.toString() || "",
+        pricingMaxINR: prev.pricingMaxINR || existingProfile.pricingMaxINR?.toString() || "",
+        upiId: prev.upiId || existingProfile.upiId || "",
+      }));
+    }
+  }, [existingProfile]);
+
   const { mutateAsync: setMyRoleAsync } = useSetMyRole();
   const [roleReady, setRoleReady] = useState(false);
   const roleSetTriggered = useRef(false);
@@ -88,28 +138,30 @@ export default function OnboardPage() {
   }, []);
 
   useEffect(() => {
-    // If /users/me itself errors (e.g. transient 500), still unblock the form.
-    // POST /professionals/me sets the role server-side, so we don't need to
-    // block on the role-set call succeeding here.
     if (meError && !roleSetTriggered.current) {
       setRoleReady(true);
       return;
     }
     if (!me) return;
     if (roleSetTriggered.current) return;
+
+    if (me.role === "centre_admin") {
+      setLocation("/centre/overview", { replace: true });
+      return;
+    }
+
     if (me.role === "professional" || me.role === "admin") {
       setRoleReady(true);
       return;
     }
-    // User has role "parent" — only proceed if they explicitly chose
-    // "I'm a professional" on the choose-role page. Otherwise send them back
-    // to choose-role so they can make the choice themselves.
+
     const choseProf = sessionStorage.getItem("chose_professional");
     sessionStorage.removeItem("chose_professional");
     if (!choseProf) {
-      setLocation("/choose-role");
+      setLocation("/onboarding", { replace: true });
       return;
     }
+
     const isCentre = sessionStorage.getItem("is_therapy_centre") === "true";
     sessionStorage.removeItem("is_therapy_centre");
     if (isCentre) {
@@ -117,39 +169,50 @@ export default function OnboardPage() {
       setMyRoleAsync({ data: { role: "centre_admin" as "professional" } })
         .then(() => queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() }))
         .catch(() => { roleSetTriggered.current = false; })
-        .finally(() => { setRoleReady(true); setLocation("/centre-dashboard"); });
+        .finally(() => setLocation("/centre/overview", { replace: true }));
       return;
     }
+
     roleSetTriggered.current = true;
     setMyRoleAsync({ data: { role: "professional" } })
-      .then(() => {
-        queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
-      })
-      .catch(() => {
-        // Non-fatal: POST /professionals/me also sets the role server-side.
-        // Allow the user to proceed so they can fill in their profile.
-        roleSetTriggered.current = false;
-      })
-      .finally(() => {
-        setRoleReady(true);
-      });
-  }, [me]);
+      .then(() => queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() }))
+      .catch(() => { roleSetTriggered.current = false; })
+      .finally(() => setRoleReady(true));
+  }, [me, meError]);
 
   const createMutation = useMutation(getCreateProfessionalProfileMutationOptions());
   const updateMutation = useMutation(getUpdateProfessionalProfileMutationOptions());
 
-  if (isLoading || !roleReady) {
+  if (profileLoading || !roleReady) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3">
-        <Loader2 className="animate-spin text-primary" size={28} />
-        {!roleReady && me && me.role === "parent" && (
-          <p className="text-sm text-muted-foreground">Setting up your specialist account…</p>
-        )}
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="animate-spin text-teal-600" size={28} />
       </div>
     );
   }
 
-  function set(field: string, value: string | boolean | number | undefined) {
+  const isCoachingUser = existingProfile?.specialty === "coaching";
+
+  if (isCoachingUser) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="max-w-md w-full text-center space-y-6">
+          <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center mx-auto text-3xl">🏆</div>
+          <div>
+            <h2 className="text-xl font-serif font-semibold text-foreground mb-2">Coaching profiles</h2>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              Your coaching profile is managed separately from the new onboarding flow. Head to your dashboard to view and update your profile details.
+            </p>
+          </div>
+          <Button onClick={() => setLocation("/pro/today")} className="gap-2 bg-teal-600 hover:bg-teal-700 text-white">
+            Go to dashboard <ArrowRight size={16} />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  function setField(field: string, value: string | boolean | number | string[] | undefined) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
@@ -163,418 +226,340 @@ export default function OnboardPage() {
     }));
   }
 
-  function handleNext() {
-    if (step < STEPS.length - 1) setStep(step + 1);
+  function toggleLanguage(lang: string) {
+    setForm((prev) => ({
+      ...prev,
+      languages: prev.languages.includes(lang)
+        ? prev.languages.filter((l) => l !== lang)
+        : [...prev.languages, lang],
+    }));
   }
 
-  function handleBack() {
-    if (step > 0) setStep(step - 1);
-  }
-
-  async function handleSubmit() {
-    const qualificationsValue = isTherapyCentre
-      ? [
-          form.qualifications,
-          form.numTherapists ? `Staff: ${form.numTherapists} therapists` : "",
-          form.centreRegistrationNo ? `Reg. No: ${form.centreRegistrationNo}` : "",
-        ].filter(Boolean).join(" | ")
-      : form.qualifications;
-
-    const payload = {
-      fullName: form.fullName,
-      specialty: form.specialty as CreateProfessionalProfileBodySpecialty,
-      bio: form.bio,
-      qualifications: qualificationsValue,
-      yearsExperience: Number(form.yearsExperience),
-      city: form.city,
-      country: form.country,
-      displayArea: form.displayArea.trim() || undefined,
-      clinicAddress: form.clinicAddress.trim() || undefined,
-      latitude: form.latitude,
-      longitude: form.longitude,
-      willingToTravel: form.willingToTravel,
-      travelRadiusKm: form.willingToTravel ? Number(form.travelRadiusKm) : undefined,
-      phone: form.phone,
-      email: form.email,
-      pricingMinINR: form.pricingMinINR ? Number(form.pricingMinINR) : undefined,
-      pricingMaxINR: form.pricingMaxINR ? Number(form.pricingMaxINR) : undefined,
-      upiId: form.upiId.trim() || undefined,
-      specializationTags: form.specializationTags.length > 0 ? form.specializationTags : undefined,
-      coachingSubType: isCoach && form.coachingSubType ? form.coachingSubType : undefined,
-      inclusiveExperience: form.inclusiveExperience || undefined,
-    };
-
-    setIsSubmitting(true);
+  async function saveVertical() {
+    if (!vertical) return;
+    const specialty = VERTICAL_TO_SPECIALTY[vertical];
+    setIsSaving(true);
     try {
-      if (existingProfile) {
-        await updateMutation.mutateAsync({ data: payload });
+      if (!profileExists.current) {
+        await createMutation.mutateAsync({
+          data: {
+            vertical,
+            specialty,
+            fullName: "",
+            qualifications: "",
+            yearsExperience: 0,
+          },
+        });
+        profileExists.current = true;
       } else {
-        await createMutation.mutateAsync({ data: payload });
+        await updateMutation.mutateAsync({
+          data: { vertical, specialty },
+        });
       }
       queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
-
-      if (!existingProfile?.paymentActivated) {
-        const activateRes = await fetchWithAuth("/api/professionals/me/free-activate", { method: "POST" });
-        if (!activateRes.ok) {
-          const body = await activateRes.json().catch(() => ({}));
-          throw new Error((body as { error?: string }).error ?? "Activation failed");
-        }
-        queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
-        toast({
-          title: "Profile created & activated!",
-          description: "Next: upload your verification document from your dashboard to appear in search results.",
-        });
-      } else {
-        toast({ title: "Profile updated!" });
-      }
-      setTimeout(() => setLocation("/dashboard"), 1200);
+      setStep(1);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Something went wrong";
-      toast({ title: "Error", description: msg, variant: "destructive" });
+      const msg = err instanceof Error ? err.message : "Could not save — please try again.";
+      toast({ title: "Save failed", description: msg, variant: "destructive" });
     } finally {
-      setIsSubmitting(false);
+      setIsSaving(false);
     }
   }
 
-  const isTherapyCentre = form.specialty === "therapy_centre";
-  const isCoach = form.specialty === "coaching";
-  const isGeoFencedSpecialty = ["shadow_teacher", "special_tutor"].includes(form.specialty);
+  async function saveIdentity() {
+    setIsSaving(true);
+    try {
+      await updateMutation.mutateAsync({
+        data: {
+          fullName: form.fullName,
+          bio: form.bio || undefined,
+          yearsExperience: Number(form.yearsExperience),
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
+      setStep(2);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not save — please try again.";
+      toast({ title: "Save failed", description: msg, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function saveLanguages() {
+    setIsSaving(true);
+    try {
+      await updateMutation.mutateAsync({
+        data: { languages: form.languages },
+      });
+      queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
+      setStep(3);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not save — please try again.";
+      toast({ title: "Save failed", description: msg, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function saveLocation() {
+    setIsSaving(true);
+    try {
+      await updateMutation.mutateAsync({
+        data: {
+          city: form.city || undefined,
+          country: form.country || undefined,
+          latitude: form.latitude,
+          longitude: form.longitude,
+          displayArea: form.displayArea.trim() || undefined,
+          willingToTravel: form.willingToTravel,
+          travelRadiusKm: form.willingToTravel ? Number(form.travelRadiusKm) : undefined,
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
+      setStep(4);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not save — please try again.";
+      toast({ title: "Save failed", description: msg, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function savePricing() {
+    setIsSaving(true);
+    try {
+      await updateMutation.mutateAsync({
+        data: {
+          pricingMinINR: form.pricingMinINR ? Number(form.pricingMinINR) : undefined,
+          pricingMaxINR: form.pricingMaxINR ? Number(form.pricingMaxINR) : undefined,
+          upiId: form.upiId.trim() || undefined,
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
+      setLocation(`/onboarding/pro/stage2/${vertical}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not save — please try again.";
+      toast({ title: "Save failed", description: msg, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function handleContinue() {
+    if (step === 0) return saveVertical();
+    if (step === 1) return saveIdentity();
+    if (step === 2) return saveLanguages();
+    if (step === 3) return saveLocation();
+    if (step === 4) return savePricing();
+  }
+
+  function canAdvance(): boolean {
+    if (step === 0) return !!vertical;
+    if (step === 1) return !!form.fullName.trim();
+    return true;
+  }
+
+  const isEditing = !!existingProfile?.paymentActivated;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-xl mx-auto px-4 sm:px-6 py-10">
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-serif font-semibold text-foreground mb-1">
-            {existingProfile ? "Edit your profile" : "Set up your profile"}
+    <div className="min-h-screen bg-gradient-to-br from-[#f0faf8] via-[#f7fbf9] to-[#f0f4ff]">
+      <div className="flex justify-center pt-8 pb-2 shrink-0">
+        <a href="/" className="flex items-center gap-2">
+          <div className="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center shadow-sm">
+            <span className="text-white font-bold text-base">In</span>
+          </div>
+          <span className="font-serif font-semibold text-xl text-gray-900">
+            Includly<span className="text-teal-500 ml-0.5">·</span>
+          </span>
+        </a>
+      </div>
+
+      <div className="max-w-xl mx-auto px-4 sm:px-6 py-8">
+        <div className="mb-6 text-center">
+          <h1 className="text-2xl font-serif font-semibold text-gray-900 mb-1">
+            {isEditing ? "Edit your profile" : "Set up your profile"}
           </h1>
-          <p className="text-muted-foreground text-sm">Step {step + 1} of {STEPS.length}: {STEPS[step]}</p>
+          <p className="text-muted-foreground text-sm">
+            Step {step + 1} of {STEPS.length}: <span className="text-gray-700 font-medium">{STEPS[step]}</span>
+          </p>
         </div>
 
-        {/* Step progress */}
-        <div className="flex gap-2 mb-8">
-          {STEPS.map((s, i) => (
+        <div className="flex gap-1.5 mb-8">
+          {STEPS.map((_, i) => (
             <div
-              key={s}
-              className={`flex-1 h-1.5 rounded-full transition-colors ${i <= step ? "bg-primary" : "bg-muted"}`}
+              key={i}
+              className={`flex-1 h-1.5 rounded-full transition-colors ${i <= step ? "bg-teal-500" : "bg-gray-200"}`}
             />
           ))}
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-          {/* Step 0: Basic info */}
+        <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+
           {step === 0 && (
             <div className="space-y-4">
               <div>
-                <Label className="mb-2 block">Primary specialty</Label>
-                <div className="grid grid-cols-2 gap-2" data-testid="select-specialty">
-                  {SPECIALTY_OPTIONS.map((opt) => {
-                    const Icon = SPECIALTY_ICONS[opt.value] ?? CheckCircle2;
-                    const selected = form.specialty === opt.value;
-                    const colorClass = SPECIALTY_ICON_COLORS[opt.value] ?? "text-primary bg-primary/10";
+                <h2 className="text-lg font-semibold text-gray-900 mb-1">What kind of professional are you?</h2>
+                <p className="text-sm text-gray-500 mb-4">Choose your primary role — you can update this later.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {VERTICAL_CARDS.slice(0, 2).map((card) => {
+                    const selected = vertical === card.value;
                     return (
                       <button
-                        key={opt.value}
+                        key={card.value}
                         type="button"
-                        onClick={() => {
-                          set("specialty", opt.value);
-                          setForm((prev) => ({
-                            ...prev,
-                            specialty: opt.value,
-                            specializationTags: prev.specializationTags.filter(
-                              (t) => !t.startsWith("specialty:") || t === `specialty:${opt.value}`
-                            ).filter((t) => t !== `specialty:${opt.value}`),
-                          }));
-                        }}
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium text-left transition-all ${
+                        onClick={() => setVertical(card.value)}
+                        className={`relative text-left rounded-2xl p-5 border-2 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 ${
                           selected
-                            ? "border-primary bg-primary/10 text-primary shadow-sm"
-                            : "border-border bg-background text-foreground hover:border-primary/50"
+                            ? `${card.accent} ring-2 shadow-md bg-white`
+                            : "border-gray-100 hover:border-gray-300 bg-white hover:shadow-sm"
                         }`}
-                        data-testid={`specialty-card-${opt.value}`}
+                        data-testid={`vertical-card-${card.value}`}
                       >
-                        <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${colorClass}`}>
-                          <Icon size={15} />
-                        </span>
-                        <span className="leading-tight">{opt.label}</span>
-                        {selected && <CheckCircle2 size={14} className="ml-auto text-primary shrink-0" />}
+                        {selected && (
+                          <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-teal-500 flex items-center justify-center">
+                            <CheckCircle2 size={14} className="text-white" strokeWidth={3} />
+                          </div>
+                        )}
+                        <div className={`w-12 h-12 ${card.iconBg} rounded-xl flex items-center justify-center text-2xl mb-3`}>
+                          {card.emoji}
+                        </div>
+                        <h3 className={`font-semibold text-sm mb-1 ${selected ? "text-teal-700" : "text-gray-900"}`}>
+                          {card.title}
+                        </h3>
+                        <p className="text-xs text-gray-500 leading-relaxed">{card.desc}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-3">
+                  {VERTICAL_CARDS.slice(2).map((card) => {
+                    const selected = vertical === card.value;
+                    return (
+                      <button
+                        key={card.value}
+                        type="button"
+                        onClick={() => setVertical(card.value)}
+                        className={`relative w-full text-left rounded-2xl p-5 border-2 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 ${
+                          selected
+                            ? `${card.accent} ring-2 shadow-md bg-white`
+                            : "border-gray-100 hover:border-gray-300 bg-white hover:shadow-sm"
+                        }`}
+                        data-testid={`vertical-card-${card.value}`}
+                      >
+                        {selected && (
+                          <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-teal-500 flex items-center justify-center">
+                            <CheckCircle2 size={14} className="text-white" strokeWidth={3} />
+                          </div>
+                        )}
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 ${card.iconBg} rounded-xl flex items-center justify-center text-2xl shrink-0`}>
+                            {card.emoji}
+                          </div>
+                          <div>
+                            <h3 className={`font-semibold text-sm mb-0.5 ${selected ? "text-teal-700" : "text-gray-900"}`}>
+                              {card.title}
+                            </h3>
+                            <p className="text-xs text-gray-500 leading-relaxed">{card.desc}</p>
+                          </div>
+                        </div>
                       </button>
                     );
                   })}
                 </div>
               </div>
+            </div>
+          )}
 
-              {isCoach && (
-                <div>
-                  <Label className="mb-2 block">Coaching discipline</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {COACHING_SUB_TYPE_OPTIONS.map((opt) => {
-                      const Icon = COACHING_SUB_TYPE_ICONS[opt.value] ?? CheckCircle2;
-                      const selected = form.coachingSubType === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => set("coachingSubType", opt.value)}
-                          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium text-left transition-all ${
-                            selected
-                              ? "border-primary bg-primary/10 text-primary shadow-sm"
-                              : "border-border bg-background text-foreground hover:border-primary/50"
-                          }`}
-                        >
-                          <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${selected ? "text-primary bg-primary/10" : "text-orange-600 bg-orange-50"}`}>
-                            <Icon size={15} />
-                          </span>
-                          <span className="leading-tight">{opt.label}</span>
-                          {selected && <CheckCircle2 size={14} className="ml-auto text-primary shrink-0" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {form.specialty && form.specialty !== "therapy_centre" && (
-                <div>
-                  <Label className="mb-2 block text-sm">
-                    Also practise as <span className="text-muted-foreground font-normal">(optional)</span>
-                  </Label>
-                  <div className="flex flex-wrap gap-2">
-                    {SPECIALTY_OPTIONS
-                      .filter((opt) => opt.value !== form.specialty && opt.value !== "therapy_centre")
-                      .map((opt) => {
-                        const tagKey = `specialty:${opt.value}`;
-                        const selected = form.specializationTags.includes(tagKey);
-                        return (
-                          <button
-                            key={opt.value}
-                            type="button"
-                            onClick={() => {
-                              setForm((prev) => ({
-                                ...prev,
-                                specializationTags: selected
-                                  ? prev.specializationTags.filter((t) => t !== tagKey)
-                                  : [...prev.specializationTags, tagKey],
-                              }));
-                            }}
-                            className={`px-3 py-1 rounded-full text-xs border transition-colors ${
-                              selected
-                                ? "bg-primary/10 border-primary text-primary font-medium"
-                                : "bg-background border-border text-muted-foreground hover:border-primary/50"
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                  </div>
-                </div>
-              )}
+          {step === 1 && (
+            <div className="space-y-5">
               <div>
-                <Label htmlFor="fullName">
-                  {isTherapyCentre ? "Centre name" : "Full name"}
+                <h2 className="text-lg font-semibold text-gray-900 mb-1">Tell us about yourself</h2>
+                <p className="text-sm text-gray-500 mb-4">This appears on your public profile.</p>
+              </div>
+              <div>
+                <Label htmlFor="fullName" className="text-sm font-medium">
+                  Full name <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="fullName"
                   value={form.fullName}
-                  onChange={(e) => set("fullName", e.target.value)}
-                  placeholder={isTherapyCentre ? "e.g. Bloom Therapy Centre" : "Dr. Priya Sharma"}
+                  onChange={(e) => setField("fullName", e.target.value)}
+                  placeholder="Dr. Priya Sharma"
                   className="mt-1"
                   data-testid="input-fullName"
                 />
               </div>
-              {!isTherapyCentre && (
-                <div>
-                  <Label htmlFor="yearsExperience">Years of experience</Label>
-                  <Input
-                    id="yearsExperience"
-                    type="number"
-                    min={0}
-                    max={60}
-                    value={form.yearsExperience}
-                    onChange={(e) => set("yearsExperience", e.target.value)}
-                    className="mt-1"
-                    data-testid="input-yearsExperience"
-                  />
-                </div>
-              )}
-              {isTherapyCentre && (
-                <div>
-                  <Label htmlFor="yearsExperience">Years in operation</Label>
-                  <Input
-                    id="yearsExperience"
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={form.yearsExperience}
-                    onChange={(e) => set("yearsExperience", e.target.value)}
-                    placeholder="e.g. 5"
-                    className="mt-1"
-                    data-testid="input-yearsExperience"
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Step 1: Details */}
-          {step === 1 && (
-            <div className="space-y-4">
               <div>
-                <Label htmlFor="bio">
-                  {isTherapyCentre ? "About your centre" : "Bio"}
+                <Label htmlFor="bio" className="text-sm font-medium">
+                  Short bio <span className="text-gray-400 font-normal">(optional)</span>
                 </Label>
                 <Textarea
                   id="bio"
                   value={form.bio}
-                  onChange={(e) => set("bio", e.target.value)}
-                  placeholder={
-                    isTherapyCentre
-                      ? "Describe your centre's mission, facilities, and approach to therapy..."
-                      : "Tell parents about your approach, methods, and experience..."
-                  }
-                  className="mt-1 min-h-[120px]"
+                  onChange={(e) => setField("bio", e.target.value)}
+                  placeholder="Tell parents about your approach, experience, and what makes you a great fit for children with special needs…"
+                  className="mt-1 min-h-[110px]"
                   data-testid="input-bio"
                 />
               </div>
               <div>
-                <Label htmlFor="qualifications">
-                  {isTherapyCentre ? "Therapies & services offered" : "Qualifications"}
+                <Label htmlFor="yearsExperience" className="text-sm font-medium">
+                  Years of experience
                 </Label>
-                <Textarea
-                  id="qualifications"
-                  value={form.qualifications}
-                  onChange={(e) => set("qualifications", e.target.value)}
-                  placeholder={
-                    isTherapyCentre
-                      ? "ABA Therapy, Speech Therapy, Occupational Therapy, Behaviour Intervention..."
-                      : "B.Ed Special Education, ASHA Certified, etc."
-                  }
-                  className="mt-1 min-h-[80px]"
-                  data-testid="input-qualifications"
+                <Input
+                  id="yearsExperience"
+                  type="number"
+                  min={0}
+                  max={60}
+                  value={form.yearsExperience}
+                  onChange={(e) => setField("yearsExperience", e.target.value)}
+                  className="mt-1"
+                  data-testid="input-yearsExperience"
                 />
               </div>
-              <div>
-                <Label>Specialization tags <span className="text-muted-foreground text-xs">(pick up to 5)</span></Label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {TAG_OPTIONS.map((tag) => {
-                    const selected = form.specializationTags.includes(tag);
-                    return (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() => {
-                          setForm((prev) => {
-                            if (prev.specializationTags.includes(tag)) {
-                              return { ...prev, specializationTags: prev.specializationTags.filter((t) => t !== tag) };
-                            }
-                            if (prev.specializationTags.length >= 5) return prev;
-                            return { ...prev, specializationTags: [...prev.specializationTags, tag] };
-                          });
-                        }}
-                        className={`px-3 py-1 rounded-full text-sm border transition-colors ${selected ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-foreground hover:border-primary"}`}
-                      >
-                        {tag}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {isTherapyCentre && (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="numTherapists">No. of therapists</Label>
-                      <Input
-                        id="numTherapists"
-                        type="number"
-                        min={1}
-                        value={form.numTherapists}
-                        onChange={(e) => set("numTherapists", e.target.value)}
-                        placeholder="e.g. 8"
-                        className="mt-1"
-                        data-testid="input-numTherapists"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="centreRegistrationNo">Registration No. <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                      <Input
-                        id="centreRegistrationNo"
-                        value={form.centreRegistrationNo}
-                        onChange={(e) => set("centreRegistrationNo", e.target.value)}
-                        placeholder="e.g. MH/TC/2020/1234"
-                        className="mt-1"
-                        data-testid="input-centreRegistrationNo"
-                      />
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Registration number will be shown on your centre's profile page to build parent trust.
-                  </p>
-                </>
-              )}
-
-              {isCoach && (
-                <div className="flex items-center justify-between py-2 border border-green-200 bg-green-50 rounded-xl px-3">
-                  <div>
-                    <Label className="flex items-center gap-1.5">
-                      <Heart size={14} className="text-green-600" />
-                      Inclusive / special-needs experience
-                    </Label>
-                    <p className="text-xs text-muted-foreground">I have experience coaching children with special needs. Parents can filter by this.</p>
-                  </div>
-                  <Switch
-                    checked={form.inclusiveExperience}
-                    onCheckedChange={(v) => set("inclusiveExperience", v)}
-                    data-testid="switch-inclusive-experience"
-                  />
-                </div>
-              )}
-
-              {!isTherapyCentre && (
-                <>
-                  <div className="flex items-center justify-between py-2">
-                    <div>
-                      <Label>Willing to travel</Label>
-                      <p className="text-xs text-muted-foreground">Do you offer home visits or travel to clients?</p>
-                    </div>
-                    <Switch
-                      checked={form.willingToTravel}
-                      onCheckedChange={(v) => set("willingToTravel", v)}
-                      data-testid="switch-travel"
-                    />
-                  </div>
-                  {form.willingToTravel && (
-                    <div>
-                      <Label htmlFor="travelRadius">Travel radius</Label>
-                      <Select value={form.travelRadiusKm} onValueChange={(v) => set("travelRadiusKm", v)}>
-                        <SelectTrigger className="mt-1" data-testid="select-travel-radius">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {TRAVEL_RADIUS_OPTIONS.map((r) => (
-                            <SelectItem key={r} value={r.toString()}>{r} km</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {isGeoFencedSpecialty && (
-                        <p className="mt-2 text-xs text-muted-foreground" data-testid="geofencing-label">
-                          Parents within {form.travelRadiusKm} km of your location can find you when searching for home visits.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
             </div>
           )}
 
-          {/* Step 2: Location */}
           {step === 2 && (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-1">Languages you work in</h2>
+                <p className="text-sm text-gray-500 mb-4">
+                  Parents filter by language — select all you're comfortable working in.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {LANGUAGE_OPTIONS.map((lang) => {
+                  const selected = form.languages.includes(lang);
+                  return (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => toggleLanguage(lang)}
+                      className={`px-4 py-2 rounded-full border text-sm font-medium transition-all ${
+                        selected
+                          ? "bg-teal-600 text-white border-teal-600"
+                          : "bg-white border-gray-200 text-gray-700 hover:border-teal-400"
+                      }`}
+                    >
+                      {lang}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-gray-400">You can skip this — it's optional but improves your match score.</p>
+            </div>
+          )}
+
+          {step === 3 && (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Pin your location so parents can find you on the map and in nearby searches.
-              </p>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-1">Where are you based?</h2>
+                <p className="text-sm text-gray-500 mb-4">
+                  Helps parents nearby find you. Your exact address is never shared before a booking.
+                </p>
+              </div>
               <LocationPicker
                 lat={form.latitude}
                 lng={form.longitude}
@@ -582,24 +567,24 @@ export default function OnboardPage() {
                 country={form.country}
                 onLocationChange={handleLocationChange}
               />
-              <div className="grid grid-cols-2 gap-4 mt-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="city">City</Label>
+                  <Label htmlFor="city" className="text-sm font-medium">City</Label>
                   <Input
                     id="city"
                     value={form.city}
-                    onChange={(e) => set("city", e.target.value)}
+                    onChange={(e) => setField("city", e.target.value)}
                     placeholder="Mumbai"
                     className="mt-1"
                     data-testid="input-city"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="country">Country</Label>
+                  <Label htmlFor="country" className="text-sm font-medium">Country</Label>
                   <Input
                     id="country"
                     value={form.country}
-                    onChange={(e) => set("country", e.target.value)}
+                    onChange={(e) => setField("country", e.target.value)}
                     placeholder="India"
                     className="mt-1"
                     data-testid="input-country"
@@ -607,173 +592,156 @@ export default function OnboardPage() {
                 </div>
               </div>
               <div>
-                <Label htmlFor="displayArea">Area shown to parents <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Label htmlFor="displayArea" className="text-sm font-medium">
+                  Area shown to parents <span className="text-gray-400 font-normal">(optional)</span>
+                </Label>
                 <Input
                   id="displayArea"
                   value={form.displayArea}
-                  onChange={(e) => set("displayArea", e.target.value)}
+                  onChange={(e) => setField("displayArea", e.target.value)}
                   placeholder="e.g. Bandra West, Mumbai"
                   className="mt-1"
                   data-testid="input-display-area"
                 />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Shown on your public profile. Your exact address is never shared before a booking is confirmed.
-                </p>
               </div>
-              <div>
-                <Label htmlFor="clinicAddress">Full clinic / practice address <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                <Input
-                  id="clinicAddress"
-                  value={form.clinicAddress}
-                  onChange={(e) => set("clinicAddress", e.target.value)}
-                  placeholder="e.g. 204 Sunrise Chambers, SV Road, Bandra West, Mumbai 400050"
-                  className="mt-1"
-                  data-testid="input-clinic-address"
-                />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Shared with parents only after a booking is confirmed.
-                </p>
+              <div className="flex items-center justify-between py-2.5 px-3 border border-gray-200 rounded-xl">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Willing to travel / home visits</p>
+                  <p className="text-xs text-gray-500">Do you travel to the child's location?</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.willingToTravel}
+                  onClick={() => setField("willingToTravel", !form.willingToTravel)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 ${form.willingToTravel ? "bg-teal-600" : "bg-gray-200"}`}
+                  data-testid="switch-travel"
+                >
+                  <span className={`pointer-events-none block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform ${form.willingToTravel ? "translate-x-5" : "translate-x-0"}`} />
+                </button>
               </div>
+              {form.willingToTravel && (
+                <div>
+                  <Label className="text-sm font-medium">Travel radius</Label>
+                  <div className="flex gap-2 mt-1">
+                    {TRAVEL_RADIUS_OPTIONS.map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setField("travelRadiusKm", r.toString())}
+                        className={`flex-1 py-2 rounded-xl border text-sm font-medium transition-all ${
+                          form.travelRadiusKm === r.toString()
+                            ? "bg-teal-600 text-white border-teal-600"
+                            : "bg-white border-gray-200 text-gray-700 hover:border-teal-400"
+                        }`}
+                      >
+                        {r} km
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Step 3: Contact */}
-          {step === 3 && (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground bg-muted/50 rounded-lg p-3 border border-border">
-                Your contact details will only be visible to parents who unlock your profile.
-              </p>
-              <div>
-                <Label htmlFor="phone">Phone number</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  value={form.phone}
-                  onChange={(e) => set("phone", e.target.value)}
-                  placeholder="+91 98765 43210"
-                  className="mt-1"
-                  data-testid="input-phone"
-                />
-              </div>
-              <div>
-                <Label htmlFor="email">Email address</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => set("email", e.target.value)}
-                  placeholder="you@example.com"
-                  className="mt-1"
-                  data-testid="input-email"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Step 4: Pricing */}
           {step === 4 && (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground bg-muted/50 rounded-lg p-3 border border-border">
-                Let parents know your expected session rate. This helps them filter by budget.
-              </p>
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-1">Pricing & payment</h2>
+                <p className="text-sm text-gray-500 mb-4">
+                  Let parents know your session rate. You can always update this later.
+                </p>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="pricingMinINR">Min. price (₹)</Label>
+                  <Label htmlFor="pricingMinINR" className="text-sm font-medium">Min. rate (₹)</Label>
                   <div className="relative mt-1">
-                    <IndianRupee size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <IndianRupee size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       id="pricingMinINR"
                       type="number"
                       min={0}
                       value={form.pricingMinINR}
-                      onChange={(e) => set("pricingMinINR", e.target.value)}
+                      onChange={(e) => setField("pricingMinINR", e.target.value)}
                       placeholder="500"
-                      className="pl-8"
+                      className="pl-7"
                       data-testid="input-pricingMinINR"
                     />
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="pricingMaxINR">Max. price (₹)</Label>
+                  <Label htmlFor="pricingMaxINR" className="text-sm font-medium">Max. rate (₹)</Label>
                   <div className="relative mt-1">
-                    <IndianRupee size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <IndianRupee size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       id="pricingMaxINR"
                       type="number"
                       min={0}
                       value={form.pricingMaxINR}
-                      onChange={(e) => set("pricingMaxINR", e.target.value)}
+                      onChange={(e) => setField("pricingMaxINR", e.target.value)}
                       placeholder="2000"
-                      className="pl-8"
+                      className="pl-7"
                       data-testid="input-pricingMaxINR"
                     />
                   </div>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Leave blank if you prefer to discuss pricing directly with parents.
-              </p>
               {form.pricingMinINR && form.pricingMaxINR && (
-                <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-800 font-medium">
-                  Your profile will show: ₹{Number(form.pricingMinINR).toLocaleString("en-IN")} – ₹{Number(form.pricingMaxINR).toLocaleString("en-IN")} / session
+                <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-800 font-medium">
+                  Profile will show: ₹{Number(form.pricingMinINR).toLocaleString("en-IN")} – ₹{Number(form.pricingMaxINR).toLocaleString("en-IN")} / session
                 </div>
               )}
-
-              <div className="border-t border-border pt-4 mt-2">
-                <Label htmlFor="upiId" className="flex items-center gap-1.5">
-                  UPI ID <span className="text-xs text-muted-foreground font-normal">(for receiving session payments)</span>
+              <div className="border-t border-gray-100 pt-4">
+                <Label htmlFor="upiId" className="text-sm font-medium">
+                  UPI ID <span className="text-gray-400 font-normal">(for payouts)</span>
                 </Label>
                 <Input
                   id="upiId"
-                  type="text"
-                  placeholder="yourname@upi"
                   value={form.upiId}
-                  onChange={(e) => set("upiId", e.target.value)}
+                  onChange={(e) => setField("upiId", e.target.value)}
+                  placeholder="yourname@upi"
                   className="mt-1"
                   data-testid="input-upiId"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Parents pay for sessions via Razorpay. Your payout will be transferred to this UPI ID. Only you can see this — it's never shown to parents.
+                <p className="text-xs text-gray-400 mt-1">
+                  Parents pay via Razorpay. Your payout goes to this UPI. Never shown to parents.
                 </p>
+              </div>
+              <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700 leading-relaxed">
+                After this step you'll answer a few more questions specific to your role, then your profile will be reviewed by our team.
               </div>
             </div>
           )}
-
         </div>
 
-        {/* Navigation */}
         <div className="flex justify-between mt-6">
-          <Button variant="outline" onClick={handleBack} disabled={step === 0 || isSubmitting}>
-            Back
+          <Button
+            variant="outline"
+            onClick={() => setStep((s) => Math.max(0, s - 1))}
+            disabled={step === 0 || isSaving}
+            className="gap-1 border-gray-200"
+          >
+            <ChevronLeft size={15} /> Back
           </Button>
-          {step < STEPS.length - 1 ? (
-            <Button
-              onClick={handleNext}
-              disabled={step === 0 && (!form.specialty || !form.fullName)}
-              data-testid="next-step-btn"
-            >
-              Continue
-            </Button>
-          ) : (
-            <Button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="gap-2"
-              data-testid="submit-profile-btn"
-            >
-              {isSubmitting ? (
-                <Loader2 size={15} className="animate-spin" />
-              ) : (
-                <CheckCircle2 size={15} />
-              )}
-              {isSubmitting
-                ? "Saving…"
-                : existingProfile
-                ? "Save changes"
-                : "Create & activate profile"}
-            </Button>
-          )}
+          <Button
+            onClick={handleContinue}
+            disabled={!canAdvance() || isSaving}
+            className="gap-2 bg-teal-600 hover:bg-teal-700 text-white min-w-[120px]"
+            data-testid={step === 4 ? "submit-stage1-btn" : "next-step-btn"}
+          >
+            {isSaving ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : step === 4 ? (
+              <>Save & continue <ChevronRight size={15} /></>
+            ) : (
+              <>Continue <ChevronRight size={15} /></>
+            )}
+          </Button>
         </div>
+
+        <p className="text-center text-xs text-gray-400 mt-5">
+          Your progress is saved automatically at each step.
+        </p>
       </div>
     </div>
   );

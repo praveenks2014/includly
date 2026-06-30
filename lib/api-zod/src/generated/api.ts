@@ -199,6 +199,11 @@ export const GetMyProfessionalProfileResponse = zod.object({
     .enum(["swimming", "dance", "music", "sports", "singing", "fitness", "art", "yoga"])
     .nullish(),
   inclusiveExperience: zod.boolean(),
+  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).nullish(),
+  verticalDetails: zod.record(zod.string(), zod.unknown()).nullish(),
+  rciCrrNumber: zod.string().nullish(),
+  certifications: zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
+  profileComplete: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
 
@@ -258,6 +263,7 @@ export const CreateProfessionalProfileBody = zod.object({
     .optional(),
   inclusiveExperience: zod.boolean().optional(),
   specializationTags: zod.array(zod.string()).optional(),
+  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).optional(),
 });
 
 /**
@@ -319,6 +325,10 @@ export const UpdateProfessionalProfileBody = zod.object({
   specializationTags: zod.array(zod.string()).optional(),
   languages: zod.array(zod.string()).optional(),
   avatarUrl: zod.string().optional(),
+  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).optional(),
+  verticalDetails: zod.record(zod.string(), zod.unknown()).optional(),
+  rciCrrNumber: zod.string().optional(),
+  certifications: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
 });
 
 export const UpdateProfessionalProfileResponse = zod.object({
@@ -376,6 +386,10 @@ export const UpdateProfessionalProfileResponse = zod.object({
     .nullish()
     .describe("UPI ID — returned only in private (own profile) response"),
   paymentActivated: zod.boolean(),
+  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).nullish(),
+  verticalDetails: zod.record(zod.string(), zod.unknown()).nullish(),
+  rciCrrNumber: zod.string().nullish(),
+  certifications: zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
   createdAt: zod.coerce.date(),
 });
 

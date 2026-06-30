@@ -38,6 +38,7 @@ import ParentDashboard from "@/pages/parent-dashboard";
 import ProfessionalDashboard from "@/pages/professional-dashboard";
 import CentreDashboard from "@/pages/centre-dashboard";
 import ChildOnboardingPage from "@/pages/onboarding-child";
+import OnboardStage2Page from "@/pages/onboard-stage2";
 
 // REQUIRED — copy verbatim per Replit-managed Clerk skill.
 // Resolves the key from window.location.hostname so the same build serves
@@ -317,6 +318,9 @@ function Router() {
         {/* ── Onboarding (RequireAuth, no AppShell chrome) ── */}
         <Route path="/onboarding/pro">
           <RequireAuth><OnboardPage /></RequireAuth>
+        </Route>
+        <Route path="/onboarding/pro/stage2/:vertical">
+          <RequireAuth><OnboardStage2Page /></RequireAuth>
         </Route>
         <Route path="/onboarding/child">
           <RequireAuth><ChildOnboardingPage /></RequireAuth>
