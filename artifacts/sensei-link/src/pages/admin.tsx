@@ -45,7 +45,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 
-type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "users" | "payments" | "settings" | "commissions" | "moderation" | "bookings" | "shadow-teacher" | "engagements" | "centres";
+type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "users" | "payments" | "settings" | "commissions" | "moderation" | "bookings" | "shadow-teacher" | "engagements" | "centres" | "rci-queue";
 
 // ── Booking row shape from /admin/bookings ────────────────────────────────────
 interface AdminBookingRow {
@@ -445,6 +445,7 @@ export default function AdminPage() {
     { id: "engagements", label: "Engagements", icon: <IndianRupee size={18} /> },
     { id: "centres", label: "Therapy Centres", icon: <Building2 size={18} /> },
     { id: "moderation", label: "Moderation", icon: <Flag size={18} /> },
+    { id: "rci-queue", label: "RCI Queue", icon: <Shield size={18} /> },
     { id: "settings", label: "Settings", icon: <Settings size={18} /> },
     { id: "commissions", label: "Commission Rates", icon: <IndianRupee size={18} /> },
   ];
@@ -533,8 +534,117 @@ export default function AdminPage() {
           {activeTab === "moderation" && <ModerationTab />}
           {activeTab === "settings" && <SettingsTab />}
           {activeTab === "commissions" && <CommissionRatesTab />}
+          {activeTab === "rci-queue" && <RciQueueTab />}
         </div>
       </div>
+    </div>
+  );
+}
+
+function RciQueueTab() {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [verifying, setVerifying] = useState<number | null>(null);
+  const [items, setItems] = useState<Array<{
+    id: number;
+    fullName: string | null;
+    city: string | null;
+    country: string | null;
+    rciCrrNumber: string | null;
+    userEmail: string | null;
+    createdAt: string;
+  }>>([]);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await fetchWithAuth("/api/admin/professionals/pending-rci");
+      const data = await res.json() as { professionals: typeof items };
+      setItems(data.professionals ?? []);
+    } catch {
+      toast({ title: "Failed to load RCI queue", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { void load(); }, []);
+
+  async function markVerified(id: number) {
+    setVerifying(id);
+    try {
+      const res = await fetchWithAuth(`/api/admin/professionals/${id}/verify-rci`, { method: "PATCH" });
+      if (!res.ok) throw new Error("Failed");
+      toast({ title: "RCI verified ✓" });
+      setItems((prev) => prev.filter((p) => p.id !== id));
+    } catch {
+      toast({ title: "Could not mark verified", variant: "destructive" });
+    } finally {
+      setVerifying(null);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-bold text-[#1A2340]">Therapist RCI Verification Queue</h2>
+        <p className="text-sm text-gray-500 mt-1">
+          Therapists who have submitted a CRR number and are awaiting manual verification.{" "}
+          Before marking verified, look up the CRR number at{" "}
+          <a
+            href="https://www.rci.gov.in/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-teal-600 underline"
+          >
+            rci.gov.in
+          </a>.
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-gray-400" />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center text-gray-400 border border-dashed rounded-xl">
+          <CheckCircle size={32} className="mb-3 text-green-400" />
+          <p className="font-medium text-gray-600">Queue is clear</p>
+          <p className="text-sm mt-1">No therapists awaiting RCI verification right now.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {items.map((item) => (
+            <div key={item.id} className="bg-white border rounded-xl p-4 flex items-start gap-4 shadow-sm">
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-[#1A2340] truncate">{item.fullName ?? "—"}</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {item.userEmail ?? "—"} · {[item.city, item.country].filter(Boolean).join(", ") || "—"}
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded">CRR #</span>
+                  <span className="text-sm font-mono font-bold tracking-wide text-[#1A2340]">
+                    {item.rciCrrNumber}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  Submitted {new Date(item.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                </p>
+              </div>
+              <button
+                onClick={() => void markVerified(item.id)}
+                disabled={verifying === item.id}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors"
+              >
+                {verifying === item.id
+                  ? <Loader2 size={12} className="animate-spin" />
+                  : <Check size={12} />}
+                Mark Verified
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

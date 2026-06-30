@@ -219,6 +219,10 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
 
   // Only show approved (verified) profiles in public search — pending/rejected are invisible
   conditions.push(eq(professionalProfilesTable.verificationStatus, "verified"));
+  // Only show activation-complete profiles (Stage 2 onboarding done)
+  conditions.push(eq(professionalProfilesTable.paymentActivated, true));
+  // Therapists must have a CRR number on file — prevents unlicensed profiles appearing in search
+  conditions.push(sql`(${professionalProfilesTable.vertical} != 'therapist' OR (${professionalProfilesTable.rciCrrNumber} IS NOT NULL AND ${professionalProfilesTable.rciCrrNumber} != ''))`);
 
   if (verifiedOnly) {
     conditions.push(eq(professionalProfilesTable.isVerified, true));

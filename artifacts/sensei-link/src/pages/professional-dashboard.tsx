@@ -85,6 +85,88 @@ function calcEndTime(start: string, mins: number) {
 }
 
 
+// ─── Go-Live Status Widget ────────────────────────────────────────────────────
+function GoLiveStatusWidget({ profile, onTabChange }: {
+  profile: ProfessionalProfile;
+  onTabChange: (tab: ProTab) => void;
+}) {
+  const isTherapist = profile.vertical === "therapist";
+
+  if (isTherapist) {
+    if (!profile.rciCrrNumber) {
+      return (
+        <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+          <AlertCircle size={18} className="text-red-500 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold text-red-800 text-sm">RCI registration required</p>
+            <p className="text-xs text-red-700 mt-0.5">
+              Therapists must provide an RCI CRR number to appear in parent search. Add yours in your profile to get started.
+            </p>
+          </div>
+          <button onClick={() => onTabChange("profile")} className="text-xs text-red-600 underline shrink-0 mt-0.5">
+            Add CRR →
+          </button>
+        </div>
+      );
+    }
+    if (profile.rciVerified) {
+      return (
+        <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
+          <BadgeCheck size={18} className="text-green-600 shrink-0" />
+          <div>
+            <p className="font-semibold text-green-800 text-sm">✓ RCI Verified — Visible to parents</p>
+            <p className="text-xs text-green-700 mt-0.5">Your RCI CRR number has been verified. Your profile is live in parent search.</p>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+        <Clock size={18} className="text-amber-600 mt-0.5 shrink-0" />
+        <div>
+          <p className="font-semibold text-amber-800 text-sm">Pending RCI verification</p>
+          <p className="text-xs text-amber-700 mt-0.5">
+            Your CRR number has been submitted and is being reviewed by the Includly team. This usually takes 2–3 business days.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!profile.paymentActivated) {
+    return (
+      <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+        <Clock size={18} className="text-amber-600 mt-0.5 shrink-0" />
+        <div className="flex-1">
+          <p className="font-semibold text-amber-800 text-sm">Complete onboarding to go live</p>
+          <p className="text-xs text-amber-700 mt-0.5">Finish your profile setup to become visible to parents searching on Includly.</p>
+        </div>
+        <a href="/onboarding/pro" className="text-xs text-amber-700 underline shrink-0 mt-0.5">Continue →</a>
+      </div>
+    );
+  }
+  if (profile.verificationStatus !== "verified") {
+    return (
+      <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+        <Clock size={18} className="text-amber-600 mt-0.5 shrink-0" />
+        <div>
+          <p className="font-semibold text-amber-800 text-sm">Profile under review</p>
+          <p className="text-xs text-amber-700 mt-0.5">Our team is reviewing your profile. This usually takes 2–3 business days.</p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
+      <CheckCircle2 size={18} className="text-green-600 shrink-0" />
+      <div>
+        <p className="font-semibold text-green-800 text-sm">✓ Visible to parents</p>
+        <p className="text-xs text-green-700 mt-0.5">Parents can find and contact you in search results.</p>
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: HOME
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -178,6 +260,8 @@ function HomeTab({ profile, firstName, onTabChange }: {
 
   return (
     <div className="space-y-6">
+      {/* Vertical-aware go-live status widget */}
+      {profile && <GoLiveStatusWidget profile={profile} onTabChange={onTabChange} />}
       {/* Verification status banner */}
       {profile && !bannerDismissed && (
         <>

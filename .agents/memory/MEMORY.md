@@ -18,3 +18,4 @@
 - [Clerk key configuration](clerk-key-config.md) — VITE_CLERK_PUBLISHABLE_KEY env var (shared) holds the live key; dev preview uses hardcoded DEV_CLERK_KEY; server needs CLERK_SECRET_KEY + CLERK_SECRET_KEY_DEV for dual-instance JWT verify
 - [Negotiation offer supersede rule](negotiation-offer-supersede.md) — POST /offers must supersede ALL pending offers (both roles), not just submitter's own; omitting raisedByRole filter causes dual-pending deadlock
 - [api-client-react rebuild requirement](api-client-react-rebuild.md) — after editing api.schemas.ts/api.ts, run `pnpm --filter @workspace/api-client-react exec tsc -p tsconfig.json` to update dist/.d.ts before TS type checks see changes
+- [Search response nullable contacts](search-nullable-contacts.md) — phoneBlurred/emailBlurred are intentionally null for shadow teachers in search results; all 4 SearchProfessionalsResponse/ResultItem/Unlocks/Dashboard schemas need .nullable() not .string()

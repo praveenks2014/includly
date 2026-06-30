@@ -161,6 +161,7 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
       and(
         eq(professionalProfilesTable.specialty, "shadow_teacher"),
         eq(professionalProfilesTable.verificationStatus, "verified"),
+        eq(professionalProfilesTable.paymentActivated, true),
         isNotNull(professionalProfilesTable.pricingMinINR),
         ...(busyProfIds.length > 0 ? [notInArray(professionalProfilesTable.id, busyProfIds)] : []),
       ),
@@ -1578,6 +1579,7 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
         and(
           eq(professionalProfilesTable.specialty, "shadow_teacher"),
           eq(professionalProfilesTable.verificationStatus, "verified"),
+          eq(professionalProfilesTable.paymentActivated, true),
           isNotNull(professionalProfilesTable.pricingMinINR),
           excludeIds.length > 0
             ? sql`${professionalProfilesTable.id} != ALL(${sql.raw(`ARRAY[${excludeIds.join(",")}]::int[]`)})`

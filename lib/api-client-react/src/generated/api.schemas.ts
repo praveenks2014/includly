@@ -181,6 +181,7 @@ export interface ProfessionalProfile {
   rciCrrNumber?: string | null;
   certifications?: Record<string, unknown>[] | null;
   profileComplete: boolean;
+  rciVerified: boolean;
   coachingSubType?: string | null;
   createdAt: string;
 }

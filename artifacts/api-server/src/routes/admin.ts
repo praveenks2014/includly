@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, ne, count, gte, and, sum, desc } from "drizzle-orm";
+import { eq, ne, count, gte, and, sum, desc, isNotNull } from "drizzle-orm";
 import { createClerkClient } from "@clerk/express";
 import {
   db,
@@ -860,6 +860,54 @@ router.delete("/admin/users/:id", ...adminGuard, async (req, res): Promise<void>
 
   await db.delete(usersTable).where(eq(usersTable.id, id));
   res.json({ deleted: true, id, email: user.email });
+});
+
+router.get("/admin/professionals/pending-rci", ...adminGuard, async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      id: professionalProfilesTable.id,
+      fullName: professionalProfilesTable.fullName,
+      city: professionalProfilesTable.city,
+      country: professionalProfilesTable.country,
+      rciCrrNumber: professionalProfilesTable.rciCrrNumber,
+      vertical: professionalProfilesTable.vertical,
+      createdAt: professionalProfilesTable.createdAt,
+      userEmail: usersTable.email,
+    })
+    .from(professionalProfilesTable)
+    .leftJoin(usersTable, eq(professionalProfilesTable.userId, usersTable.id))
+    .where(
+      and(
+        eq(professionalProfilesTable.vertical, "therapist"),
+        isNotNull(professionalProfilesTable.rciCrrNumber),
+        ne(professionalProfilesTable.rciCrrNumber, ""),
+        eq(professionalProfilesTable.rciVerified, false),
+      ),
+    )
+    .orderBy(professionalProfilesTable.createdAt);
+
+  res.json({ professionals: rows, total: rows.length });
+});
+
+router.patch("/admin/professionals/:id/verify-rci", ...adminGuard, async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const [profile] = await db
+    .update(professionalProfilesTable)
+    .set({ rciVerified: true, updatedAt: new Date() })
+    .where(and(eq(professionalProfilesTable.id, id), eq(professionalProfilesTable.vertical, "therapist")))
+    .returning();
+
+  if (!profile) {
+    res.status(404).json({ error: "Professional not found or not a therapist" });
+    return;
+  }
+
+  res.json({ id: profile.id, rciVerified: profile.rciVerified, fullName: profile.fullName });
 });
 
 router.delete("/purge-non-admin-users", async (req, res): Promise<void> => {
