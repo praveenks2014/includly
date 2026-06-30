@@ -1,0 +1,62 @@
+BUILD — Step 1 of the onboarding redesign: the DATA MODEL for verticals.
+Do NOT touch auth, payments, or parent dashboard. Show me the migration
+and schema diff before applying.
+
+Introduce a "vertical" concept for professionals. A professional belongs
+to ONE primary vertical chosen at onboarding:
+- shadow_teacher
+- home_tutor
+- therapist   (covers speech, OT, behavioural/ABA, special educator, psych)
+
+Schema changes (professionals table, via a new Drizzle migration):
+1. Add `vertical` enum column: 'shadow_teacher' | 'home_tutor' | 'therapist'
+   (not null, but allow a migration default for existing rows — set
+   existing professionals to 'shadow_teacher' since that's the launch
+   vertical; we'll let them edit later).
+2. Add a JSONB column `vertical_details` to hold vertical-specific answers
+   (so we don't add 30 sparse columns). Structure documented below.
+3. Add compliance columns (shared, nullable):
+   - `rci_crr_number` (text, nullable) — therapist CRR/RCI registration
+   - `rci_verified` (boolean, default false)
+   - `certifications` (JSONB array) — [{name, issuer, year, fileUrl?}]
+4. Keep existing shared fields (name, bio, experience years, languages,
+   pricing, location) — do NOT duplicate them into vertical_details.
+
+vertical_details JSONB shapes (document these as TS types):
+
+  shadow_teacher: {
+    trainingCertified: boolean,         // completed a shadow-teacher training course
+    trainingInstitute?: string,
+    highestEducation: '10th'|'12th'|'graduate'|'postgraduate',
+    educationField?: string,            // e.g. Psychology, Education
+    abaCredential?: 'none'|'rbt'|'abat'|'other',
+    conditionsSupported: string[],      // ASD, ADHD, dyslexia, dyscalculia, dysgraphia, intellectual_disability, speech_delay, other
+    settings: string[],                 // ['in_school','at_home']
+    gradeLevels: string[]               // preschool, primary, middle, high
+  }
+
+  home_tutor: {
+    subjects: string[],                 // Math, Science, English, etc.
+    boards: string[],                   // CBSE, ICSE, State, IB, IGCSE
+    gradeLevels: string[],
+    mode: string[],                     // ['at_home','online']
+    specialNeedsExperience: boolean     // optional plus
+  }
+
+  therapist: {
+    discipline: 'speech'|'occupational'|'behavioural_aba'|'special_education'|'clinical_psychology'|'other',
+    rciRegistered: boolean,             // must be true to be listed
+    crrNumber: string,                  // mirrors rci_crr_number
+    qualifications: string[],           // degrees
+    conditionsTreated: string[],
+    settings: string[],                 // ['clinic','at_home','online']
+    ageGroups: string[]                 // toddler, child, teen
+  }
+
+Deliverable for this step:
+- The Drizzle migration (show SQL).
+- Updated schema + TS types for vertical and vertical_details.
+- A backfill setting existing professionals to vertical='shadow_teacher'.
+- DO NOT build any UI yet. Just the data model + migration.
+
+Show me the migration SQL and schema diff before running it.
