@@ -37,7 +37,7 @@ const ROLE_CARDS: {
   {
     id: "professional",
     emoji: "👩‍⚕️",
-    title: "Professional / Therapist",
+    title: "Educator / Therapist",
     desc: "I'm a therapist, special educator, shadow teacher, or related specialist.",
     bg: "bg-teal-50",
   },
@@ -340,7 +340,7 @@ export default function ChooseRolePage() {
               <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm space-y-5">
                 <div>
                   <h2 className="text-xl font-serif font-semibold text-gray-900 mb-1">Where are you based?</h2>
-                  <p className="text-sm text-gray-500">We'll show professionals closest to you. You can update this anytime.</p>
+                  <p className="text-sm text-gray-500">We'll show specialists closest to you. You can update this anytime.</p>
                 </div>
 
                 <div className="space-y-3">
@@ -366,7 +366,7 @@ export default function ChooseRolePage() {
                 </div>
 
                 <div className="bg-teal-50 border border-teal-100 rounded-xl p-3 text-xs text-teal-700 leading-relaxed">
-                  Your location helps us find verified professionals in your city or neighbourhood.
+                  Your location helps us find verified specialists in your city or neighbourhood.
                   We never share your exact address.
                 </div>
               </div>

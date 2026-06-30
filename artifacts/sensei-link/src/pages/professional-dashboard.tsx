@@ -512,7 +512,7 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
       <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center shadow-sm">
         <User size={36} className="mx-auto mb-3 text-gray-300" />
         <p className="font-semibold text-gray-600 mb-1">No profile yet</p>
-        <p className="text-sm text-gray-400 mb-5">Create your professional profile to appear in search results.</p>
+        <p className="text-sm text-gray-400 mb-5">Create your profile to appear in search results.</p>
         <Link href="/onboard"><Button className="bg-[#2EC4A5] hover:bg-[#26a88d]">Set up profile</Button></Link>
       </div>
     );

@@ -249,7 +249,7 @@ export default function ProfessionalProfilePage() {
 
   const p = professional;
   const ratings = ratingsData ?? [];
-  const firstName = p.fullName?.split(" ")[0] ?? "Professional";
+  const firstName = p.fullName?.split(" ")[0] ?? "Specialist";
   const initials = p.fullName ? p.fullName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() : "PR";
   const specialtyLabel = getSpecialtyLabel(p.specialty);
 
@@ -291,7 +291,7 @@ export default function ProfessionalProfilePage() {
           </div>
           <div className="pb-1 flex-1 sm:pt-16">
             <div className="flex flex-wrap items-center gap-2 mb-1">
-              <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#1A2340]">{p.fullName ?? "Professional"}</h1>
+              <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#1A2340]">{p.fullName ?? "Specialist"}</h1>
               {p.isVerified && p.verificationStatus === "verified" && (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#2EC4A5] bg-[#2EC4A5]/10 border border-[#2EC4A5]/20 px-2.5 py-0.5 rounded-full">
                   <BadgeCheck size={13} />
@@ -650,14 +650,14 @@ function ActionCard({ p, isSignedIn, isUnlocked, chatAccessOnly, firstName }: Ac
           {p.phone && (
             <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl">
               <Phone size={15} className="text-[#2EC4A5] shrink-0" />
-              <a href={`tel:${p.phone}`} className="text-sm text-[#1A2340] font-medium hover:text-[#2EC4A5] flex-1 focus-visible:ring-2 focus-visible:ring-[#2EC4A5] rounded" aria-label="Call professional" data-testid="contact-phone">{p.phone}</a>
+              <a href={`tel:${p.phone}`} className="text-sm text-[#1A2340] font-medium hover:text-[#2EC4A5] flex-1 focus-visible:ring-2 focus-visible:ring-[#2EC4A5] rounded" aria-label="Call specialist" data-testid="contact-phone">{p.phone}</a>
               <CopyButton text={p.phone} label="phone number" />
             </div>
           )}
           {p.email && (
             <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl">
               <Mail size={15} className="text-[#2EC4A5] shrink-0" />
-              <a href={`mailto:${p.email}`} className="text-sm text-[#1A2340] font-medium hover:text-[#2EC4A5] flex-1 truncate focus-visible:ring-2 focus-visible:ring-[#2EC4A5] rounded" aria-label="Email professional" data-testid="contact-email">{p.email}</a>
+              <a href={`mailto:${p.email}`} className="text-sm text-[#1A2340] font-medium hover:text-[#2EC4A5] flex-1 truncate focus-visible:ring-2 focus-visible:ring-[#2EC4A5] rounded" aria-label="Email specialist" data-testid="contact-email">{p.email}</a>
               <CopyButton text={p.email} label="email" />
             </div>
           )}
@@ -717,7 +717,7 @@ function MobileActionBar({ p, isUnlocked, chatAccessOnly, firstName }: ActionPro
           <a
             href={`tel:${p.phone}`}
             className="flex-1 flex items-center justify-center gap-2 h-11 bg-[#2EC4A5] text-white rounded-xl font-semibold text-sm focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
-            aria-label="Call professional"
+            aria-label="Call specialist"
           >
             <Phone size={16} /> Call
           </a>
@@ -726,7 +726,7 @@ function MobileActionBar({ p, isUnlocked, chatAccessOnly, firstName }: ActionPro
           <a
             href={`mailto:${p.email}`}
             className="flex-1 flex items-center justify-center gap-2 h-11 border border-[#2EC4A5] text-[#2EC4A5] rounded-xl font-semibold text-sm focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
-            aria-label="Email professional"
+            aria-label="Email specialist"
           >
             <Mail size={16} /> Email
           </a>

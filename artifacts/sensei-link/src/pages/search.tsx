@@ -155,7 +155,7 @@ export default function SearchPage() {
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-serif font-semibold text-foreground">Find a specialist</h1>
-            <p className="text-muted-foreground mt-1">Search from our network of verified professionals across India.</p>
+            <p className="text-muted-foreground mt-1">Search from our network of verified specialists across India.</p>
           </div>
           <div className="flex items-center bg-muted rounded-lg p-0.5 shrink-0">
             <button

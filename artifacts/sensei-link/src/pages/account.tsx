@@ -445,7 +445,7 @@ export default function AccountPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm">Profile updates</p>
-                        <p className="text-xs text-muted-foreground">When a professional you unlocked updates their profile</p>
+                        <p className="text-xs text-muted-foreground">When a specialist you unlocked updates their profile</p>
                       </div>
                       <Switch
                         checked={prefs.onProfileUpdate}
@@ -484,10 +484,10 @@ export default function AccountPage() {
         {/* Professional profile link */}
         {me?.role === "professional" && (
           <div className="bg-card border border-border rounded-xl p-5 shadow-sm mb-6">
-            <h2 className="font-semibold mb-1">Professional profile</h2>
+            <h2 className="font-semibold mb-1">Your profile</h2>
             <p className="text-sm text-muted-foreground mb-3">Manage your public profile that parents see in search results.</p>
             <Link href="/onboard">
-              <Button variant="outline" size="sm" data-testid="edit-pro-profile-btn">Edit professional profile</Button>
+              <Button variant="outline" size="sm" data-testid="edit-pro-profile-btn">Edit your profile</Button>
             </Link>
           </div>
         )}

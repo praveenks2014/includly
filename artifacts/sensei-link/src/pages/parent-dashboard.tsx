@@ -130,7 +130,7 @@ function ProfCard({
           {initials(p.fullName)}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-[#1A2340] text-sm truncate leading-tight">{p.fullName ?? "Professional"}</p>
+          <p className="font-bold text-[#1A2340] text-sm truncate leading-tight">{p.fullName ?? "Specialist"}</p>
           <span className="inline-block text-[11px] px-2 py-0.5 bg-teal-50 text-teal-700 rounded-full border border-teal-100 mt-1">
             {getSpecialtyLabel(p.specialty)}
           </span>
@@ -205,7 +205,7 @@ function SessionCard({ s, compact = false }: { s: SessionBookingWithDetails; com
             <CalendarCheck size={15} className="text-violet-500" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-[#1A2340] text-sm truncate">{s.professionalName ?? "Professional"}</p>
+            <p className="font-bold text-[#1A2340] text-sm truncate">{s.professionalName ?? "Specialist"}</p>
             {s.professionalSpecialty && (
               <p className="text-[11px] text-gray-400 mt-0.5">{getSpecialtyLabel(s.professionalSpecialty)}</p>
             )}
@@ -561,7 +561,7 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
               </p>
               <p className="text-[11px] text-gray-400 mt-0.5 truncate">
                 {nextSession
-                  ? `Next: ${nextSession.professionalName ?? "Professional"} · ${new Date(nextSession.bookedDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
+                  ? `Next: ${nextSession.professionalName ?? "Specialist"} · ${new Date(nextSession.bookedDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
                   : "View your schedule"}
               </p>
             </div>
@@ -710,7 +710,7 @@ function FindTab() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[1.35rem] font-bold text-[#1A2340] leading-tight">Find Professionals</h1>
+          <h1 className="text-[1.35rem] font-bold text-[#1A2340] leading-tight">Find Specialists</h1>
           <p className="text-xs text-gray-400 mt-0.5">Search verified specialists near you</p>
         </div>
         {isFetching && (
@@ -792,7 +792,7 @@ function FindTab() {
               <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
                 <Search size={20} className="text-gray-300" />
               </div>
-              <p className="text-sm font-semibold text-gray-600">No professionals found</p>
+              <p className="text-sm font-semibold text-gray-600">No specialists found</p>
               <p className="text-xs text-gray-400 mt-1">Try adjusting your filters or broadening the city.</p>
             </div>
           ) : (
@@ -801,7 +801,7 @@ function FindTab() {
                 <ProfCard
                   key={p.id}
                   p={p}
-                  onChat={() => setChatProfessional({ id: p.id, name: p.fullName ?? "Professional" })}
+                  onChat={() => setChatProfessional({ id: p.id, name: p.fullName ?? "Specialist" })}
                   onReview={() => setReviewingId(p.id)}
                 />
               ))}
@@ -871,7 +871,7 @@ function BookingsTab() {
             <CalendarCheck size={20} className="text-gray-300" />
           </div>
           <p className="text-sm font-semibold text-gray-600">No {bookingTab} bookings</p>
-          <p className="text-xs text-gray-400 mt-1">{bookingTab === "upcoming" ? "Find a professional to book a session." : "Your completed sessions will appear here."}</p>
+          <p className="text-xs text-gray-400 mt-1">{bookingTab === "upcoming" ? "Find a specialist to book a session." : "Your completed sessions will appear here."}</p>
         </div>
       ) : (
         <div className="space-y-3">{shown.map((s) => <SessionCard key={s.id} s={s} />)}</div>
@@ -931,7 +931,7 @@ function MessagesTab() {
     <div className="space-y-5 pb-4">
       <div>
         <h1 className="text-[1.35rem] font-bold text-[#1A2340] leading-tight">Messages</h1>
-        <p className="text-xs text-gray-400 mt-0.5">Conversations with your professionals</p>
+        <p className="text-xs text-gray-400 mt-0.5">Conversations with your specialists</p>
       </div>
       {threads.length === 0 ? (
         <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-12 text-center">
@@ -939,14 +939,14 @@ function MessagesTab() {
             <MessageCircle size={20} className="text-teal-300" />
           </div>
           <p className="text-sm font-semibold text-gray-600">No conversations yet</p>
-          <p className="text-xs text-gray-400 mt-1">Find a professional and send your first message.</p>
+          <p className="text-xs text-gray-400 mt-1">Find a specialist and send your first message.</p>
         </div>
       ) : (
         <div className="bg-white border border-gray-100 rounded-2xl divide-y divide-gray-50 shadow-sm overflow-hidden">
           {threads.map((t) => (
             <button
               key={t.threadId}
-              onClick={() => setChatProfessional({ id: t.professionalId, name: t.professionalName ?? "Professional", threadId: t.threadId, childName: t.childName })}
+              onClick={() => setChatProfessional({ id: t.professionalId, name: t.professionalName ?? "Specialist", threadId: t.threadId, childName: t.childName })}
               className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50/80 transition-colors text-left"
             >
               <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-sm shrink-0 ${t.chattable === false ? "bg-gradient-to-br from-gray-100 to-gray-50 border border-gray-200 text-gray-400" : "bg-gradient-to-br from-teal-100 to-teal-50 border border-teal-100 text-teal-700"}`}>
@@ -955,7 +955,7 @@ function MessagesTab() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <p className={`text-sm truncate ${t.unread > 0 ? "font-bold text-[#1A2340]" : "font-semibold text-gray-700"}`}>
-                    {t.professionalName ?? "Professional"}
+                    {t.professionalName ?? "Specialist"}
                   </p>
                   {t.chattable === false && (
                     <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">Past</span>

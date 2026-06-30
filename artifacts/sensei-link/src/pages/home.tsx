@@ -249,7 +249,7 @@ export default function HomePage() {
               <span className="text-2xl font-bold text-teal-700 font-serif tabular-nums">
                 {profCount.toLocaleString()}+
               </span>
-              <span className="text-sm text-gray-600">Professionals</span>
+              <span className="text-sm text-gray-600">Specialists</span>
             </div>
             <div className="hidden sm:block w-px bg-gray-200" />
             <div className="flex items-center gap-2">
@@ -389,7 +389,7 @@ export default function HomePage() {
                       : "text-gray-600 hover:text-gray-900"
                   }`}
                 >
-                  {tab === "parents" ? "For Parents" : tab === "professionals" ? "For Professionals" : "For Therapy Centres"}
+                  {tab === "parents" ? "For Parents" : tab === "professionals" ? "For Specialists" : "For Therapy Centres"}
                 </button>
               ))}
             </div>
@@ -447,7 +447,7 @@ export default function HomePage() {
       <section className="py-20 px-4 bg-gray-50">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-serif font-semibold text-gray-900 mb-2">Trusted by families & professionals</h2>
+            <h2 className="text-3xl font-serif font-semibold text-gray-900 mb-2">Trusted by families & specialists</h2>
             <p className="text-gray-500">Real stories from real people across India.</p>
           </div>
 
@@ -487,7 +487,7 @@ export default function HomePage() {
             Includly is completely free for families.
           </h2>
           <p className="text-teal-100 text-base mb-2 max-w-xl mx-auto">
-            Professionals list for free during our launch period. Join now and grow your reach with zero risk.
+            Specialists list for free during our launch period. Join now and grow your reach with zero risk.
           </p>
           <p className="text-teal-200 text-xs mb-8">
             Monetisation will be enabled by admin when the platform is ready — you'll be notified in advance.
@@ -520,7 +520,7 @@ export default function HomePage() {
               <span className="font-serif font-semibold text-lg text-white">Includly</span>
             </div>
             <p className="text-xs leading-relaxed mb-5 text-gray-500">
-              India's trusted marketplace connecting families with verified special-education professionals.
+              India's trusted marketplace connecting families with verified specialists.
             </p>
             <div className="flex gap-3">
               {[
@@ -545,7 +545,7 @@ export default function HomePage() {
             <h4 className="text-white font-semibold text-sm mb-4">For Parents</h4>
             <ul className="space-y-2.5 text-xs">
               {[
-                { label: "Find Professionals", href: "/search" },
+                { label: "Find Specialists", href: "/search" },
                 { label: "How It Works", href: "/#how-it-works" },
                 { label: "Reviews", href: "/search" },
                 { label: "Support", href: "/support" },
@@ -557,15 +557,15 @@ export default function HomePage() {
             </ul>
           </div>
 
-          {/* For Professionals */}
+          {/* For Specialists */}
           <div>
-            <h4 className="text-white font-semibold text-sm mb-4">For Professionals</h4>
+            <h4 className="text-white font-semibold text-sm mb-4">For Specialists</h4>
             <ul className="space-y-2.5 text-xs">
               {[
                 { label: "List Your Services", href: "/sign-up?as=professional" },
                 { label: "Pricing", href: "/pricing" },
                 { label: "Get Verified", href: "/sign-up?as=professional" },
-                { label: "Professional Dashboard", href: "/dashboard" },
+                { label: "Dashboard", href: "/dashboard" },
                 { label: "Resources", href: "/support" },
               ].map((l) => (
                 <li key={l.label}>

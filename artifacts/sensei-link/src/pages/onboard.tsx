@@ -389,7 +389,7 @@ export default function OnboardPage() {
           {step === 0 && (
             <div className="space-y-4">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 mb-1">What kind of professional are you?</h2>
+                <h2 className="text-lg font-semibold text-gray-900 mb-1">Which role best describes you?</h2>
                 <p className="text-sm text-gray-500 mb-4">Choose your primary role — you can update this later.</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {VERTICAL_CARDS.slice(0, 2).map((card) => {

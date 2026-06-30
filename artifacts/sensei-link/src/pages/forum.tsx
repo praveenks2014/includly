@@ -369,7 +369,7 @@ function AnswerForm({ postId, onDone, placeholder }: { postId: number; onDone: (
   return (
     <form onSubmit={handleSubmit} className="mt-4 space-y-3">
       <Textarea
-        placeholder={placeholder ?? "Share your professional expertise..."}
+        placeholder={placeholder ?? "Share your expertise..."}
         value={body}
         onChange={(e) => setBody(e.target.value)}
         rows={4}

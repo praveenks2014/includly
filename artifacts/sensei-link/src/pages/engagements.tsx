@@ -69,7 +69,7 @@ function EngagementLogsDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="font-serif text-[#1A2340]">
-            Engagement Logs — {engagement.professionalName ?? "Professional"}
+            Engagement Logs — {engagement.professionalName ?? "Specialist"}
           </DialogTitle>
         </DialogHeader>
 
@@ -192,7 +192,7 @@ function EngagementCard({
             </div>
             <div>
               <p className="font-semibold text-[#1A2340]">
-                {isParent ? (engagement.professionalName ?? "Professional") : (engagement.parentName ?? "Parent")}
+                {isParent ? (engagement.professionalName ?? "Specialist") : (engagement.parentName ?? "Parent")}
               </p>
               {engagement.childName && (
                 <p className="text-xs text-gray-400 mt-0.5">Child: {engagement.childName}</p>

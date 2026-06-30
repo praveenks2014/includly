@@ -259,7 +259,7 @@ function ParentDashboard({
         />
         <StatCard
           icon={<Search size={18} className="text-accent" />}
-          label="Search professionals"
+          label="Search specialists"
           value={<Link href="/search"><Button size="sm" className="mt-1" data-testid="parent-search-cta">Find now</Button></Link>}
         />
       </div>
@@ -351,7 +351,7 @@ function ParentDashboard({
               {data.recentUnlocks.map((unlock) => (
                 <div key={unlock.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
                   <div>
-                    <p className="font-medium text-sm">{unlock.professional?.fullName ?? "Professional"}</p>
+                    <p className="font-medium text-sm">{unlock.professional?.fullName ?? "Specialist"}</p>
                     <p className="text-xs text-muted-foreground">
                       {unlock.professional?.specialty ? getSpecialtyLabel(unlock.professional.specialty) : ""}
                     </p>
@@ -581,7 +581,7 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
           <User size={24} className="text-primary" />
         </div>
         <h2 className="text-lg font-semibold mb-2">Set up your profile</h2>
-        <p className="text-muted-foreground text-sm mb-6">Create your professional profile to start appearing in search results.</p>
+        <p className="text-muted-foreground text-sm mb-6">Create your profile to start appearing in search results.</p>
         <Link href="/onboard">
           <Button data-testid="create-profile-btn">Create profile</Button>
         </Link>
@@ -725,7 +725,7 @@ function ProfessionalDashboard({ data, isLoading }: { data: ProfessionalDashboar
             <div>
               <p className="font-semibold text-red-800 text-base">Your application was not approved</p>
               <p className="text-sm text-red-700 mt-1.5">
-                Your professional profile application has been reviewed and could not be approved at this time.
+                Your application has been reviewed and could not be approved at this time.
                 {(profile as { rejectionReason?: string | null }).rejectionReason && (
                   <span> Reason: <em>{(profile as { rejectionReason?: string | null }).rejectionReason}</em>.</span>
                 )}

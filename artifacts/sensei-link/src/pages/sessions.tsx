@@ -291,7 +291,7 @@ function SessionCard({
 
         <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
           <User size={14} className="text-muted-foreground" />
-          {isProfessional ? session.parentName ?? "Parent" : session.professionalName ?? "Professional"}
+          {isProfessional ? session.parentName ?? "Parent" : session.professionalName ?? "Specialist"}
         </div>
 
         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">

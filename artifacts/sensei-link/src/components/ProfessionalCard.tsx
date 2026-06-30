@@ -53,7 +53,7 @@ export function ProfessionalCard({ professional: p, distanceKm }: ProfessionalCa
             <div className="flex items-center gap-2 flex-wrap">
               <Link href={`/professionals/${p.id}`} className="hover:underline">
                 <h3 className="font-semibold text-foreground text-base leading-tight truncate">
-                  {p.fullName ?? "Professional"}
+                  {p.fullName ?? "Specialist"}
                 </h3>
               </Link>
               {p.isVerified && p.verificationStatus === "verified" && (
