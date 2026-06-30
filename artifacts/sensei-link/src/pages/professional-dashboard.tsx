@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { ShadowMatchChatDrawer } from "@/components/ShadowMatchChatDrawer";
 import { ComingSoon } from "@/components/ComingSoon";
+import { CityAutocomplete, type CityResult } from "@/components/CityAutocomplete";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ProTab = "home" | "profile" | "availability" | "bookings" | "earnings" | "certifications" | "verification" | "notifications" | "messages" | "engagement" | "enquiries";
@@ -440,6 +441,8 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
     yearsExperience: profile?.yearsExperience ?? 0,
     city: profile?.city ?? "",
     displayArea: profile?.displayArea ?? "",
+    latitude: (profile as unknown as { latitude?: number | null })?.latitude ?? undefined as number | undefined,
+    longitude: (profile as unknown as { longitude?: number | null })?.longitude ?? undefined as number | undefined,
     phone: profile?.phone ?? "",
     email: profile?.email ?? "",
     pricingMinINR: profile?.pricingMinINR ?? 0,
@@ -459,6 +462,8 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
         yearsExperience: profile.yearsExperience ?? 0,
         city: profile.city ?? "",
         displayArea: profile.displayArea ?? "",
+        latitude: (profile as unknown as { latitude?: number | null })?.latitude ?? undefined,
+        longitude: (profile as unknown as { longitude?: number | null })?.longitude ?? undefined,
         phone: profile.phone ?? "",
         email: profile.email ?? "",
         pricingMinINR: profile.pricingMinINR ?? 0,
@@ -481,6 +486,8 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
           yearsExperience: Number(form.yearsExperience) || undefined,
           city: form.city.trim() || undefined,
           displayArea: form.displayArea.trim() || undefined,
+          latitude: form.latitude,
+          longitude: form.longitude,
           phone: form.phone.trim() || undefined,
           email: form.email.trim() || undefined,
           pricingMinINR: Number(form.pricingMinINR) || undefined,
@@ -635,16 +642,20 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
           {/* Location */}
           <div className="space-y-4 pt-4 border-t border-gray-50">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Location</p>
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm">City</Label>
-                <Input value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} className="mt-1 rounded-lg focus-visible:ring-[#2EC4A5]" aria-label="City" />
-              </div>
-              <div>
-                <Label className="text-sm">Display Area</Label>
-                <Input value={form.displayArea} onChange={(e) => setForm((f) => ({ ...f, displayArea: e.target.value }))} className="mt-1 rounded-lg focus-visible:ring-[#2EC4A5]" placeholder="e.g. Bandra West, Mumbai" aria-label="Display area" />
-              </div>
-            </div>
+            <CityAutocomplete
+              city={form.city}
+              area={form.displayArea}
+              onSelect={(result: CityResult) =>
+                setForm((f) => ({
+                  ...f,
+                  city: result.city,
+                  displayArea: result.area || f.displayArea,
+                  latitude: result.lat,
+                  longitude: result.lng,
+                }))
+              }
+              onManualChange={(city) => setForm((f) => ({ ...f, city }))}
+            />
           </div>
 
           {/* Session */}

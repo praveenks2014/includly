@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { LocationPicker, type PickedLocation } from "@/components/LocationPicker";
+import { CityAutocomplete, type CityResult } from "@/components/CityAutocomplete";
 import {
   Loader2,
   CheckCircle2,
@@ -214,16 +214,6 @@ export default function OnboardPage() {
 
   function setField(field: string, value: string | boolean | number | string[] | undefined) {
     setForm((prev) => ({ ...prev, [field]: value }));
-  }
-
-  function handleLocationChange(loc: PickedLocation) {
-    setForm((prev) => ({
-      ...prev,
-      latitude: loc.lat,
-      longitude: loc.lng,
-      city: loc.city || prev.city,
-      country: loc.country || prev.country,
-    }));
   }
 
   function toggleLanguage(lang: string) {
@@ -560,36 +550,27 @@ export default function OnboardPage() {
                   Helps parents nearby find you. Your exact address is never shared before a booking.
                 </p>
               </div>
-              <LocationPicker
-                lat={form.latitude}
-                lng={form.longitude}
+              <CityAutocomplete
                 city={form.city}
-                country={form.country}
-                onLocationChange={handleLocationChange}
+                area={form.displayArea}
+                onSelect={(result: CityResult) => {
+                  setField("city", result.city);
+                  setField("displayArea", result.area || form.displayArea);
+                  setField("latitude", result.lat);
+                  setField("longitude", result.lng);
+                }}
+                onManualChange={(city) => setField("city", city)}
               />
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="city" className="text-sm font-medium">City</Label>
-                  <Input
-                    id="city"
-                    value={form.city}
-                    onChange={(e) => setField("city", e.target.value)}
-                    placeholder="Mumbai"
-                    className="mt-1"
-                    data-testid="input-city"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="country" className="text-sm font-medium">Country</Label>
-                  <Input
-                    id="country"
-                    value={form.country}
-                    onChange={(e) => setField("country", e.target.value)}
-                    placeholder="India"
-                    className="mt-1"
-                    data-testid="input-country"
-                  />
-                </div>
+              <div>
+                <Label htmlFor="country" className="text-sm font-medium">Country</Label>
+                <Input
+                  id="country"
+                  value={form.country}
+                  onChange={(e) => setField("country", e.target.value)}
+                  placeholder="India"
+                  className="mt-1"
+                  data-testid="input-country"
+                />
               </div>
               <div>
                 <Label htmlFor="displayArea" className="text-sm font-medium">
