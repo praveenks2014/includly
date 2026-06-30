@@ -16,3 +16,4 @@
 - [fetchWithAuth non-2xx](fetchwithauth-nonok.md) — fetchWithAuth never throws on non-2xx; queryFns doing .then(r=>r.json()) treat 403/500 bodies as success → guard with Array.isArray/r.ok before .reduce/.find/.map
 - [pnpm monorepo dep removal](pnpm-monorepo-dep-removal.md) — uninstallLanguagePackages targets the workspace ROOT (reports success but no-op on artifact deps); remove artifact deps with `pnpm --filter @workspace/<x> remove <pkg>`
 - [Clerk key configuration](clerk-key-config.md) — VITE_CLERK_PUBLISHABLE_KEY env var (shared) holds the live key; dev preview uses hardcoded DEV_CLERK_KEY; server needs CLERK_SECRET_KEY + CLERK_SECRET_KEY_DEV for dual-instance JWT verify
+- [Negotiation offer supersede rule](negotiation-offer-supersede.md) — POST /offers must supersede ALL pending offers (both roles), not just submitter's own; omitting raisedByRole filter causes dual-pending deadlock

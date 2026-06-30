@@ -907,12 +907,13 @@ router.post("/shadow-teacher/:matchId/candidates/:candidateId/offers", requireAu
     .where(and(eq(negotiationOffersTable.matchId, matchId), eq(negotiationOffersTable.candidateId, candidateId), eq(negotiationOffersTable.status, "accepted")))
     .limit(1);
   if (existingAccepted) { res.status(409).json({ error: "A price has already been agreed for this candidate" }); return; }
+  // Supersede ALL pending offers (from both parties) — a new offer/counter implicitly
+  // rejects the other side's pending offer, so only one live pending offer exists at a time.
   await db.update(negotiationOffersTable)
     .set({ status: "superseded", updatedAt: new Date() })
     .where(and(
       eq(negotiationOffersTable.matchId, matchId),
       eq(negotiationOffersTable.candidateId, candidateId),
-      eq(negotiationOffersTable.raisedByRole, ctx.myRole),
       eq(negotiationOffersTable.status, "pending"),
     ));
   const [offer] = await db.insert(negotiationOffersTable).values({
@@ -1054,7 +1055,7 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
   // Block commit while any offer for this match+candidate is still pending —
   // the teacher must accept (or the parent must withdraw) before committing.
   const [pendingOffer] = await db
-    .select({ amountInr: negotiationOffersTable.amountInr })
+    .select({ amountInr: negotiationOffersTable.amountInr, raisedByRole: negotiationOffersTable.raisedByRole })
     .from(negotiationOffersTable)
     .where(
       and(
@@ -1066,9 +1067,12 @@ router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"
     .limit(1);
 
   if (pendingOffer) {
+    const pendingMsg = pendingOffer.raisedByRole === "parent"
+      ? `Waiting for ${teacher.fullName ?? "the teacher"} to accept your offer of ₹${pendingOffer.amountInr.toLocaleString("en-IN")} before you can commit.`
+      : `${teacher.fullName ?? "The teacher"} has countered at ₹${pendingOffer.amountInr.toLocaleString("en-IN")} — accept or send a counter-offer before committing.`;
     res.status(409).json({
       error: "commitment_blocked_pending_offer",
-      message: `Waiting for ${teacher.fullName ?? "the teacher"} to accept your offer of ₹${pendingOffer.amountInr.toLocaleString("en-IN")} before you can commit.`,
+      message: pendingMsg,
       pendingAmountInr: pendingOffer.amountInr,
       teacherName: teacher.fullName,
     });

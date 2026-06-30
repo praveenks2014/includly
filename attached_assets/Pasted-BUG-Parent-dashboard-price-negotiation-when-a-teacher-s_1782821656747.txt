@@ -1,0 +1,51 @@
+BUG — Parent dashboard, price negotiation: when a teacher sends a 
+COUNTER-OFFER, the parent has no way to ACCEPT it. The negotiation 
+deadlocks.
+
+Example (Amin card on parent dashboard):
+- Parent offered ₹25,000/mo (status: pending)
+- Teacher countered ₹27,000/mo (status: pending)
+- Parent's only options: "Chat", "Withdraw", "Request Trial Day", 
+  "Not interested"
+- The button says "Waiting for Amin to accept your offer of ₹25,000 
+  before you can commit"
+
+The problem: the teacher has ALREADY responded with a counter (₹27,000), 
+but the parent can only wait for the teacher to accept the parent's 
+₹25,000 — which won't happen because the teacher countered instead. 
+There's no path for the parent to accept the teacher's ₹27,000 counter.
+
+Expected behavior: when the teacher sends a counter-offer, the parent 
+should be able to:
+1. ACCEPT the teacher's counter-offer (₹27,000) — this should set the 
+   agreed price to ₹27,000 and unblock the commit flow, OR
+2. Counter back with a new offer, OR
+3. Decline/withdraw
+
+Right now only option 3 (withdraw) exists when a teacher counters.
+
+Investigate and fix:
+1. In the parent dashboard negotiation UI (parent-dashboard.tsx), when 
+   there's a teacher counter-offer (teacher offered ₹X, status pending), 
+   show an "Accept ₹X" button for the parent.
+2. When the parent accepts the teacher's counter, the agreed price 
+   should be set to the teacher's amount, and the commit flow should 
+   unblock (the "Waiting for teacher to accept" guard should clear 
+   because there's now an agreed price).
+3. Check the backend negotiation logic (shadowTeacher.ts or wherever 
+   price negotiation is handled): is there an endpoint for the parent 
+   to accept a teacher's counter-offer? If not, add one. If yes, why 
+   isn't the UI exposing it?
+4. The commit guard currently requires "teacher accepted parent's 
+   price." It should ALSO allow commit when "parent accepted teacher's 
+   counter-price" — i.e. commit is allowed whenever there's a mutually 
+   agreed price, regardless of who proposed it last.
+
+Show me the current negotiation state logic (how offers/counters are 
+tracked and what unblocks commit) before changing it. Don't break the 
+existing flow where the teacher accepts the parent's offer — just ADD 
+the path where the parent accepts the teacher's counter.
+
+Key point: the commit should unblock when EITHER party accepts the 
+other's price — a counter-offer that's accepted by the other side IS a 
+mutually agreed price.
