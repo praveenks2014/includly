@@ -45,7 +45,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 
-type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "payments" | "settings" | "commissions" | "moderation" | "bookings" | "shadow-teacher" | "engagements" | "centres";
+type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "users" | "payments" | "settings" | "commissions" | "moderation" | "bookings" | "shadow-teacher" | "engagements" | "centres";
 
 // ── Booking row shape from /admin/bookings ────────────────────────────────────
 interface AdminBookingRow {
@@ -438,6 +438,7 @@ export default function AdminPage() {
     { id: "professionals", label: "Professionals", icon: <UserCheck size={18} /> },
     { id: "verifications", label: "Verifications", icon: <Shield size={18} /> },
     { id: "parents", label: "Parents", icon: <Users size={18} /> },
+    { id: "users", label: "User Management", icon: <UserX size={18} /> },
     { id: "payments", label: "Payments", icon: <CreditCard size={18} /> },
     { id: "bookings", label: "Bookings & Payouts", icon: <IndianRupee size={18} /> },
     { id: "shadow-teacher", label: "Shadow Teacher", icon: <UserCheck size={18} /> },
@@ -523,6 +524,7 @@ export default function AdminPage() {
           {activeTab === "professionals" && <ProfessionalsTab />}
           {activeTab === "verifications" && <VerificationsTab />}
           {activeTab === "parents" && <ParentsTab />}
+          {activeTab === "users" && <UserManagementTab />}
           {activeTab === "payments" && <PaymentsTab />}
           {activeTab === "bookings" && <AdminBookingsTab />}
           {activeTab === "shadow-teacher" && <AdminShadowTeacherTab />}
@@ -1065,6 +1067,245 @@ function ParentsTab() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── User Management Tab ─────────────────────────────────────────────────────
+interface AdminUserRow {
+  id: number;
+  clerkId: string | null;
+  email: string | null;
+  fullName: string | null;
+  role: string;
+  city: string | null;
+  createdAt: string | null;
+}
+
+const ROLE_COLORS: Record<string, string> = {
+  admin: "bg-red-100 text-red-700",
+  professional: "bg-blue-100 text-blue-700",
+  parent: "bg-green-100 text-green-700",
+  centre_admin: "bg-purple-100 text-purple-700",
+};
+
+function UserManagementTab() {
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [confirmDelete, setConfirmDelete] = useState<AdminUserRow | null>(null);
+  const [roleChangeUser, setRoleChangeUser] = useState<AdminUserRow | null>(null);
+  const [newRole, setNewRole] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+  const { toast } = useToast();
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["adminUsers", page, roleFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams({ page: String(page), limit: "30" });
+      if (roleFilter) params.set("role", roleFilter);
+      const res = await fetchWithAuth(`/api/admin/users?${params}`);
+      if (!res.ok) throw new Error("Failed to load users");
+      return res.json() as Promise<{ users: AdminUserRow[]; page: number; limit: number }>;
+    },
+  });
+
+  const filteredUsers = (data?.users ?? []).filter((u) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      u.email?.toLowerCase().includes(q) ||
+      u.fullName?.toLowerCase().includes(q) ||
+      String(u.id).includes(q)
+    );
+  });
+
+  async function handleRoleChange() {
+    if (!roleChangeUser || !newRole) return;
+    setBusy(true);
+    try {
+      const res = await fetchWithAuth(`/api/admin/users/${roleChangeUser.id}/role`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: newRole }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
+      toast({ title: "Role updated", description: `${roleChangeUser.email ?? roleChangeUser.id} → ${newRole}` });
+      setRoleChangeUser(null);
+      refetch();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirmDelete) return;
+    setBusy(true);
+    try {
+      const res = await fetchWithAuth(`/api/admin/users/${confirmDelete.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
+      toast({ title: "User removed", description: `${confirmDelete.email ?? confirmDelete.id} deleted from DB. Clerk account preserved — they can re-onboard on next sign-in.` });
+      setConfirmDelete(null);
+      refetch();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4 max-w-6xl">
+      <p className="text-sm text-gray-500">Find, change roles, or remove user accounts. Deleting a user removes their DB record — their Clerk account is preserved and they can re-onboard on next sign-in.</p>
+
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <Input
+          placeholder="Search by name, email, or ID…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="sm:max-w-xs"
+        />
+        <select
+          value={roleFilter}
+          onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:ring-2 focus:ring-[#2EC4A5] focus:outline-none"
+        >
+          <option value="">All roles</option>
+          <option value="parent">Parents</option>
+          <option value="professional">Professionals</option>
+          <option value="admin">Admins</option>
+          <option value="centre_admin">Centre Admins</option>
+        </select>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-[0_4px_24px_rgba(26,35,64,0.08)] overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">User</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden sm:table-cell">Role</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide hidden md:table-cell">Joined</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wide">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i}>
+                  {[1,2,3,4].map(j => <td key={j} className="px-4 py-3"><div className="h-4 bg-gray-100 rounded animate-pulse" /></td>)}
+                </tr>
+              ))
+            ) : !filteredUsers.length ? (
+              <tr>
+                <td colSpan={4} className="py-12 text-center text-gray-400 text-sm">No users found</td>
+              </tr>
+            ) : (
+              filteredUsers.map((u) => (
+                <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-[#1A2340]">{u.fullName ?? "—"}</p>
+                    <p className="text-xs text-gray-400">{u.email ?? "—"} · #{u.id}</p>
+                  </td>
+                  <td className="px-4 py-3 hidden sm:table-cell">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[u.role] ?? "bg-gray-100 text-gray-600"}`}>
+                      {u.role}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 hidden md:table-cell text-xs text-gray-400">
+                    {u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => { setRoleChangeUser(u); setNewRole(u.role); }}
+                      >
+                        <Edit2 size={12} className="mr-1" />
+                        Role
+                      </Button>
+                      {u.role !== "admin" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                          onClick={() => setConfirmDelete(u)}
+                        >
+                          <Trash2 size={12} className="mr-1" />
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {data && data.users.length === 30 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-400">Showing page {page}</p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+            <Button variant="outline" size="sm" onClick={() => setPage((p) => p + 1)}>Next</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Role-change dialog */}
+      <Dialog open={!!roleChangeUser} onOpenChange={(open) => { if (!open) setRoleChangeUser(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Role</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-500 mb-3">
+            Changing role for <span className="font-semibold">{roleChangeUser?.email ?? roleChangeUser?.fullName ?? `#${roleChangeUser?.id}`}</span>
+          </p>
+          <select
+            value={newRole}
+            onChange={(e) => setNewRole(e.target.value)}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:ring-2 focus:ring-[#2EC4A5] focus:outline-none"
+          >
+            <option value="parent">parent</option>
+            <option value="professional">professional</option>
+            <option value="admin">admin</option>
+            <option value="centre_admin">centre_admin</option>
+          </select>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setRoleChangeUser(null)} disabled={busy}>Cancel</Button>
+            <Button onClick={handleRoleChange} disabled={busy || newRole === roleChangeUser?.role} className="bg-[#2EC4A5] hover:bg-[#26a88d]">
+              {busy ? <Loader2 size={14} className="animate-spin mr-1" /> : <Check size={14} className="mr-1" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete-confirm dialog */}
+      <Dialog open={!!confirmDelete} onOpenChange={(open) => { if (!open) setConfirmDelete(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Remove User</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-700">
+            This removes <span className="font-semibold">{confirmDelete?.email ?? confirmDelete?.fullName ?? `#${confirmDelete?.id}`}</span> (role: <span className="font-semibold">{confirmDelete?.role}</span>) from the database.
+          </p>
+          <p className="text-xs text-gray-400 mt-1">Their Clerk account is NOT deleted — they can sign in again and re-onboard from scratch (starting as a parent).</p>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setConfirmDelete(null)} disabled={busy}>Cancel</Button>
+            <Button onClick={handleDelete} disabled={busy} className="bg-red-500 hover:bg-red-600 text-white">
+              {busy ? <Loader2 size={14} className="animate-spin mr-1" /> : <Trash2 size={14} className="mr-1" />}
+              Remove User
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

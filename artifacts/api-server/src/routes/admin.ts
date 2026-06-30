@@ -755,6 +755,113 @@ router.get("/admin/payouts", ...adminGuard, async (req, res): Promise<void> => {
   res.json(rows);
 });
 
+// ─── Admin: User role management ────────────────────────────────────────────
+
+// GET /admin/users — list all users (any role) with search
+router.get("/admin/users", ...adminGuard, async (req, res): Promise<void> => {
+  const { search, role, page: rawPage, limit: rawLimit } = req.query;
+  const page = Math.max(1, parseInt(String(rawPage ?? "1"), 10));
+  const limit = Math.min(100, Math.max(1, parseInt(String(rawLimit ?? "30"), 10)));
+  const offset = (page - 1) * limit;
+
+  const conditions: ReturnType<typeof eq>[] = [];
+  if (role && typeof role === "string") conditions.push(eq(usersTable.role, role as any));
+
+  let rows = await db
+    .select({
+      id: usersTable.id,
+      clerkId: usersTable.clerkId,
+      email: usersTable.email,
+      fullName: usersTable.fullName,
+      role: usersTable.role,
+      city: usersTable.city,
+      createdAt: usersTable.createdAt,
+    })
+    .from(usersTable)
+    .where(conditions.length ? conditions[0] : undefined)
+    .orderBy(desc(usersTable.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  if (search && typeof search === "string") {
+    const q = search.toLowerCase();
+    rows = rows.filter(
+      (r) =>
+        r.email?.toLowerCase().includes(q) ||
+        r.fullName?.toLowerCase().includes(q) ||
+        String(r.id).includes(q),
+    );
+  }
+
+  res.json({
+    users: rows.map((r) => ({
+      ...r,
+      createdAt: r.createdAt?.toISOString() ?? null,
+    })),
+    page,
+    limit,
+  });
+});
+
+// PATCH /admin/users/:id/role — change a user's role
+router.patch("/admin/users/:id/role", ...adminGuard, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] ?? "", 10);
+  const { role } = req.body ?? {};
+
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+
+  const allowed = ["parent", "professional", "admin"] as const;
+  if (!allowed.includes(role)) {
+    res.status(400).json({ error: `role must be one of: ${allowed.join(", ")}` });
+    return;
+  }
+
+  const [updated] = await db
+    .update(usersTable)
+    .set({ role, updatedAt: new Date() })
+    .where(eq(usersTable.id, id))
+    .returning({ id: usersTable.id, role: usersTable.role, email: usersTable.email });
+
+  if (!updated) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  res.json(updated);
+});
+
+// DELETE /admin/users/:id — remove a user from the database
+// The user's Clerk account is preserved; they can re-onboard on next sign-in.
+router.delete("/admin/users/:id", ...adminGuard, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] ?? "", 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+
+  const [user] = await db
+    .select({ id: usersTable.id, role: usersTable.role, email: usersTable.email })
+    .from(usersTable)
+    .where(eq(usersTable.id, id))
+    .limit(1);
+
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  if (user.role === "admin") {
+    res.status(403).json({ error: "Cannot delete an admin account" });
+    return;
+  }
+
+  await db.delete(usersTable).where(eq(usersTable.id, id));
+  res.json({ deleted: true, id, email: user.email });
+});
+
 router.delete("/purge-non-admin-users", async (req, res): Promise<void> => {
   const secret = req.headers["x-purge-secret"];
   if (secret !== "includly-purge-2026-xk9q") {

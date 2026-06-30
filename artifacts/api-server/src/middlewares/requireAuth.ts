@@ -20,7 +20,19 @@ export const requireAuth = async (
   res: Response,
   next: NextFunction,
 ): Promise<void> => {
-  const { userId: clerkId } = getAuth(req);
+  const authResult = getAuth(req);
+  const clerkId = authResult?.userId;
+
+  if (process.env.NODE_ENV !== "production") {
+    const dbg = (authResult as any)?.debug?.();
+    console.log("[requireAuth] debug:", {
+      clerkId,
+      sessionId: authResult?.sessionId,
+      authDebug: dbg,
+      secretKeyPrefix: process.env.CLERK_SECRET_KEY?.slice(0, 10),
+      pubKeyPrefix: process.env.CLERK_PUBLISHABLE_KEY?.slice(0, 20),
+    });
+  }
 
   if (!clerkId) {
     res.status(401).json({ error: "Unauthorized" });

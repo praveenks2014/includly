@@ -58,10 +58,6 @@ app.use(
       getClerkProxyHost(req) ?? "",
       process.env.CLERK_PUBLISHABLE_KEY,
     ),
-    secretKey:
-      process.env.NODE_ENV !== "production"
-        ? (process.env.CLERK_SECRET_KEY_DEV ?? process.env.CLERK_SECRET_KEY)
-        : process.env.CLERK_SECRET_KEY,
   })),
 );
 
