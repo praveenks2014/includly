@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, count, gt, and } from "drizzle-orm";
-import { db, usersTable, professionalProfilesTable, ratingsTable, contactUnlocksTable, professionalSubscriptionsTable } from "@workspace/db";
+import { db, usersTable, professionalProfilesTable, ratingsTable, contactUnlocksTable, professionalSubscriptionsTable, therapyCentresTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   GetParentDashboardResponse,
@@ -146,6 +146,10 @@ router.get("/dashboard/stats", async (_req, res): Promise<void> => {
     .select({ count: count() })
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.isVerified, true));
+  const [centreCount] = await db
+    .select({ count: count() })
+    .from(therapyCentresTable)
+    .where(eq(therapyCentresTable.status, "live"));
 
   const allProfs = await db.select({ specialty: professionalProfilesTable.specialty }).from(professionalProfilesTable);
 
@@ -162,8 +166,18 @@ router.get("/dashboard/stats", async (_req, res): Promise<void> => {
       totalRatings: Number(ratingsCount?.count ?? 0),
       specialtyCounts,
       verifiedCount: Number(verifiedCount?.count ?? 0),
+      totalCentres: Number(centreCount?.count ?? 0),
     }),
   );
+});
+
+router.post("/waitlist", async (req, res): Promise<void> => {
+  const { email } = req.body as { email?: string };
+  if (!email || !email.includes("@")) {
+    res.status(400).json({ error: "Valid email required" });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 export default router;

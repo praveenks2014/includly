@@ -27,6 +27,23 @@ export function SideNav() {
   const renderItem = (item: NavItem) => {
     const active = item.match(loc);
     const Icon = item.icon;
+
+    if (item.comingSoon) {
+      return (
+        <div
+          key={item.path}
+          className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-300 cursor-default select-none"
+          style={{ minHeight: 44 }}
+        >
+          <Icon size={18} strokeWidth={1.8} />
+          <span className="flex-1">{item.label}</span>
+          <span className="text-[10px] font-medium bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full leading-none">
+            Soon
+          </span>
+        </div>
+      );
+    }
+
     return (
       <Link
         key={item.path}

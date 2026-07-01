@@ -882,6 +882,7 @@ export const GetPlatformStatsResponse = zod.object({
   totalRatings: zod.number(),
   specialtyCounts: zod.record(zod.string(), zod.number()),
   verifiedCount: zod.number(),
+  totalCentres: zod.number(),
 });
 
 /**

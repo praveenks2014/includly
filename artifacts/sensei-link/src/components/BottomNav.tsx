@@ -41,6 +41,20 @@ export function BottomNav() {
       {primaryTabs.map((item) => {
         const active = item.match(loc);
         const Icon = item.icon;
+
+        if (item.comingSoon) {
+          return (
+            <div
+              key={item.path}
+              className="relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-gray-300 cursor-default select-none"
+              style={{ minHeight: 44 }}
+            >
+              <Icon size={20} strokeWidth={1.8} />
+              <span>{item.label}</span>
+            </div>
+          );
+        }
+
         return (
           <Link
             key={item.path}
@@ -91,6 +105,22 @@ export function BottomNav() {
               {secondaryTabs.map((item) => {
                 const Icon = item.icon;
                 const active = item.match(loc);
+
+                if (item.comingSoon) {
+                  return (
+                    <div
+                      key={item.path}
+                      className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-gray-300 cursor-default select-none"
+                    >
+                      <Icon size={18} strokeWidth={1.8} />
+                      <span className="flex-1">{item.label}</span>
+                      <span className="text-[10px] font-medium bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full leading-none">
+                        Soon
+                      </span>
+                    </div>
+                  );
+                }
+
                 return (
                   <Link
                     key={item.path}

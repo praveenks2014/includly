@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { useUser } from "@clerk/react";
 import { Redirect } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useGetPlatformStats } from "@workspace/api-client-react";
+import { STAT_THRESHOLDS } from "@/features";
 import {
-  Search, ShieldCheck, Heart, ArrowRight, Star, ChevronDown,
-  MapPin, Clock, CheckCircle2, Quote, Instagram, Twitter,
-  Linkedin, Facebook, Phone, BookOpen, Stethoscope,
+  Search, ShieldCheck, Heart, ArrowRight, Star,
+  CheckCircle2, Quote, Instagram, Twitter,
+  Linkedin, Facebook, Phone, BookOpen,
   GraduationCap, Brain, Building2, UserCheck, Sparkles,
 } from "lucide-react";
 
@@ -36,7 +37,6 @@ const CATEGORY_CARDS = [
     bg: "bg-teal-50",
     title: "Shadow Teacher",
     desc: "In-classroom support and one-on-one learning assistance for children with special needs.",
-    count: 420,
     specialty: "shadow_teacher",
   },
   {
@@ -44,7 +44,6 @@ const CATEGORY_CARDS = [
     bg: "bg-orange-50",
     title: "Occupational Therapist",
     desc: "Helping children build daily living skills, fine motor control, and sensory processing.",
-    count: 310,
     specialty: "occupational_therapy",
   },
   {
@@ -52,7 +51,6 @@ const CATEGORY_CARDS = [
     bg: "bg-blue-50",
     title: "Speech Therapist",
     desc: "Improving communication, language development, and swallowing for all age groups.",
-    count: 280,
     specialty: "speech_therapy",
   },
   {
@@ -60,7 +58,6 @@ const CATEGORY_CARDS = [
     bg: "bg-violet-50",
     title: "Child Psychologist",
     desc: "Assessments, therapy, and support for emotional, behavioural, and developmental concerns.",
-    count: 190,
     specialty: "child_psychologist",
   },
   {
@@ -68,7 +65,6 @@ const CATEGORY_CARDS = [
     bg: "bg-rose-50",
     title: "Special Educator",
     desc: "Personalised academic instruction aligned to each child's IEP and learning style.",
-    count: 360,
     specialty: "special_educator",
   },
 ];
@@ -124,58 +120,40 @@ const TESTIMONIALS = [
   },
 ];
 
-const QUICK_CHIPS = [
-  { label: "Shadow Teacher", specialty: "shadow_teacher" },
-  { label: "Speech Therapy", specialty: "speech_therapy" },
-  { label: "Occupational Therapy", specialty: "occupational_therapy" },
-  { label: "ABA Therapy", specialty: "aba_therapy" },
-  { label: "Sensory Integration", specialty: "sensory_integration" },
-];
-
-const SPECIALTIES_OPTIONS = [
-  { value: "", label: "All Specialties" },
-  { value: "shadow_teacher", label: "Shadow Teacher" },
-  { value: "speech_therapy", label: "Speech Therapy" },
-  { value: "occupational_therapy", label: "Occupational Therapy" },
-  { value: "aba_therapy", label: "ABA Therapy" },
-  { value: "sensory_integration", label: "Sensory Integration" },
-  { value: "special_educator", label: "Special Educator" },
-  { value: "child_psychologist", label: "Child Psychologist" },
-];
-
-const AGE_OPTIONS = [
-  { value: "", label: "Any Age" },
-  { value: "0-3", label: "0–3 years (Infant)" },
-  { value: "3-6", label: "3–6 years (Toddler)" },
-  { value: "6-12", label: "6–12 years (School-age)" },
-  { value: "12-18", label: "12–18 years (Teen)" },
-  { value: "18+", label: "18+ (Adult)" },
-];
-
 export default function HomePage() {
   const { isSignedIn } = useUser();
   const { data: stats } = useGetPlatformStats();
   const [howTab, setHowTab] = useState<"parents" | "professionals" | "centres">("parents");
-  const [specialty, setSpecialty] = useState("");
-  const [city, setCity] = useState("");
-  const [ageGroup, setAgeGroup] = useState("");
-  const [availability, setAvailability] = useState("");
-  const [, setLocation] = useLocation();
+  const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistState, setWaitlistState] = useState<"idle" | "loading" | "done" | "error">("idle");
 
-  const profCount = useCountUp(2400);
-  const centreCount = useCountUp(380);
-  const childCount = useCountUp(12000);
+  const rawProfCount = stats?.totalProfessionals ?? 0;
+  const rawCentreCount = stats?.totalCentres ?? 0;
+  const rawParentCount = stats?.totalParents ?? 0;
+
+  const animProfCount = useCountUp(rawProfCount);
+  const animCentreCount = useCountUp(rawCentreCount);
+  const animParentCount = useCountUp(rawParentCount);
+
+  const showProfCount = rawProfCount >= STAT_THRESHOLDS.specialists;
+  const showCentreCount = rawCentreCount >= STAT_THRESHOLDS.centres;
+  const showParentCount = rawParentCount >= STAT_THRESHOLDS.parents;
 
   if (isSignedIn) return <Redirect to="/dashboard" />;
 
-  function handleSearch(e: React.FormEvent) {
+  async function handleWaitlist(e: React.FormEvent) {
     e.preventDefault();
-    const params = new URLSearchParams();
-    if (specialty) params.set("specialty", specialty);
-    if (city) params.set("city", city);
-    if (ageGroup) params.set("age", ageGroup);
-    if (availability) params.set("mode", availability);
-    setLocation(`/search?${params.toString()}`);
+    setWaitlistState("loading");
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: waitlistEmail }),
+      });
+      setWaitlistState(res.ok ? "done" : "error");
+    } catch {
+      setWaitlistState("error");
+    }
   }
 
   return (
@@ -245,26 +223,42 @@ export default function HomePage() {
 
           {/* Trust bar */}
           <div className="inline-flex flex-wrap justify-center gap-x-8 gap-y-3 bg-white/60 backdrop-blur-sm rounded-2xl px-8 py-4 border border-white/80 shadow-sm">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-teal-700 font-serif tabular-nums">
-                {profCount.toLocaleString()}+
-              </span>
-              <span className="text-sm text-gray-600">Specialists</span>
-            </div>
+            {showProfCount ? (
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-bold text-teal-700 font-serif tabular-nums">
+                  {animProfCount.toLocaleString()}+
+                </span>
+                <span className="text-sm text-gray-600">Specialists</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-teal-700">Growing network of specialists</span>
+              </div>
+            )}
             <div className="hidden sm:block w-px bg-gray-200" />
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-teal-700 font-serif tabular-nums">
-                {centreCount.toLocaleString()}+
-              </span>
-              <span className="text-sm text-gray-600">Therapy Centres</span>
-            </div>
-            <div className="hidden sm:block w-px bg-gray-200" />
-            <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-teal-700 font-serif tabular-nums">
-                {childCount.toLocaleString()}+
-              </span>
-              <span className="text-sm text-gray-600">Children Supported</span>
-            </div>
+            {showCentreCount ? (
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-bold text-teal-700 font-serif tabular-nums">
+                  {animCentreCount.toLocaleString()}+
+                </span>
+                <span className="text-sm text-gray-600">Therapy Centres</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-teal-700">Verified centres joining soon</span>
+              </div>
+            )}
+            {showParentCount && (
+              <>
+                <div className="hidden sm:block w-px bg-gray-200" />
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-bold text-teal-700 font-serif tabular-nums">
+                    {animParentCount.toLocaleString()}+
+                  </span>
+                  <span className="text-sm text-gray-600">Children Supported</span>
+                </div>
+              </>
+            )}
             <div className="hidden sm:block w-px bg-gray-200" />
             <div className="flex items-center gap-2">
               <ShieldCheck size={18} className="text-teal-600" />
@@ -274,97 +268,44 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── SEARCH BAR ── */}
-      <section id="search" className="py-10 px-4 bg-white border-b border-gray-100 shadow-sm">
-        <div className="max-w-5xl mx-auto">
-          <form onSubmit={handleSearch}>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <label className="sr-only">Specialty</label>
-                <select
-                  value={specialty}
-                  onChange={(e) => setSpecialty(e.target.value)}
-                  className="w-full h-12 pl-4 pr-10 rounded-xl border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent appearance-none"
-                >
-                  {SPECIALTIES_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-                <ChevronDown size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              </div>
-
-              <div className="relative flex-1">
-                <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="City (e.g. Mumbai, Delhi)"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  className="w-full h-12 pl-9 pr-4 rounded-xl border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                />
-              </div>
-
-              <div className="relative">
-                <label className="sr-only">Child's age group</label>
-                <select
-                  value={ageGroup}
-                  onChange={(e) => setAgeGroup(e.target.value)}
-                  className="h-12 pl-4 pr-10 rounded-xl border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent appearance-none"
-                >
-                  {AGE_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-                <ChevronDown size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              </div>
-
-              <div className="relative">
-                <label className="sr-only">Availability</label>
-                <select
-                  value={availability}
-                  onChange={(e) => setAvailability(e.target.value)}
-                  className="h-12 pl-4 pr-10 rounded-xl border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent appearance-none"
-                >
-                  <option value="">Online / Offline</option>
-                  <option value="online">Online only</option>
-                  <option value="offline">In-person only</option>
-                  <option value="both">Both</option>
-                </select>
-                <ChevronDown size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              </div>
-
-              <Button
-                type="submit"
-                className="h-12 px-8 bg-teal-600 hover:bg-teal-700 text-white rounded-xl gap-2 text-sm font-medium shrink-0"
-                data-testid="search-submit"
-              >
-                <Search size={16} />
-                Search
-              </Button>
+      {/* ── EARLY ACCESS CAPTURE ── */}
+      <section id="early-access" className="py-10 px-4 bg-white border-b border-gray-100 shadow-sm">
+        <div className="max-w-2xl mx-auto text-center">
+          <p className="text-sm font-medium text-teal-600 mb-2">Specialist search launching soon</p>
+          <h2 className="text-xl font-serif font-semibold text-gray-900 mb-4">
+            Be first to find the right support for your child
+          </h2>
+          {waitlistState === "done" ? (
+            <div className="flex items-center justify-center gap-2 text-teal-700 font-medium py-4">
+              <CheckCircle2 size={20} />
+              <span>You're on the list! We'll notify you when search goes live.</span>
             </div>
-          </form>
-
-          {/* Quick chips */}
-          <div className="flex flex-wrap gap-2 mt-4">
-            {QUICK_CHIPS.map((chip) => (
-              <button
-                key={chip.specialty}
-                onClick={() => setLocation(`/search?specialty=${chip.specialty}`)}
-                className="text-xs px-3 py-1.5 rounded-full border border-teal-200 text-teal-700 bg-teal-50 hover:bg-teal-100 transition-colors font-medium"
-              >
-                {chip.label}
-              </button>
-            ))}
-            <button
-              onClick={() => {
-                navigator.geolocation?.getCurrentPosition(() => setLocation("/search?near=me"));
-                setLocation("/search");
-              }}
-              className="text-xs px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 bg-gray-50 hover:bg-gray-100 transition-colors font-medium flex items-center gap-1"
-            >
-              <MapPin size={11} /> Near Me
-            </button>
-          </div>
+          ) : (
+            <form onSubmit={handleWaitlist}>
+              <div className="flex flex-col sm:flex-row gap-3 max-w-xl mx-auto">
+                <input
+                  type="email"
+                  required
+                  placeholder="Enter your email for early access"
+                  value={waitlistEmail}
+                  onChange={(e) => setWaitlistEmail(e.target.value)}
+                  disabled={waitlistState === "loading"}
+                  className="flex-1 h-12 px-4 rounded-xl border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:opacity-50"
+                />
+                <Button
+                  type="submit"
+                  disabled={waitlistState === "loading"}
+                  className="h-12 px-8 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-medium shrink-0 disabled:opacity-60"
+                  data-testid="waitlist-submit"
+                >
+                  {waitlistState === "loading" ? "Sending…" : "Get Early Access"}
+                </Button>
+              </div>
+              {waitlistState === "error" && (
+                <p className="text-red-500 text-xs mt-2">Something went wrong. Please try again.</p>
+              )}
+            </form>
+          )}
         </div>
       </section>
 
@@ -420,24 +361,22 @@ export default function HomePage() {
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-5">
             {CATEGORY_CARDS.map((card) => (
-              <Link key={card.specialty} href={`/search?specialty=${card.specialty}`}>
-                <div
-                  className="group flex flex-col gap-3 p-6 bg-white border border-gray-100 rounded-2xl hover:shadow-md hover:-translate-y-1 transition-all duration-200 cursor-pointer"
-                  data-testid={`category-${card.specialty}`}
-                >
-                  <div className={`w-12 h-12 ${card.bg} rounded-xl flex items-center justify-center`}>
-                    {card.icon}
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 text-sm group-hover:text-teal-700 transition-colors">{card.title}</h3>
-                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">{card.desc}</p>
-                  </div>
-                  <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-50">
-                    <span className="text-xs text-gray-400">{card.count}+ listed</span>
-                    <span className="text-xs text-teal-600 font-medium group-hover:translate-x-0.5 transition-transform">Browse →</span>
-                  </div>
+              <div
+                key={card.specialty}
+                className="flex flex-col gap-3 p-6 bg-white border border-gray-100 rounded-2xl opacity-70"
+                data-testid={`category-${card.specialty}`}
+              >
+                <div className={`w-12 h-12 ${card.bg} rounded-xl flex items-center justify-center`}>
+                  {card.icon}
                 </div>
-              </Link>
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">{card.title}</h3>
+                  <p className="text-xs text-gray-500 mt-1 leading-relaxed">{card.desc}</p>
+                </div>
+                <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-50">
+                  <span className="text-xs text-gray-400 italic">Coming soon</span>
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -545,9 +484,8 @@ export default function HomePage() {
             <h4 className="text-white font-semibold text-sm mb-4">For Parents</h4>
             <ul className="space-y-2.5 text-xs">
               {[
-                { label: "Find Specialists", href: "/search" },
                 { label: "How It Works", href: "/#how-it-works" },
-                { label: "Reviews", href: "/search" },
+                { label: "Get Early Access", href: "#early-access" },
                 { label: "Support", href: "/support" },
               ].map((l) => (
                 <li key={l.label}>

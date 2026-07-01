@@ -20,8 +20,8 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const GUEST_NAV = [
   { label: "How It Works", href: "/#how-it-works" },
-  { label: "Find Professionals", href: "/search" },
-  { label: "Resources", href: "/resources" },
+  { label: "Find Specialists", href: "/#find-professionals" },
+  { label: "Early Access", href: "/#early-access" },
 ];
 
 export function Navbar() {
@@ -86,12 +86,6 @@ export function Navbar() {
           <nav className="hidden md:flex items-center gap-1">
             {isSignedIn ? (
               <>
-                <Link href="/search">
-                  <Button variant="ghost" size="sm" className="gap-2 text-gray-600 hover:text-gray-900">
-                    <Search size={15} />
-                    Search
-                  </Button>
-                </Link>
                 <Link href="/dashboard">
                   <Button variant="ghost" size="sm" className="gap-2 text-gray-600 hover:text-gray-900">
                     <LayoutDashboard size={15} />
@@ -204,7 +198,6 @@ export function Navbar() {
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
             {isSignedIn ? (
               <>
-                <MobileNavItem href="/search" icon={<Search size={16} />} label="Search" onClick={closeMobile} />
                 <MobileNavItem href="/dashboard" icon={<LayoutDashboard size={16} />} label="Dashboard" onClick={closeMobile} />
                 {isAdmin && (
                   <MobileNavItem href="/admin" icon={<Shield size={16} />} label="Admin" onClick={closeMobile} className="text-violet-700" />

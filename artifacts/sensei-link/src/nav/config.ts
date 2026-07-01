@@ -27,6 +27,8 @@ export interface NavItem {
   specialtyFilter?: string;
   /** Hidden from the mobile bottom bar's primary slots; surfaced via the "More" sheet instead. */
   mobileHidden?: boolean;
+  /** Renders as a disabled "Coming soon" item instead of a navigable link. */
+  comingSoon?: boolean;
 }
 
 function tab(
@@ -53,13 +55,13 @@ export const NAV: Record<Exclude<Role, "admin">, NavItem[]> = {
     tab("Progress", LineChart, "/progress"),
     tab("Inbox", MessageSquare, "/inbox", "unreadMessages"),
     { ...tab("Community", Users, "/community"), mobileHidden: true },
-    { ...tab("Resources", BookOpen, "/resources"), mobileHidden: true },
-    { ...tab("Ask Includly", Sparkles, "/ask"), mobileHidden: true },
+    { ...tab("Resources", BookOpen, "/resources"), mobileHidden: true, comingSoon: true },
+    { ...tab("Ask Includly", Sparkles, "/ask"), mobileHidden: true, comingSoon: true },
   ],
   professional: [
     tab("Today", LayoutDashboard, "/pro/today", "pendingRequests"),
     tab("Calendar", CalendarDays, "/pro/calendar"),
-    tab("Clients", Users, "/pro/clients"),
+    { ...tab("Clients", Users, "/pro/clients"), comingSoon: true },
     tab("Inbox", MessageSquare, "/pro/inbox", "unreadMessages"),
     tab("Earnings", Wallet, "/pro/earnings"),
     tab("Enquiries", Inbox, "/pro/enquiries", undefined, "shadow_teacher"),

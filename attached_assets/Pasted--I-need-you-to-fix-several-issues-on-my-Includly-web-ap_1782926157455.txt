@@ -1,0 +1,16 @@
+
+I need you to fix several issues on my Includly web app (React + Vite + TypeScript frontend, Express + Drizzle + PostgreSQL backend). Do NOT add new features — only fix data accuracy and hide incomplete pages. Keep changes tight and surgical.
+1. Landing page stats are wrong
+The landing page shows hardcoded stats for "Professionals onboarded", "Children supported", and "Centres listed." Replace these with real database counts:
+
+Create a GET /api/stats endpoint that returns live counts: professionals from professional_profiles, parents from users WHERE role = 'parent', and centres from the therapy centres table filtered to status live.
+Wire the landing page to fetch and display these real numbers.
+If a count is genuinely zero or very low, show the honest number — do not fall back to fake placeholder values like "500+" or "1,200+". If you prefer, swap the number for soft copy like "Growing network of specialists" when the real count is below a small threshold.
+
+2. Remove "Professional Search" from the landing page
+The professional search/directory page is not built. Remove every link, nav item, and CTA button on the public landing page that routes to it (including any "Find a specialist" buttons). Replace with either a "Coming soon" disabled state or a simple notify-me input — never let a visitor click into a broken/unbuilt page.
+3. Hide incomplete pages in the post-login nav
+After login, the top nav shows links to pages that are stubs or unfinished (professional search, and any others). Audit each nav item against whether its route is actually complete. For anything that renders a stub or "coming soon" placeholder, remove it from the nav or show it with a disabled "Coming soon" badge — not as a clickable link. Check the Journey tab (parent dashboard) and Clients tab (professional dashboard) specifically.
+4. Add a single feature-flag config
+Create a features.ts config file with one entry per feature and a status field ('enabled' | 'coming_soon' | 'hidden'). Have the landing page CTAs and all nav items read their visibility from this config, so features can be toggled in one place instead of editing many components.
+Before you start, show me the list of files you plan to change and the current nav/route setup so I can confirm. Then make the changes.
