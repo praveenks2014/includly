@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, count, gt, and } from "drizzle-orm";
-import { db, usersTable, professionalProfilesTable, ratingsTable, contactUnlocksTable, professionalSubscriptionsTable, therapyCentresTable } from "@workspace/db";
+import { z } from "zod/v4";
+import { db, usersTable, professionalProfilesTable, ratingsTable, contactUnlocksTable, professionalSubscriptionsTable, therapyCentresTable, waitlistTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   GetParentDashboardResponse,
@@ -171,13 +172,26 @@ router.get("/dashboard/stats", async (_req, res): Promise<void> => {
   );
 });
 
+const WaitlistBody = z.object({
+  email: z.email(),
+  source: z.string().optional(),
+});
+
 router.post("/waitlist", async (req, res): Promise<void> => {
-  const { email } = req.body as { email?: string };
-  if (!email || !email.includes("@")) {
-    res.status(400).json({ error: "Valid email required" });
+  const parsed = WaitlistBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ ok: false, error: "invalid_email" });
     return;
   }
-  res.json({ ok: true });
+  const email = parsed.data.email.trim().toLowerCase();
+  const source = parsed.data.source ?? "hero_form";
+  try {
+    await db.insert(waitlistTable).values({ email, source }).onConflictDoNothing();
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[waitlist] insert failed", err);
+    res.status(500).json({ ok: false });
+  }
 });
 
 export default router;

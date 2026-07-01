@@ -20,3 +20,4 @@
 - [GitHub push workaround](github-push-workaround.md) — git remote add and .git/config writes are sandboxed; use `git push <inline-URL-with-PAT> main` to bypass; no persistent named remote possible
 - [api-client-react rebuild requirement](api-client-react-rebuild.md) — after editing api.schemas.ts/api.ts, run `pnpm --filter @workspace/api-client-react exec tsc -p tsconfig.json` to update dist/.d.ts before TS type checks see changes
 - [Search response nullable contacts](search-nullable-contacts.md) — phoneBlurred/emailBlurred are intentionally null for shadow teachers in search results; all 4 SearchProfessionalsResponse/ResultItem/Unlocks/Dashboard schemas need .nullable() not .string()
+- [WebGL detection in Replit sandbox](webgl-replit-detection.md) — Replit preview has no GPU; THREE.WebGLRenderer throws before React ErrorBoundary; detect WebGL via useEffect before Canvas ever mounts

@@ -18,6 +18,7 @@ import {
   childrenTable,
   engagementLifecycleRequestsTable,
   engagementSalaryPaymentsTable,
+  waitlistTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import {
@@ -908,6 +909,14 @@ router.patch("/admin/professionals/:id/verify-rci", ...adminGuard, async (req, r
   }
 
   res.json({ id: profile.id, rciVerified: profile.rciVerified, fullName: profile.fullName });
+});
+
+router.get("/admin/waitlist", ...adminGuard, async (_req, res): Promise<void> => {
+  const rows = await db
+    .select()
+    .from(waitlistTable)
+    .orderBy(desc(waitlistTable.createdAt));
+  res.json(rows);
 });
 
 router.delete("/purge-non-admin-users", async (req, res): Promise<void> => {
