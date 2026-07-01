@@ -1,0 +1,68 @@
+```
+You are redesigning the UI of "Includly", a special-education specialist marketplace for parents in
+India (React 19 + Vite + Tailwind CSS v4 + Radix/shadcn UI + framer-motion + lucide-react + wouter +
+TanStack Query + Clerk auth). Goal: make the ENTIRE UI feel modern, premium, and visually appealing to
+2025 standards, with TASTEFUL 3D graphics — without breaking any functionality.
+
+NON-NEGOTIABLE CONSTRAINTS
+- Do NOT change routing, API calls, data fetching, auth (Clerk), form logic, or data models. This is a
+  visual/UX refresh only — same routes, same endpoints, same behavior.
+- Keep the existing tech: Tailwind v4, the Radix/shadcn components in src/components/ui, framer-motion,
+  lucide-react. Reuse and restyle these; do not rip them out.
+- Audience is parents of children with special needs. The tone must stay CALM, WARM, TRUSTWORTHY, and
+  ACCESSIBLE. No flashy, noisy, or overwhelming effects. 3D is a subtle accent, never a distraction.
+- Accessibility: WCAG AA contrast, visible focus states, keyboard nav, semantic HTML, and honor
+  prefers-reduced-motion (disable/ää reduce 3D + motion when set).
+- Performance: mobile-first and fast. Lazy-load any 3D/WebGL, provide a lightweight static fallback,
+  and keep the main bundle lean. Target good Lighthouse performance on mid-range mobile.
+
+BRAND
+- Keep the Includly name and the teal accent (#2EC4A5) as the primary brand color. Modernize AROUND it:
+  refine into a cohesive palette (primary teal + a deeper teal/ink for text, soft neutral grays, and
+  restrained violet/amber accents already used). Add a subtle brand gradient (teal → mint/aqua).
+
+DESIGN SYSTEM (do this first, in Tailwind v4 @theme + src/index.css)
+- Define design tokens: color scale, spacing, radii (generous: rounded-xl/2xl), elevation (soft,
+  layered shadows), and a type scale. Add a modern typeface (e.g., Inter, General Sans, or Geist) for
+  headings/body; keep it performant (self-host or preconnect Google Fonts).
+- Introduce depth utilities: soft shadows, subtle borders, glassmorphism surfaces (backdrop-blur with
+  low-opacity backgrounds), and gentle gradient meshes for section backgrounds.
+- Support light and dark mode cohesively.
+- Standardize the shadcn components (Button, Card, Input, Dialog, Badge, Tabs) with the new tokens:
+  rounded corners, soft shadows, hover "lift" + press micro-interactions.
+
+3D GRAPHICS (tasteful, accent-level)
+- Add a hero 3D scene on the landing page (home.tsx) using @react-three/fiber + @react-three/drei +
+  three (pure-JS, safe to add). Something calm and abstract that evokes connection/care — e.g. slowly
+  floating soft geometric shapes / an orb / gently drifting particles in the teal palette, with soft
+  lighting and subtle mouse parallax. Lazy-load it (React.lazy/Suspense), pause when offscreen, and
+  fall back to a static gradient/illustration on reduced-motion or low-power devices.
+- Elsewhere in the app, keep it 2D but with DEPTH: glass cards, layered soft shadows, gradient
+  accents, subtle 3D tilt on key cards (small rotateX/Y on hover), and smooth framer-motion
+  transitions. No heavy WebGL inside dashboards.
+
+MOTION
+- Use framer-motion for page/section transitions, scroll-reveal (fade/slide-up), staggered lists, and
+  micro-interactions on buttons/cards. Keep durations short (150–300ms) and easing gentle. Respect
+  prefers-reduced-motion everywhere.
+
+PAGE-BY-PAGE (apply the new system to all)
+- Landing (home.tsx): modern hero with the 3D accent + clear value prop and CTAs; polished feature
+  sections, social proof, trust signals; strong footer.
+- Search (search.tsx) + specialist cards: clean card grid with avatars, specialty chips, ratings,
+  location, price; refined filters; skeleton loading states.
+- Professional profile (professional-profile.tsx): hero header, credentials, glass info cards,
+  sticky booking CTA.
+- Dashboards (parent-/professional-/centre-dashboard.tsx): modernize stat tiles, tabs, tables, and
+  empty states; consistent spacing and elevation; keep the tabbed structure.
+- Onboarding (choose-role, onboard, onboard-stage2, onboarding-child): friendly multi-step wizard with
+  a progress indicator, large touch targets, clear validation, and encouraging copy.
+- Redesign the ComingSoon placeholder and all empty/loading/error states to feel intentional.
+
+DELIVERABLES
+- A cohesive design-token layer, restyled shared components, and all pages updated to match.
+- No regressions in behavior; responsive from 320px up; AA accessibility; 3D lazy-loaded with fallback.
+- Summarize the design decisions (palette, type, spacing, shadows) at the end.
+```
+
+---

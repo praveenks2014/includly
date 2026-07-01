@@ -1,0 +1,35 @@
+I need you to fix the failing early-access form on my Includly landing page and properly persist the collected emails. Frontend is React + Vite + TypeScript; backend is Express + TypeScript + Drizzle ORM + PostgreSQL. Keep changes tight — this is the waitlist capture only, no other features.
+Context: The hero form currently POSTs to a stubbed waitlist endpoint and shows "Something went wrong. Please try again." on submit. It needs to actually work and save emails to the database.
+1. Debug the current failure first
+Before changing anything, reproduce the error and tell me the actual status code and server-log message when the form submits (404, 500, validation error, etc.). Confirm the route the frontend calls matches the registered Express route exactly, including the /api prefix, and that body-parsing middleware is present. Report what you find, then fix it.
+2. Create the waitlist table (Drizzle schema)
+Add a waitlist table to the schema:
+
+id — primary key
+email — text, unique, not null
+source — text, defaults to 'hero_form' (so I can distinguish capture points later)
+createdAt — timestamp, defaults to now
+
+Generate and run the migration.
+3. Build the endpoint
+Create POST /api/waitlist (register it in the Express router, no auth guard — this is public):
+
+Accepts { email, source? }
+Validates email is a well-formed address using a Zod schema; return 400 { ok: false, error: 'invalid_email' } if not
+Upserts into the waitlist table with onConflictDoNothing on the email column, so duplicate submissions are ignored cleanly and never error
+On success return 200 { ok: true }
+Wrap the handler in try/catch; on unexpected failure return 500 { ok: false } and log the real error server-side
+Make it idempotent: same email submitting twice returns 200 { ok: true }, not an error
+
+4. Fix the frontend submit handler
+
+Only show the error state on a non-2xx response
+On success, replace the form with a success state: "You're on the list — we'll email you when specialist search launches."
+Trim and lowercase the email before sending
+Disable the submit button while the request is in flight to prevent double-submits
+Basic client-side email format check before POSTing, so obvious typos don't hit the server
+
+5. Add a simple admin export
+So I can retrieve these emails after launch, add GET /api/admin/waitlist (behind the existing admin auth guard) that returns all waitlist rows as JSON, ordered by createdAt descending. If there's an existing admin panel pattern, add a small "Waitlist" view there showing email, source, and signup date with a "Download CSV" button. If that's more than a small addition, just the JSON endpoint is fine for now.
+Out of scope: No email-sending integration yet, no third-party email service. Just capture, store, and let me export. I'll wire up the launch announcement separately.
+Before you start, show me: the current waitlist endpoint code, the frontend submit handler, and the schema file you'll add the table to. Confirm the plan, then execute.
