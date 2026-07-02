@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Check, Loader2, Zap, UserCheck, Stethoscope, Building2, IndianRupee, CheckCircle2, Crown, CreditCard } from "lucide-react";
 import { loadRazorpayScript, formatRupees, type RazorpayPaymentResponse, type RazorpaySubscriptionResponse } from "@/lib/razorpay";
 import { getSpecialtyLabel } from "@/lib/specialties";
+import { SHOW_PRO_UPGRADE } from "@/features";
 
 type RazorpayResponse = RazorpayPaymentResponse;
 
@@ -324,6 +325,7 @@ export default function PricingPage() {
           )}
 
           {/* Go Pro CTA */}
+          {SHOW_PRO_UPGRADE && (
           <div className="mt-8 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-6">
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 bg-amber-100 border border-amber-200 rounded-xl flex items-center justify-center shrink-0">
@@ -367,6 +369,7 @@ export default function PricingPage() {
               </div>
             </div>
           </div>
+          )}
 
           <div className="mt-8 text-center text-xs text-muted-foreground">
             Billing starts 30 days after activation via UPI auto-debit. Cancel anytime from your dashboard.

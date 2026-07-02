@@ -47,6 +47,7 @@ import {
   useVerifyRazorpayPayment,
 } from "@workspace/api-client-react";
 import { loadRazorpayScript, formatRupees, type RazorpayPaymentResponse, type RazorpaySubscriptionResponse } from "@/lib/razorpay";
+import { SHOW_PRO_UPGRADE } from "@/features";
 
 export default function AccountPage() {
   const { user } = useUser();
@@ -493,7 +494,7 @@ export default function AccountPage() {
         )}
 
         {/* Pro subscription upgrade for professional users */}
-        {me?.role === "professional" && (
+        {SHOW_PRO_UPGRADE && me?.role === "professional" && (
           <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-5 shadow-sm mb-6">
             <div className="flex items-start gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0">
