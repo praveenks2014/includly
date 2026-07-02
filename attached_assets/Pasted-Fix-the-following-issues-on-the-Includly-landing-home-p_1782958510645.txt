@@ -1,0 +1,60 @@
+Fix the following issues on the Includly landing/home page (and related pages). This is a pre-launch
+build showing an "early access" state. Do NOT break routing, auth (Clerk), data fetching, or the
+existing design system (Tailwind v4 + shadcn + the teal brand). Keep the current visual style.
+
+1) BROKEN HEADER NAV LINKS
+   The top-nav items "How It Works", "Find Specialists", and "Early Access" do nothing. Wire them:
+   - "How It Works" → smooth-scroll to the How-it-works section (add id="how-it-works" if missing).
+   - "Find Specialists" → the specialist search page/route (or, if search is disabled pre-launch,
+     smooth-scroll to the Early Access section instead — pick based on whether search is live).
+   - "Early Access" → smooth-scroll to the Early Access signup section (see #2).
+   Use in-page anchor scrolling for same-page targets and real navigation for route targets. Verify
+   each link works on desktop and mobile.
+
+2) CATEGORY-BASED EARLY-ACCESS CAPTURE (replace the single "launching soon" email box)
+   Replace the current "Specialist search launching soon → enter email for early access" block with a
+   waitlist signup that captures WHICH audience the person is, so we can email by category post-launch.
+   - Audience categories: "Parent", "Specialist", "Therapy Centre".
+   - Place this section directly BELOW the "How it works" tabs (For Parents / For Specialists /
+     For Therapy Centres). Default the selected category to whichever How-it-works tab is active, and
+     let the user change it (segmented control / tabs matching the existing style).
+   - Fields: email (required), category (required), optional name. Validate email; show success and
+     error states; prevent duplicate signups (same email+category) gracefully.
+   - BACKEND: add persistent storage — a new DB table (e.g. early_access_signups: id, email, category,
+     name nullable, createdAt, unique on lower(email)+category) via the existing Drizzle setup, plus a
+     POST API endpoint to insert, and an admin-only way to export/list signups by category (so we can
+     send category-specific launch emails later). Follow the repo's existing route/schema patterns.
+
+3) REMOVE FABRICATED TESTIMONIALS
+   The "Trusted by families & specialists / Real stories from real people" section uses hardcoded fake
+   quotes (Meena Krishnan, Rohan Desai, Dr. Anita Sharma). We will not display untrue marketing.
+   Remove this section entirely for now. (If you want a placeholder, replace it with an honest,
+   non-fabricated trust section — e.g. how verification works, safety/privacy commitments — with NO
+   invented names, quotes, ratings, or numbers.)
+
+4) FIX / HIDE NON-WORKING FOOTER + LINKS
+   Many footer links under "For Parents", "For Specialists", and "Company" lead nowhere. Audit every
+   footer and nav link. For each target:
+   - If the page/route exists and is launch-ready → keep and ensure it works.
+   - If it does not exist or isn't ready for launch → HIDE the link (remove it) rather than leaving a
+     dead link. Do not ship links to non-existent pages.
+   For links we clearly need at launch that are missing, create minimal real pages: About Us, Contact,
+   and any of {Pricing, Privacy Policy, Terms of Service, Support, Get Verified} that don't already
+   exist. Keep them simple but real. List which links you kept, which you hid, and which pages you
+   created.
+
+5) SUPPORT EMAIL + FAQ CORRECTNESS
+   - The support email is wrong. Replace ALL occurrences of the current support address (shown as
+     support@senseilink.in / any senseilink address) across the app — support page, footer, mailto
+     links, meta — with: theglobalpitstop@gmail.com
+   - The Support page FAQ (e.g. "How do I unlock a professional's contact details?", refund, verification
+     questions) may be inaccurate or incomplete for launch. Review each FAQ against how the product
+     actually works right now; correct wrong answers, remove ones that don't apply pre-launch, and only
+     keep FAQs that are true today. Do not invent policies.
+
+ACCEPTANCE
+- Every visible nav/footer link either works or is removed — zero dead links.
+- Early-access form stores email + category server-side and is reachable from the "Early Access" nav link.
+- No fabricated testimonials/quotes/numbers anywhere on the landing page.
+- Support email is theglobalpitstop@gmail.com everywhere; FAQ contains only accurate entries.
+- No regressions to existing routes, auth, or styling. Summarize all changes at the end.

@@ -9,8 +9,7 @@ import { STAT_THRESHOLDS } from "@/features";
 import { motion, useReducedMotion, useInView } from "framer-motion";
 import {
   Search, ShieldCheck, Heart, ArrowRight, Star,
-  CheckCircle2, Quote, Instagram, Twitter,
-  Linkedin, Facebook, Phone, BookOpen,
+  CheckCircle2, Phone, BookOpen,
   GraduationCap, Brain, Building2, UserCheck, Sparkles,
 } from "lucide-react";
 
@@ -108,34 +107,10 @@ const HOW_IT_WORKS = {
   ],
 };
 
-const TESTIMONIALS = [
-  {
-    stars: 5,
-    quote: "We found our daughter's shadow teacher within 3 days of signing up. The verification badge gave us confidence that she was genuinely qualified. Life-changing.",
-    name: "Meena Krishnan",
-    role: "Parent of a 7-year-old with autism",
-    city: "Chennai",
-    initials: "MK",
-    color: "bg-teal-600",
-  },
-  {
-    stars: 5,
-    quote: "As a speech therapist, Includly brought me 6 new families in my first month. The profile is easy to set up and the leads are genuinely high quality.",
-    name: "Rohan Desai",
-    role: "Speech-Language Pathologist",
-    city: "Pune",
-    initials: "RD",
-    color: "bg-violet-600",
-  },
-  {
-    stars: 5,
-    quote: "Our centre was fully booked within 6 weeks of listing on Includly. The parent community trusts the platform, which means they trust us from day one.",
-    name: "Dr. Anita Sharma",
-    role: "Director, Bloom Therapy Centre",
-    city: "Bengaluru",
-    initials: "AS",
-    color: "bg-rose-600",
-  },
+const WAITLIST_CATEGORIES = [
+  { value: "parent" as const, label: "I'm a Parent" },
+  { value: "specialist" as const, label: "I'm a Specialist" },
+  { value: "centre" as const, label: "I'm a Therapy Centre" },
 ];
 
 function ScrollReveal({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
@@ -160,8 +135,15 @@ export default function HomePage() {
   const { data: stats } = useGetPlatformStats();
   const [howTab, setHowTab] = useState<"parents" | "professionals" | "centres">("parents");
   const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistName, setWaitlistName] = useState("");
+  const [waitlistCategory, setWaitlistCategory] = useState<"parent" | "specialist" | "centre">("parent");
   const [waitlistState, setWaitlistState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const prefersReduced = useReducedMotion();
+
+  useEffect(() => {
+    const map = { parents: "parent", professionals: "specialist", centres: "centre" } as const;
+    setWaitlistCategory(map[howTab]);
+  }, [howTab]);
 
   const rawProfCount = stats?.totalProfessionals ?? 0;
   const rawCentreCount = (stats as Record<string, number> | undefined)?.totalCentres ?? 0;
@@ -190,7 +172,11 @@ export default function HomePage() {
       const res = await fetch(`${window.location.origin}${basePath}/api/waitlist`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmed }),
+        body: JSON.stringify({
+          email: trimmed,
+          category: waitlistCategory,
+          name: waitlistName.trim() || undefined,
+        }),
       });
       setWaitlistState(res.ok ? "done" : "error");
     } catch {
@@ -341,55 +327,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── EARLY ACCESS CAPTURE ── */}
-      <section id="early-access" className="py-14 px-4 bg-white border-b border-gray-100">
-        <div className="max-w-2xl mx-auto text-center">
-          <ScrollReveal>
-            <p className="text-sm font-semibold text-teal-600 mb-2 tracking-wide uppercase">Specialist search launching soon</p>
-            <h2 className="text-2xl font-serif font-semibold text-gray-900 mb-6">
-              Be first to find the right support for your child
-            </h2>
-          </ScrollReveal>
-          <ScrollReveal delay={0.08}>
-            {waitlistState === "done" ? (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="flex items-center justify-center gap-2.5 bg-teal-50 text-teal-700 font-medium py-4 px-6 rounded-2xl border border-teal-100"
-              >
-                <CheckCircle2 size={20} className="text-teal-600 shrink-0" />
-                <span>You're on the list — we'll email you when specialist search launches.</span>
-              </motion.div>
-            ) : (
-              <form onSubmit={handleWaitlist}>
-                <div className="flex flex-col sm:flex-row gap-3 max-w-xl mx-auto">
-                  <input
-                    type="email"
-                    required
-                    placeholder="Enter your email for early access"
-                    value={waitlistEmail}
-                    onChange={(e) => setWaitlistEmail(e.target.value)}
-                    disabled={waitlistState === "loading"}
-                    className="flex-1 h-12 px-4 rounded-xl border border-gray-200 bg-gray-50 text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:opacity-50 transition-all"
-                  />
-                  <Button
-                    type="submit"
-                    disabled={waitlistState === "loading"}
-                    className="h-12 px-8 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-medium shrink-0 disabled:opacity-60 transition-all hover:-translate-y-0.5 shadow-md shadow-teal-200/50"
-                    data-testid="waitlist-submit"
-                  >
-                    {waitlistState === "loading" ? "Sending…" : "Get Early Access"}
-                  </Button>
-                </div>
-                {waitlistState === "error" && (
-                  <p className="text-red-500 text-xs mt-2.5">Please enter a valid email and try again.</p>
-                )}
-              </form>
-            )}
-          </ScrollReveal>
-        </div>
-      </section>
-
       {/* ── HOW IT WORKS ── */}
       <section id="how-it-works" className="py-24 px-4 bg-gray-50/80">
         <div className="max-w-5xl mx-auto">
@@ -445,6 +382,82 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── EARLY ACCESS / WAITLIST ── */}
+      <section id="early-access" className="py-16 px-4 bg-teal-50/30 border-y border-teal-100/60">
+        <div className="max-w-xl mx-auto text-center">
+          <ScrollReveal>
+            <p className="text-sm font-semibold text-teal-600 mb-2 tracking-wide uppercase">Early Access</p>
+            <h2 className="text-2xl font-serif font-semibold text-gray-900 mb-2">Join the waitlist</h2>
+            <p className="text-gray-500 text-sm mb-7">
+              Be first to know when Includly opens in your city. Tell us who you are so we can keep you updated.
+            </p>
+          </ScrollReveal>
+          <ScrollReveal delay={0.08}>
+            {waitlistState === "done" ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex items-center justify-center gap-2.5 bg-teal-50 text-teal-700 font-medium py-4 px-6 rounded-2xl border border-teal-100"
+              >
+                <CheckCircle2 size={20} className="text-teal-600 shrink-0" />
+                <span>You're on the list — we'll be in touch soon.</span>
+              </motion.div>
+            ) : (
+              <form onSubmit={handleWaitlist} className="space-y-4 text-left max-w-sm mx-auto">
+                <div className="flex justify-center">
+                  <div className="inline-flex bg-white border border-gray-200 rounded-xl p-1 gap-1 shadow-sm">
+                    {WAITLIST_CATEGORIES.map((cat) => (
+                      <button
+                        key={cat.value}
+                        type="button"
+                        onClick={() => setWaitlistCategory(cat.value)}
+                        className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+                          waitlistCategory === cat.value
+                            ? "bg-teal-600 text-white shadow-sm"
+                            : "text-gray-600 hover:text-gray-900"
+                        }`}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Your name (optional)"
+                  value={waitlistName}
+                  onChange={(e) => setWaitlistName(e.target.value)}
+                  disabled={waitlistState === "loading"}
+                  className="w-full h-11 px-4 rounded-xl border border-gray-200 bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:opacity-50 transition-all"
+                />
+                <div className="flex gap-3">
+                  <input
+                    type="email"
+                    required
+                    placeholder="Your email address"
+                    value={waitlistEmail}
+                    onChange={(e) => setWaitlistEmail(e.target.value)}
+                    disabled={waitlistState === "loading"}
+                    className="flex-1 h-11 px-4 rounded-xl border border-gray-200 bg-white text-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent disabled:opacity-50 transition-all"
+                  />
+                  <Button
+                    type="submit"
+                    disabled={waitlistState === "loading"}
+                    className="h-11 px-6 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-medium shrink-0 disabled:opacity-60 transition-all hover:-translate-y-0.5 shadow-md shadow-teal-200/50"
+                    data-testid="waitlist-submit"
+                  >
+                    {waitlistState === "loading" ? "Sending…" : "Join"}
+                  </Button>
+                </div>
+                {waitlistState === "error" && (
+                  <p className="text-red-500 text-xs text-center">Please enter a valid email and try again.</p>
+                )}
+              </form>
+            )}
+          </ScrollReveal>
+        </div>
+      </section>
+
       {/* ── CATEGORY GRID ── */}
       <section id="find-professionals" className="py-24 px-4 bg-white">
         <div className="max-w-5xl mx-auto">
@@ -478,41 +491,55 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── TESTIMONIALS ── */}
+      {/* ── HOW WE VERIFY ── */}
       <section className="py-24 px-4 bg-gray-50/80">
         <div className="max-w-5xl mx-auto">
           <ScrollReveal className="text-center mb-14">
-            <h2 className="text-3xl font-serif font-semibold text-gray-900 mb-2">Trusted by families & specialists</h2>
-            <p className="text-gray-500">Real stories from real people across India.</p>
+            <h2 className="text-3xl font-serif font-semibold text-gray-900 mb-2">Built on trust</h2>
+            <p className="text-gray-500">Every specialist on Includly goes through our verification process before going live.</p>
           </ScrollReveal>
 
-          <div className="grid sm:grid-cols-3 gap-5 overflow-x-auto sm:overflow-visible pb-2">
-            {TESTIMONIALS.map((t, i) => (
-              <ScrollReveal key={t.name} delay={i * 0.1}>
-                <motion.div
-                  whileHover={prefersReduced ? {} : { y: -4, transition: { duration: 0.2 } }}
-                  className="flex-shrink-0 w-[82vw] sm:w-auto bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-gray-100/80 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-4"
-                >
-                  <div className="flex gap-0.5">
-                    {Array.from({ length: t.stars }).map((_, idx) => (
-                      <Star key={idx} size={13} className="fill-amber-400 text-amber-400" />
-                    ))}
-                  </div>
-                  <Quote size={18} className="text-teal-200" />
-                  <p className="text-sm text-gray-700 leading-relaxed flex-1 italic">"{t.quote}"</p>
-                  <div className="flex items-center gap-3 pt-2 border-t border-gray-50">
-                    <div className={`w-9 h-9 ${t.color} rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0`}>
-                      {t.initials}
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-gray-900">{t.name}</div>
-                      <div className="text-xs text-gray-500">{t.role} · {t.city}</div>
-                    </div>
-                  </div>
-                </motion.div>
-              </ScrollReveal>
-            ))}
+          <div className="grid sm:grid-cols-3 gap-6">
+            <ScrollReveal delay={0}>
+              <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm h-full">
+                <div className="w-11 h-11 bg-teal-50 rounded-xl flex items-center justify-center mb-4">
+                  <ShieldCheck size={22} className="text-teal-600" />
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-2">Identity verified</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  We review government-issued ID (Aadhaar or equivalent) for every specialist before they appear on Includly.
+                </p>
+              </div>
+            </ScrollReveal>
+            <ScrollReveal delay={0.08}>
+              <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm h-full">
+                <div className="w-11 h-11 bg-teal-50 rounded-xl flex items-center justify-center mb-4">
+                  <GraduationCap size={22} className="text-teal-600" />
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-2">Credentials reviewed</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  Qualification certificates, RCI registration (where applicable), and experience are manually reviewed by our team.
+                </p>
+              </div>
+            </ScrollReveal>
+            <ScrollReveal delay={0.16}>
+              <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm h-full">
+                <div className="w-11 h-11 bg-teal-50 rounded-xl flex items-center justify-center mb-4">
+                  <Heart size={22} className="text-teal-600" />
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-2">Community accountability</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  You can report concerns from any specialist's profile. Our team reviews every report, and profiles are suspended pending investigation.
+                </p>
+              </div>
+            </ScrollReveal>
           </div>
+
+          <ScrollReveal delay={0.2} className="mt-10 text-center">
+            <p className="text-xs text-gray-400 max-w-2xl mx-auto">
+              A verified badge means we have reviewed a specialist's documents — it does not guarantee outcomes. Parents should exercise their own judgment before engaging any professional.
+            </p>
+          </ScrollReveal>
         </div>
       </section>
 
@@ -562,72 +589,37 @@ export default function HomePage() {
               </div>
               <span className="font-serif font-semibold text-lg text-white">Includly</span>
             </div>
-            <p className="text-xs leading-relaxed mb-5 text-gray-500">
+            <p className="text-xs leading-relaxed text-gray-500">
               India's trusted marketplace connecting families with verified specialists.
             </p>
-            <div className="flex gap-2.5">
-              {[
-                { icon: <Twitter size={14} />, href: "#" },
-                { icon: <Instagram size={14} />, href: "#" },
-                { icon: <Facebook size={14} />, href: "#" },
-                { icon: <Linkedin size={14} />, href: "#" },
-              ].map((s, i) => (
-                <a
-                  key={i}
-                  href={s.href}
-                  className="w-8 h-8 bg-gray-800 hover:bg-teal-600 rounded-lg flex items-center justify-center transition-colors"
-                >
-                  {s.icon}
-                </a>
-              ))}
-            </div>
           </div>
 
           <div>
             <h4 className="text-white font-semibold text-sm mb-4">For Parents</h4>
             <ul className="space-y-2.5 text-xs">
-              {[
-                { label: "How It Works", href: "/#how-it-works" },
-                { label: "Get Early Access", href: "#early-access" },
-                { label: "Support", href: "/support" },
-              ].map((l) => (
-                <li key={l.label}>
-                  <Link href={l.href} className="hover:text-teal-400 transition-colors">{l.label}</Link>
-                </li>
-              ))}
+              <li><a href="#how-it-works" className="hover:text-teal-400 transition-colors">How It Works</a></li>
+              <li><a href="#early-access" className="hover:text-teal-400 transition-colors">Get Early Access</a></li>
+              <li><Link href="/support" className="hover:text-teal-400 transition-colors">Support</Link></li>
             </ul>
           </div>
 
           <div>
             <h4 className="text-white font-semibold text-sm mb-4">For Specialists</h4>
             <ul className="space-y-2.5 text-xs">
-              {[
-                { label: "List Your Services", href: "/sign-up?as=professional" },
-                { label: "Pricing", href: "/pricing" },
-                { label: "Get Verified", href: "/sign-up?as=professional" },
-                { label: "Dashboard", href: "/dashboard" },
-                { label: "Resources", href: "/support" },
-              ].map((l) => (
-                <li key={l.label}>
-                  <Link href={l.href} className="hover:text-teal-400 transition-colors">{l.label}</Link>
-                </li>
-              ))}
+              <li><Link href="/sign-up?as=professional" className="hover:text-teal-400 transition-colors">List Your Services</Link></li>
+              <li><Link href="/pricing" className="hover:text-teal-400 transition-colors">Pricing</Link></li>
+              <li><Link href="/sign-up?as=professional" className="hover:text-teal-400 transition-colors">Get Verified</Link></li>
+              <li><Link href="/resources" className="hover:text-teal-400 transition-colors">Resources</Link></li>
             </ul>
           </div>
 
           <div>
             <h4 className="text-white font-semibold text-sm mb-4">Company</h4>
             <ul className="space-y-2.5 text-xs">
-              {[
-                { label: "About Us", href: "/" },
-                { label: "Privacy Policy", href: "/privacy" },
-                { label: "Terms of Service", href: "/terms" },
-                { label: "Contact", href: "/support" },
-              ].map((l) => (
-                <li key={l.label}>
-                  <Link href={l.href} className="hover:text-teal-400 transition-colors">{l.label}</Link>
-                </li>
-              ))}
+              <li><Link href="/about" className="hover:text-teal-400 transition-colors">About Us</Link></li>
+              <li><Link href="/privacy" className="hover:text-teal-400 transition-colors">Privacy Policy</Link></li>
+              <li><Link href="/terms" className="hover:text-teal-400 transition-colors">Terms of Service</Link></li>
+              <li><Link href="/support" className="hover:text-teal-400 transition-colors">Contact</Link></li>
             </ul>
           </div>
         </div>

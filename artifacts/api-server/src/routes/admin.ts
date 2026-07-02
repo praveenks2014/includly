@@ -911,10 +911,13 @@ router.patch("/admin/professionals/:id/verify-rci", ...adminGuard, async (req, r
   res.json({ id: profile.id, rciVerified: profile.rciVerified, fullName: profile.fullName });
 });
 
-router.get("/admin/waitlist", ...adminGuard, async (_req, res): Promise<void> => {
+router.get("/admin/waitlist", ...adminGuard, async (req, res): Promise<void> => {
+  const { category } = req.query as { category?: string };
+  const conditions = category ? [eq(waitlistTable.category, category)] : [];
   const rows = await db
     .select()
     .from(waitlistTable)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(waitlistTable.createdAt));
   res.json(rows);
 });

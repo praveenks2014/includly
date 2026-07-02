@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 function getWebPushConfig() {
   const publicKey = process.env["VAPID_PUBLIC_KEY"];
   const privateKey = process.env["VAPID_PRIVATE_KEY"];
-  const subject = process.env["VAPID_SUBJECT"] ?? "mailto:admin@senseilink.com";
+  const subject = process.env["VAPID_SUBJECT"] ?? "mailto:theglobalpitstop@gmail.com";
 
   if (!publicKey || !privateKey) return null;
 

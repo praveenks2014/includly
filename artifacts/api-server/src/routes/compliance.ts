@@ -20,11 +20,11 @@ router.get("/compliance/privacy", (_req, res): void => {
       "your personal data as described in this policy, including for the purposes of identity verification, " +
       "communications, and marketplace operations.\n\n" +
       "5. RETENTION & DELETION: Data is retained for the duration of your account. You may request deletion " +
-      "of your account and data at any time by writing to privacy@senseilink.in. We will process deletion " +
+      "of your account and data at any time by writing to theglobalpitstop@gmail.com. We will process deletion " +
       "requests within 30 days.\n\n" +
       "6. SECURITY: Data is stored on encrypted servers. Access to personal data is restricted to authorized " +
       "personnel only.\n\n" +
-      "7. CONTACT: For privacy questions, email privacy@senseilink.in.",
+      "7. CONTACT: For privacy questions, email theglobalpitstop@gmail.com.",
   });
 });
 
@@ -47,7 +47,7 @@ router.get("/compliance/terms", (_req, res): void => {
       "subscription period. Plan B (pay-per-contact) charges per individual unlock. All payments are final.\n\n" +
       "6. REFUND POLICY: Subscription fees are non-refundable once the subscription period begins. " +
       "Pay-per-contact unlock fees are non-refundable once the contact has been revealed. " +
-      "In case of a technical error (contact not revealed due to platform failure), contact support@senseilink.in " +
+      "In case of a technical error (contact not revealed due to platform failure), contact theglobalpitstop@gmail.com " +
       "within 7 days for a review.\n\n" +
       "7. PROHIBITED CONDUCT: Users must not impersonate professionals, submit false credentials, " +
       "scrape contact information, or use the platform for harassment.\n\n" +
@@ -65,19 +65,19 @@ router.get("/compliance/support", (_req, res): void => {
     content:
       "SenseiLink Support\n\n" +
       "CONTACT US\n" +
-      "Email: support@senseilink.in\n" +
+      "Email: theglobalpitstop@gmail.com\n" +
       "Response time: Within 24 hours on business days (Monday–Friday, 9am–6pm IST)\n\n" +
       "COMMON TOPICS\n" +
       "• Account issues (login, profile editing): Email support with your registered phone number\n" +
       "• Payment or subscription queries: Email support with your transaction ID\n" +
       "• Refund requests: See our refund policy in Terms of Service. Email support within 7 days of the transaction\n" +
       "• Reporting a professional: Email support with the professional's profile link and a description of the issue\n" +
-      "• Data deletion requests: Email privacy@senseilink.in with your registered phone number\n\n" +
+      "• Data deletion requests: Email theglobalpitstop@gmail.com with your registered phone number\n\n" +
       "PROFESSIONAL VERIFICATION\n" +
-      "If you are a professional awaiting verification, please email support@senseilink.in with your registered " +
+      "If you are a professional awaiting verification, please email theglobalpitstop@gmail.com with your registered " +
       "email and document reference. Verification typically takes 2–3 business days.\n\n" +
       "TECHNICAL ISSUES\n" +
-      "For technical bugs or app issues, please email support@senseilink.in with a screenshot and description " +
+      "For technical bugs or app issues, please email theglobalpitstop@gmail.com with a screenshot and description " +
       "of the problem.",
   });
 });

@@ -174,6 +174,8 @@ router.get("/dashboard/stats", async (_req, res): Promise<void> => {
 
 const WaitlistBody = z.object({
   email: z.email(),
+  category: z.enum(["parent", "specialist", "centre"]).default("parent"),
+  name: z.string().max(100).optional(),
   source: z.string().optional(),
 });
 
@@ -184,9 +186,14 @@ router.post("/waitlist", async (req, res): Promise<void> => {
     return;
   }
   const email = parsed.data.email.trim().toLowerCase();
+  const category = parsed.data.category;
+  const name = parsed.data.name?.trim() || null;
   const source = parsed.data.source ?? "hero_form";
   try {
-    await db.insert(waitlistTable).values({ email, source }).onConflictDoNothing();
+    await db
+      .insert(waitlistTable)
+      .values({ email, category, name, source })
+      .onConflictDoNothing();
     res.json({ ok: true });
   } catch (err) {
     console.error("[waitlist] insert failed", err);

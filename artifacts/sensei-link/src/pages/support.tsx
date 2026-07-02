@@ -27,7 +27,7 @@ const FAQ = [
   },
   {
     q: "I'm a professional — how do I get my profile verified?",
-    a: "Create or edit your profile via the 'Edit profile' section, and ensure all credentials are filled in. Then submit your verification documents via email to verify@senseilink.in with your registered phone number and profession details. Our team will review within 3-5 business days.",
+    a: "Create or edit your profile via the 'Edit profile' section, and ensure all credentials are filled in. Then email theglobalpitstop@gmail.com with your registered phone number and profession details. Our team will review within 3–5 business days.",
   },
 ];
 
@@ -57,8 +57,8 @@ export default function SupportPage() {
         <h1 className="text-3xl font-serif font-semibold text-foreground mb-2">Support</h1>
         <p className="text-muted-foreground mb-10">
           We're here to help. Reach us at{" "}
-          <a href="mailto:support@senseilink.in" className="text-primary underline">
-            support@senseilink.in
+          <a href="mailto:theglobalpitstop@gmail.com" className="text-primary underline">
+            theglobalpitstop@gmail.com
           </a>{" "}
           or use the form below.
         </p>

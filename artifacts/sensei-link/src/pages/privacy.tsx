@@ -80,7 +80,7 @@ export default function PrivacyPage() {
             <h3>6.2 DPDP Rights (Indian users)</h3>
             <p>Under India's Digital Personal Data Protection Act (DPDP Act), 2023, you have the right to access information, correct inaccurate data, and seek grievance redressal. You may withdraw your consent for processing of your personal data at any time by contacting us.</p>
 
-            <p>To exercise any of these rights, please contact us at <a href="mailto:privacy@senseilink.in">privacy@senseilink.in</a>.</p>
+            <p>To exercise any of these rights, please contact us at <a href="mailto:theglobalpitstop@gmail.com">theglobalpitstop@gmail.com</a>.</p>
           </Section>
 
           <Section title="7. Cookies and Tracking">

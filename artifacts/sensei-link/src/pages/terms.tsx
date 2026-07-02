@@ -36,7 +36,7 @@ export default function TermsPage() {
 
           <Section title="4. Contact Unlock — Refund Policy">
             <p><strong>No refunds will be issued once a contact has been unlocked.</strong> When you pay to unlock a professional's contact details, the transaction is final and non-refundable, as the service (revealing the contact information) has been delivered immediately upon payment.</p>
-            <p>Subscription fees are non-refundable once the subscription period has begun. If you believe you were charged in error, please contact our support team within 7 days at <a href="mailto:support@senseilink.in">support@senseilink.in</a>.</p>
+            <p>Subscription fees are non-refundable once the subscription period has begun. If you believe you were charged in error, please contact our support team within 7 days at <a href="mailto:theglobalpitstop@gmail.com">theglobalpitstop@gmail.com</a>.</p>
           </Section>
 
           <Section title="5. Professional Responsibility Disclaimer">

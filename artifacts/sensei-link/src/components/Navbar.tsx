@@ -19,10 +19,10 @@ import { useState, useEffect } from "react";
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const GUEST_NAV = [
-  { label: "How It Works", href: "/#how-it-works" },
-  { label: "Find Specialists", href: "/#find-professionals" },
-  { label: "Early Access", href: "/#early-access" },
-];
+  { label: "How It Works", href: "#how-it-works", anchor: true },
+  { label: "Find Specialists", href: "/search", anchor: false },
+  { label: "Early Access", href: "#early-access", anchor: true },
+] as const;
 
 export function Navbar() {
   const { isSignedIn, user } = useUser();
@@ -131,13 +131,21 @@ export function Navbar() {
               </>
             ) : (
               <>
-                {GUEST_NAV.map((item) => (
-                  <Link key={item.label} href={item.href}>
-                    <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900 text-sm">
-                      {item.label}
-                    </Button>
-                  </Link>
-                ))}
+                {GUEST_NAV.map((item) =>
+                  item.anchor ? (
+                    <a key={item.label} href={item.href}>
+                      <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900 text-sm">
+                        {item.label}
+                      </Button>
+                    </a>
+                  ) : (
+                    <Link key={item.label} href={item.href}>
+                      <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900 text-sm">
+                        {item.label}
+                      </Button>
+                    </Link>
+                  )
+                )}
                 <div className="w-px h-5 bg-gray-200 mx-2" />
                 <Link href="/sign-in">
                   <Button variant="ghost" size="sm" className="text-gray-700 hover:text-gray-900">
@@ -216,9 +224,15 @@ export function Navbar() {
               </>
             ) : (
               <>
-                {GUEST_NAV.map((item) => (
-                  <MobileNavItem key={item.label} href={item.href} label={item.label} onClick={closeMobile} />
-                ))}
+                {GUEST_NAV.map((item) =>
+                  item.anchor ? (
+                    <a key={item.label} href={item.href} onClick={closeMobile} className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                      {item.label}
+                    </a>
+                  ) : (
+                    <MobileNavItem key={item.label} href={item.href} label={item.label} onClick={closeMobile} />
+                  )
+                )}
                 <div className="pt-4 border-t border-gray-100 mt-4 space-y-2">
                   <Link href="/sign-in" onClick={closeMobile}>
                     <Button variant="outline" className="w-full border-gray-200 text-gray-700">

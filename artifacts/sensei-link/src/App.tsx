@@ -17,6 +17,7 @@ import { SelectedChildProvider } from "@/contexts/SelectedChildContext";
 
 import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home";
+import AboutPage from "@/pages/about";
 import SearchPage from "@/pages/search";
 import ProfessionalProfilePage from "@/pages/professional-profile";
 import OnboardPage from "@/pages/onboard";
@@ -307,6 +308,7 @@ function Router() {
             <ForumPage />
           </RequireAuth>
         </Route>
+        <Route path="/about" component={AboutPage} />
         <Route path="/privacy" component={PrivacyPage} />
         <Route path="/terms" component={TermsPage} />
         <Route path="/support">
