@@ -3,6 +3,7 @@ import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc, arrayOverlaps, notInA
 import { db, usersTable, professionalProfilesTable, adminSettingsTable, specialtyEnum, coachingSubTypeEnum, professionalSubscriptionsTable, professionalCertificationsTable, contactUnlocksTable, shadowTeacherEngagementsTable, shadowTeacherMatchesTable } from "@workspace/db";
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
 import { notifyParentsOnProfileUpdate } from "../lib/notificationService";
+import { getClerkPrimaryEmail } from "../lib/clerkUser";
 import {
   GetMyProfessionalProfileResponse,
   CreateProfessionalProfileBody,
@@ -65,7 +66,7 @@ function computeProfileComplete(profile: {
 }
 
 router.get("/professionals/me", requireAuth, async (req, res): Promise<void> => {
-  const [profile] = await db
+  let [profile] = await db
     .select()
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.userId, req.userId!));
@@ -73,6 +74,18 @@ router.get("/professionals/me", requireAuth, async (req, res): Promise<void> => 
   if (!profile) {
     res.status(404).json({ error: "Professional profile not found" });
     return;
+  }
+
+  // Keep the profile's email in lockstep with the professional's Clerk login email —
+  // fixes drift for profiles created/edited before this was enforced server-side.
+  const clerkEmail = await getClerkPrimaryEmail(req.clerkId!);
+  if (clerkEmail && clerkEmail !== profile.email) {
+    const [synced] = await db
+      .update(professionalProfilesTable)
+      .set({ email: clerkEmail })
+      .where(eq(professionalProfilesTable.id, profile.id))
+      .returning();
+    if (synced) profile = synced;
   }
 
   const profileComplete = computeProfileComplete(profile);
@@ -110,12 +123,18 @@ router.post("/professionals/me", requireAuth, async (req, res): Promise<void> =>
 
   await db.update(usersTable).set({ role: "professional" }).where(eq(usersTable.id, req.userId!));
 
+  // Ignore any client-submitted email — the profile email always mirrors the
+  // professional's Clerk login identity so it can't be spoofed via the API.
+  const { email: _clientEmail, ...createData } = parsed.data;
+  const clerkEmail = await getClerkPrimaryEmail(req.clerkId!);
+
   const [profile] = await db
     .insert(professionalProfilesTable)
     .values({
       userId: req.userId!,
       vertical: "shadow_teacher" as const,
-      ...parsed.data,
+      ...createData,
+      email: clerkEmail,
     })
     .returning();
 
@@ -154,8 +173,14 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
     }
   }
 
-  const { avatarUrl, verticalDetails: incomingVd, ...profileData } = parsed.data;
-  const updateData: typeof profileData & { offersHomeVisits?: boolean; verticalDetails?: unknown } = { ...profileData };
+  const { avatarUrl, verticalDetails: incomingVd, email: _clientEmail, ...profileData } = parsed.data;
+  const updateData: typeof profileData & { offersHomeVisits?: boolean; verticalDetails?: unknown; email?: string } = { ...profileData };
+
+  // Ignore any client-submitted email — always resync to the Clerk login email.
+  const clerkEmail = await getClerkPrimaryEmail(req.clerkId!);
+  if (clerkEmail) {
+    updateData.email = clerkEmail;
+  }
 
   // Auto-disable home visits if specialty is changing to ineligible
   if (

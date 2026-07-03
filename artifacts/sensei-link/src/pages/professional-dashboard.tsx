@@ -416,10 +416,12 @@ function HomeTab({ profile, firstName, onTabChange }: {
 function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useUser();
   const { mutateAsync: patchProfile, isPending } = useUpdateProfessionalProfile();
   const [editing, setEditing] = useState(false);
   const [avatarFileKey, setAvatarFileKey] = useState("");
   const [savingAvatar, setSavingAvatar] = useState(false);
+  const loginEmail = user?.primaryEmailAddress?.emailAddress ?? profile?.email ?? "";
 
   async function handleSaveAvatar() {
     if (!avatarFileKey) return;
@@ -444,7 +446,6 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
     latitude: (profile as unknown as { latitude?: number | null })?.latitude ?? undefined as number | undefined,
     longitude: (profile as unknown as { longitude?: number | null })?.longitude ?? undefined as number | undefined,
     phone: profile?.phone ?? "",
-    email: profile?.email ?? "",
     pricingMinINR: profile?.pricingMinINR ?? 0,
     pricingMaxINR: profile?.pricingMaxINR ?? 0,
     offersHomeVisits: profile?.offersHomeVisits ?? false,
@@ -465,7 +466,6 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
         latitude: (profile as unknown as { latitude?: number | null })?.latitude ?? undefined,
         longitude: (profile as unknown as { longitude?: number | null })?.longitude ?? undefined,
         phone: profile.phone ?? "",
-        email: profile.email ?? "",
         pricingMinINR: profile.pricingMinINR ?? 0,
         pricingMaxINR: profile.pricingMaxINR ?? 0,
         offersHomeVisits: profile.offersHomeVisits ?? false,
@@ -489,7 +489,6 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
           latitude: form.latitude,
           longitude: form.longitude,
           phone: form.phone.trim() || undefined,
-          email: form.email.trim() || undefined,
           pricingMinINR: Number(form.pricingMinINR) || undefined,
           pricingMaxINR: Number(form.pricingMaxINR) || undefined,
           offersHomeVisits: form.offersHomeVisits,
@@ -756,8 +755,9 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
                 <Label className="text-sm">Email</Label>
                 <div className="relative mt-1">
                   <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} className="pl-9 rounded-lg focus-visible:ring-[#2EC4A5]" aria-label="Contact email" />
+                  <Input type="email" value={loginEmail} disabled readOnly className="pl-9 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed" aria-label="Contact email (synced with your login email)" />
                 </div>
+                <p className="text-xs text-gray-400 mt-1">Synced with your login email — can't be changed here.</p>
               </div>
             </div>
           </div>

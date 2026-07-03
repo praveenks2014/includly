@@ -1,0 +1,56 @@
+MIGRATION AUDIT — read-only, change nothing. I'm evaluating moving this
+app off Replit to another hosting provider (for cost and performance).
+I need a complete inventory of everything that would need to move or
+change. Read the code/config and report:
+
+1. RUNTIME & BUILD
+   - Exact runtime requirements: Node version, pnpm workspace structure,
+     build commands for the API server and the frontend, start commands.
+   - Any Replit-SPECIFIC dependencies or config: .replit file contents,
+     replit-specific env handling, anything that reads Replit-only
+     variables or services. List every Replit-coupled piece.
+
+2. DATABASE
+   - PostgreSQL: which version, how is it provisioned (Replit's built-in
+     Postgres?), approximate size, number of tables.
+   - All Drizzle migrations present — is the schema fully reproducible
+     from migrations, or has drift/manual SQL happened?
+   - What's the backup/export path — can we pg_dump cleanly?
+
+3. AUTH (CRITICAL)
+   - We use Replit-managed Clerk. Document exactly how it's wired:
+     which env vars Replit auto-injects (VITE_CLERK_PROXY_URL etc.),
+     the clerkProxyMiddleware setup, cookie-based auth flow.
+   - What EXACTLY breaks if we leave Replit: does the Replit-managed
+     Clerk instance stop working entirely? What would re-setup on our
+     own Clerk instance require (list every step: new instance, keys,
+     DNS records, proxy or domain config, Google OAuth redirect URLs)?
+
+4. PAYMENTS
+   - Razorpay: where are webhook URLs configured? What URL do they point
+     to? What has to change if the domain/host changes?
+
+5. SECRETS INVENTORY
+   - Every environment variable/secret the app needs to run (names only,
+     not values), split by: frontend build-time (VITE_*), backend
+     runtime, and Replit-auto-injected.
+
+6. STORAGE & ASSETS
+   - Any file uploads (certifications, ID documents, profile photos)?
+     Where are they stored (Replit storage? DB? external)? How much data?
+
+7. BACKGROUND JOBS
+   - The nudgeScheduler and any other cron/background processes — how do
+     they run on Replit, and what would they need elsewhere?
+
+8. DOMAIN & DNS
+   - Current domain setup: what points where (we know www.includly.in →
+     Replit's IP). What DNS changes would a move require?
+
+9. TRAFFIC & RESOURCE PROFILE
+   - Rough resource needs: is this one Node process + Postgres? Memory/
+     CPU expectations? Current autoscale settings in .replit?
+
+Output: a complete migration inventory with a RISK RATING per item
+(easy to move / needs work / high risk). Flag the single riskiest
+pieces. Do not change anything.
