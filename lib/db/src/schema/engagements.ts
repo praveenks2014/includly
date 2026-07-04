@@ -6,7 +6,7 @@ import { professionalProfilesTable } from "./professionals";
 import { shadowTeacherMatchesTable } from "./shadowTeacher";
 import { childrenTable } from "./children";
 
-export const engagementStatusEnum = pgEnum("engagement_status", ["pending_start", "active", "paused", "notice_period", "ended", "pending_teacher_acceptance"]);
+export const engagementStatusEnum = pgEnum("engagement_status", ["pending_start", "active", "paused", "notice_period", "ended", "pending_teacher_acceptance", "pending_activation_fee"]);
 
 export const shadowTeacherEngagementsTable = pgTable("shadow_teacher_engagements", {
   id: serial("id").primaryKey(),
@@ -27,6 +27,15 @@ export const shadowTeacherEngagementsTable = pgTable("shadow_teacher_engagements
   trialCreditInr: integer("trial_credit_inr").notNull().default(0),
   trialCreditApplied: boolean("trial_credit_applied").notNull().default(false),
   startOtp: text("start_otp"),
+  // Monetization restructure — per-row snapshot of the salary model in effect for this
+  // engagement. Backfilled true for all pre-existing rows so their behavior never changes;
+  // new rows snapshot the live admin_settings.platformSalaryEnabled value at commit time.
+  platformSalaryEnabled: boolean("platform_salary_enabled").notNull().default(true),
+  placementFeeInr: integer("placement_fee_inr"),
+  placementFeePaymentId: integer("placement_fee_payment_id"),
+  activationFeeInr: integer("activation_fee_inr"),
+  activationFeePaymentId: integer("activation_fee_payment_id"),
+  activationFeeOrderId: text("activation_fee_order_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

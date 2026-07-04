@@ -1478,6 +1478,11 @@ function SettingsTab() {
   const [gstRatePct, setGstRatePct] = useState<number | "">("");
   const [tiers, setTiers] = useState<TierDef[]>(DEFAULT_TIERS_FE);
 
+  const [placementFeeInr, setPlacementFeeInr] = useState<number | "">("");
+  const [activationFeeInr, setActivationFeeInr] = useState<number | "">("");
+  const [platformSalaryEnabled, setPlatformSalaryEnabled] = useState(false);
+  const [trialDirectPayEnabled, setTrialDirectPayEnabled] = useState(true);
+
   const [isSaving, setIsSaving] = useState(false);
   const [synced, setSynced] = useState(false);
 
@@ -1486,16 +1491,21 @@ function SettingsTab() {
     setUnlockPrice(settings.contactUnlockPriceInr ?? 0);
     setCommissionPct(settings.platformCommissionPct ?? 0);
     setMonetisationEnabled(settings.monetisationEnabled ?? false);
-    setMatchingFeeInr((settings as Record<string, unknown>)["matchingFeeInr"] as number ?? 500);
-    setMatchingFeeRefundable(((settings as Record<string, unknown>)["matchingFeeRefundable"] as boolean) ?? true);
-    setTrialFeeInr((settings as Record<string, unknown>)["trialFeeInr"] as number ?? 500);
-    setSalaryPlatformCutPct((settings as Record<string, unknown>)["salaryPlatformCutPct"] as number ?? 10);
-    setNoticePeriodDays((settings as Record<string, unknown>)["noticePeriodDays"] as number ?? 30);
-    setParentBuyoutDays((settings as Record<string, unknown>)["parentBuyoutDays"] as number ?? 15);
-    setMarkupPct((settings as Record<string, unknown>)["markupPct"] as number ?? 10);
-    setGstRatePct((settings as Record<string, unknown>)["gstRatePct"] as number ?? 18);
-    const tj = (settings as Record<string, unknown>)["tiersJson"] as string | undefined;
+    const settingsRec = settings as unknown as Record<string, unknown>;
+    setMatchingFeeInr(settingsRec["matchingFeeInr"] as number ?? 500);
+    setMatchingFeeRefundable((settingsRec["matchingFeeRefundable"] as boolean) ?? true);
+    setTrialFeeInr(settingsRec["trialFeeInr"] as number ?? 500);
+    setSalaryPlatformCutPct(settingsRec["salaryPlatformCutPct"] as number ?? 10);
+    setNoticePeriodDays(settingsRec["noticePeriodDays"] as number ?? 30);
+    setParentBuyoutDays(settingsRec["parentBuyoutDays"] as number ?? 15);
+    setMarkupPct(settingsRec["markupPct"] as number ?? 10);
+    setGstRatePct(settingsRec["gstRatePct"] as number ?? 18);
+    const tj = settingsRec["tiersJson"] as string | undefined;
     if (tj) { try { setTiers(JSON.parse(tj)); } catch { /* ignore */ } }
+    setPlacementFeeInr(settingsRec["placementFeeInr"] as number ?? 2999);
+    setActivationFeeInr(settingsRec["activationFeeInr"] as number ?? 999);
+    setPlatformSalaryEnabled((settingsRec["platformSalaryEnabled"] as boolean) ?? false);
+    setTrialDirectPayEnabled((settingsRec["trialDirectPayEnabled"] as boolean) ?? true);
     setSynced(true);
   }
 
@@ -1517,6 +1527,10 @@ function SettingsTab() {
           markupPct: Number(markupPct) || 10,
           gstRatePct: Number(gstRatePct) || 18,
           tiersJson: JSON.stringify(tiers),
+          placementFeeInr: Number(placementFeeInr) || 2999,
+          activationFeeInr: Number(activationFeeInr) || 999,
+          platformSalaryEnabled,
+          trialDirectPayEnabled,
         },
       });
       queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() });
@@ -1662,6 +1676,56 @@ function SettingsTab() {
           </div>
         </div>
 
+        {/* ── Monetization Restructure — Placement & Activation Fees ── */}
+        <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-5">
+          <div>
+            <p className="text-base font-bold text-[#1A2340]">Placement & Activation Fees</p>
+            <p className="text-xs text-gray-400 mt-1">
+              These apply to NEW shadow-teacher engagements only. Changing them does not affect
+              existing active engagements' salary or commission terms.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">Placement Fee (₹)</Label>
+              <p className="text-xs text-gray-400 mb-1.5">Charged to the parent when they commit to a shortlisted teacher.</p>
+              <Input type="number" min={0} value={placementFeeInr}
+                onChange={(e) => setPlacementFeeInr(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">Activation Fee (₹)</Label>
+              <p className="text-xs text-gray-400 mb-1.5">Charged to the teacher when they accept the engagement.</p>
+              <Input type="number" min={0} value={activationFeeInr}
+                onChange={(e) => setActivationFeeInr(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+          </div>
+          <hr className="border-gray-100" />
+          <div className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50">
+            <div>
+              <p className="text-sm font-medium text-[#1A2340]">Platform-run salary payments</p>
+              <p className="text-xs text-gray-400">When on, new engagements route monthly salary through the platform instead of parent-to-teacher direct pay.</p>
+            </div>
+            <button type="button" onClick={() => setPlatformSalaryEnabled(v => !v)}
+              aria-label={platformSalaryEnabled ? "Disable platform salary" : "Enable platform salary"}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4A5] focus-visible:ring-offset-2 ${platformSalaryEnabled ? "bg-[#2EC4A5]" : "bg-gray-200"}`}>
+              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${platformSalaryEnabled ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50">
+            <div>
+              <p className="text-sm font-medium text-[#1A2340]">Trial day direct pay</p>
+              <p className="text-xs text-gray-400">When on, parents with a verified-UPI teacher can pay the trial fee directly instead of through the platform.</p>
+            </div>
+            <button type="button" onClick={() => setTrialDirectPayEnabled(v => !v)}
+              aria-label={trialDirectPayEnabled ? "Disable trial direct pay" : "Enable trial direct pay"}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4A5] focus-visible:ring-offset-2 ${trialDirectPayEnabled ? "bg-[#2EC4A5]" : "bg-gray-200"}`}>
+              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${trialDirectPayEnabled ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
+          </div>
+        </div>
+
         {/* ── Session Pricing ── */}
         <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-5">
           <p className="text-base font-bold text-[#1A2340]">Session Pricing</p>
@@ -1768,6 +1832,8 @@ interface AdminEngagement {
   matchRequestId: number | null; tier: string | null; startDate: string;
   monthlyFeeInr: string; status: string; endDate: string | null; notes: string | null;
   createdAt: string; parentName: string | null; professionalName: string | null; childName: string | null;
+  platformSalaryEnabled: boolean | null; placementFeeInr: number | null; placementFeePaymentId: number | null;
+  activationFeeInr: number | null; activationFeePaymentId: number | null;
 }
 interface LifecycleReq {
   id: number; engagementId: number; type: string; method: string | null;
@@ -1847,6 +1913,7 @@ function AdminEngagementsTab() {
 
   const ENG_STATUS_COLORS: Record<string, string> = {
     pending_teacher_acceptance: "bg-purple-50 text-purple-700 border-purple-200",
+    pending_activation_fee: "bg-orange-50 text-orange-700 border-orange-200",
     pending_start: "bg-amber-50 text-amber-700 border-amber-200",
     active: "bg-green-50 text-green-700 border-green-200",
     notice_period: "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -1898,6 +1965,21 @@ function AdminEngagementsTab() {
                   <p className="text-xs text-gray-400 mt-0.5">
                     {eng.childName ? `Child: ${eng.childName} · ` : ""}₹{Number(eng.monthlyFeeInr).toLocaleString("en-IN")}/mo · From {new Date(eng.startDate).toLocaleDateString("en-IN")}
                   </p>
+                  <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                    {eng.placementFeeInr != null && (
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${eng.placementFeePaymentId ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}`}>
+                        Placement fee ₹{eng.placementFeeInr.toLocaleString("en-IN")} {eng.placementFeePaymentId ? "· paid" : "· pending"}
+                      </span>
+                    )}
+                    {eng.activationFeeInr != null && (
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${eng.activationFeePaymentId ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}`}>
+                        Activation fee ₹{eng.activationFeeInr.toLocaleString("en-IN")} {eng.activationFeePaymentId ? "· paid" : "· pending"}
+                      </span>
+                    )}
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${eng.platformSalaryEnabled ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-gray-50 text-gray-500 border-gray-200"}`}>
+                      {eng.platformSalaryEnabled ? "Platform salary" : "Direct-pay salary"}
+                    </span>
+                  </div>
                 </div>
                 <button onClick={() => selectedEng === eng.id ? setSelectedEng(null) : loadLifecycle(eng.id)}
                   className="shrink-0 text-xs text-[#2EC4A5] hover:underline font-medium">

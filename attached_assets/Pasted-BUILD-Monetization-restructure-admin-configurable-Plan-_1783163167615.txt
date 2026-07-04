@@ -1,0 +1,53 @@
+BUILD — Monetization restructure, admin-configurable. Plan first: show
+me schema diffs + affected endpoints before writing code. Do NOT touch
+auth, matching-fee flow, or existing ACTIVE engagements' salary logic.
+PREREQUISITE: the ₹1 UPI verification (verified_upi_vpa) is built.
+
+STEP 1 — Extend admin_settings (not a new system):
+Add columns: placementFeeInr (default 2999), activationFeeInr (default
+999), platformSalaryEnabled (boolean, default false),
+trialDirectPayEnabled (boolean, default true).
+- Expose fees/flags the client needs via an authenticated non-admin
+  settings endpoint (frontend can't read admin_settings today — confirm
+  and add a safe read-only subset endpoint).
+- Add a settings audit log: every PATCH /admin/settings writes who/what/
+  old→new/when.
+- Admin panel: add these fields to the existing settings screen.
+
+STEP 2 — Commit-moment fees (net-new gates; snapshot amounts):
+a) PLACEMENT FEE (parent): at POST /shadow-teacher/:matchId/commit,
+   before creating the engagement, require Razorpay payment of
+   placementFeeInr (read from admin_settings at that moment; SNAPSHOT
+   the amount onto the engagement row). If the teacher later declines
+   acceptance, auto-refund to the parent's wallet (wallet exists).
+b) ACTIVATION FEE (teacher): gate POST /engagements/:id/confirm-start —
+   teacher must pay activationFeeInr (snapshot at teacher-acceptance
+   time) before OTP entry is allowed. Status shows "pending activation
+   fee". Note: professionals have never paid mid-flow before — reuse
+   the standard Razorpay order flow, and record it in payments history.
+c) Server always computes charges from the SNAPSHOT, never client-sent
+   amounts. Settings changes affect only future commits.
+
+STEP 3 — Salary & trial flow for NEW engagements (flag-gated by
+platformSalaryEnabled / trialDirectPayEnabled; engagements created
+before this deploy keep the existing 10% platform-salary flow
+untouched):
+a) Platform salary OFF: hide "Pay Monthly Salary"; engagement view
+   instead shows the teacher's verified_upi_vpa with monthly "Mark
+   salary paid" (parent marks → teacher confirms → stored per month).
+b) Trial direct-pay ON: trial flow shows teacher's verified UPI, parent
+   pays teacher directly, parent marks paid + teacher confirms. Retire
+   trialFeePaidInr→trialCreditInr for new matches. The old Razorpay
+   trial order path stays only for the flag-off state.
+c) New engagements: NO salary commission (salaryPlatformCutPct and the
+   dead ledger 5% must not apply). Revenue = placement + activation
+   fees only. Leave the dead ledger.ts engagement:5 constant with a
+   comment marking it deprecated — do not repurpose it.
+
+STEP 4 — Visibility:
+Placement + activation fees must appear in parent/professional payment
+histories and the admin Payments tab.
+
+Show me: the admin_settings migration, the two payment-gate insertion
+points, the refund-on-decline path, and how old vs new engagements are
+distinguished — before building.

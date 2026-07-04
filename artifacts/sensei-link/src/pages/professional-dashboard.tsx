@@ -2011,6 +2011,9 @@ function EngagementTab() {
     childConsent: { media?: boolean } | null;
     endDate?: string | null;
     endedReason?: string | null;
+    platformSalaryEnabled?: boolean;
+    placementFeeInr?: number | null;
+    activationFeeInr?: number | null;
   }
 
   interface DailyLog {
@@ -2054,12 +2057,13 @@ function EngagementTab() {
     queryFn: () => fetchWithAuth("/api/engagements").then(r => r.json()),
   });
 
-  const activeList = engagements.filter(e => ["pending_teacher_acceptance", "pending_start", "active", "notice_period", "paused"].includes(e.status));
+  const activeList = engagements.filter(e => ["pending_teacher_acceptance", "pending_activation_fee", "pending_start", "active", "notice_period", "paused"].includes(e.status));
   const active = (selectedEngId ? engagements.find(e => e.id === selectedEngId) : null) ?? activeList[0] ?? null;
 
   const pendingStartDisabledEngTabs = new Set(["child", "log", "trends"]);
+  const isPreStartStatus = active?.status === "pending_start" || active?.status === "pending_teacher_acceptance" || active?.status === "pending_activation_fee";
   const visibleEngTab: typeof engTab =
-    ((active?.status === "pending_start" || active?.status === "pending_teacher_acceptance") && pendingStartDisabledEngTabs.has(engTab)) ||
+    (isPreStartStatus && pendingStartDisabledEngTabs.has(engTab)) ||
     (active?.status === "ended" && engTab === "lifecycle")
       ? "overview" : engTab;
 
@@ -2105,6 +2109,91 @@ function EngagementTab() {
     } catch (err) {
       toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" });
     } finally { setSubmittingAcceptance(false); }
+  }
+
+  // ── Activation fee payment (pending_activation_fee status) ─────────────────
+  const [payingActivationFee, setPayingActivationFee] = useState(false);
+
+  async function handlePayActivationFee() {
+    if (!active) return;
+    setPayingActivationFee(true);
+    try {
+      const orderRes = await fetchWithAuth(`/api/engagements/${active.id}/activation-fee/order`, { method: "POST" });
+      const orderData = await orderRes.json() as { error?: string; orderId?: string; amount?: number; keyId?: string; resuming?: boolean };
+      if (!orderRes.ok) { toast({ title: orderData.error ?? "Could not start payment", variant: "destructive" }); return; }
+      if (!orderData.orderId || !orderData.amount || !orderData.keyId) { toast({ title: "Invalid payment response", variant: "destructive" }); return; }
+
+      const loaded = await loadRazorpayScript();
+      if (!loaded) { toast({ title: "Payment gateway unavailable", variant: "destructive" }); return; }
+
+      await new Promise<void>((resolve, reject) => {
+        const rzp = new window.Razorpay({
+          key: orderData.keyId!,
+          amount: orderData.amount!,
+          currency: "INR",
+          order_id: orderData.orderId!,
+          name: "Includly",
+          description: "One-time activation fee",
+          handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+            try {
+              const vRes = await fetchWithAuth(`/api/engagements/${active.id}/activation-fee/verify`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySignature: response.razorpay_signature,
+                }),
+              });
+              const vd = await vRes.json() as { error?: string; status?: string };
+              if (!vRes.ok) { toast({ title: vd.error ?? "Payment verification failed", variant: "destructive" }); reject(new Error("verify")); return; }
+              toast({ title: "Activation fee paid ✓", description: "You can now enter the parent's start code to activate the engagement." });
+              queryClient.invalidateQueries({ queryKey: ["pro-engagements"] });
+              resolve();
+            } catch { reject(new Error("verify")); }
+          },
+          modal: { ondismiss: () => reject(new Error("dismissed")) },
+          theme: { color: "#2EC4A5" },
+        });
+        rzp.open();
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg !== "dismissed") toast({ title: "Could not complete payment", description: msg, variant: "destructive" });
+    } finally {
+      setPayingActivationFee(false);
+    }
+  }
+
+  // ── Direct-pay salary confirmations (platformSalaryEnabled === false) ──────
+  interface SalaryConfirmation {
+    id: number;
+    engagementId: number;
+    month: string;
+    amountInr: number;
+    markedPaidAt: string;
+    confirmedAt: string | null;
+  }
+  const { data: salaryConfirmations = [] } = useQuery<SalaryConfirmation[]>({
+    queryKey: ["salary-confirmations", active?.id],
+    queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/salary-confirmations`).then(r => { if (!r.ok) throw new Error(r.statusText); return r.json() as Promise<SalaryConfirmation[]>; }),
+    enabled: !!active && active.platformSalaryEnabled === false,
+  });
+  const [confirmingSalaryId, setConfirmingSalaryId] = useState<number | null>(null);
+
+  async function handleConfirmSalaryReceipt(confId: number) {
+    if (!active) return;
+    setConfirmingSalaryId(confId);
+    try {
+      const res = await fetchWithAuth(`/api/engagements/${active.id}/salary-confirmations/${confId}/confirm`, { method: "POST" });
+      if (!res.ok) { const e = await res.json() as { error?: string }; throw new Error(e.error ?? "Failed to confirm"); }
+      queryClient.invalidateQueries({ queryKey: ["salary-confirmations", active.id] });
+      toast({ title: "Receipt confirmed ✓" });
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally {
+      setConfirmingSalaryId(null);
+    }
   }
 
   // ── Goal management state ──────────────────────────────────────────────────
@@ -2435,10 +2524,10 @@ function EngagementTab() {
         {([["overview", "Overview"], ["child", "Child & Goals"], ["log", "Daily Log"], ["trends", "Trends"], ["lifecycle", "Manage"]] as [string, string][])
           .filter(([id]) =>
             !(active.status === "ended" && id === "lifecycle") &&
-            !(active.status === "pending_teacher_acceptance" && id === "lifecycle")
+            !((active.status === "pending_teacher_acceptance" || active.status === "pending_activation_fee") && id === "lifecycle")
           )
           .map(([id, label]) => {
-            const isPendingDisabled = (active.status === "pending_start" || active.status === "pending_teacher_acceptance") && pendingStartDisabledEngTabs.has(id);
+            const isPendingDisabled = (active.status === "pending_start" || active.status === "pending_teacher_acceptance" || active.status === "pending_activation_fee") && pendingStartDisabledEngTabs.has(id);
             return isPendingDisabled ? (
               <button key={id} disabled title="Available once the engagement starts"
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap text-gray-300 cursor-not-allowed select-none">
@@ -2501,8 +2590,60 @@ function EngagementTab() {
               </div>
             </div>
           )}
+          {active.status === "pending_activation_fee" && (
+            <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-4">
+              <p className="text-sm font-bold text-[#1A2340]">One-Time Activation Fee</p>
+              <p className="text-xs text-gray-500">
+                Pay the one-time activation fee to unlock the start code entry for this engagement.
+              </p>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-500">Activation fee</span>
+                <span className="font-semibold text-[#1A2340]">₹{Number(active.activationFeeInr ?? 0).toLocaleString("en-IN")}</span>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => void handlePayActivationFee()}
+                disabled={payingActivationFee}
+                className="w-full bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-xs font-semibold"
+              >
+                {payingActivationFee && <Loader2 size={12} className="animate-spin mr-1" />}
+                Pay ₹{Number(active.activationFeeInr ?? 0).toLocaleString("en-IN")} to Activate
+              </Button>
+            </div>
+          )}
           {active.status === "pending_start" && (
             <EngagementStartOtpEntry engagementId={active.id} />
+          )}
+          {active.platformSalaryEnabled === false && salaryConfirmations.length > 0 && (
+            <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
+              <p className="text-sm font-bold text-[#1A2340]">Salary Confirmations</p>
+              <p className="text-xs text-gray-500">
+                Your salary for this engagement is paid directly to your UPI ID. Confirm receipt once the parent marks a month as paid.
+              </p>
+              <div className="space-y-2">
+                {salaryConfirmations.map(sc => (
+                  <div key={sc.id} className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-lg">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-[#1A2340]">{sc.month}</p>
+                      <p className="text-xs text-gray-400">₹{sc.amountInr.toLocaleString("en-IN")} · marked paid {new Date(sc.markedPaidAt).toLocaleDateString("en-IN")}</p>
+                    </div>
+                    {sc.confirmedAt ? (
+                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-full border bg-green-50 text-green-700 border-green-200 shrink-0">confirmed</span>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => void handleConfirmSalaryReceipt(sc.id)}
+                        disabled={confirmingSalaryId === sc.id}
+                        className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-xs font-semibold shrink-0"
+                      >
+                        {confirmingSalaryId === sc.id && <Loader2 size={12} className="animate-spin mr-1" />}
+                        Confirm Receipt
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
           <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
             <div className="flex items-center justify-between">
@@ -3105,6 +3246,9 @@ interface Candidacy {
   preMeetingRequested: boolean;
   preMeetingNote:      string | null;
   trialLocation:       string | null;
+  trialDirectPay:             boolean;
+  trialDirectPayMarkedPaidAt: string | null;
+  trialDirectPayConfirmedAt:  string | null;
   threadId:            number | null;
   messageCount:        number;
   lastMessageAt:       string | null;
@@ -3280,6 +3424,9 @@ function CandidacyCard({ candidacy: c, onOpen, myUserId }: { candidacy: Candidac
           )}
         </div>
       )}
+      {c.isSelected && c.trialDirectPay && c.trialDirectPayMarkedPaidAt && (
+        <TrialDirectPayConfirm matchId={c.matchId} confirmedAt={c.trialDirectPayConfirmedAt} />
+      )}
       {c.matchStatus === "trial_pending" && c.isSelected && (
         <TrialOtpEntry matchId={c.matchId} type="start" />
       )}
@@ -3447,6 +3594,53 @@ function TrialOtpEntry({ matchId, type }: { matchId: number; type: "start" | "en
           {loading ? <Loader2 size={12} className="animate-spin" /> : (isStart ? "Start" : "End")}
         </Button>
       </div>
+    </div>
+  );
+}
+
+function TrialDirectPayConfirm({ matchId, confirmedAt }: { matchId: number; confirmedAt: string | null }) {
+  const [loading, setLoading] = useState(false);
+  const [confirmed, setConfirmed] = useState(!!confirmedAt);
+  const { toast } = useToast();
+
+  async function handleConfirm() {
+    setLoading(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/confirm-trial-direct-pay`, { method: "POST" });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        toast({ title: d.error ?? "Failed to confirm", variant: "destructive" });
+        return;
+      }
+      setConfirmed(true);
+      toast({ title: "Receipt confirmed ✓" });
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (confirmed) {
+    return (
+      <div className="mb-2 p-3 bg-green-50 border border-green-200 rounded-xl">
+        <p className="text-xs font-semibold text-green-800">✓ You confirmed receiving the trial fee directly</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-2 p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
+      <p className="text-xs font-semibold text-amber-800">💸 Parent says they've paid the trial fee to your UPI ID</p>
+      <p className="text-xs text-amber-700">Check your UPI app, then confirm once you've received it.</p>
+      <Button
+        size="sm"
+        onClick={() => void handleConfirm()}
+        disabled={loading}
+        className="h-8 px-4 rounded-xl text-xs text-white bg-amber-500 hover:bg-amber-600"
+      >
+        {loading ? <Loader2 size={12} className="animate-spin" /> : "Confirm I received it"}
+      </Button>
     </div>
   );
 }

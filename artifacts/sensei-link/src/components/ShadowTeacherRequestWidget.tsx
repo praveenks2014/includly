@@ -509,6 +509,18 @@ export function ShadowTeacherRequestWidget() {
   const [trialPreMeetingNote, setTrialPreMeetingNote] = useState("");
   const [trialLocation, setTrialLocation] = useState("");
 
+  // Direct-pay trial flow state (admin-flag trialDirectPayEnabled — parent pays teacher's UPI directly)
+  const [directPayInfo, setDirectPayInfo] = useState<{
+    professionalId: number;
+    upiVpa: string;
+    teacherName: string;
+    trialFeeInr: number;
+    preMeetingRequested: boolean;
+    preMeetingNote: string | null;
+    trialLoc: string | null;
+  } | null>(null);
+  const [markingDirectPayPaid, setMarkingDirectPayPaid] = useState(false);
+
   const status = match?.status ?? null;
   const isActive = status && !["cancelled", "refunded"].includes(status);
   const committed = status === "committed";
@@ -608,31 +620,86 @@ export function ShadowTeacherRequestWidget() {
     }
   }
 
-  // ── handleChoose — FREE commit (matching fee was already paid at request) ──
+  // ── handleChoose — commit to a teacher (placement fee charged via Razorpay) ──
   async function handleChoose(professionalId: number, startDate?: string) {
     if (!match) return;
     setChoosingId(professionalId);
     try {
-      const res = await fetchWithAuth(`/api/shadow-teacher/${match.id}/commit`, {
+      const orderRes = await fetchWithAuth(`/api/shadow-teacher/${match.id}/commit/order`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ selectedProfessionalId: professionalId, startDate }),
       });
-      const data = await res.json() as { error?: string; message?: string; engagementId?: number };
-      if (!res.ok) {
-        if (res.status === 409) {
-          toast({ title: "Cannot choose teacher", description: data.message ?? data.error, variant: "destructive" });
+      const orderData = await orderRes.json() as {
+        error?: string; message?: string; engagementId?: number;
+        waived?: boolean; orderId?: string; amount?: number; keyId?: string;
+      };
+      if (!orderRes.ok) {
+        if (orderRes.status === 409) {
+          toast({ title: "Cannot choose teacher", description: orderData.message ?? orderData.error, variant: "destructive" });
         } else {
-          toast({ title: data.error ?? "Could not select teacher", variant: "destructive" });
+          toast({ title: orderData.error ?? "Could not select teacher", variant: "destructive" });
         }
         return;
       }
-      toast({ title: "Teacher confirmed!", description: "Your start code is now visible in the Engagement tab." });
-      queryClient.invalidateQueries({ queryKey: ["parent-engagements"] });
-      queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+
+      // Placement fee waived (admin set it to ₹0) — engagement already created.
+      if (orderData.waived) {
+        toast({ title: "Teacher confirmed!", description: "Your start code is now visible in the Engagement tab." });
+        queryClient.invalidateQueries({ queryKey: ["parent-engagements"] });
+        queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+        await refetch();
+        return;
+      }
+
+      if (!orderData.orderId || !orderData.amount || !orderData.keyId) {
+        toast({ title: "Invalid payment response", variant: "destructive" });
+        return;
+      }
+
+      const loaded = await loadRazorpayScript();
+      if (!loaded) { toast({ title: "Payment gateway unavailable", variant: "destructive" }); return; }
+
+      await new Promise<void>((resolve, reject) => {
+        const rzp = new window.Razorpay({
+          key: orderData.keyId!,
+          amount: orderData.amount!,
+          currency: "INR",
+          order_id: orderData.orderId!,
+          name: "Includly",
+          description: "Shadow teacher placement fee",
+          handler: async (response: RazorpayPaymentResponse) => {
+            try {
+              const vRes = await fetchWithAuth(`/api/shadow-teacher/${match.id}/commit/verify`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySignature: response.razorpay_signature,
+                }),
+              });
+              const vd = await vRes.json() as { error?: string; message?: string; engagementId?: number };
+              if (!vRes.ok) {
+                toast({ title: vd.message ?? vd.error ?? "Payment verification failed", variant: "destructive" });
+                reject(new Error("verify"));
+                return;
+              }
+              toast({ title: "Teacher confirmed!", description: "Your start code is now visible in the Engagement tab." });
+              queryClient.invalidateQueries({ queryKey: ["parent-engagements"] });
+              queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+              await refetch();
+              resolve();
+            } catch { reject(new Error("verify")); }
+          },
+          modal: { ondismiss: () => reject(new Error("dismissed")) },
+        });
+        rzp.open();
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg !== "dismissed") toast({ title: "Could not select teacher", description: msg, variant: "destructive" });
       await refetch();
-    } catch {
-      toast({ title: "Network error", variant: "destructive" });
     } finally {
       setChoosingId(null);
     }
@@ -665,19 +732,45 @@ export function ShadowTeacherRequestWidget() {
     setTrialModalOpen(false);
     setRequestingTrial(true);
     try {
-      const loaded = await loadRazorpayScript();
-      if (!loaded) { toast({ title: "Payment gateway unavailable", variant: "destructive" }); return; }
-
       const res = await fetchWithAuth(`/api/shadow-teacher/${match.id}/request-trial`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ selectedProfessionalId: professionalId }),
       });
-      const data = await res.json() as { error?: string; message?: string; matchId?: number; orderId?: string; amount?: number; keyId?: string };
+      const data = await res.json() as {
+        error?: string; message?: string; matchId?: number; orderId?: string; amount?: number; keyId?: string;
+        directPay?: boolean; blocked?: boolean; trialFeeInr?: number; upiVpa?: string; teacherName?: string;
+      };
       if (!res.ok) {
         toast({ title: data.message ?? data.error ?? "Could not initiate trial", variant: "destructive" });
         return;
       }
+
+      // ── Direct-pay branch: no Razorpay order — parent pays teacher's UPI directly ──
+      if (data.directPay) {
+        if (data.blocked) {
+          toast({
+            title: "Teacher hasn't verified their UPI ID yet",
+            description: "We've notified them. Try again once they've verified it.",
+            variant: "destructive",
+          });
+          return;
+        }
+        setDirectPayInfo({
+          professionalId,
+          upiVpa: data.upiVpa!,
+          teacherName: data.teacherName ?? "your teacher",
+          trialFeeInr: data.trialFeeInr ?? 500,
+          preMeetingRequested,
+          preMeetingNote,
+          trialLoc,
+        });
+        return;
+      }
+
+      const loaded = await loadRazorpayScript();
+      if (!loaded) { toast({ title: "Payment gateway unavailable", variant: "destructive" }); return; }
+
       if (!data.orderId || !data.amount || !data.keyId) {
         toast({ title: "Invalid payment response", variant: "destructive" });
         return;
@@ -728,6 +821,37 @@ export function ShadowTeacherRequestWidget() {
       await refetch();
     } finally {
       setRequestingTrial(false);
+    }
+  }
+
+  // ── handleConfirmDirectPayPaid — parent confirms they paid the teacher's UPI directly ──
+  async function handleConfirmDirectPayPaid() {
+    if (!match || !directPayInfo) return;
+    setMarkingDirectPayPaid(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${match.id}/mark-trial-direct-pay-paid`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          selectedProfessionalId: directPayInfo.professionalId,
+          preMeetingRequested: directPayInfo.preMeetingRequested,
+          preMeetingNote: directPayInfo.preMeetingNote,
+          trialLocation: directPayInfo.trialLoc,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string; message?: string };
+        toast({ title: d.message ?? d.error ?? "Could not confirm payment", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Trial day booked!", description: "Coordinate with the teacher to schedule the trial day." });
+      setDirectPayInfo(null);
+      queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+      await refetch();
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setMarkingDirectPayPaid(false);
     }
   }
 
@@ -1280,6 +1404,59 @@ export function ShadowTeacherRequestWidget() {
               >
                 <IndianRupee size={13} />
                 Pay {"\u20B9"}{trialFee.toLocaleString("en-IN")} {"&"} Book Trial
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!directPayInfo} onOpenChange={(o) => { if (!o) setDirectPayInfo(null); }}>
+          <DialogContent className="max-w-sm rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-[#1A2340]">Pay {directPayInfo?.teacherName} directly</DialogTitle>
+            </DialogHeader>
+            {directPayInfo && (
+              <div className="space-y-4 py-2">
+                <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm text-orange-800">
+                  Send <strong>₹{directPayInfo.trialFeeInr.toLocaleString("en-IN")}</strong> via UPI directly to your teacher.
+                  The platform does not hold this payment.
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Teacher&apos;s UPI ID</p>
+                    <p className="text-sm font-mono font-semibold text-[#1A2340]">{directPayInfo.upiVpa}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-lg text-xs shrink-0"
+                    onClick={() => { void navigator.clipboard.writeText(directPayInfo.upiVpa); toast({ title: "UPI ID copied" }); }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Once you&apos;ve sent the payment via your UPI app, tap confirm below to book the trial day.
+                </p>
+              </div>
+            )}
+            <DialogFooter className="flex gap-2 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 rounded-xl"
+                onClick={() => setDirectPayInfo(null)}
+                disabled={markingDirectPayPaid}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white rounded-xl gap-1"
+                disabled={markingDirectPayPaid}
+                onClick={() => void handleConfirmDirectPayPaid()}
+              >
+                {markingDirectPayPaid ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                I&apos;ve Paid
               </Button>
             </DialogFooter>
           </DialogContent>

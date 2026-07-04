@@ -11,4 +11,8 @@ export interface UpdateAdminSettingsBody {
   contactUnlockPriceInr?: number;
   platformCommissionPct?: number;
   monetisationEnabled?: boolean;
+  placementFeeInr?: number;
+  activationFeeInr?: number;
+  platformSalaryEnabled?: boolean;
+  trialDirectPayEnabled?: boolean;
 }

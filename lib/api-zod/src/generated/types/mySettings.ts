@@ -6,15 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface AdminSettings {
-  id: number;
-  contactLimitPerParent: number;
-  contactUnlockPriceInr: number;
-  platformCommissionPct: number;
-  monetisationEnabled: boolean;
+export interface MySettings {
   placementFeeInr: number;
   activationFeeInr: number;
   platformSalaryEnabled: boolean;
   trialDirectPayEnabled: boolean;
-  updatedAt: Date;
+  trialFeeInr: number;
 }

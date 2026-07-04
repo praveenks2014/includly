@@ -682,6 +682,23 @@ export const GetContactUsageResponse = zod.object({
 export const GetAdminSettingsResponse = zod.object({
   id: zod.number(),
   contactLimitPerParent: zod.number(),
+  contactUnlockPriceInr: zod.number(),
+  platformCommissionPct: zod.number(),
+  monetisationEnabled: zod.boolean(),
+  matchingFeeInr: zod.number(),
+  matchingFeeRefundable: zod.boolean(),
+  markupPct: zod.number(),
+  markupFlatInr: zod.number(),
+  gstRatePct: zod.number(),
+  salaryPlatformCutPct: zod.number(),
+  noticePeriodDays: zod.number(),
+  parentBuyoutDays: zod.number(),
+  tiersJson: zod.string().nullish(),
+  trialFeeInr: zod.number(),
+  placementFeeInr: zod.number(),
+  activationFeeInr: zod.number(),
+  platformSalaryEnabled: zod.boolean(),
+  trialDirectPayEnabled: zod.boolean(),
   updatedAt: zod.coerce.date(),
 });
 
@@ -703,6 +720,10 @@ export const UpdateAdminSettingsBody = zod.object({
   parentBuyoutDays: zod.number().optional(),
   tiersJson: zod.string().optional(),
   trialFeeInr: zod.number().optional(),
+  placementFeeInr: zod.number().optional(),
+  activationFeeInr: zod.number().optional(),
+  platformSalaryEnabled: zod.boolean().optional(),
+  trialDirectPayEnabled: zod.boolean().optional(),
 });
 
 export const UpdateAdminSettingsResponse = zod.object({
@@ -711,7 +732,32 @@ export const UpdateAdminSettingsResponse = zod.object({
   contactUnlockPriceInr: zod.number(),
   platformCommissionPct: zod.number(),
   monetisationEnabled: zod.boolean(),
+  matchingFeeInr: zod.number(),
+  matchingFeeRefundable: zod.boolean(),
+  markupPct: zod.number(),
+  markupFlatInr: zod.number(),
+  gstRatePct: zod.number(),
+  salaryPlatformCutPct: zod.number(),
+  noticePeriodDays: zod.number(),
+  parentBuyoutDays: zod.number(),
+  tiersJson: zod.string().nullish(),
+  trialFeeInr: zod.number(),
+  placementFeeInr: zod.number(),
+  activationFeeInr: zod.number(),
+  platformSalaryEnabled: zod.boolean(),
+  trialDirectPayEnabled: zod.boolean(),
   updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Get the public-facing subset of admin settings relevant to the current flows (any authenticated role)
+ */
+export const GetMySettingsResponse = zod.object({
+  placementFeeInr: zod.number(),
+  activationFeeInr: zod.number(),
+  platformSalaryEnabled: zod.boolean(),
+  trialDirectPayEnabled: zod.boolean(),
+  trialFeeInr: zod.number(),
 });
 
 /**

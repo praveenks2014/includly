@@ -111,6 +111,9 @@ router.get("/engagements", requireAuth, async (req, res): Promise<void> => {
         startOtp: shadowTeacherEngagementsTable.startOtp,
         endDate: shadowTeacherEngagementsTable.endDate,
         endedReason: shadowTeacherEngagementsTable.endedReason,
+        platformSalaryEnabled: shadowTeacherEngagementsTable.platformSalaryEnabled,
+        placementFeeInr: shadowTeacherEngagementsTable.placementFeeInr,
+        activationFeeInr: shadowTeacherEngagementsTable.activationFeeInr,
         professionalName: professionalProfilesTable.fullName,
         professionalSpecialty: professionalProfilesTable.specialty,
         childName: childrenTable.name,
@@ -159,6 +162,9 @@ router.get("/engagements", requireAuth, async (req, res): Promise<void> => {
       candidateId:      shadowMatchCandidatesTable.id,
       endDate:          shadowTeacherEngagementsTable.endDate,
       endedReason:      shadowTeacherEngagementsTable.endedReason,
+      platformSalaryEnabled: shadowTeacherEngagementsTable.platformSalaryEnabled,
+      placementFeeInr:  shadowTeacherEngagementsTable.placementFeeInr,
+      activationFeeInr: shadowTeacherEngagementsTable.activationFeeInr,
     })
     .from(shadowTeacherEngagementsTable)
     .leftJoin(usersTable, eq(shadowTeacherEngagementsTable.parentId, usersTable.id))
@@ -294,7 +300,7 @@ router.patch("/engagements/:id/start-date", requireAuth, requireRole("parent"), 
 
   if (!engagement) { res.status(404).json({ error: "Engagement not found" }); return; }
   if (engagement.parentId !== req.userId!) { res.status(403).json({ error: "Access denied" }); return; }
-  if (engagement.status !== "pending_start") {
+  if (!["pending_start", "pending_activation_fee"].includes(engagement.status)) {
     res.status(400).json({ error: "Start date can only be changed before the engagement begins" }); return;
   }
 

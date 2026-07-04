@@ -6,6 +6,7 @@ import {
   db,
   shadowTeacherEngagementsTable,
   engagementSalaryPaymentsTable,
+  engagementSalaryConfirmationsTable,
   adminSettingsTable,
   professionalProfilesTable,
 } from "@workspace/db";
@@ -59,6 +60,10 @@ router.post("/engagements/:id/pay-salary", requireAuth, requireRole("parent"), a
   if (!eng) { res.status(404).json({ error: "Engagement not found" }); return; }
   if (!["active", "notice_period"].includes(eng.status)) {
     res.status(409).json({ error: "Engagement is not active" });
+    return;
+  }
+  if (!eng.platformSalaryEnabled) {
+    res.status(409).json({ error: "platform_salary_disabled", message: "This engagement's salary is paid directly to the teacher. Use the salary-confirmations flow instead." });
     return;
   }
 
@@ -256,6 +261,158 @@ router.post("/engagements/:id/verify-salary-payment", requireAuth, requireRole("
   } catch { /* non-blocking */ }
 
   res.json(updated);
+});
+
+// ── Direct-pay salary confirmations (platformSalaryEnabled === false) ──────────
+// Parent marks a month's salary as paid directly to the teacher's UPI; teacher
+// confirms receipt. Record-only — no platform funds move, no commission applies.
+
+const MarkSalaryConfirmationBody = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+});
+
+// POST /engagements/:id/salary-confirmations — parent marks a month as paid directly
+router.post("/engagements/:id/salary-confirmations", requireAuth, requireRole("parent"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = MarkSalaryConfirmationBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { month } = parsed.data;
+
+  const eng = await getEngagementForParent(id, req.userId!);
+  if (!eng) { res.status(404).json({ error: "Engagement not found" }); return; }
+  if (!["active", "notice_period"].includes(eng.status)) {
+    res.status(409).json({ error: "Engagement is not active" });
+    return;
+  }
+  if (eng.platformSalaryEnabled) {
+    res.status(409).json({ error: "platform_salary_enabled", message: "This engagement's salary is paid through the platform. Use the pay-salary flow instead." });
+    return;
+  }
+
+  const [prof] = await db
+    .select({ userId: professionalProfilesTable.userId, upiVpa: professionalProfilesTable.upiVpa, upiVerifiedAt: professionalProfilesTable.upiVerifiedAt })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, eng.professionalId))
+    .limit(1);
+  if (!prof?.upiVpa || !prof.upiVerifiedAt) {
+    res.status(409).json({ error: "professional_upi_unverified", message: "This teacher hasn't verified their UPI ID yet." });
+    return;
+  }
+
+  // Idempotent: re-return the existing confirmation for this month rather than duplicating
+  const [existing] = await db
+    .select()
+    .from(engagementSalaryConfirmationsTable)
+    .where(and(eq(engagementSalaryConfirmationsTable.engagementId, id), eq(engagementSalaryConfirmationsTable.month, month)))
+    .limit(1);
+  if (existing) { res.status(200).json(existing); return; }
+
+  const [confirmation] = await db
+    .insert(engagementSalaryConfirmationsTable)
+    .values({
+      engagementId: id,
+      month,
+      amountInr: eng.monthlyFeeInr,
+      markedPaidAt: new Date(),
+    })
+    .returning();
+
+  try {
+    await createInAppNotification(prof.userId, {
+      type: "salary_marked_paid_direct",
+      title: "Parent marked salary as paid",
+      body: `The parent has marked your salary of ₹${eng.monthlyFeeInr.toLocaleString("en-IN")} for ${month} as paid directly. Please confirm receipt in the app.`,
+      relatedType: "engagement",
+      relatedId: id,
+    });
+  } catch { /* non-blocking */ }
+
+  res.status(201).json(confirmation);
+});
+
+// POST /engagements/:id/salary-confirmations/:confId/confirm — teacher confirms receipt
+router.post("/engagements/:id/salary-confirmations/:confId/confirm", requireAuth, requireRole("professional"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  const confId = parseInt(req.params["confId"] as string, 10);
+  if (isNaN(id) || isNaN(confId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [eng] = await db
+    .select()
+    .from(shadowTeacherEngagementsTable)
+    .where(eq(shadowTeacherEngagementsTable.id, id))
+    .limit(1);
+  if (!eng) { res.status(404).json({ error: "Engagement not found" }); return; }
+
+  const [prof] = await db
+    .select({ id: professionalProfilesTable.id, userId: professionalProfilesTable.userId })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, eng.professionalId))
+    .limit(1);
+  if (!prof || prof.userId !== req.userId!) { res.status(403).json({ error: "Access denied" }); return; }
+
+  const [confirmation] = await db
+    .select()
+    .from(engagementSalaryConfirmationsTable)
+    .where(and(eq(engagementSalaryConfirmationsTable.id, confId), eq(engagementSalaryConfirmationsTable.engagementId, id)))
+    .limit(1);
+  if (!confirmation) { res.status(404).json({ error: "Confirmation not found" }); return; }
+
+  if (confirmation.confirmedAt) { res.json(confirmation); return; }
+
+  const [updated] = await db
+    .update(engagementSalaryConfirmationsTable)
+    .set({ confirmedAt: new Date() })
+    .where(eq(engagementSalaryConfirmationsTable.id, confId))
+    .returning();
+
+  try {
+    await createInAppNotification(eng.parentId, {
+      type: "salary_confirmation_received",
+      title: "Teacher confirmed salary receipt",
+      body: `Your teacher confirmed receiving the ₹${confirmation.amountInr.toLocaleString("en-IN")} salary payment for ${confirmation.month}.`,
+      relatedType: "engagement",
+      relatedId: id,
+    });
+  } catch { /* non-blocking */ }
+
+  res.json(updated);
+});
+
+// GET /engagements/:id/salary-confirmations — both parent and teacher can view
+router.get("/engagements/:id/salary-confirmations", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [eng] = await db
+    .select()
+    .from(shadowTeacherEngagementsTable)
+    .where(eq(shadowTeacherEngagementsTable.id, id))
+    .limit(1);
+  if (!eng) { res.status(404).json({ error: "Engagement not found" }); return; }
+
+  const isParent = eng.parentId === req.userId!;
+  const [prof] = await db
+    .select({ userId: professionalProfilesTable.userId })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, eng.professionalId))
+    .limit(1);
+  const isTeacher = prof?.userId === req.userId!;
+  const isAdmin = req.userRole === "admin";
+
+  if (!isParent && !isTeacher && !isAdmin) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
+
+  const rows = await db
+    .select()
+    .from(engagementSalaryConfirmationsTable)
+    .where(eq(engagementSalaryConfirmationsTable.engagementId, id))
+    .orderBy(desc(engagementSalaryConfirmationsTable.month));
+
+  res.json(rows);
 });
 
 // GET /engagements/:id/payments — both parent and teacher can view

@@ -447,7 +447,7 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
   });
   const activeEngagement = engagements.find(
     (e) =>
-      ["active", "notice_period", "paused", "pending_start", "pending_teacher_acceptance"].includes(e.status) &&
+      ["active", "notice_period", "paused", "pending_start", "pending_activation_fee", "pending_teacher_acceptance"].includes(e.status) &&
       e.childId === selectedChildId
   );
 
@@ -1251,6 +1251,7 @@ function ShadowTeacherTab() {
     startOtp?: string | null;
     endDate?: string | null;
     endedReason?: string | null;
+    platformSalaryEnabled?: boolean;
   }
   interface DailyLog {
     id: number;
@@ -1270,6 +1271,13 @@ function ShadowTeacherTab() {
     status: string;
     paidAt: string | null;
   }
+  interface SalaryConfirmation {
+    id: number;
+    month: string;
+    amountInr: number;
+    markedPaidAt: string;
+    confirmedAt: string | null;
+  }
   interface LifecycleRequest {
     id: number;
     type: string;
@@ -1286,7 +1294,7 @@ function ShadowTeacherTab() {
   });
 
   const active = engagements.find(e =>
-    (["active", "notice_period", "paused", "pending_start", "pending_teacher_acceptance", "ended"].includes(e.status)) &&
+    (["active", "notice_period", "paused", "pending_start", "pending_activation_fee", "pending_teacher_acceptance", "ended"].includes(e.status)) &&
     e.childId === selectedChildId
   );
 
@@ -1300,6 +1308,12 @@ function ShadowTeacherTab() {
     queryKey: ["engagement-payments", active?.id],
     queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/payments`).then(r => r.json()),
     enabled: !!active,
+  });
+
+  const { data: salaryConfirmations = [] } = useQuery<SalaryConfirmation[]>({
+    queryKey: ["salary-confirmations", active?.id],
+    queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/salary-confirmations`).then(r => r.json()),
+    enabled: !!active && active?.platformSalaryEnabled === false,
   });
 
   const { data: lifecycleRequests = [] } = useQuery<LifecycleRequest[]>({
@@ -1341,8 +1355,9 @@ function ShadowTeacherTab() {
   const [changingStartDate, setChangingStartDate] = useState(false);
 
   const pendingStartDisabledTabs = new Set(["logs", "goals", "trends", "payments"]);
+  const isPreStartSt = active?.status === "pending_start" || active?.status === "pending_teacher_acceptance" || active?.status === "pending_activation_fee";
   const visibleStTab: typeof stTab =
-    ((active?.status === "pending_start" || active?.status === "pending_teacher_acceptance") && pendingStartDisabledTabs.has(stTab)) ||
+    (isPreStartSt && pendingStartDisabledTabs.has(stTab)) ||
     (active?.status === "ended" && stTab === "lifecycle")
       ? "overview" : stTab;
 
@@ -1431,6 +1446,27 @@ function ShadowTeacherTab() {
     finally { setPostingLifecycle(false); }
   }
 
+  async function handleMarkSalaryPaidDirect() {
+    if (!active || !payingMonth.trim()) return;
+    setPayingInProgress(true);
+    try {
+      const resp = await fetchWithAuth(`/api/engagements/${active.id}/salary-confirmations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: payingMonth }),
+      });
+      const body = await resp.json() as { error?: string; message?: string };
+      if (!resp.ok) { throw new Error(body.message ?? body.error ?? "Failed to mark as paid"); }
+      queryClient.invalidateQueries({ queryKey: ["salary-confirmations", active.id] });
+      setPayingMonth("");
+      toast({ title: "Marked as paid — waiting for teacher to confirm receipt" });
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally {
+      setPayingInProgress(false);
+    }
+  }
+
   async function handlePaySalary() {
     if (!active || !payingMonth.trim()) return;
     setPayingInProgress(true);
@@ -1440,7 +1476,11 @@ function ShadowTeacherTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ month: payingMonth }),
       });
-      if (salaryResp.status === 409) { toast({ title: "Already paid for this month" }); return; }
+      if (salaryResp.status === 409) {
+        const e = await salaryResp.json() as { error?: string; message?: string };
+        toast({ title: e.message ?? e.error ?? "Already paid for this month" });
+        return;
+      }
       if (!salaryResp.ok) { const e = await salaryResp.json(); throw new Error(e.error ?? "Failed to create order"); }
       const orderRes = await salaryResp.json();
 
@@ -1619,10 +1659,10 @@ function ShadowTeacherTab() {
         {(([["overview", "Overview"], ["logs", "Daily Logs"], ["goals", "Goals"], ["trends", "Trends"], ["payments", "Payments"], ["lifecycle", "Manage"]] as [string, string][])
           .filter(([id]) =>
             !(active.status === "ended" && id === "lifecycle") &&
-            !(active.status === "pending_teacher_acceptance" && id === "lifecycle")
+            !((active.status === "pending_teacher_acceptance" || active.status === "pending_activation_fee") && id === "lifecycle")
           )
         ).map(([id, label]) => {
-          const isPendingDisabled = (active.status === "pending_start" || active.status === "pending_teacher_acceptance") && pendingStartDisabledTabs.has(id);
+          const isPendingDisabled = isPreStartSt && pendingStartDisabledTabs.has(id);
           const tipText = id === "payments"
             ? "Available once the engagement starts — salary payments begin on the confirmed start date"
             : "Available once the engagement starts";
@@ -1713,6 +1753,24 @@ function ShadowTeacherTab() {
                     </span>
                   </div>
                 </div>
+              </div>
+            </div>
+          ) : active.status === "pending_activation_fee" ? (
+            <div className="space-y-3">
+              <p className="text-sm font-bold text-[#1A2340]">Teacher Accepted — Awaiting Activation</p>
+              <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
+                    <Clock size={14} className="text-orange-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-orange-900">Waiting for the teacher to pay the activation fee</p>
+                    <p className="text-[11px] text-orange-600 mt-0.5">You'll be notified once the engagement is ready to start</p>
+                  </div>
+                </div>
+                <p className="text-xs text-orange-700 leading-relaxed">
+                  {active.professionalName ?? "Your teacher"} has accepted and needs to complete a one-time activation payment before the start code becomes available.
+                </p>
               </div>
             </div>
           ) : active.status === "pending_start" ? (
@@ -1807,7 +1865,26 @@ function ShadowTeacherTab() {
               <p className="text-xs text-gray-500 font-medium">This engagement has ended — records are read-only.</p>
             </div>
           )}
-          {active.status !== "ended" && (
+          {["active", "notice_period"].includes(active.status) && active.platformSalaryEnabled === false ? (
+            <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
+              <p className="text-sm font-bold text-[#1A2340]">Mark Salary as Paid</p>
+              <p className="text-xs text-gray-500">
+                This engagement's salary is paid directly to your teacher's UPI ID — the platform doesn't hold these funds.
+                Pay the teacher directly, then mark the month as paid here so they can confirm receipt.
+              </p>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Month (YYYY-MM)</p>
+                <input value={payingMonth} onChange={(e) => setPayingMonth(e.target.value)}
+                  placeholder="2026-06"
+                  className="w-full max-w-xs rounded-lg border border-gray-200 p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]" />
+              </div>
+              <Button onClick={handleMarkSalaryPaidDirect} disabled={payingInProgress || !payingMonth.trim()}
+                className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-sm">
+                {payingInProgress ? <Loader2 size={14} className="animate-spin mr-1" /> : <IndianRupee size={14} className="mr-1" />}
+                Mark ₹{Number(active.monthlyFeeInr).toLocaleString("en-IN")} as Paid
+              </Button>
+            </div>
+          ) : active.status !== "ended" && (
             <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
               <p className="text-sm font-bold text-[#1A2340]">Pay Salary</p>
               <div>
@@ -1823,7 +1900,35 @@ function ShadowTeacherTab() {
               </Button>
             </div>
           )}
-          {payments.length === 0 ? (
+
+          {active.platformSalaryEnabled === false ? (
+            salaryConfirmations.length === 0 ? (
+              <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-10 text-center">
+                <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                  <IndianRupee size={20} className="text-gray-300" />
+                </div>
+                <p className="text-sm font-semibold text-gray-600">No salary payments marked yet</p>
+                <p className="text-xs text-gray-400 mt-1">Marked payments will appear here once the engagement starts.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {salaryConfirmations.map(sc => (
+                  <div key={sc.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${sc.confirmedAt ? "bg-green-50" : "bg-amber-50"}`}>
+                      <IndianRupee size={15} className={sc.confirmedAt ? "text-green-600" : "text-amber-500"} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-[#1A2340]">{sc.month}</p>
+                      <p className="text-xs text-gray-400">₹{sc.amountInr.toLocaleString("en-IN")} · marked paid {new Date(sc.markedPaidAt).toLocaleDateString("en-IN")}</p>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${sc.confirmedAt ? "bg-green-50 text-green-700 border-green-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                      {sc.confirmedAt ? "confirmed" : "pending confirmation"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : payments.length === 0 ? (
             <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-10 text-center">
               <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
                 <IndianRupee size={20} className="text-gray-300" />
@@ -2176,7 +2281,7 @@ function ProgressTab() {
   });
 
   const active = engagements.find(e =>
-    (["active", "notice_period", "paused", "pending_start", "pending_teacher_acceptance", "ended"].includes(e.status)) &&
+    (["active", "notice_period", "paused", "pending_start", "pending_activation_fee", "pending_teacher_acceptance", "ended"].includes(e.status)) &&
     e.childId === selectedChildId
   );
 
@@ -2214,8 +2319,8 @@ function ProgressTab() {
   }
 
   // Mirror ShadowTeacherTab: logs/goals/trends are gated until the engagement
-  // actually starts (pending_start / pending_teacher_acceptance) — no pre-start writes.
-  if (active.status === "pending_start" || active.status === "pending_teacher_acceptance") {
+  // actually starts (pending_start / pending_teacher_acceptance / pending_activation_fee) — no pre-start writes.
+  if (active.status === "pending_start" || active.status === "pending_teacher_acceptance" || active.status === "pending_activation_fee") {
     return (
       <div className="space-y-5 pb-4">
         <div>

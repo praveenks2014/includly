@@ -55,6 +55,18 @@ export const shadowTeacherMatchesTable = pgTable("shadow_teacher_matches", {
   trialStartOtp: text("trial_start_otp"),
   trialEndOtp: text("trial_end_otp"),
   trialLocation: text("trial_location"),
+  // Monetization restructure — trial direct-pay flag, snapshotted from
+  // admin_settings.trialDirectPayEnabled at trial-request time. Null if no trial was requested.
+  trialDirectPay: boolean("trial_direct_pay"),
+  trialDirectPayMarkedPaidAt: timestamp("trial_direct_pay_marked_paid_at", { withTimezone: true }),
+  trialDirectPayConfirmedAt: timestamp("trial_direct_pay_confirmed_at", { withTimezone: true }),
+  // Monetization restructure — placement-fee commit gate. The commit flow is two-phase
+  // (order then verify); these columns hold the pending state between the two calls since
+  // the engagement doesn't exist yet at order-creation time.
+  pendingCommitProfessionalId: integer("pending_commit_professional_id").references(() => professionalProfilesTable.id, { onDelete: "set null" }),
+  pendingCommitStartDate: text("pending_commit_start_date"),
+  placementFeeOrderId: text("placement_fee_order_id"),
+  placementFeeAmountInr: integer("placement_fee_amount_inr"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

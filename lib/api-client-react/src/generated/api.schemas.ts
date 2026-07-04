@@ -720,6 +720,11 @@ export interface AdminSettings {
   noticePeriodDays: number;
   parentBuyoutDays: number;
   tiersJson: string | null;
+  trialFeeInr: number;
+  placementFeeInr: number;
+  activationFeeInr: number;
+  platformSalaryEnabled: boolean;
+  trialDirectPayEnabled: boolean;
   updatedAt: string;
 }
 
@@ -737,6 +742,11 @@ export interface UpdateAdminSettingsBody {
   noticePeriodDays?: number;
   parentBuyoutDays?: number;
   tiersJson?: string;
+  trialFeeInr?: number;
+  placementFeeInr?: number;
+  activationFeeInr?: number;
+  platformSalaryEnabled?: boolean;
+  trialDirectPayEnabled?: boolean;
 }
 
 export interface VapidPublicKeyResponse {

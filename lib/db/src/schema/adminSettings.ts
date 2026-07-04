@@ -28,6 +28,13 @@ export const adminSettingsTable = pgTable("admin_settings", {
   tiersJson: text("tiers_json"),
   // Trial day flow — fee charged to parent for a one-day trial with a shortlisted teacher
   trialFeeInr: integer("trial_fee_inr").notNull().default(500),
+  // Monetization restructure — admin-configurable commit-moment fees + salary/trial model flags.
+  // These flags are snapshotted onto individual rows (engagements, matches) at the moment they
+  // apply; changing them here only affects rows created/transitioned AFTER the change.
+  placementFeeInr: integer("placement_fee_inr").notNull().default(2999),
+  activationFeeInr: integer("activation_fee_inr").notNull().default(999),
+  platformSalaryEnabled: boolean("platform_salary_enabled").notNull().default(false),
+  trialDirectPayEnabled: boolean("trial_direct_pay_enabled").notNull().default(true),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

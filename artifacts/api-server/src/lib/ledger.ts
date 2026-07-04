@@ -116,6 +116,45 @@ export async function refundToWallet(
   });
 }
 
+export type WalletSourceType = "refund" | "topup" | "booking" | "engagement";
+
+/**
+ * Generic wallet credit helper — increments the user's wallet balance and
+ * records a walletTransactions row in the same atomic step. Used for
+ * refunds (e.g. placement-fee refund on teacher decline) and for crediting
+ * stranded trial-fee amounts that have no salary payment to apply against
+ * (platformSalaryEnabled=false engagements).
+ */
+export async function creditWallet(
+  userId: number,
+  amountInr: number,
+  sourceType: WalletSourceType,
+  referenceId: number | null,
+  description: string,
+): Promise<number> {
+  return await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(usersTable)
+      .set({ walletBalanceInr: sql`${usersTable.walletBalanceInr} + ${amountInr}` })
+      .where(eq(usersTable.id, userId))
+      .returning({ walletBalanceInr: usersTable.walletBalanceInr });
+
+    const newBalance = updated?.walletBalanceInr ?? amountInr;
+
+    await tx.insert(walletTransactionsTable).values({
+      userId,
+      amountInr,
+      type: "credit",
+      sourceType,
+      referenceId,
+      description,
+      balanceAfter: newBalance,
+    });
+
+    return newBalance;
+  });
+}
+
 export async function findLedgerByBooking(bookingId: number) {
   const [entry] = await db
     .select()

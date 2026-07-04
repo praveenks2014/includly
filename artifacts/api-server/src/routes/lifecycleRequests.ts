@@ -12,9 +12,11 @@ import {
   shadowTeacherMatchesTable,
   shadowMatchCandidatesTable,
   negotiationOffersTable,
+  paymentsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { sendPushNotification, createInAppNotification } from "../lib/notificationService";
+import { creditWallet } from "../lib/ledger";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -640,9 +642,17 @@ router.patch("/engagements/:id/teacher-acceptance", requireAuth, async (req, res
   }
 
   if (action === "accept") {
+    const settings = await getSettings();
+    const activationFeeInr = ((settings as Record<string, unknown>)["activationFeeInr"] as number) ?? 999;
+    const nextStatus = activationFeeInr > 0 ? "pending_activation_fee" : "pending_start";
+
     await db
       .update(shadowTeacherEngagementsTable)
-      .set({ status: "pending_start", updatedAt: new Date() })
+      .set({
+        status: nextStatus,
+        activationFeeInr: activationFeeInr > 0 ? activationFeeInr : null,
+        updatedAt: new Date(),
+      })
       .where(eq(shadowTeacherEngagementsTable.id, id));
 
     try {
@@ -651,12 +661,25 @@ router.patch("/engagements/:id/teacher-acceptance", requireAuth, async (req, res
       await createInAppNotification(eng.parentId, {
         type: "engagement_accepted",
         title: "Teacher accepted the engagement",
-        body: `${profRow?.fullName ?? "Your teacher"} accepted the engagement. Your start code will be ready on ${eng.startDate}.`,
+        body: nextStatus === "pending_activation_fee"
+          ? `${profRow?.fullName ?? "Your teacher"} accepted the engagement and is completing their activation fee. Your start code will be ready once that's done.`
+          : `${profRow?.fullName ?? "Your teacher"} accepted the engagement. Your start code will be ready on ${eng.startDate}.`,
         relatedType: "engagement", relatedId: id,
       });
     } catch { /* non-blocking */ }
 
-    res.json({ status: "pending_start" });
+    if (nextStatus === "pending_activation_fee") {
+      try {
+        await createInAppNotification(req.userId!, {
+          type: "activation_fee_due",
+          title: "Activation fee required",
+          body: `Pay the one-time activation fee of ₹${activationFeeInr.toLocaleString("en-IN")} to start this engagement.`,
+          relatedType: "engagement", relatedId: id,
+        });
+      } catch { /* non-blocking */ }
+    }
+
+    res.json({ status: nextStatus, activationFeeInr: activationFeeInr > 0 ? activationFeeInr : undefined });
     return;
   }
 
@@ -709,19 +732,147 @@ router.patch("/engagements/:id/teacher-acceptance", requireAuth, async (req, res
       .where(eq(shadowTeacherMatchesTable.id, eng.matchRequestId));
   }
 
-  // 6. Notify parent
+  // 6. Refund the placement fee — the parent already paid it to commit to this
+  // teacher; a decline means the placement never happened.
+  let refundedInr: number | null = null;
+  if (eng.placementFeePaymentId) {
+    const [feePayment] = await db
+      .select()
+      .from(paymentsTable)
+      .where(eq(paymentsTable.id, eng.placementFeePaymentId))
+      .limit(1);
+    if (feePayment && feePayment.status !== "refunded") {
+      refundedInr = Math.round(feePayment.amountPaise / 100);
+      await creditWallet(
+        eng.parentId,
+        refundedInr,
+        "refund",
+        feePayment.id,
+        "Placement fee refunded — teacher declined the engagement.",
+      );
+      await db
+        .update(paymentsTable)
+        .set({ status: "refunded" })
+        .where(eq(paymentsTable.id, feePayment.id));
+    }
+  }
+
+  // 7. Notify parent
   try {
     const [profRow] = await db.select({ fullName: professionalProfilesTable.fullName })
       .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, eng.professionalId)).limit(1);
     await createInAppNotification(eng.parentId, {
       type: "engagement_declined",
       title: "Teacher declined the engagement",
-      body: `${profRow?.fullName ?? "The teacher"} declined this engagement. You can return to your enquiry to choose another teacher.`,
+      body: refundedInr
+        ? `${profRow?.fullName ?? "The teacher"} declined this engagement. Your placement fee of ₹${refundedInr.toLocaleString("en-IN")} has been refunded to your wallet. You can return to your enquiry to choose another teacher.`
+        : `${profRow?.fullName ?? "The teacher"} declined this engagement. You can return to your enquiry to choose another teacher.`,
       relatedType: "engagement", relatedId: id,
     });
   } catch { /* non-blocking */ }
 
-  res.json({ status: "ended", endedReason: "teacher_declined" });
+  res.json({ status: "ended", endedReason: "teacher_declined", refundedInr: refundedInr ?? undefined });
+});
+
+// ── POST /engagements/:id/activation-fee/order + /verify — teacher pays the one-time activation fee ──
+const ActivationVerifyBody = z.object({
+  razorpayOrderId: z.string(),
+  razorpayPaymentId: z.string(),
+  razorpaySignature: z.string(),
+});
+
+router.post("/engagements/:id/activation-fee/order", requireAuth, requireRole("professional"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { eng, role } = await getEngagementWithAccess(id, req.userId!, req.userRole!);
+  if (!eng || role !== "teacher") { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
+  if (eng.status !== "pending_activation_fee") { res.status(409).json({ error: "Engagement is not awaiting an activation fee payment" }); return; }
+
+  const activationFeeInr = eng.activationFeeInr ?? 0;
+  if (activationFeeInr <= 0) { res.status(409).json({ error: "No activation fee is due for this engagement" }); return; }
+
+  // Idempotency — reuse the pending order if one already exists.
+  if (eng.activationFeeOrderId) {
+    res.json({ orderId: eng.activationFeeOrderId, amount: activationFeeInr * 100, keyId: process.env["RAZORPAY_KEY_ID"]!, resuming: true });
+    return;
+  }
+
+  const razorpay = getRazorpay();
+  if (!razorpay) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
+
+  const amount = activationFeeInr * 100;
+  const order = await razorpay.orders.create({
+    amount,
+    currency: "INR",
+    receipt: `activation_${id}_${Date.now()}`,
+    notes: { engagementId: String(id) },
+  });
+
+  await db
+    .update(shadowTeacherEngagementsTable)
+    .set({ activationFeeOrderId: order.id as string, updatedAt: new Date() })
+    .where(eq(shadowTeacherEngagementsTable.id, id));
+
+  res.json({ orderId: order.id, amount, keyId: process.env["RAZORPAY_KEY_ID"]! });
+});
+
+router.post("/engagements/:id/activation-fee/verify", requireAuth, requireRole("professional"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = ActivationVerifyBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = parsed.data;
+
+  const keySecret = process.env["RAZORPAY_KEY_SECRET"];
+  if (!keySecret) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
+
+  const { eng, role } = await getEngagementWithAccess(id, req.userId!, req.userRole!);
+  if (!eng || role !== "teacher") { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
+
+  // Idempotent — already past this gate.
+  if (eng.status !== "pending_activation_fee") {
+    res.json({ status: eng.status, alreadyProcessed: true });
+    return;
+  }
+  if (!eng.activationFeeOrderId || eng.activationFeeOrderId !== razorpayOrderId) { res.status(400).json({ error: "Order ID mismatch" }); return; }
+
+  const expectedSig = crypto.createHmac("sha256", keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");
+  if (expectedSig !== razorpaySignature) { res.status(400).json({ error: "Payment signature verification failed" }); return; }
+
+  const activationFeeInr = eng.activationFeeInr ?? 0;
+  const [paymentRow] = await db
+    .insert(paymentsTable)
+    .values({
+      userId: req.userId!,
+      plan: "plan_activation_fee",
+      provider: "razorpay",
+      providerOrderId: razorpayOrderId,
+      providerPaymentId: razorpayPaymentId,
+      amountPaise: activationFeeInr * 100,
+      currency: "INR",
+      status: "completed",
+      professionalId: eng.professionalId,
+      metadata: JSON.stringify({ engagementId: id }),
+    })
+    .returning();
+
+  await db
+    .update(shadowTeacherEngagementsTable)
+    .set({ status: "pending_start", activationFeePaymentId: paymentRow!.id, updatedAt: new Date() })
+    .where(eq(shadowTeacherEngagementsTable.id, id));
+
+  try {
+    await createInAppNotification(eng.parentId, {
+      type: "engagement_activated",
+      title: "Teacher completed activation",
+      body: "Your start code is now ready in the Engagement tab.",
+      relatedType: "engagement", relatedId: id,
+    });
+  } catch { /* non-blocking */ }
+
+  res.json({ status: "pending_start" });
 });
 
 export default router;

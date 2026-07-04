@@ -472,6 +472,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /settings/me:
+    get:
+      operationId: getMySettings
+      tags: [dashboard]
+      summary: Get the public-facing subset of admin settings relevant to the current flows (any authenticated role)
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Public settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MySettings"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /admin/settings:
     get:
       operationId: getAdminSettings
@@ -2650,12 +2671,63 @@ components:
           type: integer
         contactLimitPerParent:
           type: integer
+        contactUnlockPriceInr:
+          type: integer
+        platformCommissionPct:
+          type: integer
+        monetisationEnabled:
+          type: boolean
+        matchingFeeInr:
+          type: integer
+        matchingFeeRefundable:
+          type: boolean
+        markupPct:
+          type: number
+        markupFlatInr:
+          type: integer
+        gstRatePct:
+          type: number
+        salaryPlatformCutPct:
+          type: number
+        noticePeriodDays:
+          type: integer
+        parentBuyoutDays:
+          type: integer
+        tiersJson:
+          type: string
+          nullable: true
+        trialFeeInr:
+          type: integer
+        placementFeeInr:
+          type: integer
+        activationFeeInr:
+          type: integer
+        platformSalaryEnabled:
+          type: boolean
+        trialDirectPayEnabled:
+          type: boolean
         updatedAt:
           type: string
           format: date-time
       required:
         - id
         - contactLimitPerParent
+        - contactUnlockPriceInr
+        - platformCommissionPct
+        - monetisationEnabled
+        - matchingFeeInr
+        - matchingFeeRefundable
+        - markupPct
+        - markupFlatInr
+        - gstRatePct
+        - salaryPlatformCutPct
+        - noticePeriodDays
+        - parentBuyoutDays
+        - trialFeeInr
+        - placementFeeInr
+        - activationFeeInr
+        - platformSalaryEnabled
+        - trialDirectPayEnabled
         - updatedAt
 
     UpdateAdminSettingsBody:
@@ -2663,6 +2735,82 @@ components:
       properties:
         contactLimitPerParent:
           type: integer
+        contactUnlockPriceInr:
+          type: integer
+        platformCommissionPct:
+          type: integer
+        monetisationEnabled:
+          type: boolean
+        matchingFeeInr:
+          type: integer
+        matchingFeeRefundable:
+          type: boolean
+        markupPct:
+          type: number
+        markupFlatInr:
+          type: integer
+        gstRatePct:
+          type: number
+        salaryPlatformCutPct:
+          type: number
+        noticePeriodDays:
+          type: integer
+        parentBuyoutDays:
+          type: integer
+        tiersJson:
+          type: string
+        trialFeeInr:
+          type: integer
+        placementFeeInr:
+          type: integer
+        activationFeeInr:
+          type: integer
+        platformSalaryEnabled:
+          type: boolean
+        trialDirectPayEnabled:
+          type: boolean
+
+    SettingsAuditLogEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        adminUserId:
+          type: integer
+        adminName:
+          type: string
+          nullable: true
+        changes:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - adminUserId
+        - changes
+        - createdAt
+
+    MySettings:
+      type: object
+      properties:
+        placementFeeInr:
+          type: integer
+        activationFeeInr:
+          type: integer
+        platformSalaryEnabled:
+          type: boolean
+        trialDirectPayEnabled:
+          type: boolean
+        trialFeeInr:
+          type: integer
+      required:
+        - placementFeeInr
+        - activationFeeInr
+        - platformSalaryEnabled
+        - trialDirectPayEnabled
+        - trialFeeInr
 
     VapidPublicKeyResponse:
       type: object

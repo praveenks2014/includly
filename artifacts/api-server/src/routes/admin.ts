@@ -19,6 +19,7 @@ import {
   engagementLifecycleRequestsTable,
   engagementSalaryPaymentsTable,
   waitlistTable,
+  settingsAuditLogTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import {
@@ -243,6 +244,21 @@ router.get("/admin/settings", ...adminGuard, async (_req, res): Promise<void> =>
   res.json(settings);
 });
 
+router.get("/settings/me", requireAuth, async (_req, res): Promise<void> => {
+  let [settings] = await db.select().from(adminSettingsTable).limit(1);
+  if (!settings) {
+    [settings] = await db.insert(adminSettingsTable).values({}).returning();
+  }
+
+  res.json({
+    placementFeeInr: settings.placementFeeInr,
+    activationFeeInr: settings.activationFeeInr,
+    platformSalaryEnabled: settings.platformSalaryEnabled,
+    trialDirectPayEnabled: settings.trialDirectPayEnabled,
+    trialFeeInr: settings.trialFeeInr,
+  });
+});
+
 router.patch("/admin/settings", ...adminGuard, async (req, res): Promise<void> => {
   const parsed = UpdateAdminSettingsBody.safeParse(req.body);
   if (!parsed.success) {
@@ -255,13 +271,48 @@ router.patch("/admin/settings", ...adminGuard, async (req, res): Promise<void> =
     [settings] = await db.insert(adminSettingsTable).values({}).returning();
   }
 
+  // Diff only the fields the caller actually sent, and only when the value differs
+  // from what's currently stored — keeps the audit trail meaningful.
+  const changes: Record<string, { from: unknown; to: unknown }> = {};
+  for (const key of Object.keys(parsed.data) as (keyof typeof parsed.data)[]) {
+    const nextVal = parsed.data[key];
+    const prevVal = (settings as Record<string, unknown>)[key as string];
+    if (nextVal !== undefined && nextVal !== prevVal) {
+      changes[key as string] = { from: prevVal, to: nextVal };
+    }
+  }
+
   const [updated] = await db
     .update(adminSettingsTable)
     .set({ ...parsed.data, updatedAt: new Date() })
     .where(eq(adminSettingsTable.id, settings.id))
     .returning();
 
+  if (Object.keys(changes).length > 0) {
+    await db.insert(settingsAuditLogTable).values({
+      adminUserId: req.userId!,
+      changes,
+    });
+  }
+
   res.json(updated);
+});
+
+router.get("/admin/settings/audit-log", ...adminGuard, async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      id: settingsAuditLogTable.id,
+      adminUserId: settingsAuditLogTable.adminUserId,
+      adminName: usersTable.fullName,
+      changes: settingsAuditLogTable.changes,
+      createdAt: settingsAuditLogTable.createdAt,
+    })
+    .from(settingsAuditLogTable)
+    .leftJoin(usersTable, eq(settingsAuditLogTable.adminUserId, usersTable.id))
+    .orderBy(desc(settingsAuditLogTable.createdAt))
+    .limit(100);
+
+  res.json(rows);
 });
 
 router.get("/admin/professionals/:id/documents", ...adminGuard, async (req, res): Promise<void> => {
@@ -653,6 +704,11 @@ router.get("/admin/engagements", ...adminGuard, async (_req, res): Promise<void>
       parentName: usersTable.fullName,
       professionalName: professionalProfilesTable.fullName,
       childName: childrenTable.name,
+      platformSalaryEnabled: shadowTeacherEngagementsTable.platformSalaryEnabled,
+      placementFeeInr: shadowTeacherEngagementsTable.placementFeeInr,
+      placementFeePaymentId: shadowTeacherEngagementsTable.placementFeePaymentId,
+      activationFeeInr: shadowTeacherEngagementsTable.activationFeeInr,
+      activationFeePaymentId: shadowTeacherEngagementsTable.activationFeePaymentId,
     })
     .from(shadowTeacherEngagementsTable)
     .leftJoin(usersTable, eq(shadowTeacherEngagementsTable.parentId, usersTable.id))
