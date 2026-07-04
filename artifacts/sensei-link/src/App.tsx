@@ -32,6 +32,7 @@ import AdminPage from "@/pages/admin";
 import SignUpPage from "@/pages/sign-up";
 import SignInPage from "@/pages/sign-in";
 import SsoCallbackPage from "@/pages/sso-callback";
+import DevSignInPage from "@/pages/dev-signin";
 import ChooseRolePage from "@/pages/choose-role";
 import ResourcesPage from "@/pages/resources";
 import ForumPage from "@/pages/forum";
@@ -293,6 +294,9 @@ function Router() {
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/sign-up/*?" component={SignUpPage} />
         <Route path="/sso-callback" component={SsoCallbackPage} />
+        {import.meta.env.DEV && (
+          <Route path="/dev-signin" component={DevSignInPage} />
+        )}
         <Route path="/search" component={SearchPage} />
         <Route path="/p/:id" component={ProfessionalProfilePage} />
         <Route path="/pricing" component={PricingPage} />

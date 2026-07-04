@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import devRouter from "./dev";
 import usersRouter from "./users";
 import professionalsRouter from "./professionals";
 import ratingsRouter from "./ratings";
@@ -35,6 +36,11 @@ import behaviorLogsRouter from "./behaviorLogs";
 const router: IRouter = Router();
 
 router.use(healthRouter);
+// Mounted early, ahead of any router that applies an unconditional
+// `router.use(requireAuth)` (e.g. behaviorLogs.ts) — those intercept every
+// unmatched request that reaches them, so a later mount position would make
+// this route unreachable regardless of its own auth logic.
+router.use(devRouter);
 router.use(usersRouter);
 router.use(professionalsRouter);
 router.use(ratingsRouter);
@@ -66,5 +72,6 @@ router.use(parentNeedsRouter);
 router.use(centresRouter);
 router.use(goalsRouter);
 router.use(behaviorLogsRouter);
+router.use(devRouter);
 
 export default router;

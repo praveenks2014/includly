@@ -10,6 +10,11 @@ const ALLOWED_TEST_EMAILS = new Set([
 
 router.get("/dev/signin", async (req, res) => {
   try {
+    if (process.env.NODE_ENV === "production") {
+      res.status(404).send("Not found.");
+      return;
+    }
+
     const email = String(req.query.email ?? "").toLowerCase().trim();
 
     if (!ALLOWED_TEST_EMAILS.has(email)) {
