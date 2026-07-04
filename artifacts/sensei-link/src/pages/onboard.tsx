@@ -118,7 +118,6 @@ export default function OnboardPage() {
     travelRadiusKm: existingProfile?.travelRadiusKm?.toString() ?? "10",
     pricingMinINR: existingProfile?.pricingMinINR?.toString() ?? "",
     pricingMaxINR: existingProfile?.pricingMaxINR?.toString() ?? "",
-    upiId: existingProfile?.upiId ?? "",
   });
 
   const profileExists = useRef(!!existingProfile);
@@ -140,7 +139,6 @@ export default function OnboardPage() {
         displayArea: prev.displayArea || existingProfile.displayArea || "",
         pricingMinINR: prev.pricingMinINR || existingProfile.pricingMinINR?.toString() || "",
         pricingMaxINR: prev.pricingMaxINR || existingProfile.pricingMaxINR?.toString() || "",
-        upiId: prev.upiId || existingProfile.upiId || "",
       }));
     }
   }, [existingProfile]);
@@ -340,7 +338,6 @@ export default function OnboardPage() {
         data: {
           pricingMinINR: form.pricingMinINR ? Number(form.pricingMinINR) : undefined,
           pricingMaxINR: form.pricingMaxINR ? Number(form.pricingMaxINR) : undefined,
-          upiId: form.upiId.trim() || undefined,
         },
       });
       queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
@@ -698,24 +695,8 @@ export default function OnboardPage() {
                 Profile will show: ₹{Number(form.pricingMinINR).toLocaleString("en-IN")} – ₹{Number(form.pricingMaxINR).toLocaleString("en-IN")} / session
               </div>
             )}
-            <div className="border-t border-gray-100 pt-4">
-              <Label htmlFor="upiId" className="text-sm font-medium">
-                UPI ID <span className="text-gray-400 font-normal">(for payouts)</span>
-              </Label>
-              <Input
-                id="upiId"
-                value={form.upiId}
-                onChange={(e) => setField("upiId", e.target.value)}
-                placeholder="yourname@upi"
-                className="mt-1"
-                data-testid="input-upiId"
-              />
-              <p className="text-xs text-gray-400 mt-1">
-                Parents pay via Razorpay. Your payout goes to this UPI. Never shown to parents.
-              </p>
-            </div>
             <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700 leading-relaxed">
-              After this step you'll answer a few more questions specific to your role, then your profile will be reviewed by our team.
+              After this step you'll answer a few more questions specific to your role, then your profile will be reviewed by our team. You can verify your UPI ID for payouts from your dashboard once your profile is live.
             </div>
           </div>
         )}

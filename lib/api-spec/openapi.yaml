@@ -213,6 +213,54 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /professionals/me/upi-verification/order:
+    post:
+      operationId: createUpiVerificationOrder
+      tags: [professionals]
+      summary: Create a ₹1 Razorpay order (UPI-only) to verify the professional's UPI ID via reverse penny-drop
+      security:
+        - clerkAuth: []
+      responses:
+        "200":
+          description: Razorpay order for UPI verification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpiVerificationOrder"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /professionals/me/upi-verification/confirm:
+    post:
+      operationId: confirmUpiVerification
+      tags: [professionals]
+      summary: Confirm the ₹1 UPI verification payment, save the server-verified VPA, and auto-refund
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmUpiVerificationBody"
+      responses:
+        "200":
+          description: UPI verification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpiVerificationResult"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /professionals/{id}:
     get:
       operationId: getProfessional
@@ -1704,6 +1752,13 @@ components:
         upiId:
           type: ["string", "null"]
           description: UPI ID — returned only in private (own profile) response
+        upiVpa:
+          type: ["string", "null"]
+          description: Server-verified UPI VPA (via ₹1 reverse penny-drop) — read-only, returned only in private (own profile) response
+        upiVerifiedAt:
+          type: ["string", "null"]
+          format: date-time
+          description: When the UPI VPA was last verified — null if never verified
         paymentActivated:
           type: boolean
         createdAt:
@@ -2385,6 +2440,56 @@ components:
         - sessionId
         - url
         - paymentId
+
+    UpiVerificationOrder:
+      type: object
+      properties:
+        orderId:
+          type: string
+        amount:
+          type: integer
+          description: Amount in paise (always 100 = ₹1)
+        currency:
+          type: string
+        keyId:
+          type: string
+      required:
+        - orderId
+        - amount
+        - currency
+        - keyId
+
+    ConfirmUpiVerificationBody:
+      type: object
+      properties:
+        razorpayPaymentId:
+          type: string
+        razorpayOrderId:
+          type: string
+        razorpaySignature:
+          type: string
+      required:
+        - razorpayPaymentId
+        - razorpayOrderId
+        - razorpaySignature
+
+    UpiVerificationResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        upiVpa:
+          type: ["string", "null"]
+        upiVerifiedAt:
+          type: ["string", "null"]
+          format: date-time
+        message:
+          type: string
+      required:
+        - success
+        - upiVpa
+        - upiVerifiedAt
+        - message
 
     CreateRazorpayOrderBody:
       type: object

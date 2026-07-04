@@ -9,6 +9,14 @@ export interface RazorpayOrderOptions {
   prefill?: { name?: string; email?: string; contact?: string };
   theme?: { color?: string };
   modal?: { ondismiss?: () => void };
+  method?: {
+    upi?: boolean;
+    card?: boolean;
+    netbanking?: boolean;
+    wallet?: boolean;
+    emi?: boolean;
+    paylater?: boolean;
+  };
 }
 
 export interface RazorpaySubscriptionOptions {

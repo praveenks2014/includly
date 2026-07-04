@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc, arrayOverlaps, notInArray, isNotNull, inArray, type SQL } from "drizzle-orm";
+import Razorpay from "razorpay";
+import crypto from "crypto";
 import { db, usersTable, professionalProfilesTable, adminSettingsTable, specialtyEnum, coachingSubTypeEnum, professionalSubscriptionsTable, professionalCertificationsTable, contactUnlocksTable, shadowTeacherEngagementsTable, shadowTeacherMatchesTable } from "@workspace/db";
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
 import { notifyParentsOnProfileUpdate } from "../lib/notificationService";
@@ -13,7 +15,17 @@ import {
   GetProfessionalResponse,
   SearchProfessionalsQueryParams,
   SearchProfessionalsResponse,
+  CreateUpiVerificationOrderResponse,
+  ConfirmUpiVerificationBody,
+  ConfirmUpiVerificationResponse,
 } from "@workspace/api-zod";
+
+function getRazorpay(): Razorpay | null {
+  const keyId = process.env["RAZORPAY_KEY_ID"];
+  const keySecret = process.env["RAZORPAY_KEY_SECRET"];
+  if (!keyId || !keySecret) return null;
+  return new Razorpay({ key_id: keyId, key_secret: keySecret });
+}
 
 type SpecialtyValue = (typeof specialtyEnum.enumValues)[number];
 type CoachingSubTypeValue = (typeof coachingSubTypeEnum.enumValues)[number];
@@ -225,6 +237,151 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
 
   const profileComplete = computeProfileComplete(profile);
   res.json(UpdateProfessionalProfileResponse.parse({ ...profile, profileComplete }));
+});
+
+// ₹1 reverse-penny-drop UPI verification: create a UPI-only order for ₹1.
+router.post("/professionals/me/upi-verification/order", requireAuth, requireRole("professional", "admin"), async (req, res): Promise<void> => {
+  const [profile] = await db
+    .select({ id: professionalProfilesTable.id })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.userId, req.userId!));
+
+  if (!profile) {
+    res.status(404).json({ error: "Professional profile not found" });
+    return;
+  }
+
+  const razorpay = getRazorpay();
+  if (!razorpay) {
+    res.status(503).json({ error: "Payments are not configured" });
+    return;
+  }
+
+  const order = await razorpay.orders.create({
+    amount: 100,
+    currency: "INR",
+    receipt: `upi_verify_${profile.id}_${Date.now()}`,
+    notes: {
+      purpose: "upi_verification",
+      professionalId: String(profile.id),
+      userId: String(req.userId),
+    },
+  });
+
+  res.json(
+    CreateUpiVerificationOrderResponse.parse({
+      orderId: order.id,
+      amount: 100,
+      currency: "INR",
+      keyId: process.env["RAZORPAY_KEY_ID"]!,
+    }),
+  );
+});
+
+// Confirm the ₹1 UPI verification payment: server-side fetch the payment entity from
+// Razorpay (never trust a client-submitted VPA), save the verified VPA, then auto-refund.
+router.post("/professionals/me/upi-verification/confirm", requireAuth, requireRole("professional", "admin"), async (req, res): Promise<void> => {
+  const parsed = ConfirmUpiVerificationBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { razorpayPaymentId, razorpayOrderId, razorpaySignature } = parsed.data;
+
+  const [profile] = await db
+    .select({ id: professionalProfilesTable.id })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.userId, req.userId!));
+
+  if (!profile) {
+    res.status(404).json({ error: "Professional profile not found" });
+    return;
+  }
+
+  const razorpay = getRazorpay();
+  const keySecret = process.env["RAZORPAY_KEY_SECRET"];
+  if (!razorpay || !keySecret) {
+    res.status(503).json({ error: "Payments are not configured" });
+    return;
+  }
+
+  const expectedSignature = crypto
+    .createHmac("sha256", keySecret)
+    .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+    .digest("hex");
+  if (expectedSignature !== razorpaySignature) {
+    res.status(400).json({ error: "Invalid payment signature" });
+    return;
+  }
+
+  type RazorpayOrderEntity = { notes?: Record<string, string> };
+  type RazorpayPaymentEntity = {
+    order_id?: string;
+    status?: string;
+    method?: string;
+    amount?: number;
+    vpa?: string;
+    upi?: { vpa?: string };
+  };
+
+  let order: RazorpayOrderEntity;
+  let payment: RazorpayPaymentEntity;
+  try {
+    order = (await razorpay.orders.fetch(razorpayOrderId)) as unknown as RazorpayOrderEntity;
+    payment = (await razorpay.payments.fetch(razorpayPaymentId)) as unknown as RazorpayPaymentEntity;
+  } catch (err) {
+    console.error("[upi-verification] Razorpay fetch failed:", err);
+    res.status(400).json({ error: "Unable to verify payment with Razorpay" });
+    return;
+  }
+
+  if (order.notes?.["purpose"] !== "upi_verification" || order.notes?.["userId"] !== String(req.userId!)) {
+    res.status(400).json({ error: "Order does not belong to this verification request" });
+    return;
+  }
+
+  if (
+    payment.order_id !== razorpayOrderId ||
+    payment.status !== "captured" ||
+    payment.method !== "upi" ||
+    payment.amount !== 100
+  ) {
+    res.status(400).json({ error: "Payment could not be verified as a valid ₹1 UPI payment" });
+    return;
+  }
+
+  const vpa = payment.vpa ?? payment.upi?.vpa;
+  if (!vpa) {
+    res.status(400).json({ error: "Could not read a UPI VPA from this payment" });
+    return;
+  }
+
+  const upiVerifiedAt = new Date();
+  const [updated] = await db
+    .update(professionalProfilesTable)
+    .set({ upiVpa: vpa, upiVerificationPaymentId: razorpayPaymentId, upiVerifiedAt })
+    .where(eq(professionalProfilesTable.id, profile.id))
+    .returning();
+
+  // Best-effort auto-refund of the ₹1 verification charge — never block on failure,
+  // the VPA is already saved and verified.
+  try {
+    await (razorpay.payments as unknown as { refund: (id: string, opts: Record<string, unknown>) => Promise<unknown> }).refund(
+      razorpayPaymentId,
+      { notes: { reason: "UPI verification refund" } },
+    );
+  } catch (err) {
+    console.error("[upi-verification] Refund of ₹1 verification payment failed:", err);
+  }
+
+  res.json(
+    ConfirmUpiVerificationResponse.parse({
+      success: true,
+      upiVpa: updated?.upiVpa ?? vpa,
+      upiVerifiedAt: updated?.upiVerifiedAt ?? upiVerifiedAt,
+      message: "UPI verified — your ₹1 has been refunded.",
+    }),
+  );
 });
 
 router.get("/professionals/search", optionalAuth, async (req, res): Promise<void> => {
@@ -504,7 +661,16 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
     .limit(1);
   const isPremiumLive = !!activeProfSub;
 
-  const { upiId: _upiId, latitude: _lat, longitude: _lng, clinicAddress: _clinicAddress, ...safeProfile } = profile;
+  const {
+    upiId: _upiId,
+    upiVpa: _upiVpa,
+    upiVerificationPaymentId: _upiVerificationPaymentId,
+    upiVerifiedAt: _upiVerifiedAt,
+    latitude: _lat,
+    longitude: _lng,
+    clinicAddress: _clinicAddress,
+    ...safeProfile
+  } = profile;
   const result = {
     ...safeProfile,
     avatarUrl: userRow?.avatarUrl ?? null,

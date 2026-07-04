@@ -66,6 +66,8 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   rejectionReason: text("rejection_reason"),
   upiId: text("upi_id"),
   upiVpa: text("upi_vpa"),
+  upiVerificationPaymentId: text("upi_verification_payment_id"),
+  upiVerifiedAt: timestamp("upi_verified_at", { withTimezone: true }),
   paymentActivated: boolean("payment_activated").notNull().default(false),
   isPremium: boolean("is_premium").notNull().default(false),
   specializationTags: text("specialization_tags").array().notNull().default([]),
@@ -95,6 +97,11 @@ export const insertProfessionalProfileSchema = createInsertSchema(professionalPr
   isVerified: true,
   verificationStatus: true,
   paymentActivated: true,
+  // Verified UPI destination — server-only. Never client-writable; only the
+  // upi-verification/confirm handler (trusted Razorpay payment fetch) may set these.
+  upiVpa: true,
+  upiVerificationPaymentId: true,
+  upiVerifiedAt: true,
 });
 export type InsertProfessionalProfile = z.infer<typeof insertProfessionalProfileSchema>;
 export type ProfessionalProfile = typeof professionalProfilesTable.$inferSelect;

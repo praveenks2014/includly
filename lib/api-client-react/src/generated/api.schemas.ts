@@ -165,6 +165,16 @@ export interface ProfessionalProfile {
    * @nullable
    */
   upiId?: string | null;
+  /**
+   * Server-verified UPI VPA (via ₹1 reverse penny-drop) — read-only, returned only in private (own profile) response
+   * @nullable
+   */
+  upiVpa?: string | null;
+  /**
+   * When the UPI VPA was last verified — null if never verified
+   * @nullable
+   */
+  upiVerifiedAt?: string | null;
   paymentActivated: boolean;
   /** Whether the professional has an active Pro subscription */
   isPremium?: boolean;
@@ -572,6 +582,29 @@ export interface StripeCheckoutSession {
   sessionId: string;
   url: string;
   paymentId: number;
+}
+
+export interface UpiVerificationOrder {
+  orderId: string;
+  /** Amount in paise (always 100 = ₹1) */
+  amount: number;
+  currency: string;
+  keyId: string;
+}
+
+export interface ConfirmUpiVerificationBody {
+  razorpayPaymentId: string;
+  razorpayOrderId: string;
+  razorpaySignature: string;
+}
+
+export interface UpiVerificationResult {
+  success: boolean;
+  /** @nullable */
+  upiVpa: string | null;
+  /** @nullable */
+  upiVerifiedAt: string | null;
+  message: string;
 }
 
 export type CreateRazorpayOrderBodyPlan =

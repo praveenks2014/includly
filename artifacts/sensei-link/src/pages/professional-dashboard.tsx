@@ -12,6 +12,8 @@ import {
   useGetMyAvailability,
   useSetAvailability,
   useGetMySessions,
+  useCreateUpiVerificationOrder,
+  useConfirmUpiVerification,
   getGetProfessionalDashboardQueryKey,
   getGetMyProfessionalProfileQueryKey,
   type ProfessionalProfile,
@@ -29,13 +31,14 @@ import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import { fetchWithAuth } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { loadRazorpayScript } from "@/lib/razorpay";
 import {
   Home, User, CalendarClock, CalendarCheck, IndianRupee, Award,
   ShieldCheck, Bell, Settings, Loader2, CheckCircle2, XCircle,
   Clock, AlertCircle, Eye, Phone, Mail, MapPin, Star, Unlock,
   Edit3, Save, HelpCircle, BadgeCheck, FileText, ChevronRight,
   Menu, X, Plus, Trash2, TrendingUp, Check, MessageSquare, Send, ChevronLeft,
-  Users, Minus, Camera, Share2,
+  Users, Minus, Camera, Share2, RefreshCw,
 } from "lucide-react";
 import { ShadowMatchChatDrawer } from "@/components/ShadowMatchChatDrawer";
 import { ComingSoon } from "@/components/ComingSoon";
@@ -1268,6 +1271,12 @@ function useMySalaryPayments() {
 function EarningsTab() {
   const { data: sessions = [] } = useGetMySessions({ role: "professional" } as Parameters<typeof useGetMySessions>[0]);
   const { data: salaryPayments = [], isLoading: salaryLoading } = useMySalaryPayments();
+  const { data: profile } = useGetMyProfessionalProfile();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { mutateAsync: createUpiOrder } = useCreateUpiVerificationOrder();
+  const { mutateAsync: confirmUpi } = useConfirmUpiVerification();
+  const [verifyingUpi, setVerifyingUpi] = useState(false);
   const typedSessions = sessions as SessionBookingWithDetails[];
   const completed = typedSessions.filter((s) => s.status === "completed");
   const sessionTotal = completed.reduce((sum, s) => sum + (s.amountInr ?? 0), 0);
@@ -1283,6 +1292,51 @@ function EarningsTab() {
   const thisMonthSession = completed
     .filter((s) => new Date(s.bookedDate).toISOString().slice(0, 7) === thisMonthStr)
     .reduce((sum, s) => sum + (s.amountInr ?? 0), 0);
+
+  async function handleVerifyUpi() {
+    setVerifyingUpi(true);
+    try {
+      const order = await createUpiOrder();
+      const loaded = await loadRazorpayScript();
+      if (!loaded) {
+        toast({ title: "Could not load payment gateway", description: "Please check your connection and try again.", variant: "destructive" });
+        setVerifyingUpi(false);
+        return;
+      }
+      const rzp = new window.Razorpay({
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency,
+        name: "Includly",
+        description: "UPI verification (₹1, auto-refunded)",
+        order_id: order.orderId,
+        method: { upi: true, card: false, netbanking: false, wallet: false, emi: false, paylater: false },
+        handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+          try {
+            const result = await confirmUpi({
+              data: {
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpayOrderId: response.razorpay_order_id,
+                razorpaySignature: response.razorpay_signature,
+              },
+            });
+            await queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
+            toast({ title: "UPI verified", description: result.message || "Your ₹1 will be refunded automatically." });
+          } catch (err: unknown) {
+            toast({ title: "Verification failed", description: err instanceof Error ? err.message : "Please try again.", variant: "destructive" });
+          } finally {
+            setVerifyingUpi(false);
+          }
+        },
+        modal: { ondismiss: () => setVerifyingUpi(false) },
+        theme: { color: "#2EC4A5" },
+      });
+      rzp.open();
+    } catch (err: unknown) {
+      toast({ title: "Could not start verification", description: err instanceof Error ? err.message : "Please try again.", variant: "destructive" });
+      setVerifyingUpi(false);
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -1300,6 +1354,68 @@ function EarningsTab() {
             <p className="text-xs text-gray-500 mt-0.5">{stat.label}</p>
           </div>
         ))}
+      </div>
+
+      {/* Payout Settings — verified UPI */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-[#1A2340] flex items-center gap-2">
+            <IndianRupee size={16} className="text-[#2EC4A5]" /> Payout Settings
+          </h2>
+          {profile?.upiVerifiedAt && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-700">
+              <ShieldCheck size={12} /> Verified
+            </span>
+          )}
+        </div>
+
+        {profile?.upiVpa && profile?.upiVerifiedAt ? (
+          <>
+            <div>
+              <Label className="text-xs text-gray-500">Verified UPI ID</Label>
+              <Input
+                value={profile.upiVpa}
+                readOnly
+                disabled
+                className="mt-1 bg-gray-50 font-medium"
+                data-testid="input-verified-upi"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">
+                Verified on {new Date(profile.upiVerifiedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}. Payouts are sent to this UPI ID.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleVerifyUpi}
+              disabled={verifyingUpi}
+              data-testid="button-reverify-upi"
+            >
+              {verifyingUpi ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <RefreshCw size={14} className="mr-1.5" />}
+              Re-verify to change UPI ID
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-gray-500">
+              Verify your UPI ID to receive payouts. We charge ₹1 to confirm ownership — it's automatically refunded within a few days.
+            </p>
+            <Button
+              type="button"
+              onClick={handleVerifyUpi}
+              disabled={verifyingUpi}
+              className="bg-[#2EC4A5] hover:bg-[#28B090]"
+              data-testid="button-verify-upi"
+            >
+              {verifyingUpi ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <ShieldCheck size={14} className="mr-1.5" />}
+              Verify your UPI ID
+            </Button>
+          </>
+        )}
+        <p className="text-[11px] text-gray-400 leading-relaxed">
+          We confirm UPI ownership with a ₹1 payment via Razorpay, which is refunded automatically. Your UPI ID is never shown to parents.
+        </p>
       </div>
 
       {/* Shadow teacher salary payments */}

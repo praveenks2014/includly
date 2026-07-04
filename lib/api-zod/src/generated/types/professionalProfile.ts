@@ -58,6 +58,16 @@ export interface ProfessionalProfile {
    * @nullable
    */
   upiId?: string | null;
+  /**
+   * Server-verified UPI VPA (via ₹1 reverse penny-drop) — read-only, returned only in private (own profile) response
+   * @nullable
+   */
+  upiVpa?: string | null;
+  /**
+   * When the UPI VPA was last verified — null if never verified
+   * @nullable
+   */
+  upiVerifiedAt?: Date | null;
   paymentActivated: boolean;
   createdAt: Date;
 }

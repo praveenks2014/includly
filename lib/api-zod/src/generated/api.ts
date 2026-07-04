@@ -194,6 +194,16 @@ export const GetMyProfessionalProfileResponse = zod.object({
     .string()
     .nullish()
     .describe("UPI ID — returned only in private (own profile) response"),
+  upiVpa: zod
+    .string()
+    .nullish()
+    .describe(
+      "Server-verified UPI VPA (via ₹1 reverse penny-drop) — read-only, returned only in private (own profile) response",
+    ),
+  upiVerifiedAt: zod.coerce
+    .date()
+    .nullish()
+    .describe("When the UPI VPA was last verified — null if never verified"),
   paymentActivated: zod.boolean(),
   coachingSubType: zod
     .enum(["swimming", "dance", "music", "sports", "singing", "fitness", "art", "yoga"])
@@ -386,12 +396,48 @@ export const UpdateProfessionalProfileResponse = zod.object({
     .string()
     .nullish()
     .describe("UPI ID — returned only in private (own profile) response"),
+  upiVpa: zod
+    .string()
+    .nullish()
+    .describe(
+      "Server-verified UPI VPA (via ₹1 reverse penny-drop) — read-only, returned only in private (own profile) response",
+    ),
+  upiVerifiedAt: zod.coerce
+    .date()
+    .nullish()
+    .describe("When the UPI VPA was last verified — null if never verified"),
   paymentActivated: zod.boolean(),
   vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).nullish(),
   verticalDetails: zod.record(zod.string(), zod.unknown()).nullish(),
   rciCrrNumber: zod.string().nullish(),
   certifications: zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
   createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Create a ₹1 Razorpay order (UPI-only) to verify the professional's UPI ID via reverse penny-drop
+ */
+export const CreateUpiVerificationOrderResponse = zod.object({
+  orderId: zod.string(),
+  amount: zod.number().describe("Amount in paise (always 100 = ₹1)"),
+  currency: zod.string(),
+  keyId: zod.string(),
+});
+
+/**
+ * @summary Confirm the ₹1 UPI verification payment, save the server-verified VPA, and auto-refund
+ */
+export const ConfirmUpiVerificationBody = zod.object({
+  razorpayPaymentId: zod.string(),
+  razorpayOrderId: zod.string(),
+  razorpaySignature: zod.string(),
+});
+
+export const ConfirmUpiVerificationResponse = zod.object({
+  success: zod.boolean(),
+  upiVpa: zod.string().nullable(),
+  upiVerifiedAt: zod.coerce.date().nullable(),
+  message: zod.string(),
 });
 
 /**

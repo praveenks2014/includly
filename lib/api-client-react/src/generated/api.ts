@@ -29,6 +29,7 @@ import type {
   BroadcastNotificationResult,
   CertificationDocument,
   ComplianceContent,
+  ConfirmUpiVerificationBody,
   ContactUnlock,
   ContactUsage,
   CreateProfessionalProfileBody,
@@ -76,6 +77,8 @@ import type {
   UpdateProfessionalProfileBody,
   UpdateSessionStatusBody,
   UpdateUserBody,
+  UpiVerificationOrder,
+  UpiVerificationResult,
   UploadUrlRequest,
   UploadUrlResponse,
   UserProfile,
@@ -653,6 +656,174 @@ export const useUpdateProfessionalProfile = <
   TContext
 > => {
   return useMutation(getUpdateProfessionalProfileMutationOptions(options));
+};
+
+/**
+ * @summary Create a ₹1 Razorpay order (UPI-only) to verify the professional's UPI ID via reverse penny-drop
+ */
+export const getCreateUpiVerificationOrderUrl = () => {
+  return `/api/professionals/me/upi-verification/order`;
+};
+
+export const createUpiVerificationOrder = async (
+  options?: RequestInit,
+): Promise<UpiVerificationOrder> => {
+  return customFetch<UpiVerificationOrder>(getCreateUpiVerificationOrderUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getCreateUpiVerificationOrderMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createUpiVerificationOrder>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createUpiVerificationOrder>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["createUpiVerificationOrder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createUpiVerificationOrder>>,
+    void
+  > = () => {
+    return createUpiVerificationOrder(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateUpiVerificationOrderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createUpiVerificationOrder>>
+>;
+
+export type CreateUpiVerificationOrderMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Create a ₹1 Razorpay order (UPI-only) to verify the professional's UPI ID via reverse penny-drop
+ */
+export const useCreateUpiVerificationOrder = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createUpiVerificationOrder>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createUpiVerificationOrder>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getCreateUpiVerificationOrderMutationOptions(options));
+};
+
+/**
+ * @summary Confirm the ₹1 UPI verification payment, save the server-verified VPA, and auto-refund
+ */
+export const getConfirmUpiVerificationUrl = () => {
+  return `/api/professionals/me/upi-verification/confirm`;
+};
+
+export const confirmUpiVerification = async (
+  confirmUpiVerificationBody: ConfirmUpiVerificationBody,
+  options?: RequestInit,
+): Promise<UpiVerificationResult> => {
+  return customFetch<UpiVerificationResult>(getConfirmUpiVerificationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(confirmUpiVerificationBody),
+  });
+};
+
+export const getConfirmUpiVerificationMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmUpiVerification>>,
+    TError,
+    { data: BodyType<ConfirmUpiVerificationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof confirmUpiVerification>>,
+  TError,
+  { data: BodyType<ConfirmUpiVerificationBody> },
+  TContext
+> => {
+  const mutationKey = ["confirmUpiVerification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof confirmUpiVerification>>,
+    { data: BodyType<ConfirmUpiVerificationBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return confirmUpiVerification(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ConfirmUpiVerificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof confirmUpiVerification>>
+>;
+export type ConfirmUpiVerificationMutationBody =
+  BodyType<ConfirmUpiVerificationBody>;
+export type ConfirmUpiVerificationMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Confirm the ₹1 UPI verification payment, save the server-verified VPA, and auto-refund
+ */
+export const useConfirmUpiVerification = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmUpiVerification>>,
+    TError,
+    { data: BodyType<ConfirmUpiVerificationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof confirmUpiVerification>>,
+  TError,
+  { data: BodyType<ConfirmUpiVerificationBody> },
+  TContext
+> => {
+  return useMutation(getConfirmUpiVerificationMutationOptions(options));
 };
 
 /**

@@ -20,5 +20,7 @@
 - [GitHub push workaround](github-push-workaround.md) — git remote add and .git/config writes are sandboxed; use `git push <inline-URL-with-PAT> main` to bypass; no persistent named remote possible
 - [api-client-react rebuild requirement](api-client-react-rebuild.md) — after editing api.schemas.ts/api.ts, run `pnpm --filter @workspace/api-client-react exec tsc -p tsconfig.json` to update dist/.d.ts before TS type checks see changes
 - [Search response nullable contacts](search-nullable-contacts.md) — phoneBlurred/emailBlurred are intentionally null for shadow teachers in search results; all 4 SearchProfessionalsResponse/ResultItem/Unlocks/Dashboard schemas need .nullable() not .string()
+- [api-zod export ambiguity](api-zod-export-ambiguity.md) — barrel re-exporting both zod consts and TS interfaces with same names blocks composite build/stale dist; delete the types/ re-export, don't try `export type *`
+- [Razorpay checkout e2e limits](razorpay-checkout-e2e-limits.md) — Razorpay's hosted contact-details/OTP overlay can't be driven to completion by Playwright; scope e2e tests to order creation + method/amount restriction
 - [WebGL detection in Replit sandbox](webgl-replit-detection.md) — Replit preview has no GPU; THREE.WebGLRenderer throws before React ErrorBoundary; detect WebGL via useEffect before Canvas ever mounts
 - [Tailwind v4 CSS-var arbitrary syntax](tailwind-v4-cssvar-syntax.md) — `[--foo]` bare-var-name syntax silently compiles to invalid CSS in Tailwind v4; must use `(--foo)` or `[var(--foo)]`
