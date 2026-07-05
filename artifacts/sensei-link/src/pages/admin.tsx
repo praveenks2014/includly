@@ -867,6 +867,17 @@ function ProfessionalsTab() {
                     <td className="px-4 py-3">
                       <p className="font-semibold text-[#1A2340]">{prof.fullName ?? prof.userName ?? "—"}</p>
                       <p className="text-xs text-gray-400">{prof.userEmail ?? "—"}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        ID:{" "}
+                        <button
+                          type="button"
+                          onClick={() => { void navigator.clipboard.writeText(String(prof.id)); }}
+                          className="font-mono text-gray-500 hover:text-[#2EC4A5] hover:underline"
+                          title="Click to copy — use this ID in Add/Assign dialogs"
+                        >
+                          {prof.id}
+                        </button>
+                      </p>
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell text-gray-500 text-xs">
                       {getSpecialtyLabel(prof.specialty as Parameters<typeof getSpecialtyLabel>[0])}
@@ -953,6 +964,9 @@ function ProfessionalsTab() {
                 <p className="text-gray-500">{reviewProf.userEmail}</p>
                 <p className="text-gray-600">{getSpecialtyLabel(reviewProf.specialty as Parameters<typeof getSpecialtyLabel>[0])}</p>
                 <p className="text-gray-400">{[reviewProf.city, reviewProf.country].filter(Boolean).join(", ") || "—"}</p>
+                <p className="text-xs text-gray-400 pt-1">
+                  Professional ID: <span className="font-mono text-gray-600">{reviewProf.id}</span>
+                </p>
               </div>
               {reviewProf.verificationStatus !== "verified" && !reviewProf.requirementsMet && (
                 <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 space-y-1">
