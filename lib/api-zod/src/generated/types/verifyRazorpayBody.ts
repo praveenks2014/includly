@@ -8,8 +8,7 @@
 
 export interface VerifyRazorpayBody {
   razorpayPaymentId: string;
-  razorpayOrderId?: string;
-  razorpaySubscriptionId?: string;
+  razorpayOrderId: string;
   razorpaySignature: string;
   paymentId: number;
 }

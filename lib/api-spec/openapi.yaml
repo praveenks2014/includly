@@ -1004,6 +1004,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ProfessionalProfile"
+        "400":
+          description: >-
+            Vertical's mandatory verification requirements are not met
+            (missing government ID and/or, for therapists, RCI CRR number
+            and RCI certificate). Approval is hard-blocked server-side.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificationRequirementsErrorResponse"
         "401":
           description: Unauthorized
           content:
@@ -1630,6 +1639,28 @@ components:
       required:
         - error
 
+    VerificationRequirementsErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: [verification_requirements_not_met]
+        message:
+          type: string
+        missing:
+          type: array
+          items:
+            type: string
+        warnings:
+          type: array
+          items:
+            type: string
+      required:
+        - error
+        - message
+        - missing
+        - warnings
+
     UserProfile:
       type: object
       properties:
@@ -1770,6 +1801,20 @@ components:
           type: ["integer", "null"]
         pricingMaxINR:
           type: ["integer", "null"]
+        vertical:
+          type: string
+          enum: [shadow_teacher, home_tutor, therapist]
+        verticalDetails:
+          nullable: true
+          description: Vertical-specific structured details (e.g. therapist licensing info)
+        rciCrrNumber:
+          type: ["string", "null"]
+          description: RCI Central Rehabilitation Register number — required for therapists to be searchable
+        rciVerified:
+          type: boolean
+        rejectionReason:
+          type: ["string", "null"]
+          description: Reason given by admin when the application was rejected
         upiId:
           type: ["string", "null"]
           description: UPI ID — returned only in private (own profile) response
@@ -2612,12 +2657,37 @@ components:
           type: ["string", "null"]
         userName:
           type: ["string", "null"]
+        hasIdentityDoc:
+          type: boolean
+        hasRciCertificate:
+          type: boolean
+        requirementsMet:
+          type: boolean
+          description: >-
+            True only when the professional's vertical-specific mandatory
+            verification requirements (government ID for all verticals; RCI
+            CRR number + RCI certificate for therapists) have been submitted.
+            The admin approve endpoint hard-rejects approval while this is
+            false.
+        missingRequirements:
+          type: array
+          items:
+            type: string
+        requirementWarnings:
+          type: array
+          items:
+            type: string
       required:
         - id
         - userId
         - specialty
         - verificationStatus
         - createdAt
+        - hasIdentityDoc
+        - hasRciCertificate
+        - requirementsMet
+        - missingRequirements
+        - requirementWarnings
 
     AdminProfessionalsResponse:
       type: object

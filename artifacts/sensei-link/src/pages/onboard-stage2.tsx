@@ -4,11 +4,14 @@ import { fetchWithAuth } from "@/lib/api";
 import {
   useGetMyProfessionalProfile,
   getGetMyProfessionalProfileQueryKey,
+  useGetMyIdentityVerification,
+  useGetMyCertifications,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { MultiSelectChips } from "@/components/MultiSelectChips";
 import { FileUploadField } from "@/components/FileUploadField";
@@ -296,14 +299,151 @@ function YesNoField({
   );
 }
 
+const ID_DOC_TYPES = [
+  { value: "aadhar", label: "Aadhaar Card (India)" },
+  { value: "passport", label: "Passport" },
+  { value: "driving_licence", label: "Driving Licence" },
+  { value: "national_id", label: "National ID" },
+];
+
+// Mandatory for ALL verticals — a professional cannot be reviewed/approved
+// (and therefore cannot be listed in parent search) without a government ID
+// on file. See artifacts/api-server/src/lib/verificationRequirements.ts.
+function IdentityDocumentSection({
+  idDocType,
+  setIdDocType,
+  idFileKey,
+  setIdFileKey,
+  dpdpConsent,
+  setDpdpConsent,
+  alreadySubmitted,
+  disabled,
+}: {
+  idDocType: string;
+  setIdDocType: (v: string) => void;
+  idFileKey: string;
+  setIdFileKey: (v: string) => void;
+  dpdpConsent: boolean;
+  setDpdpConsent: (v: boolean) => void;
+  alreadySubmitted: boolean;
+  disabled: boolean;
+}) {
+  if (alreadySubmitted) {
+    return (
+      <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-4 flex items-center gap-2 text-green-700 text-sm font-medium">
+        <CheckCircle2 size={16} />
+        Government ID already submitted for verification.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 border-t border-gray-100 pt-6">
+      <Label className="text-sm font-semibold text-gray-800">
+        Government ID <span className="text-red-500 ml-1">*</span>
+      </Label>
+      <p className="text-xs text-gray-500">
+        Required to appear in parent search — Aadhaar, Passport, Driving Licence, or National ID.
+      </p>
+
+      <div className="space-y-2">
+        <SelectField
+          label="Document type"
+          value={idDocType}
+          options={ID_DOC_TYPES.map((o) => o.label)}
+          onChange={(label) => {
+            const match = ID_DOC_TYPES.find((o) => o.label === label);
+            setIdDocType(match ? match.value : idDocType);
+          }}
+        />
+      </div>
+
+      <FileUploadField label="Upload government ID" onUploaded={setIdFileKey} uploadedPath={idFileKey} disabled={disabled} />
+
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+        <p className="text-xs font-semibold text-amber-900">Data Processing Consent — DPDP Act 2023</p>
+        <p className="text-xs text-amber-800 leading-relaxed">
+          Your ID document is collected solely for professional verification on Includly, stored securely, and will not be shared
+          with third parties. You may request deletion at any time via Account Settings.
+        </p>
+        <div className="flex items-start gap-2">
+          <Checkbox
+            id="onboard-dpdp-consent"
+            checked={dpdpConsent}
+            onCheckedChange={(v) => setDpdpConsent(v === true)}
+          />
+          <label htmlFor="onboard-dpdp-consent" className="text-xs text-amber-900 leading-relaxed cursor-pointer">
+            I consent to Includly processing my identity document for verification as described above.
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Mandatory for therapists only — RCI (Rehabilitation Council of India)
+// registration is a legal requirement to practice, so both the CRR number
+// and the certificate scan are hard-gated before a therapist can be
+// approved or appear in parent search.
+function RciCertificateSection({
+  rciCertFileKey,
+  setRciCertFileKey,
+  alreadySubmitted,
+  disabled,
+}: {
+  rciCertFileKey: string;
+  setRciCertFileKey: (v: string) => void;
+  alreadySubmitted: boolean;
+  disabled: boolean;
+}) {
+  if (alreadySubmitted) {
+    return (
+      <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-4 flex items-center gap-2 text-green-700 text-sm font-medium">
+        <CheckCircle2 size={16} />
+        RCI certificate already submitted for verification.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm font-semibold text-gray-800">
+        RCI certificate <span className="text-red-500 ml-1">*</span>
+      </Label>
+      <p className="text-xs text-gray-500">
+        Your Rehabilitation Council of India Certificate of Registration scan/photo — mandatory before you can appear in
+        parent search.
+      </p>
+      <FileUploadField
+        label="Upload RCI certificate"
+        onUploaded={setRciCertFileKey}
+        uploadedPath={rciCertFileKey}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
+type IdentitySectionProps = {
+  idDocType: string;
+  setIdDocType: (v: string) => void;
+  idFileKey: string;
+  setIdFileKey: (v: string) => void;
+  dpdpConsent: boolean;
+  setDpdpConsent: (v: boolean) => void;
+  alreadySubmitted: boolean;
+};
+
 function ShadowTeacherForm({
   form,
   setForm,
   isSaving,
+  idProps,
 }: {
   form: ShadowForm;
   setForm: React.Dispatch<React.SetStateAction<ShadowForm>>;
   isSaving: boolean;
+  idProps: IdentitySectionProps;
 }) {
   return (
     <div className="space-y-7">
@@ -368,11 +508,12 @@ function ShadowTeacherForm({
 
       <div className="space-y-2">
         <Label className="text-sm font-semibold text-gray-800">
-          Certification document{" "}
-          <span className="text-gray-400 font-normal">(optional)</span>
+          Training certificate{" "}
+          <span className="text-gray-400 font-normal">(encouraged, not required)</span>
         </Label>
         <p className="text-xs text-gray-500">
-          B.Ed certificate, RCI card, or any relevant credential — helps with faster verification.
+          B.Ed certificate, RCI card, or any relevant credential — profiles with a training certificate on file are
+          reviewed faster and shown as more trusted to parents.
         </p>
         <FileUploadField
           label="Upload document"
@@ -381,6 +522,8 @@ function ShadowTeacherForm({
           disabled={isSaving}
         />
       </div>
+
+      <IdentityDocumentSection {...idProps} disabled={isSaving} />
     </div>
   );
 }
@@ -389,10 +532,12 @@ function HomeTutorForm({
   form,
   setForm,
   isSaving,
+  idProps,
 }: {
   form: TutorForm;
   setForm: React.Dispatch<React.SetStateAction<TutorForm>>;
   isSaving: boolean;
+  idProps: IdentitySectionProps;
 }) {
   return (
     <div className="space-y-7">
@@ -462,6 +607,8 @@ function HomeTutorForm({
           disabled={isSaving}
         />
       </div>
+
+      <IdentityDocumentSection {...idProps} disabled={isSaving} />
     </div>
   );
 }
@@ -470,10 +617,14 @@ function TherapistForm({
   form,
   setForm,
   isSaving,
+  idProps,
+  rciCertProps,
 }: {
   form: TherapistForm;
   setForm: React.Dispatch<React.SetStateAction<TherapistForm>>;
   isSaving: boolean;
+  idProps: IdentitySectionProps;
+  rciCertProps: { rciCertFileKey: string; setRciCertFileKey: (v: string) => void; alreadySubmitted: boolean };
 }) {
   const showRciBlock = form.rciRegistered === false;
 
@@ -561,21 +712,14 @@ function TherapistForm({
         />
       </ChipsField>
 
-      <div className="space-y-2">
-        <Label className="text-sm font-semibold text-gray-800">
-          Certification document{" "}
-          <span className="text-gray-400 font-normal">(optional)</span>
-        </Label>
-        <p className="text-xs text-gray-500">
-          RCI certificate, degree, or any relevant credential — helps with faster verification.
-        </p>
-        <FileUploadField
-          label="Upload document"
-          onUploaded={(key) => setForm((f) => ({ ...f, certKey: key }))}
-          uploadedPath={form.certKey}
-          disabled={isSaving}
-        />
-      </div>
+      <RciCertificateSection
+        rciCertFileKey={rciCertProps.rciCertFileKey}
+        setRciCertFileKey={rciCertProps.setRciCertFileKey}
+        alreadySubmitted={rciCertProps.alreadySubmitted}
+        disabled={isSaving}
+      />
+
+      <IdentityDocumentSection {...idProps} disabled={isSaving} />
     </div>
   );
 }
@@ -585,7 +729,10 @@ export default function OnboardStage2Page() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: profile, isLoading } = useGetMyProfessionalProfile();
+  const { data: profile, isLoading: profileLoading } = useGetMyProfessionalProfile();
+  const { data: idVerificationRaw, isLoading: idLoading } = useGetMyIdentityVerification();
+  const { data: certsRaw, isLoading: certsLoading } = useGetMyCertifications();
+  const isLoading = profileLoading || idLoading || certsLoading;
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const vertical = (params.vertical ?? profile?.vertical ?? "shadow_teacher") as VerticalValue;
@@ -629,6 +776,37 @@ export default function OnboardStage2Page() {
     certKey: (existingVd.certKey as string) ?? "",
   });
 
+  const [idDocType, setIdDocType] = useState("aadhar");
+  const [idFileKey, setIdFileKey] = useState("");
+  const [dpdpConsent, setDpdpConsent] = useState(false);
+  const [rciCertFileKey, setRciCertFileKey] = useState("");
+
+  const idVerif = idVerificationRaw as { status?: string } | null | undefined;
+  const identityAlreadySubmitted = !!idVerif && idVerif.status !== "rejected";
+  const certs = (certsRaw as { documentType: string }[] | undefined) ?? [];
+  const rciCertAlreadySubmitted = certs.some((c) => c.documentType === "rci_certificate");
+  const hasAnyCert = certs.length > 0;
+
+  function identityValid() {
+    return identityAlreadySubmitted || (!!idFileKey && dpdpConsent);
+  }
+
+  const idProps = {
+    idDocType,
+    setIdDocType,
+    idFileKey,
+    setIdFileKey,
+    dpdpConsent,
+    setDpdpConsent,
+    alreadySubmitted: identityAlreadySubmitted,
+  };
+
+  const rciCertProps = {
+    rciCertFileKey,
+    setRciCertFileKey,
+    alreadySubmitted: rciCertAlreadySubmitted,
+  };
+
   useEffect(() => {
     if (!isLoading && !profile) {
       setLocation("/onboarding/pro", { replace: true });
@@ -662,12 +840,14 @@ export default function OnboardStage2Page() {
       therapistForm.ageGroups.length > 0;
     if (!base) return false;
     if (therapistForm.rciRegistered === true) {
-      return !!therapistForm.rciCrrNumber.trim();
+      if (!therapistForm.rciCrrNumber.trim()) return false;
+      if (!rciCertAlreadySubmitted && !rciCertFileKey) return false;
     }
     return true;
   }
 
   function isValid() {
+    if (!identityValid()) return false;
     if (isShadow) return isShadowValid();
     if (isTutor) return isTutorValid();
     if (isTherapist) return isTherapistValid();
@@ -729,6 +909,45 @@ export default function OnboardStage2Page() {
         throw new Error((body as { error?: string }).error ?? "Save failed");
       }
 
+      // Government ID is mandatory for every vertical — submit it to the
+      // real verification queue (not just verticalDetails) so the admin
+      // approve endpoint's hard gate can see it.
+      if (!identityAlreadySubmitted && idFileKey) {
+        const idRes = await fetchWithAuth("/api/verifications/identity", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documentType: idDocType, fileKey: idFileKey, dpdpConsent }),
+        });
+        if (!idRes.ok) {
+          const body = await idRes.json().catch(() => ({}));
+          throw new Error((body as { error?: string }).error ?? "Identity document submission failed");
+        }
+      }
+
+      // Therapist RCI certificate is mandatory once they claim RCI
+      // registration — required alongside the CRR number for approval.
+      if (isTherapist && therapistForm.rciRegistered === true && !rciCertAlreadySubmitted && rciCertFileKey) {
+        const certRes = await fetchWithAuth("/api/verifications/certifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documentType: "rci_certificate", fileKey: rciCertFileKey }),
+        });
+        if (!certRes.ok) {
+          const body = await certRes.json().catch(() => ({}));
+          throw new Error((body as { error?: string }).error ?? "RCI certificate submission failed");
+        }
+      }
+
+      // Shadow teacher training certificate is encouraged, not mandatory —
+      // best-effort submit so it clears the soft warning shown to admins.
+      if (isShadow && !hasAnyCert && shadowForm.certKey) {
+        await fetchWithAuth("/api/verifications/certifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documentType: "training_certificate", fileKey: shadowForm.certKey }),
+        }).catch(() => {});
+      }
+
       if (!isTherapist) {
         const activateRes = await fetchWithAuth("/api/professionals/me/free-activate", {
           method: "POST",
@@ -740,6 +959,8 @@ export default function OnboardStage2Page() {
       }
 
       await queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
+      await queryClient.invalidateQueries({ queryKey: ["/api/verifications/identity"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/verifications/certifications"] });
 
       if (isTherapist && therapistForm.rciRegistered === false) {
         toast({
@@ -844,16 +1065,23 @@ export default function OnboardStage2Page() {
           {/* Form card */}
           <div className={`bg-white border border-gray-100 rounded-2xl p-6 shadow-sm ring-1 ${colorRing}`}>
             {isShadow && (
-              <ShadowTeacherForm form={shadowForm} setForm={setShadowForm} isSaving={isSaving} />
+              <ShadowTeacherForm
+                form={shadowForm}
+                setForm={setShadowForm}
+                isSaving={isSaving}
+                idProps={idProps}
+              />
             )}
             {isTutor && (
-              <HomeTutorForm form={tutorForm} setForm={setTutorForm} isSaving={isSaving} />
+              <HomeTutorForm form={tutorForm} setForm={setTutorForm} isSaving={isSaving} idProps={idProps} />
             )}
             {isTherapist && (
               <TherapistForm
                 form={therapistForm}
                 setForm={setTherapistForm}
                 isSaving={isSaving}
+                idProps={idProps}
+                rciCertProps={rciCertProps}
               />
             )}
           </div>

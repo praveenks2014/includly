@@ -12,6 +12,16 @@ export interface AdminSettings {
   contactUnlockPriceInr: number;
   platformCommissionPct: number;
   monetisationEnabled: boolean;
+  matchingFeeInr: number;
+  matchingFeeRefundable: boolean;
+  markupPct: number;
+  markupFlatInr: number;
+  gstRatePct: number;
+  salaryPlatformCutPct: number;
+  noticePeriodDays: number;
+  parentBuyoutDays: number;
+  tiersJson?: string | null;
+  trialFeeInr: number;
   placementFeeInr: number;
   activationFeeInr: number;
   platformSalaryEnabled: boolean;

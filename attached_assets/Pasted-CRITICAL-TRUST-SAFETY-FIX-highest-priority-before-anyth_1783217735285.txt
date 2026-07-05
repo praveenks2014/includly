@@ -1,0 +1,48 @@
+CRITICAL TRUST & SAFETY FIX — highest priority, before anything else.
+The audit confirmed there is NO verification gate: any specialist,
+including a therapist with zero credentials, can become active, appear
+in parent search, and get matched with a child. This is a child-safety
+hole and, for therapists, a legal violation (RCI Act requires
+registration to practice). This MUST be fixed before launch.
+
+The infrastructure exists but isn't enforced. Wire it up:
+
+1. LISTABILITY GATE (server-side, non-negotiable): a specialist must NOT
+   appear in ANY parent-facing search/match result, and must NOT be
+   assignable to a child, unless BOTH:
+   a. adminApproved = true (an admin has reviewed and approved them), AND
+   b. their vertical's required verification is complete (see #2).
+   Enforce this in the SEARCH/MATCH query itself, server-side — not the
+   UI. paymentActivated alone must NOT make someone searchable.
+
+2. VERTICAL-SPECIFIC REQUIRED FIELDS (block "profile complete /
+   submittable for review" until met):
+   - THERAPIST: RCI/CRR number MANDATORY + RCI certificate document
+     upload MANDATORY. Cannot submit for approval without both.
+   - ALL VERTICALS: at least one government ID document upload MANDATORY.
+   - SHADOW TEACHER: ID mandatory; training certificate strongly
+     encouraged (allow submit without it, but flag to admin / lower
+     trust). Confirm this is the right line.
+   - Make these server-side validations, not just UI required-attributes.
+
+3. VERIFICATION WORKFLOW: after a specialist submits, they enter
+   "pending review" (NOT active/searchable). An admin reviews documents
+   in the existing admin UI, then approves (sets adminApproved=true) or
+   rejects with reason. Only approval makes them eligible to appear to
+   parents (combined with #1).
+
+4. DECOUPLE payment-activation from verification: completing onboarding /
+   paying any fee must NOT auto-set searchability. Searchability =
+   adminApproved AND required-verification-complete, enforced in the
+   query.
+
+5. BACKFILL: any existing specialists currently searchable without
+   verification — set them to pending review / not-searchable until an
+   admin approves. Don't grandfather unverified specialists into
+   visibility.
+
+Show me: the exact search/match query change that enforces the gate, the
+server-side required-field validation per vertical, and how "pending
+review → approved → searchable" flows. This is the launch-blocking
+safety fix — verify the gate is SERVER-SIDE, and test that an
+unverified/unapproved therapist genuinely cannot appear to a parent.

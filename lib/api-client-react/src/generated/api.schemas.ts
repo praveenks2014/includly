@@ -13,6 +13,20 @@ export interface ErrorResponse {
   error: string;
 }
 
+export type VerificationRequirementsErrorResponseError =
+  (typeof VerificationRequirementsErrorResponseError)[keyof typeof VerificationRequirementsErrorResponseError];
+
+export const VerificationRequirementsErrorResponseError = {
+  verification_requirements_not_met: "verification_requirements_not_met",
+} as const;
+
+export interface VerificationRequirementsErrorResponse {
+  error: VerificationRequirementsErrorResponseError;
+  message: string;
+  missing: string[];
+  warnings: string[];
+}
+
 export type UserProfileRole =
   (typeof UserProfileRole)[keyof typeof UserProfileRole];
 
@@ -20,7 +34,6 @@ export const UserProfileRole = {
   parent: "parent",
   professional: "professional",
   admin: "admin",
-  centre_admin: "centre_admin",
 } as const;
 
 export interface UserProfile {
@@ -52,12 +65,6 @@ export interface UserProfile {
    */
   longitude?: number | null;
   shareHomeLocation?: boolean;
-  /** @nullable */
-  supportTypes?: string[] | null;
-  /** @nullable */
-  childCount?: number | null;
-  /** @nullable */
-  deletionScheduledAt?: string | null;
   createdAt: string;
 }
 
@@ -73,8 +80,6 @@ export interface UpdateUserBody {
   longitude?: number;
   shareHomeLocation?: boolean;
   avatarUrl?: string;
-  supportTypes?: string[];
-  childCount?: number;
 }
 
 export type SetRoleBodyRole =
@@ -83,7 +88,6 @@ export type SetRoleBodyRole =
 export const SetRoleBodyRole = {
   parent: "parent",
   professional: "professional",
-  centre_admin: "centre_admin",
 } as const;
 
 export interface SetRoleBody {
@@ -102,7 +106,6 @@ export const ProfessionalProfileSpecialty = {
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
   therapy_centre: "therapy_centre",
-  coaching: "coaching",
 } as const;
 
 export type ProfessionalProfileVerificationStatus =
@@ -113,6 +116,15 @@ export const ProfessionalProfileVerificationStatus = {
   verified: "verified",
   rejected: "rejected",
   unsubmitted: "unsubmitted",
+} as const;
+
+export type ProfessionalProfileVertical =
+  (typeof ProfessionalProfileVertical)[keyof typeof ProfessionalProfileVertical];
+
+export const ProfessionalProfileVertical = {
+  shadow_teacher: "shadow_teacher",
+  home_tutor: "home_tutor",
+  therapist: "therapist",
 } as const;
 
 export interface ProfessionalProfile {
@@ -160,6 +172,20 @@ export interface ProfessionalProfile {
   pricingMinINR?: number | null;
   /** @nullable */
   pricingMaxINR?: number | null;
+  vertical?: ProfessionalProfileVertical;
+  /** Vertical-specific structured details (e.g. therapist licensing info) */
+  verticalDetails?: unknown | null;
+  /**
+   * RCI Central Rehabilitation Register number — required for therapists to be searchable
+   * @nullable
+   */
+  rciCrrNumber?: string | null;
+  rciVerified?: boolean;
+  /**
+   * Reason given by admin when the application was rejected
+   * @nullable
+   */
+  rejectionReason?: string | null;
   /**
    * UPI ID — returned only in private (own profile) response
    * @nullable
@@ -176,23 +202,6 @@ export interface ProfessionalProfile {
    */
   upiVerifiedAt?: string | null;
   paymentActivated: boolean;
-  /** Whether the professional has an active Pro subscription */
-  isPremium?: boolean;
-  /** Additional specialization tags e.g. ["specialty:OT", "ADHD"] */
-  specializationTags?: string[];
-  /** @nullable */
-  rejectionReason?: string | null;
-  languages?: string[] | null;
-  /** @nullable */
-  vertical?: "shadow_teacher" | "home_tutor" | "therapist" | null;
-  /** @nullable */
-  verticalDetails?: Record<string, unknown> | null;
-  /** @nullable */
-  rciCrrNumber?: string | null;
-  certifications?: Record<string, unknown>[] | null;
-  profileComplete: boolean;
-  rciVerified: boolean;
-  coachingSubType?: string | null;
   createdAt: string;
 }
 
@@ -241,10 +250,6 @@ export interface ProfessionalDetail {
   /** @nullable */
   pricingMaxINR?: number | null;
   paymentActivated: boolean;
-  /** Whether the professional has an active Pro subscription */
-  isPremium?: boolean;
-  /** Additional specialization tags e.g. ["specialty:OT", "ADHD"] */
-  specializationTags?: string[];
   createdAt: string;
 }
 
@@ -313,7 +318,6 @@ export const CreateProfessionalProfileBodySpecialty = {
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
   therapy_centre: "therapy_centre",
-  coaching: "coaching",
 } as const;
 
 export interface CreateProfessionalProfileBody {
@@ -340,12 +344,6 @@ export interface CreateProfessionalProfileBody {
   offersHomeVisits?: boolean;
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
   upiId?: string;
-  /** Coaching discipline sub-type (only for specialty=coaching) */
-  coachingSubType?: string;
-  /** Has experience coaching children with special needs */
-  inclusiveExperience?: boolean;
-  specializationTags?: string[];
-  vertical?: "shadow_teacher" | "home_tutor" | "therapist";
 }
 
 export type UpdateProfessionalProfileBodySpecialty =
@@ -360,7 +358,6 @@ export const UpdateProfessionalProfileBodySpecialty = {
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
   therapy_centre: "therapy_centre",
-  coaching: "coaching",
 } as const;
 
 export interface UpdateProfessionalProfileBody {
@@ -387,17 +384,6 @@ export interface UpdateProfessionalProfileBody {
   offersHomeVisits?: boolean;
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
   upiId?: string;
-  /** Coaching discipline sub-type (only for specialty=coaching) */
-  coachingSubType?: string;
-  /** Has experience coaching children with special needs */
-  inclusiveExperience?: boolean;
-  specializationTags?: string[];
-  languages?: string[];
-  avatarUrl?: string;
-  vertical?: "shadow_teacher" | "home_tutor" | "therapist";
-  verticalDetails?: Record<string, unknown>;
-  rciCrrNumber?: string;
-  certifications?: Record<string, unknown>[];
 }
 
 export interface Rating {
@@ -633,16 +619,11 @@ export interface RazorpayOrder {
   keyId: string;
   paymentId: number;
   planName: string;
-  /** True when the order represents a Razorpay subscription (not a one-time order) */
-  isSubscription?: boolean;
-  /** @nullable */
-  subscriptionId?: string | null;
 }
 
 export interface VerifyRazorpayBody {
   razorpayPaymentId: string;
-  razorpayOrderId?: string;
-  razorpaySubscriptionId?: string;
+  razorpayOrderId: string;
   razorpaySignature: string;
   paymentId: number;
 }
@@ -681,6 +662,12 @@ export interface AdminProfessionalRow {
   userEmail?: string | null;
   /** @nullable */
   userName?: string | null;
+  hasIdentityDoc: boolean;
+  hasRciCertificate: boolean;
+  /** True only when the professional's vertical-specific mandatory verification requirements (government ID for all verticals; RCI CRR number + RCI certificate for therapists) have been submitted. The admin approve endpoint hard-rejects approval while this is false. */
+  requirementsMet: boolean;
+  missingRequirements: string[];
+  requirementWarnings: string[];
 }
 
 export interface AdminProfessionalsResponse {
@@ -698,11 +685,6 @@ export interface AdminStats {
   pendingProfessionals: number;
   verifiedProfessionals: number;
   rejectedProfessionals: number;
-  totalPaymentsCompleted: number;
-  totalRevenueInPaise: number;
-  totalBookingsThisMonth: number;
-  newUsersThisMonth: number;
-  professionalsBySpecialty: Record<string, number>;
 }
 
 export interface AdminSettings {
@@ -719,7 +701,7 @@ export interface AdminSettings {
   salaryPlatformCutPct: number;
   noticePeriodDays: number;
   parentBuyoutDays: number;
-  tiersJson: string | null;
+  tiersJson?: string | null;
   trialFeeInr: number;
   placementFeeInr: number;
   activationFeeInr: number;
@@ -747,6 +729,24 @@ export interface UpdateAdminSettingsBody {
   activationFeeInr?: number;
   platformSalaryEnabled?: boolean;
   trialDirectPayEnabled?: boolean;
+}
+
+export type SettingsAuditLogEntryChanges = { [key: string]: unknown };
+
+export interface SettingsAuditLogEntry {
+  id: number;
+  adminUserId: number;
+  adminName?: string | null;
+  changes: SettingsAuditLogEntryChanges;
+  createdAt: string;
+}
+
+export interface MySettings {
+  placementFeeInr: number;
+  activationFeeInr: number;
+  platformSalaryEnabled: boolean;
+  trialDirectPayEnabled: boolean;
+  trialFeeInr: number;
 }
 
 export interface VapidPublicKeyResponse {
@@ -963,17 +963,6 @@ export const SessionBookingStatus = {
   cancelled_by_professional: "cancelled_by_professional",
   completed: "completed",
   no_show: "no_show",
-  // Flow B statuses
-  requested: "requested",
-  confirmed_by_pro: "confirmed_by_pro",
-  paid_held: "paid_held",
-  session_started: "session_started",
-  session_completed: "session_completed",
-  releasable: "releasable",
-  released: "released",
-  cancelled: "cancelled",
-  refunded: "refunded",
-  disputed: "disputed",
 } as const;
 
 export interface SessionBooking {
@@ -1000,17 +989,6 @@ export const SessionBookingWithDetailsStatus = {
   cancelled_by_professional: "cancelled_by_professional",
   completed: "completed",
   no_show: "no_show",
-  // Flow B statuses
-  requested: "requested",
-  confirmed_by_pro: "confirmed_by_pro",
-  paid_held: "paid_held",
-  session_started: "session_started",
-  session_completed: "session_completed",
-  releasable: "releasable",
-  released: "released",
-  cancelled: "cancelled",
-  refunded: "refunded",
-  disputed: "disputed",
 } as const;
 
 export interface SessionBookingWithDetails {
@@ -1048,17 +1026,6 @@ export interface SessionBookingWithDetails {
    * @nullable
    */
   parentLocation?: string | null;
-  /** OTP parent shares with pro to start the session (Flow B) */
-  startOtp?: string | null;
-  /** OTP parent shares with pro to end the session (Flow B) */
-  endOtp?: string | null;
-  /** Escrow breakdown for Flow B sessions */
-  breakdown?: {
-    proAmountInr: number;
-    markupInr: number;
-    gstInr: number;
-    totalInr: number;
-  } | null;
 }
 
 export type UpdateSessionStatusBodyStatus =
@@ -1097,13 +1064,6 @@ export type SearchProfessionalsParams = {
    * Filter by maximum session price in INR
    */
   budgetMaxINR?: number;
-  /** Comma-separated specialization tags */
-  tags?: string;
-  verifiedOnly?: boolean;
-  /** Coaching sub-type filter (only relevant when specialty=coaching) */
-  coachingSubType?: string;
-  /** Filter to coaches with inclusive/special-needs experience */
-  inclusiveExperience?: boolean;
   page?: number;
   limit?: number;
 };
@@ -1120,7 +1080,6 @@ export const SearchProfessionalsSpecialty = {
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
   therapy_centre: "therapy_centre",
-  coaching: "coaching",
 } as const;
 
 export type StripeWebhookBody = { [key: string]: unknown };

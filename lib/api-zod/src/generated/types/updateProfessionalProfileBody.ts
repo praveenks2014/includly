@@ -29,14 +29,6 @@ export interface UpdateProfessionalProfileBody {
   clinicAddress?: string;
   /** Whether this specialist offers home-visit sessions */
   offersHomeVisits?: boolean;
-  /** Languages the teacher can work in (used for match scoring) */
-  languages?: string[];
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
   upiId?: string;
-  /** Vertical-specific Stage 2 answers (deep-merged on server) */
-  verticalDetails?: Record<string, unknown>;
-  /** RCI CRR number for therapists — required to appear in search */
-  rciCrrNumber?: string;
-  /** Uploaded certification documents */
-  certifications?: Record<string, unknown>[];
 }

@@ -23,4 +23,10 @@ export interface AdminProfessionalRow {
   userEmail?: string | null;
   /** @nullable */
   userName?: string | null;
+  hasIdentityDoc: boolean;
+  hasRciCertificate: boolean;
+  /** True only when the professional's vertical-specific mandatory verification requirements (government ID for all verticals; RCI CRR number + RCI certificate for therapists) have been submitted. The admin approve endpoint hard-rejects approval while this is false. */
+  requirementsMet: boolean;
+  missingRequirements: string[];
+  requirementWarnings: string[];
 }

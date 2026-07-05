@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, ne, count, gte, and, sum, desc, isNotNull } from "drizzle-orm";
+import { eq, ne, count, gte, and, sum, desc, isNotNull, inArray } from "drizzle-orm";
 import { createClerkClient } from "@clerk/express";
 import {
   db,
@@ -26,6 +26,11 @@ import {
   AdminListProfessionalsQueryParams,
   UpdateAdminSettingsBody,
 } from "@workspace/api-zod";
+import {
+  getVerificationRequirementsForProfessional,
+  computeVerificationRequirements,
+  RCI_CERTIFICATE_DOC_TYPE,
+} from "../lib/verificationRequirements";
 
 const clerkClient = createClerkClient({ secretKey: process.env["CLERK_SECRET_KEY"] });
 const router: IRouter = Router();
@@ -58,6 +63,8 @@ router.get("/admin/professionals", ...adminGuard, async (req, res): Promise<void
       createdAt: professionalProfilesTable.createdAt,
       userEmail: usersTable.email,
       userName: usersTable.fullName,
+      rciCrrNumber: professionalProfilesTable.rciCrrNumber,
+      vertical: professionalProfilesTable.vertical,
     })
     .from(professionalProfilesTable)
     .leftJoin(usersTable, eq(professionalProfilesTable.userId, usersTable.id))
@@ -71,8 +78,56 @@ router.get("/admin/professionals", ...adminGuard, async (req, res): Promise<void
     .from(professionalProfilesTable)
     .where(conditions.length > 0 ? and(...conditions) : undefined);
 
+  // Batch-load identity docs + certifications for the page of rows so the
+  // admin list can show, per professional, whether the vertical's mandatory
+  // verification requirements have actually been met — not just their
+  // current verificationStatus label (which an admin could otherwise
+  // approve without realizing documents are still missing).
+  const ids = rows.map((r) => r.id);
+  const identityDocs = ids.length
+    ? await db
+        .select({ professionalId: identityVerificationsTable.professionalId })
+        .from(identityVerificationsTable)
+        .where(inArray(identityVerificationsTable.professionalId, ids))
+    : [];
+  const certs = ids.length
+    ? await db
+        .select({
+          professionalId: professionalCertificationsTable.professionalId,
+          documentType: professionalCertificationsTable.documentType,
+        })
+        .from(professionalCertificationsTable)
+        .where(inArray(professionalCertificationsTable.professionalId, ids))
+    : [];
+
+  const identityDocIds = new Set(identityDocs.map((d) => d.professionalId));
+  const certsByProfessional = new Map<number, string[]>();
+  for (const c of certs) {
+    const list = certsByProfessional.get(c.professionalId) ?? [];
+    list.push(c.documentType);
+    certsByProfessional.set(c.professionalId, list);
+  }
+
+  const professionals = rows.map((row) => {
+    const { rciCrrNumber, vertical, ...rest } = row;
+    const certDocumentTypes = certsByProfessional.get(row.id) ?? [];
+    const requirements = computeVerificationRequirements(
+      { vertical, rciCrrNumber },
+      identityDocIds.has(row.id),
+      certDocumentTypes,
+    );
+    return {
+      ...rest,
+      hasIdentityDoc: identityDocIds.has(row.id),
+      hasRciCertificate: certDocumentTypes.includes(RCI_CERTIFICATE_DOC_TYPE),
+      requirementsMet: requirements.met,
+      missingRequirements: requirements.missing,
+      requirementWarnings: requirements.warnings,
+    };
+  });
+
   res.json({
-    professionals: rows,
+    professionals,
     total: Number(totalResult?.count ?? 0),
     page,
     limit,
@@ -86,6 +141,32 @@ router.patch("/admin/professionals/:id/approve", ...adminGuard, async (req, res)
     return;
   }
 
+  const [existing] = await db
+    .select({ id: professionalProfilesTable.id })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, id));
+
+  if (!existing) {
+    res.status(404).json({ error: "Professional not found" });
+    return;
+  }
+
+  // Hard server-side gate: cannot approve (and thus make listable/matchable)
+  // a professional whose vertical's mandatory verification requirements
+  // (government ID for all verticals; RCI CRR number + RCI certificate for
+  // therapists) have not actually been submitted. This is non-negotiable —
+  // an admin click alone must never be sufficient to grant visibility.
+  const requirements = await getVerificationRequirementsForProfessional(id);
+  if (!requirements.met) {
+    res.status(400).json({
+      error: "verification_requirements_not_met",
+      message: "Cannot approve — required verification documents are missing.",
+      missing: requirements.missing,
+      warnings: requirements.warnings,
+    });
+    return;
+  }
+
   const profile = await db.transaction(async (tx) => {
     const [row] = await tx
       .update(professionalProfilesTable)
@@ -95,10 +176,17 @@ router.patch("/admin/professionals/:id/approve", ...adminGuard, async (req, res)
 
     if (!row) return null;
 
-    await tx
-      .update(identityVerificationsTable)
-      .set({ status: "verified" })
+    const [identityDoc] = await tx
+      .select({ id: identityVerificationsTable.id })
+      .from(identityVerificationsTable)
       .where(eq(identityVerificationsTable.professionalId, id));
+
+    if (identityDoc) {
+      await tx
+        .update(identityVerificationsTable)
+        .set({ status: "verified", reviewedAt: new Date() })
+        .where(eq(identityVerificationsTable.professionalId, id));
+    }
 
     return row;
   });
@@ -108,7 +196,7 @@ router.patch("/admin/professionals/:id/approve", ...adminGuard, async (req, res)
     return;
   }
 
-  res.json(profile);
+  res.json({ ...profile, verificationRequirements: requirements });
 });
 
 router.patch("/admin/professionals/:id/reject", ...adminGuard, async (req, res): Promise<void> => {
@@ -133,7 +221,7 @@ router.patch("/admin/professionals/:id/reject", ...adminGuard, async (req, res):
 
   await db
     .update(identityVerificationsTable)
-    .set({ status: "rejected" })
+    .set({ status: "rejected", reviewedAt: new Date() })
     .where(eq(identityVerificationsTable.professionalId, id));
 
   res.json(profile);

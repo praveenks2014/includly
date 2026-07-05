@@ -6,6 +6,7 @@ import { db, usersTable, professionalProfilesTable, adminSettingsTable, specialt
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
 import { notifyParentsOnProfileUpdate } from "../lib/notificationService";
 import { getClerkPrimaryEmail } from "../lib/clerkUser";
+import { recomputeSubmissionStatus } from "../lib/verificationRequirements";
 import {
   GetMyProfessionalProfileResponse,
   CreateProfessionalProfileBody,
@@ -233,6 +234,12 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
   const parentIds = unlocks.map((u) => u.parentId);
   if (parentIds.length > 0) {
     void notifyParentsOnProfileUpdate(parentIds).catch(() => {});
+  }
+
+  // rciCrrNumber (or other requirement-relevant fields) may have just been
+  // set — recheck whether the profile now meets its vertical's requirements.
+  if (parsed.data.rciCrrNumber !== undefined) {
+    await recomputeSubmissionStatus(profile.id);
   }
 
   const profileComplete = computeProfileComplete(profile);

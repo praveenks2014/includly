@@ -95,6 +95,11 @@ function GoLiveStatusWidget({ profile, onTabChange }: {
   onTabChange: (tab: ProTab) => void;
 }) {
   const isTherapist = profile.vertical === "therapist";
+  const { data: idVerificationRaw } = useGetMyIdentityVerification();
+  const { data: certsRaw } = useGetMyCertifications();
+  const hasIdentityDoc = !!idVerificationRaw;
+  const certs = (certsRaw as CertDoc[] | undefined) ?? [];
+  const hasRciCertificate = certs.some((c) => c.documentType === "rci_certificate");
 
   if (isTherapist) {
     if (!profile.rciCrrNumber) {
@@ -104,7 +109,7 @@ function GoLiveStatusWidget({ profile, onTabChange }: {
           <div className="flex-1">
             <p className="font-semibold text-red-800 text-sm">RCI registration required</p>
             <p className="text-xs text-red-700 mt-0.5">
-              Therapists must provide an RCI CRR number to appear in parent search. Add yours in your profile to get started.
+              Therapists must provide an RCI CRR number, a government ID and their RCI certificate to appear in parent search.
             </p>
           </div>
           <button onClick={() => onTabChange("profile")} className="text-xs text-red-600 underline shrink-0 mt-0.5">
@@ -113,14 +118,52 @@ function GoLiveStatusWidget({ profile, onTabChange }: {
         </div>
       );
     }
-    if (profile.rciVerified) {
+    const missingDocs: string[] = [];
+    if (!hasIdentityDoc) missingDocs.push("government ID");
+    if (!hasRciCertificate) missingDocs.push("RCI certificate");
+    if (missingDocs.length > 0 && profile.verificationStatus !== "verified") {
+      return (
+        <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+          <AlertCircle size={18} className="text-red-500 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold text-red-800 text-sm">Documents required</p>
+            <p className="text-xs text-red-700 mt-0.5">
+              Upload your {missingDocs.join(" and ")} to submit your profile for review — this is required before you can appear in parent search.
+            </p>
+          </div>
+          <button onClick={() => onTabChange("verification")} className="text-xs text-red-600 underline shrink-0 mt-0.5">
+            Upload →
+          </button>
+        </div>
+      );
+    }
+    if (profile.verificationStatus === "verified") {
       return (
         <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
           <BadgeCheck size={18} className="text-green-600 shrink-0" />
           <div>
             <p className="font-semibold text-green-800 text-sm">✓ RCI Verified — Visible to parents</p>
-            <p className="text-xs text-green-700 mt-0.5">Your RCI CRR number has been verified. Your profile is live in parent search.</p>
+            <p className="text-xs text-green-700 mt-0.5">Your RCI credentials and ID have been verified. Your profile is live in parent search.</p>
           </div>
+        </div>
+      );
+    }
+    if (profile.verificationStatus === "rejected") {
+      return (
+        <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+          <XCircle size={18} className="text-red-500 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold text-red-800 text-sm">Application not approved</p>
+            <p className="text-xs text-red-700 mt-0.5">
+              {(profile as ProfessionalProfile & { rejectionReason?: string | null }).rejectionReason
+                ? <>Reason: <em>{(profile as ProfessionalProfile & { rejectionReason?: string | null }).rejectionReason}</em>. </>
+                : ""}
+              Please re-upload your documents.
+            </p>
+          </div>
+          <button onClick={() => onTabChange("verification")} className="text-xs text-red-600 underline shrink-0 mt-0.5">
+            Re-upload →
+          </button>
         </div>
       );
     }
@@ -130,7 +173,7 @@ function GoLiveStatusWidget({ profile, onTabChange }: {
         <div>
           <p className="font-semibold text-amber-800 text-sm">Pending RCI verification</p>
           <p className="text-xs text-amber-700 mt-0.5">
-            Your CRR number has been submitted and is being reviewed by the Includly team. This usually takes 2–3 business days.
+            Your CRR number, ID and RCI certificate have been submitted and are being reviewed by the Includly team. This usually takes 2–3 business days.
           </p>
         </div>
       </div>

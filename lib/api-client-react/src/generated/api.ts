@@ -43,6 +43,7 @@ import type {
   HealthStatus,
   IdentityVerificationDocument,
   MyRatingResponse,
+  MySettings,
   NotificationPreferences,
   ParentDashboard,
   PaymentPlans,
@@ -83,6 +84,7 @@ import type {
   UploadUrlResponse,
   UserProfile,
   VapidPublicKeyResponse,
+  VerificationRequirementsErrorResponse,
   VerifyRazorpayBody,
   VerifySessionPaymentBody,
 } from "./api.schemas";
@@ -1356,6 +1358,81 @@ export function useGetContactUsage<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetContactUsageQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get the public-facing subset of admin settings relevant to the current flows (any authenticated role)
+ */
+export const getGetMySettingsUrl = () => {
+  return `/api/settings/me`;
+};
+
+export const getMySettings = async (
+  options?: RequestInit,
+): Promise<MySettings> => {
+  return customFetch<MySettings>(getGetMySettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMySettingsQueryKey = () => {
+  return [`/api/settings/me`] as const;
+};
+
+export const getGetMySettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMySettings>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMySettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMySettingsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMySettings>>> = ({
+    signal,
+  }) => getMySettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMySettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMySettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMySettings>>
+>;
+export type GetMySettingsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get the public-facing subset of admin settings relevant to the current flows (any authenticated role)
+ */
+
+export function useGetMySettings<
+  TData = Awaited<ReturnType<typeof getMySettings>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMySettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMySettingsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -3150,7 +3227,7 @@ export const adminApproveProfessional = async (
 };
 
 export const getAdminApproveProfessionalMutationOptions = <
-  TError = ErrorType<ErrorResponse>,
+  TError = ErrorType<VerificationRequirementsErrorResponse | ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -3191,13 +3268,15 @@ export type AdminApproveProfessionalMutationResult = NonNullable<
   Awaited<ReturnType<typeof adminApproveProfessional>>
 >;
 
-export type AdminApproveProfessionalMutationError = ErrorType<ErrorResponse>;
+export type AdminApproveProfessionalMutationError = ErrorType<
+  VerificationRequirementsErrorResponse | ErrorResponse
+>;
 
 /**
  * @summary Approve a professional's onboarding (admin only)
  */
 export const useAdminApproveProfessional = <
-  TError = ErrorType<ErrorResponse>,
+  TError = ErrorType<VerificationRequirementsErrorResponse | ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<

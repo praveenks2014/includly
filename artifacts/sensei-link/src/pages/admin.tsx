@@ -39,7 +39,7 @@ import {
   Loader2, Users, BarChart3, Settings, CheckCircle, XCircle, Clock,
   ShieldAlert, UserCheck, TrendingUp, FileText, Eye, ExternalLink, Bell,
   IndianRupee, CreditCard, Menu, X, UserX, Shield, ChevronRight, Flag,
-  Building2, Plus, Check, Edit2, Trash2, Package,
+  Building2, Plus, Check, Edit2, Trash2, Package, AlertTriangle,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -875,9 +875,28 @@ function ProfessionalsTab() {
                       {[prof.city, prof.country].filter(Boolean).join(", ") || "—"}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_COLORS[prof.verificationStatus] ?? STATUS_COLORS.unsubmitted}`}>
-                        {prof.verificationStatus}
-                      </span>
+                      <div className="flex flex-col gap-1 items-start">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_COLORS[prof.verificationStatus] ?? STATUS_COLORS.unsubmitted}`}>
+                          {prof.verificationStatus}
+                        </span>
+                        {prof.verificationStatus !== "verified" && !prof.requirementsMet && (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border bg-red-50 text-red-600 border-red-200"
+                            title={`Missing: ${prof.missingRequirements.join(", ")}`}
+                          >
+                            <AlertTriangle size={9} />
+                            Not eligible
+                          </span>
+                        )}
+                        {prof.requirementWarnings.length > 0 && (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border bg-amber-50 text-amber-600 border-amber-200"
+                            title={prof.requirementWarnings.join(", ")}
+                          >
+                            Low trust
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center gap-2 justify-end">
@@ -935,6 +954,28 @@ function ProfessionalsTab() {
                 <p className="text-gray-600">{getSpecialtyLabel(reviewProf.specialty as Parameters<typeof getSpecialtyLabel>[0])}</p>
                 <p className="text-gray-400">{[reviewProf.city, reviewProf.country].filter(Boolean).join(", ") || "—"}</p>
               </div>
+              {reviewProf.verificationStatus !== "verified" && !reviewProf.requirementsMet && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 space-y-1">
+                  <div className="flex items-center gap-2 text-red-700 font-semibold text-sm">
+                    <AlertTriangle size={14} />
+                    Cannot approve yet
+                  </div>
+                  <p className="text-xs text-red-700 leading-relaxed">
+                    Missing: {reviewProf.missingRequirements.map((r) => r.replace(/_/g, " ")).join(", ")}
+                  </p>
+                </div>
+              )}
+              {reviewProf.requirementWarnings.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 space-y-1">
+                  <div className="flex items-center gap-2 text-amber-700 font-semibold text-sm">
+                    <AlertTriangle size={14} />
+                    Lower trust signal
+                  </div>
+                  <p className="text-xs text-amber-700 leading-relaxed">
+                    {reviewProf.requirementWarnings.map((w) => w.replace(/_/g, " ")).join(", ")}
+                  </p>
+                </div>
+              )}
               <div>
                 <p className="text-sm font-semibold text-[#1A2340] mb-2">Uploaded Documents</p>
                 {docsLoading ? (
@@ -1003,10 +1044,11 @@ function ProfessionalsTab() {
                 </Button>
                 {reviewProf.verificationStatus !== "verified" && (
                   <Button
-                    className="gap-1 bg-green-600 hover:bg-green-700 focus-visible:ring-2 focus-visible:ring-green-500"
+                    className="gap-1 bg-green-600 hover:bg-green-700 focus-visible:ring-2 focus-visible:ring-green-500 disabled:opacity-50"
                     onClick={() => handleApprove(reviewProf.id)}
-                    disabled={isRejecting || isApproving}
+                    disabled={isRejecting || isApproving || !reviewProf.requirementsMet}
                     aria-label="Approve application"
+                    title={!reviewProf.requirementsMet ? `Missing: ${reviewProf.missingRequirements.join(", ")}` : undefined}
                   >
                     {isApproving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
                     Approve

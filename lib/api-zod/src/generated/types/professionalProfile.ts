@@ -7,6 +7,7 @@
  */
 import type { ProfessionalProfileSpecialty } from "./professionalProfileSpecialty";
 import type { ProfessionalProfileVerificationStatus } from "./professionalProfileVerificationStatus";
+import type { ProfessionalProfileVertical } from "./professionalProfileVertical";
 
 export interface ProfessionalProfile {
   id: number;
@@ -53,6 +54,20 @@ export interface ProfessionalProfile {
   pricingMinINR?: number | null;
   /** @nullable */
   pricingMaxINR?: number | null;
+  vertical?: ProfessionalProfileVertical;
+  /** Vertical-specific structured details (e.g. therapist licensing info) */
+  verticalDetails?: unknown | null;
+  /**
+   * RCI Central Rehabilitation Register number — required for therapists to be searchable
+   * @nullable
+   */
+  rciCrrNumber?: string | null;
+  rciVerified?: boolean;
+  /**
+   * Reason given by admin when the application was rejected
+   * @nullable
+   */
+  rejectionReason?: string | null;
   /**
    * UPI ID — returned only in private (own profile) response
    * @nullable

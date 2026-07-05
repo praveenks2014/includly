@@ -25,7 +25,7 @@ export const GetMeResponse = zod.object({
   phone: zod.string().nullish(),
   fullName: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
-  role: zod.enum(["parent", "professional", "admin", "centre_admin"]),
+  role: zod.enum(["parent", "professional", "admin"]),
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   location: zod.string().nullish(),
@@ -42,9 +42,6 @@ export const GetMeResponse = zod.object({
       "Parent's home longitude — stored only with consent for home-visit matching",
     ),
   shareHomeLocation: zod.boolean().optional(),
-  supportTypes: zod.array(zod.string()).nullish(),
-  childCount: zod.number().nullish(),
-  deletionScheduledAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -67,8 +64,6 @@ export const UpdateMeBody = zod.object({
     .describe("Parent's home longitude — stored for home-visit matching"),
   shareHomeLocation: zod.boolean().optional(),
   avatarUrl: zod.string().optional(),
-  supportTypes: zod.array(zod.string()).optional(),
-  childCount: zod.number().int().optional(),
 });
 
 export const UpdateMeResponse = zod.object({
@@ -78,7 +73,7 @@ export const UpdateMeResponse = zod.object({
   phone: zod.string().nullish(),
   fullName: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
-  role: zod.enum(["parent", "professional", "admin", "centre_admin"]),
+  role: zod.enum(["parent", "professional", "admin"]),
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   location: zod.string().nullish(),
@@ -95,9 +90,6 @@ export const UpdateMeResponse = zod.object({
       "Parent's home longitude — stored only with consent for home-visit matching",
     ),
   shareHomeLocation: zod.boolean().optional(),
-  supportTypes: zod.array(zod.string()).nullish(),
-  childCount: zod.number().nullish(),
-  deletionScheduledAt: zod.coerce.date().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -106,7 +98,7 @@ export const UpdateMeResponse = zod.object({
  * @summary Set current user role (parent or professional)
  */
 export const SetMyRoleBody = zod.object({
-  role: zod.enum(["parent", "professional", "centre_admin"]),
+  role: zod.enum(["parent", "professional"]),
 });
 
 export const SetMyRoleResponse = zod.object({
@@ -116,7 +108,7 @@ export const SetMyRoleResponse = zod.object({
   phone: zod.string().nullish(),
   fullName: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
-  role: zod.enum(["parent", "professional", "admin", "centre_admin"]),
+  role: zod.enum(["parent", "professional", "admin"]),
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   location: zod.string().nullish(),
@@ -152,7 +144,6 @@ export const GetMyProfessionalProfileResponse = zod.object({
     "developmental_pediatrician",
     "neurologist",
     "therapy_centre",
-    "coaching",
   ]),
   bio: zod.string().nullish(),
   yearsExperience: zod.number(),
@@ -189,7 +180,24 @@ export const GetMyProfessionalProfileResponse = zod.object({
   email: zod.string().nullish(),
   pricingMinINR: zod.number().nullish(),
   pricingMaxINR: zod.number().nullish(),
-  languages: zod.array(zod.string()).nullish(),
+  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).optional(),
+  verticalDetails: zod
+    .unknown()
+    .nullish()
+    .describe(
+      "Vertical-specific structured details (e.g. therapist licensing info)",
+    ),
+  rciCrrNumber: zod
+    .string()
+    .nullish()
+    .describe(
+      "RCI Central Rehabilitation Register number — required for therapists to be searchable",
+    ),
+  rciVerified: zod.boolean().optional(),
+  rejectionReason: zod
+    .string()
+    .nullish()
+    .describe("Reason given by admin when the application was rejected"),
   upiId: zod
     .string()
     .nullish()
@@ -205,16 +213,6 @@ export const GetMyProfessionalProfileResponse = zod.object({
     .nullish()
     .describe("When the UPI VPA was last verified — null if never verified"),
   paymentActivated: zod.boolean(),
-  coachingSubType: zod
-    .enum(["swimming", "dance", "music", "sports", "singing", "fitness", "art", "yoga"])
-    .nullish(),
-  inclusiveExperience: zod.boolean(),
-  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).nullish(),
-  verticalDetails: zod.record(zod.string(), zod.unknown()).nullish(),
-  rciCrrNumber: zod.string().nullish(),
-  certifications: zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
-  profileComplete: zod.boolean(),
-  rciVerified: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
 
@@ -232,7 +230,6 @@ export const CreateProfessionalProfileBody = zod.object({
     "developmental_pediatrician",
     "neurologist",
     "therapy_centre",
-    "coaching",
   ]),
   bio: zod.string().optional(),
   yearsExperience: zod.number(),
@@ -269,12 +266,6 @@ export const CreateProfessionalProfileBody = zod.object({
     .describe(
       "UPI ID for receiving session payments (never exposed to parents\/clients)",
     ),
-  coachingSubType: zod
-    .enum(["swimming", "dance", "music", "sports", "singing", "fitness", "art", "yoga"])
-    .optional(),
-  inclusiveExperience: zod.boolean().optional(),
-  specializationTags: zod.array(zod.string()).optional(),
-  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).optional(),
 });
 
 /**
@@ -329,17 +320,6 @@ export const UpdateProfessionalProfileBody = zod.object({
     .describe(
       "UPI ID for receiving session payments (never exposed to parents\/clients)",
     ),
-  coachingSubType: zod
-    .enum(["swimming", "dance", "music", "sports", "singing", "fitness", "art", "yoga"])
-    .optional(),
-  inclusiveExperience: zod.boolean().optional(),
-  specializationTags: zod.array(zod.string()).optional(),
-  languages: zod.array(zod.string()).optional(),
-  avatarUrl: zod.string().optional(),
-  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).optional(),
-  verticalDetails: zod.record(zod.string(), zod.unknown()).optional(),
-  rciCrrNumber: zod.string().optional(),
-  certifications: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
 });
 
 export const UpdateProfessionalProfileResponse = zod.object({
@@ -355,7 +335,6 @@ export const UpdateProfessionalProfileResponse = zod.object({
     "developmental_pediatrician",
     "neurologist",
     "therapy_centre",
-    "coaching",
   ]),
   bio: zod.string().nullish(),
   yearsExperience: zod.number(),
@@ -392,6 +371,24 @@ export const UpdateProfessionalProfileResponse = zod.object({
   email: zod.string().nullish(),
   pricingMinINR: zod.number().nullish(),
   pricingMaxINR: zod.number().nullish(),
+  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).optional(),
+  verticalDetails: zod
+    .unknown()
+    .nullish()
+    .describe(
+      "Vertical-specific structured details (e.g. therapist licensing info)",
+    ),
+  rciCrrNumber: zod
+    .string()
+    .nullish()
+    .describe(
+      "RCI Central Rehabilitation Register number — required for therapists to be searchable",
+    ),
+  rciVerified: zod.boolean().optional(),
+  rejectionReason: zod
+    .string()
+    .nullish()
+    .describe("Reason given by admin when the application was rejected"),
   upiId: zod
     .string()
     .nullish()
@@ -407,10 +404,6 @@ export const UpdateProfessionalProfileResponse = zod.object({
     .nullish()
     .describe("When the UPI VPA was last verified — null if never verified"),
   paymentActivated: zod.boolean(),
-  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).nullish(),
-  verticalDetails: zod.record(zod.string(), zod.unknown()).nullish(),
-  rciCrrNumber: zod.string().nullish(),
-  certifications: zod.array(zod.record(zod.string(), zod.unknown())).nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -451,7 +444,6 @@ export const GetProfessionalResponse = zod.object({
   id: zod.number(),
   userId: zod.number(),
   fullName: zod.string().nullish(),
-  avatarUrl: zod.string().nullish(),
   specialty: zod.string(),
   bio: zod.string().nullish(),
   yearsExperience: zod.number(),
@@ -479,8 +471,8 @@ export const GetProfessionalResponse = zod.object({
   verificationStatus: zod.string(),
   averageRating: zod.number().nullish(),
   totalRatings: zod.number(),
-  phoneBlurred: zod.string().nullable(),
-  emailBlurred: zod.string().nullable(),
+  phoneBlurred: zod.string(),
+  emailBlurred: zod.string(),
   isUnlocked: zod.boolean(),
   phone: zod.string().nullish(),
   email: zod.string().nullish(),
@@ -529,12 +521,6 @@ export const SearchProfessionalsQueryParams = zod.object({
     .number()
     .optional()
     .describe("Filter by maximum session price in INR"),
-  tags: zod.coerce.string().optional().describe("Comma-separated specialization tags"),
-  verifiedOnly: zod.coerce.boolean().optional(),
-  coachingSubType: zod
-    .enum(["swimming", "dance", "music", "sports", "singing", "fitness", "art", "yoga"])
-    .optional(),
-  inclusiveExperience: zod.coerce.boolean().optional(),
   page: zod.coerce.number().default(searchProfessionalsQueryPageDefault),
   limit: zod.coerce.number().default(searchProfessionalsQueryLimitDefault),
 });
@@ -565,8 +551,8 @@ export const SearchProfessionalsResponse = zod.object({
       verificationStatus: zod.string(),
       averageRating: zod.number().nullish(),
       totalRatings: zod.number(),
-      phoneBlurred: zod.string().nullable(),
-      emailBlurred: zod.string().nullable(),
+      phoneBlurred: zod.string(),
+      emailBlurred: zod.string(),
       phone: zod.string().nullish(),
       email: zod.string().nullish(),
       isUnlocked: zod.boolean(),
@@ -579,11 +565,6 @@ export const SearchProfessionalsResponse = zod.object({
       pricingMinINR: zod.number().nullish(),
       pricingMaxINR: zod.number().nullish(),
       paymentActivated: zod.boolean(),
-      isPremium: zod.boolean().optional(),
-      specializationTags: zod.array(zod.string()).optional(),
-      chatAccessOnly: zod.boolean().optional(),
-      coachingSubType: zod.string().nullish(),
-      inclusiveExperience: zod.boolean().optional(),
     }),
   ),
   total: zod.number(),
@@ -677,6 +658,17 @@ export const GetContactUsageResponse = zod.object({
 });
 
 /**
+ * @summary Get the public-facing subset of admin settings relevant to the current flows (any authenticated role)
+ */
+export const GetMySettingsResponse = zod.object({
+  placementFeeInr: zod.number(),
+  activationFeeInr: zod.number(),
+  platformSalaryEnabled: zod.boolean(),
+  trialDirectPayEnabled: zod.boolean(),
+  trialFeeInr: zod.number(),
+});
+
+/**
  * @summary Admin — get global settings
  */
 export const GetAdminSettingsResponse = zod.object({
@@ -750,17 +742,6 @@ export const UpdateAdminSettingsResponse = zod.object({
 });
 
 /**
- * @summary Get the public-facing subset of admin settings relevant to the current flows (any authenticated role)
- */
-export const GetMySettingsResponse = zod.object({
-  placementFeeInr: zod.number(),
-  activationFeeInr: zod.number(),
-  platformSalaryEnabled: zod.boolean(),
-  trialDirectPayEnabled: zod.boolean(),
-  trialFeeInr: zod.number(),
-});
-
-/**
  * @summary Check if parent has unlocked a professional's contact
  */
 export const CheckUnlockStatusParams = zod.object({
@@ -804,8 +785,8 @@ export const GetMyUnlocksResponseItem = zod.object({
       verificationStatus: zod.string(),
       averageRating: zod.number().nullish(),
       totalRatings: zod.number(),
-      phoneBlurred: zod.string().nullable(),
-      emailBlurred: zod.string().nullable(),
+      phoneBlurred: zod.string(),
+      emailBlurred: zod.string(),
       phone: zod.string().nullish(),
       email: zod.string().nullish(),
       isUnlocked: zod.boolean(),
@@ -859,8 +840,8 @@ export const GetParentDashboardResponse = zod.object({
           verificationStatus: zod.string(),
           averageRating: zod.number().nullish(),
           totalRatings: zod.number(),
-          phoneBlurred: zod.string().nullable(),
-          emailBlurred: zod.string().nullable(),
+          phoneBlurred: zod.string(),
+          emailBlurred: zod.string(),
           phone: zod.string().nullish(),
           email: zod.string().nullish(),
           isUnlocked: zod.boolean(),
@@ -936,10 +917,42 @@ export const GetProfessionalDashboardResponse = zod.object({
       email: zod.string().nullish(),
       pricingMinINR: zod.number().nullish(),
       pricingMaxINR: zod.number().nullish(),
+      vertical: zod
+        .enum(["shadow_teacher", "home_tutor", "therapist"])
+        .optional(),
+      verticalDetails: zod
+        .unknown()
+        .nullish()
+        .describe(
+          "Vertical-specific structured details (e.g. therapist licensing info)",
+        ),
+      rciCrrNumber: zod
+        .string()
+        .nullish()
+        .describe(
+          "RCI Central Rehabilitation Register number — required for therapists to be searchable",
+        ),
+      rciVerified: zod.boolean().optional(),
+      rejectionReason: zod
+        .string()
+        .nullish()
+        .describe("Reason given by admin when the application was rejected"),
       upiId: zod
         .string()
         .nullish()
         .describe("UPI ID — returned only in private (own profile) response"),
+      upiVpa: zod
+        .string()
+        .nullish()
+        .describe(
+          "Server-verified UPI VPA (via ₹1 reverse penny-drop) — read-only, returned only in private (own profile) response",
+        ),
+      upiVerifiedAt: zod.coerce
+        .date()
+        .nullish()
+        .describe(
+          "When the UPI VPA was last verified — null if never verified",
+        ),
       paymentActivated: zod.boolean(),
       createdAt: zod.coerce.date(),
     })
@@ -974,7 +987,6 @@ export const GetPlatformStatsResponse = zod.object({
   totalRatings: zod.number(),
   specialtyCounts: zod.record(zod.string(), zod.number()),
   verifiedCount: zod.number(),
-  totalCentres: zod.number(),
 });
 
 /**
@@ -1156,8 +1168,7 @@ export const CreateRazorpayOrderResponse = zod.object({
  */
 export const VerifyRazorpayPaymentBody = zod.object({
   razorpayPaymentId: zod.string(),
-  razorpayOrderId: zod.string().optional(),
-  razorpaySubscriptionId: zod.string().optional(),
+  razorpayOrderId: zod.string(),
   razorpaySignature: zod.string(),
   paymentId: zod.number(),
 });
@@ -1253,6 +1264,15 @@ export const AdminListProfessionalsResponse = zod.object({
       createdAt: zod.coerce.date(),
       userEmail: zod.string().nullish(),
       userName: zod.string().nullish(),
+      hasIdentityDoc: zod.boolean(),
+      hasRciCertificate: zod.boolean(),
+      requirementsMet: zod
+        .boolean()
+        .describe(
+          "True only when the professional's vertical-specific mandatory verification requirements (government ID for all verticals; RCI CRR number + RCI certificate for therapists) have been submitted. The admin approve endpoint hard-rejects approval while this is false.",
+        ),
+      missingRequirements: zod.array(zod.string()),
+      requirementWarnings: zod.array(zod.string()),
     }),
   ),
   total: zod.number(),
@@ -1287,7 +1307,6 @@ export const AdminApproveProfessionalResponse = zod.object({
     "developmental_pediatrician",
     "neurologist",
     "therapy_centre",
-    "coaching",
   ]),
   bio: zod.string().nullish(),
   yearsExperience: zod.number(),
@@ -1324,10 +1343,38 @@ export const AdminApproveProfessionalResponse = zod.object({
   email: zod.string().nullish(),
   pricingMinINR: zod.number().nullish(),
   pricingMaxINR: zod.number().nullish(),
+  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).optional(),
+  verticalDetails: zod
+    .unknown()
+    .nullish()
+    .describe(
+      "Vertical-specific structured details (e.g. therapist licensing info)",
+    ),
+  rciCrrNumber: zod
+    .string()
+    .nullish()
+    .describe(
+      "RCI Central Rehabilitation Register number — required for therapists to be searchable",
+    ),
+  rciVerified: zod.boolean().optional(),
+  rejectionReason: zod
+    .string()
+    .nullish()
+    .describe("Reason given by admin when the application was rejected"),
   upiId: zod
     .string()
     .nullish()
     .describe("UPI ID — returned only in private (own profile) response"),
+  upiVpa: zod
+    .string()
+    .nullish()
+    .describe(
+      "Server-verified UPI VPA (via ₹1 reverse penny-drop) — read-only, returned only in private (own profile) response",
+    ),
+  upiVerifiedAt: zod.coerce
+    .date()
+    .nullish()
+    .describe("When the UPI VPA was last verified — null if never verified"),
   paymentActivated: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -1352,7 +1399,6 @@ export const AdminRejectProfessionalResponse = zod.object({
     "developmental_pediatrician",
     "neurologist",
     "therapy_centre",
-    "coaching",
   ]),
   bio: zod.string().nullish(),
   yearsExperience: zod.number(),
@@ -1389,10 +1435,38 @@ export const AdminRejectProfessionalResponse = zod.object({
   email: zod.string().nullish(),
   pricingMinINR: zod.number().nullish(),
   pricingMaxINR: zod.number().nullish(),
+  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).optional(),
+  verticalDetails: zod
+    .unknown()
+    .nullish()
+    .describe(
+      "Vertical-specific structured details (e.g. therapist licensing info)",
+    ),
+  rciCrrNumber: zod
+    .string()
+    .nullish()
+    .describe(
+      "RCI Central Rehabilitation Register number — required for therapists to be searchable",
+    ),
+  rciVerified: zod.boolean().optional(),
+  rejectionReason: zod
+    .string()
+    .nullish()
+    .describe("Reason given by admin when the application was rejected"),
   upiId: zod
     .string()
     .nullish()
     .describe("UPI ID — returned only in private (own profile) response"),
+  upiVpa: zod
+    .string()
+    .nullish()
+    .describe(
+      "Server-verified UPI VPA (via ₹1 reverse penny-drop) — read-only, returned only in private (own profile) response",
+    ),
+  upiVerifiedAt: zod.coerce
+    .date()
+    .nullish()
+    .describe("When the UPI VPA was last verified — null if never verified"),
   paymentActivated: zod.boolean(),
   createdAt: zod.coerce.date(),
 });

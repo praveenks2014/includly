@@ -10,6 +10,7 @@ import {
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { SubmitIdentityVerificationBody, SubmitCertificationBody } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+import { recomputeSubmissionStatus } from "../lib/verificationRequirements";
 
 const router: IRouter = Router();
 const storageService = new ObjectStorageService();
@@ -157,10 +158,11 @@ router.post(
         .returning();
     }
 
-    await db
-      .update(professionalProfilesTable)
-      .set({ verificationStatus: "pending" })
-      .where(eq(professionalProfilesTable.id, profile.id));
+    // Only flips unsubmitted/rejected -> pending once ALL of the vertical's
+    // mandatory requirements (ID + therapist RCI cert/number) are met — an
+    // ID upload alone is not enough to enter the admin review queue for a
+    // therapist still missing their RCI certificate.
+    await recomputeSubmissionStatus(profile.id);
 
     res.status(201).json({
       id: record.id,
@@ -256,6 +258,11 @@ router.post(
         fileKey,
       })
       .returning();
+
+    // A certification (e.g. an RCI certificate for a therapist) can be the
+    // last missing requirement — recheck whether the profile is now
+    // reviewable.
+    await recomputeSubmissionStatus(profile.id);
 
     res.status(201).json({
       id: record.id,
