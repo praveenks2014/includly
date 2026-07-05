@@ -2,11 +2,11 @@ import { Router, type IRouter } from "express";
 import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc, arrayOverlaps, notInArray, isNotNull, inArray, type SQL } from "drizzle-orm";
 import Razorpay from "razorpay";
 import crypto from "crypto";
-import { db, usersTable, professionalProfilesTable, adminSettingsTable, specialtyEnum, coachingSubTypeEnum, professionalSubscriptionsTable, professionalCertificationsTable, contactUnlocksTable, shadowTeacherEngagementsTable, shadowTeacherMatchesTable } from "@workspace/db";
+import { db, usersTable, professionalProfilesTable, adminSettingsTable, specialtyEnum, coachingSubTypeEnum, professionalSubscriptionsTable, professionalCertificationsTable, identityVerificationsTable, contactUnlocksTable, shadowTeacherEngagementsTable, shadowTeacherMatchesTable } from "@workspace/db";
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
 import { notifyParentsOnProfileUpdate } from "../lib/notificationService";
 import { getClerkPrimaryEmail } from "../lib/clerkUser";
-import { recomputeSubmissionStatus } from "../lib/verificationRequirements";
+import { recomputeSubmissionStatus, RCI_CERTIFICATE_DOC_TYPE } from "../lib/verificationRequirements";
 import {
   GetMyProfessionalProfileResponse,
   CreateProfessionalProfileBody,
@@ -412,6 +412,19 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
   conditions.push(eq(professionalProfilesTable.paymentActivated, true));
   // Therapists must have a CRR number on file — prevents unlicensed profiles appearing in search
   conditions.push(sql`(${professionalProfilesTable.vertical} != 'therapist' OR (${professionalProfilesTable.rciCrrNumber} IS NOT NULL AND ${professionalProfilesTable.rciCrrNumber} != ''))`);
+  // Defense-in-depth: every listed specialist must have a government ID on file, and
+  // therapists must additionally have their RCI certificate on file. This is enforced
+  // directly at query time (not just at admin-approval time) so that legacy/manually
+  // mutated rows can never surface an under-verified specialist to parents.
+  conditions.push(
+    sql`EXISTS (SELECT 1 FROM ${identityVerificationsTable} iv WHERE iv.professional_id = ${professionalProfilesTable.id})`,
+  );
+  conditions.push(
+    sql`(${professionalProfilesTable.vertical} != 'therapist' OR EXISTS (
+      SELECT 1 FROM ${professionalCertificationsTable} pc
+      WHERE pc.professional_id = ${professionalProfilesTable.id} AND pc.document_type = ${RCI_CERTIFICATE_DOC_TYPE}
+    ))`,
+  );
 
   if (verifiedOnly) {
     conditions.push(eq(professionalProfilesTable.isVerified, true));

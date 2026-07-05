@@ -17,6 +17,7 @@ import {
   professionalAvailabilityTable,
   connectThreadsTable,
   paymentsTable,
+  identityVerificationsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { z } from "zod/v4";
@@ -165,6 +166,8 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
         eq(professionalProfilesTable.verificationStatus, "verified"),
         eq(professionalProfilesTable.paymentActivated, true),
         isNotNull(professionalProfilesTable.pricingMinINR),
+        // Defense-in-depth: every candidate must have a government ID on file
+        sql`EXISTS (SELECT 1 FROM ${identityVerificationsTable} iv WHERE iv.professional_id = ${professionalProfilesTable.id})`,
         ...(busyProfIds.length > 0 ? [notInArray(professionalProfilesTable.id, busyProfIds)] : []),
       ),
     );
@@ -1960,6 +1963,8 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
           eq(professionalProfilesTable.verificationStatus, "verified"),
           eq(professionalProfilesTable.paymentActivated, true),
           isNotNull(professionalProfilesTable.pricingMinINR),
+          // Defense-in-depth: every candidate must have a government ID on file
+          sql`EXISTS (SELECT 1 FROM ${identityVerificationsTable} iv WHERE iv.professional_id = ${professionalProfilesTable.id})`,
           excludeIds.length > 0
             ? sql`${professionalProfilesTable.id} != ALL(${sql.raw(`ARRAY[${excludeIds.join(",")}]::int[]`)})`
             : sql`true`,

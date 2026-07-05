@@ -320,9 +320,23 @@ export const CreateProfessionalProfileBodySpecialty = {
   therapy_centre: "therapy_centre",
 } as const;
 
+/**
+ * Verification vertical — determines mandatory document requirements (e.g. RCI cert for therapist)
+ */
+export type CreateProfessionalProfileBodyVertical =
+  (typeof CreateProfessionalProfileBodyVertical)[keyof typeof CreateProfessionalProfileBodyVertical];
+
+export const CreateProfessionalProfileBodyVertical = {
+  shadow_teacher: "shadow_teacher",
+  home_tutor: "home_tutor",
+  therapist: "therapist",
+} as const;
+
 export interface CreateProfessionalProfileBody {
   fullName: string;
   specialty: CreateProfessionalProfileBodySpecialty;
+  /** Verification vertical — determines mandatory document requirements (e.g. RCI cert for therapist) */
+  vertical?: CreateProfessionalProfileBodyVertical;
   bio?: string;
   yearsExperience: number;
   qualifications: string;
@@ -360,9 +374,23 @@ export const UpdateProfessionalProfileBodySpecialty = {
   therapy_centre: "therapy_centre",
 } as const;
 
+/**
+ * Verification vertical — determines mandatory document requirements (e.g. RCI cert for therapist)
+ */
+export type UpdateProfessionalProfileBodyVertical =
+  (typeof UpdateProfessionalProfileBodyVertical)[keyof typeof UpdateProfessionalProfileBodyVertical];
+
+export const UpdateProfessionalProfileBodyVertical = {
+  shadow_teacher: "shadow_teacher",
+  home_tutor: "home_tutor",
+  therapist: "therapist",
+} as const;
+
 export interface UpdateProfessionalProfileBody {
   fullName?: string;
   specialty?: UpdateProfessionalProfileBodySpecialty;
+  /** Verification vertical — determines mandatory document requirements (e.g. RCI cert for therapist) */
+  vertical?: UpdateProfessionalProfileBodyVertical;
   bio?: string;
   yearsExperience?: number;
   qualifications?: string;

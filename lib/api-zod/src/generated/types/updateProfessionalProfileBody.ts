@@ -6,10 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { UpdateProfessionalProfileBodySpecialty } from "./updateProfessionalProfileBodySpecialty";
+import type { UpdateProfessionalProfileBodyVertical } from "./updateProfessionalProfileBodyVertical";
 
 export interface UpdateProfessionalProfileBody {
   fullName?: string;
   specialty?: UpdateProfessionalProfileBodySpecialty;
+  /** Verification vertical — determines mandatory document requirements (e.g. RCI cert for therapist) */
+  vertical?: UpdateProfessionalProfileBodyVertical;
   bio?: string;
   yearsExperience?: number;
   qualifications?: string;

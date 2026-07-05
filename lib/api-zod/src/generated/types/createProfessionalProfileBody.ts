@@ -6,10 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CreateProfessionalProfileBodySpecialty } from "./createProfessionalProfileBodySpecialty";
+import type { CreateProfessionalProfileBodyVertical } from "./createProfessionalProfileBodyVertical";
 
 export interface CreateProfessionalProfileBody {
   fullName: string;
   specialty: CreateProfessionalProfileBodySpecialty;
+  /** Verification vertical — determines mandatory document requirements (e.g. RCI cert for therapist) */
+  vertical?: CreateProfessionalProfileBodyVertical;
   bio?: string;
   yearsExperience: number;
   qualifications: string;

@@ -2031,6 +2031,10 @@ components:
             - developmental_pediatrician
             - neurologist
             - therapy_centre
+        vertical:
+          type: string
+          enum: [shadow_teacher, home_tutor, therapist]
+          description: Verification vertical — determines mandatory document requirements (e.g. RCI cert for therapist)
         bio:
           type: string
         yearsExperience:
@@ -2091,6 +2095,10 @@ components:
             - developmental_pediatrician
             - neurologist
             - therapy_centre
+        vertical:
+          type: string
+          enum: [shadow_teacher, home_tutor, therapist]
+          description: Verification vertical — determines mandatory document requirements (e.g. RCI cert for therapist)
         bio:
           type: string
         yearsExperience:

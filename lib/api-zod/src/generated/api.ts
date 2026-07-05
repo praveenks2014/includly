@@ -231,6 +231,12 @@ export const CreateProfessionalProfileBody = zod.object({
     "neurologist",
     "therapy_centre",
   ]),
+  vertical: zod
+    .enum(["shadow_teacher", "home_tutor", "therapist"])
+    .optional()
+    .describe(
+      "Verification vertical — determines mandatory document requirements (e.g. RCI cert for therapist)",
+    ),
   bio: zod.string().optional(),
   yearsExperience: zod.number(),
   qualifications: zod.string(),
@@ -285,6 +291,12 @@ export const UpdateProfessionalProfileBody = zod.object({
       "therapy_centre",
     ])
     .optional(),
+  vertical: zod
+    .enum(["shadow_teacher", "home_tutor", "therapist"])
+    .optional()
+    .describe(
+      "Verification vertical — determines mandatory document requirements (e.g. RCI cert for therapist)",
+    ),
   bio: zod.string().optional(),
   yearsExperience: zod.number().optional(),
   qualifications: zod.string().optional(),
