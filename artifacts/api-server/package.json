@@ -9,7 +9,8 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed:admin": "node ./build-seed.mjs && node --enable-source-maps ./dist/seed-admin.mjs",
-    "seed:demos": "node ./build-seed-demos.mjs && node --enable-source-maps ./dist/seed-demo-profiles.mjs"
+    "seed:demos": "node ./build-seed-demos.mjs && node --enable-source-maps ./dist/seed-demo-profiles.mjs",
+    "backfill:verification": "node ./build-backfill.mjs && node --enable-source-maps ./dist/backfill-verification-requirements.mjs"
   },
   "dependencies": {
     "@clerk/express": "^2.1.32",
