@@ -15,6 +15,11 @@ out-tsc
 # dependencies
 node_modules
 
+# environment / secrets (Replit Secrets are managed outside git; never commit env files)
+.env
+.env.*
+!.env.example
+
 # IDEs and editors
 /.idea
 .project
