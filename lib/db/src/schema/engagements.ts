@@ -36,6 +36,15 @@ export const shadowTeacherEngagementsTable = pgTable("shadow_teacher_engagements
   activationFeeInr: integer("activation_fee_inr"),
   activationFeePaymentId: integer("activation_fee_payment_id"),
   activationFeeOrderId: text("activation_fee_order_id"),
+  // Snapshotted from the accepted negotiation offer at commit time. Nullable so
+  // pre-feature engagements don't falsely appear to have agreed to specific
+  // terms. Data-capture only: no downstream automation reads these yet
+  // (retainer payouts, absence tracking, leave flows are future work).
+  absenceRetainerPct: integer("absence_retainer_pct"),
+  absenceFreeDaysPerMonth: integer("absence_free_days_per_month"),
+  summerRetainerPct: integer("summer_retainer_pct"),
+  summerRetainerMonths: integer("summer_retainer_months"),
+  leaveTermsNotes: text("leave_terms_notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

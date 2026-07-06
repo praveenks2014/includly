@@ -901,7 +901,14 @@ router.get("/shadow-teacher/:matchId/candidates/:candidateId/offers", requireAut
 });
 
 // ── POST /shadow-teacher/:matchId/candidates/:candidateId/offers ──────────────
-const OfferBody = z.object({ amountInr: z.number().int().positive() });
+const OfferBody = z.object({
+  amountInr: z.number().int().positive(),
+  absenceRetainerPct: z.number().int().min(0).max(100).default(50),
+  absenceFreeDaysPerMonth: z.number().int().min(0).max(30).default(4),
+  summerRetainerPct: z.number().int().min(0).max(100).default(0),
+  summerRetainerMonths: z.number().int().min(0).max(12).default(0),
+  leaveTermsNotes: z.string().max(1000).nullable().default(null),
+});
 
 router.post("/shadow-teacher/:matchId/candidates/:candidateId/offers", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const matchId = parseInt(req.params["matchId"] as string, 10);
@@ -930,7 +937,13 @@ router.post("/shadow-teacher/:matchId/candidates/:candidateId/offers", requireAu
     ));
   const [offer] = await db.insert(negotiationOffersTable).values({
     matchId, candidateId, raisedByUserId: req.userId!, raisedByRole: ctx.myRole,
-    amountInr: parsed.data.amountInr, status: "pending",
+    amountInr: parsed.data.amountInr,
+    absenceRetainerPct: parsed.data.absenceRetainerPct,
+    absenceFreeDaysPerMonth: parsed.data.absenceFreeDaysPerMonth,
+    summerRetainerPct: parsed.data.summerRetainerPct,
+    summerRetainerMonths: parsed.data.summerRetainerMonths,
+    leaveTermsNotes: parsed.data.leaveTermsNotes,
+    status: "pending",
   }).returning();
 
   // Notify the other party about the new offer
@@ -1032,6 +1045,13 @@ type CommitContextResult =
       match: typeof shadowTeacherMatchesTable.$inferSelect;
       teacher: { pricingMinINR: number | null; fullName: string | null; phone: string | null; email: string | null; userId: number };
       monthlyFeeInr: number;
+      // Non-salary agreed terms from the accepted offer (null if no accepted
+      // offer — engagement snapshot will be NULL, meaning "no agreement recorded").
+      absenceRetainerPct: number | null;
+      absenceFreeDaysPerMonth: number | null;
+      summerRetainerPct: number | null;
+      summerRetainerMonths: number | null;
+      leaveTermsNotes: string | null;
     };
 
 async function loadCommitContext(matchId: number, parentId: number, selectedProfessionalId: number): Promise<CommitContextResult> {
@@ -1093,7 +1113,14 @@ async function loadCommitContext(matchId: number, parentId: number, selectedProf
   }
 
   const [acceptedOffer] = await db
-    .select({ amountInr: negotiationOffersTable.amountInr })
+    .select({
+      amountInr: negotiationOffersTable.amountInr,
+      absenceRetainerPct: negotiationOffersTable.absenceRetainerPct,
+      absenceFreeDaysPerMonth: negotiationOffersTable.absenceFreeDaysPerMonth,
+      summerRetainerPct: negotiationOffersTable.summerRetainerPct,
+      summerRetainerMonths: negotiationOffersTable.summerRetainerMonths,
+      leaveTermsNotes: negotiationOffersTable.leaveTermsNotes,
+    })
     .from(negotiationOffersTable)
     .where(
       and(
@@ -1105,7 +1132,16 @@ async function loadCommitContext(matchId: number, parentId: number, selectedProf
     .limit(1);
   const monthlyFeeInr = acceptedOffer?.amountInr ?? teacher.pricingMinINR!;
 
-  return { match, teacher, monthlyFeeInr } as const;
+  return {
+    match,
+    teacher,
+    monthlyFeeInr,
+    absenceRetainerPct: acceptedOffer?.absenceRetainerPct ?? null,
+    absenceFreeDaysPerMonth: acceptedOffer?.absenceFreeDaysPerMonth ?? null,
+    summerRetainerPct: acceptedOffer?.summerRetainerPct ?? null,
+    summerRetainerMonths: acceptedOffer?.summerRetainerMonths ?? null,
+    leaveTermsNotes: acceptedOffer?.leaveTermsNotes ?? null,
+  } as const;
 }
 
 async function finalizeCommit(params: {
@@ -1116,8 +1152,19 @@ async function finalizeCommit(params: {
   startDate: string | null;
   placementFeeInr: number;
   placementFeePaymentId: number | null;
+  // Non-salary agreed terms snapshotted onto the engagement. Null if no accepted
+  // offer or no negotiation happened — engagement stays NULL for these fields,
+  // matching the "no agreement recorded" convention on pre-feature rows.
+  absenceRetainerPct: number | null;
+  absenceFreeDaysPerMonth: number | null;
+  summerRetainerPct: number | null;
+  summerRetainerMonths: number | null;
+  leaveTermsNotes: string | null;
 }) {
-  const { match, teacher, selectedProfessionalId, monthlyFeeInr, placementFeeInr, placementFeePaymentId } = params;
+  const {
+    match, teacher, selectedProfessionalId, monthlyFeeInr, placementFeeInr, placementFeePaymentId,
+    absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
+  } = params;
   const settings = await getSettings();
   const platformSalaryEnabled = ((settings as Record<string, unknown>)["platformSalaryEnabled"] as boolean) ?? false;
 
@@ -1159,6 +1206,13 @@ async function finalizeCommit(params: {
       platformSalaryEnabled,
       placementFeeInr: placementFeeInr > 0 ? placementFeeInr : null,
       placementFeePaymentId,
+      // Data-capture only — snapshotted from accepted offer. No downstream
+      // automation reads these yet; see schema comment on engagements table.
+      absenceRetainerPct,
+      absenceFreeDaysPerMonth,
+      summerRetainerPct,
+      summerRetainerMonths,
+      leaveTermsNotes,
     })
     .returning();
 
@@ -1228,7 +1282,10 @@ router.post("/shadow-teacher/:matchId/commit/order", requireAuth, requireRole("p
 
   const ctx = await loadCommitContext(matchId, req.userId!, selectedProfessionalId);
   if ("error" in ctx) { res.status(ctx.error.status).json(ctx.error.body); return; }
-  const { match, teacher, monthlyFeeInr } = ctx;
+  const {
+    match, teacher, monthlyFeeInr,
+    absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
+  } = ctx;
 
   const settings = await getSettings();
   const placementFeeInr = ((settings as Record<string, unknown>)["placementFeeInr"] as number) ?? 2999;
@@ -1239,6 +1296,7 @@ router.post("/shadow-teacher/:matchId/commit/order", requireAuth, requireRole("p
       startDate: startDate ?? null,
       placementFeeInr: 0,
       placementFeePaymentId: null,
+      absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
     });
     res.json({ engagementId: engagement.id, teacherFullName: teacher.fullName, phone: teacher.phone, email: teacher.email, waived: true });
     return;
@@ -1375,7 +1433,10 @@ router.post("/shadow-teacher/:matchId/commit/verify", requireAuth, requireRole("
     });
     return;
   }
-  const { match: freshMatch, teacher, monthlyFeeInr } = ctx;
+  const {
+    match: freshMatch, teacher, monthlyFeeInr,
+    absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
+  } = ctx;
 
   const engagement = await finalizeCommit({
     match: freshMatch,
@@ -1385,6 +1446,7 @@ router.post("/shadow-teacher/:matchId/commit/verify", requireAuth, requireRole("
     startDate: freshMatch.pendingCommitStartDate,
     placementFeeInr,
     placementFeePaymentId: paymentRow!.id,
+    absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
   });
 
   res.json({ engagementId: engagement.id, teacherFullName: teacher.fullName, phone: teacher.phone, email: teacher.email });
@@ -1666,7 +1728,7 @@ router.post("/shadow-teacher/:matchId/mark-trial-direct-pay-paid", requireAuth, 
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.id, selectedProfessionalId));
   if (!teacherPay?.upiVpa || !teacherPay.upiVerifiedAt) {
-    res.status(409).json({ error: "professional_upi_unverified", message: "This teacher hasn't verified their UPI ID yet." });
+    res.status(409).json({ error: "professional_upi_unverified", message: "Payment details for this teacher are being finalized. Please try again in a moment." });
     return;
   }
 

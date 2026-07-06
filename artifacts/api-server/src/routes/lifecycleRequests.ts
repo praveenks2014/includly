@@ -641,6 +641,21 @@ router.patch("/engagements/:id/teacher-acceptance", requireAuth, async (req, res
     res.status(409).json({ error: "Engagement is not awaiting teacher acceptance" }); return;
   }
 
+  if (action === "accept" && eng.platformSalaryEnabled === false) {
+    const [prof] = await db
+      .select({ upiVerifiedAt: professionalProfilesTable.upiVerifiedAt })
+      .from(professionalProfilesTable)
+      .where(eq(professionalProfilesTable.id, eng.professionalId))
+      .limit(1);
+    if (!prof?.upiVerifiedAt) {
+      res.status(409).json({
+        error: "upi_verification_required",
+        message: "Verify your UPI ID to accept this engagement. Parent will pay you directly each month.",
+      });
+      return;
+    }
+  }
+
   if (action === "accept") {
     const settings = await getSettings();
     const activationFeeInr = ((settings as Record<string, unknown>)["activationFeeInr"] as number) ?? 999;

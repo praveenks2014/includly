@@ -8,7 +8,7 @@
  *
  * Legacy (queued/matched) states also handled for existing records.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShadowMatchChatDrawer } from "./ShadowMatchChatDrawer";
+import { UpiPayQRDialog } from "./UpiPayQRDialog";
 import { useGetMe } from "@workspace/api-client-react";
 
 interface Child {
@@ -148,8 +149,35 @@ interface NegotiationOffer {
   raisedByUserId: number;
   raisedByRole: string;
   amountInr: number;
+  // Non-salary agreed terms — recorded on the offer, snapshotted to the
+  // engagement at commit. NOT tied to any downstream enforcement yet
+  // (loss-of-pay calc, absence tracking, retainer payouts are future work).
+  absenceRetainerPct: number;
+  absenceFreeDaysPerMonth: number;
+  summerRetainerPct: number;
+  summerRetainerMonths: number;
+  leaveTermsNotes: string | null;
   status: string;
   createdAt: string;
+}
+
+const DEFAULT_ABSENCE_RETAINER_PCT = 50;
+const DEFAULT_ABSENCE_FREE_DAYS_PER_MONTH = 4;
+const DEFAULT_SUMMER_RETAINER_PCT = 0;
+const DEFAULT_SUMMER_RETAINER_MONTHS = 0;
+
+function termsSummary(o: NegotiationOffer): string {
+  const parts: string[] = [];
+  const absenceCustom = o.absenceRetainerPct !== DEFAULT_ABSENCE_RETAINER_PCT
+    || o.absenceFreeDaysPerMonth !== DEFAULT_ABSENCE_FREE_DAYS_PER_MONTH;
+  const summerCustom = o.summerRetainerPct !== DEFAULT_SUMMER_RETAINER_PCT
+    || o.summerRetainerMonths !== DEFAULT_SUMMER_RETAINER_MONTHS;
+  const hasNotes = !!(o.leaveTermsNotes && o.leaveTermsNotes.trim());
+
+  if (absenceCustom) parts.push(`retainer ${o.absenceRetainerPct}% (${o.absenceFreeDaysPerMonth} free days)`);
+  if (summerCustom) parts.push(`summer ${o.summerRetainerPct}% × ${o.summerRetainerMonths}mo`);
+  if (hasNotes) parts.push("has notes");
+  return parts.length === 0 ? "standard terms" : parts.join(" · ");
 }
 
 function ScoreBadge({ score }: { score: number | null }) {
@@ -169,6 +197,12 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
   matchStatus: string;
 }) {
   const [offerInput, setOfferInput] = useState("");
+  const [absenceRetainerPct, setAbsenceRetainerPct] = useState(DEFAULT_ABSENCE_RETAINER_PCT);
+  const [absenceFreeDaysPerMonth, setAbsenceFreeDaysPerMonth] = useState(DEFAULT_ABSENCE_FREE_DAYS_PER_MONTH);
+  const [summerRetainerPct, setSummerRetainerPct] = useState(DEFAULT_SUMMER_RETAINER_PCT);
+  const [summerRetainerMonths, setSummerRetainerMonths] = useState(DEFAULT_SUMMER_RETAINER_MONTHS);
+  const [leaveTermsNotes, setLeaveTermsNotes] = useState("");
+  const [expandTerms, setExpandTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -180,7 +214,21 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
     refetchInterval: 15_000,
   });
 
-  useEffect(() => { void 0; }, []);
+  // One-shot prefill: when offers first load, seed the form from the latest
+  // offer so counter-offers iterate from the current negotiation state, not
+  // from platform defaults. Skip subsequent polls so user edits stick.
+  const prefilledRef = useRef(false);
+  useEffect(() => {
+    if (prefilledRef.current || offers.length === 0) return;
+    const latest = offers[offers.length - 1]!;
+    setAbsenceRetainerPct(latest.absenceRetainerPct ?? DEFAULT_ABSENCE_RETAINER_PCT);
+    setAbsenceFreeDaysPerMonth(latest.absenceFreeDaysPerMonth ?? DEFAULT_ABSENCE_FREE_DAYS_PER_MONTH);
+    setSummerRetainerPct(latest.summerRetainerPct ?? DEFAULT_SUMMER_RETAINER_PCT);
+    setSummerRetainerMonths(latest.summerRetainerMonths ?? DEFAULT_SUMMER_RETAINER_MONTHS);
+    setLeaveTermsNotes(latest.leaveTermsNotes ?? "");
+    if (termsSummary(latest) !== "standard terms") setExpandTerms(true);
+    prefilledRef.current = true;
+  }, [offers]);
 
   const acceptedOffer = offers.find(o => o.status === "accepted");
   const myPendingOffer = offers.find(o => o.status === "pending" && o.raisedByUserId === myUserId);
@@ -196,7 +244,14 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
       const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/offers`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amountInr: amount }),
+        body: JSON.stringify({
+          amountInr: amount,
+          absenceRetainerPct,
+          absenceFreeDaysPerMonth,
+          summerRetainerPct,
+          summerRetainerMonths,
+          leaveTermsNotes: leaveTermsNotes.trim() || null,
+        }),
       });
       if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Failed to send offer", variant: "destructive" }); return; }
       setOfferInput("");
@@ -222,30 +277,109 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
     } finally { setSubmitting(false); }
   }
 
+  const termsForm = expandTerms ? (
+    <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-2.5 space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <label className="text-[10px] text-gray-600">
+          Absence retainer (%)
+          <input type="number" min={0} max={100} value={absenceRetainerPct}
+            onChange={e => setAbsenceRetainerPct(Math.max(0, Math.min(100, parseInt(e.target.value || "0", 10))))}
+            className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5]"
+            data-testid="input-absence-retainer-pct" />
+        </label>
+        <label className="text-[10px] text-gray-600">
+          Free absence days / mo
+          <input type="number" min={0} max={30} value={absenceFreeDaysPerMonth}
+            onChange={e => setAbsenceFreeDaysPerMonth(Math.max(0, Math.min(30, parseInt(e.target.value || "0", 10))))}
+            className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5]"
+            data-testid="input-absence-free-days" />
+        </label>
+        <label className="text-[10px] text-gray-600">
+          Summer retainer (%)
+          <input type="number" min={0} max={100} value={summerRetainerPct}
+            onChange={e => setSummerRetainerPct(Math.max(0, Math.min(100, parseInt(e.target.value || "0", 10))))}
+            className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5]"
+            data-testid="input-summer-retainer-pct" />
+        </label>
+        <label className="text-[10px] text-gray-600">
+          Summer retainer for (months)
+          <input type="number" min={0} max={12} value={summerRetainerMonths}
+            onChange={e => setSummerRetainerMonths(Math.max(0, Math.min(12, parseInt(e.target.value || "0", 10))))}
+            className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5]"
+            data-testid="input-summer-retainer-months" />
+        </label>
+      </div>
+      <label className="text-[10px] text-gray-600 block">
+        Additional leave / retainer terms (optional)
+        <textarea rows={2} maxLength={1000} value={leaveTermsNotes}
+          onChange={e => setLeaveTermsNotes(e.target.value)}
+          placeholder="e.g. 2 additional paid leaves during Diwali week"
+          className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5] resize-none"
+          data-testid="input-leave-terms-notes" />
+      </label>
+      <p className="text-[10px] text-gray-400 leading-snug">
+        💡 Recorded for reference. Includly doesn&apos;t automate loss-of-pay or retainer payouts yet — this captures what you both agreed.
+      </p>
+    </div>
+  ) : null;
+
+  const toggleTermsButton = !acceptedOffer && !myPendingOffer ? (
+    <button
+      type="button"
+      onClick={() => setExpandTerms(v => !v)}
+      className="text-[10px] text-gray-500 hover:text-[#2EC4A5] underline underline-offset-2 self-start"
+      data-testid="toggle-terms"
+    >
+      {expandTerms ? "▾ Hide leave & retainer terms" : "▸ Adjust leave & retainer terms"}
+    </button>
+  ) : null;
+
   return (
     <div className="border-t border-gray-100 pt-3 space-y-2 mt-1">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Price Negotiation</p>
       {offers.filter(o => o.status !== "withdrawn").slice(-4).map(o => (
         <div key={o.id} className={`flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg ${o.raisedByUserId === myUserId ? "bg-blue-50 text-blue-800" : "bg-gray-50 text-gray-600"}`}>
-          <span>{o.raisedByUserId === myUserId ? "You" : "Teacher"} offered ₹{o.amountInr.toLocaleString("en-IN")}/mo</span>
-          <span className={`ml-2 text-[10px] font-semibold ${o.status === "accepted" ? "text-green-600" : o.status === "superseded" ? "text-gray-400" : "text-amber-600"}`}>
+          <span className="min-w-0 truncate" title={o.leaveTermsNotes ?? undefined}>
+            {o.raisedByUserId === myUserId ? "You" : "Teacher"} offered ₹{o.amountInr.toLocaleString("en-IN")}/mo · {termsSummary(o)}
+          </span>
+          <span className={`ml-2 text-[10px] font-semibold shrink-0 ${o.status === "accepted" ? "text-green-600" : o.status === "superseded" ? "text-gray-400" : "text-amber-600"}`}>
             {o.status === "accepted" ? "✓ Agreed" : o.status === "superseded" ? "replaced" : "pending"}
           </span>
         </div>
       ))}
       {acceptedOffer ? (
-        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-          <span className="text-xs font-bold text-green-800">🔒 Agreed: ₹{acceptedOffer.amountInr.toLocaleString("en-IN")}/mo — click Choose to lock in</span>
+        <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 space-y-1">
+          <p className="text-xs font-bold text-green-800">🔒 Agreed: ₹{acceptedOffer.amountInr.toLocaleString("en-IN")}/mo — click Choose to lock in</p>
+          <p className="text-[10px] text-green-700">
+            Absence retainer {acceptedOffer.absenceRetainerPct}% beyond {acceptedOffer.absenceFreeDaysPerMonth} free days/mo
+            {(acceptedOffer.summerRetainerPct > 0 || acceptedOffer.summerRetainerMonths > 0)
+              ? ` · Summer retainer ${acceptedOffer.summerRetainerPct}% × ${acceptedOffer.summerRetainerMonths}mo`
+              : ""}
+          </p>
+          {acceptedOffer.leaveTermsNotes && acceptedOffer.leaveTermsNotes.trim() && (
+            <p className="text-[10px] text-green-700 italic">Notes: {acceptedOffer.leaveTermsNotes}</p>
+          )}
         </div>
       ) : myPendingOffer ? (
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-amber-700">Waiting for teacher's response…</span>
+          <span className="text-xs text-amber-700 min-w-0 truncate">Waiting for teacher&apos;s response · {termsSummary(myPendingOffer)}</span>
           <button onClick={() => void withdrawOffer(myPendingOffer.id)} disabled={submitting}
-            className="text-[10px] text-red-500 hover:underline disabled:opacity-50">Withdraw</button>
+            className="text-[10px] text-red-500 hover:underline disabled:opacity-50 shrink-0">Withdraw</button>
         </div>
       ) : theirPendingOffer ? (
-        <div className="space-y-1.5">
-          <p className="text-xs font-medium text-gray-700">Teacher offered ₹{theirPendingOffer.amountInr.toLocaleString("en-IN")}/mo</p>
+        <div className="space-y-2">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 space-y-1">
+            <p className="text-xs font-semibold text-amber-900">Teacher offered ₹{theirPendingOffer.amountInr.toLocaleString("en-IN")}/mo</p>
+            <p className="text-[10px] text-amber-800">
+              Absence retainer {theirPendingOffer.absenceRetainerPct}% beyond {theirPendingOffer.absenceFreeDaysPerMonth} free days/mo
+              {(theirPendingOffer.summerRetainerPct > 0 || theirPendingOffer.summerRetainerMonths > 0)
+                ? ` · Summer retainer ${theirPendingOffer.summerRetainerPct}% × ${theirPendingOffer.summerRetainerMonths}mo`
+                : ""}
+            </p>
+            {theirPendingOffer.leaveTermsNotes && theirPendingOffer.leaveTermsNotes.trim() && (
+              <p className="text-[10px] text-amber-800 italic">Notes: {theirPendingOffer.leaveTermsNotes}</p>
+            )}
+          </div>
           <div className="flex gap-2">
             <button onClick={() => void acceptOffer(theirPendingOffer.id)} disabled={submitting}
               className="flex-1 text-xs bg-green-600 text-white rounded-lg py-1.5 font-semibold hover:bg-green-700 disabled:opacity-50">Accept</button>
@@ -257,16 +391,22 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
                 className="text-xs bg-[#1A2340] text-white rounded-lg px-2 font-semibold hover:bg-[#2a3660] disabled:opacity-50">Send</button>
             </div>
           </div>
+          {toggleTermsButton}
+          {termsForm}
         </div>
       ) : (
-        <div className="flex gap-2">
-          <input type="number" min="1" placeholder="Make an offer ₹/mo"
-            value={offerInput} onChange={e => setOfferInput(e.target.value)}
-            className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-[#2EC4A5] min-w-0" />
-          <button onClick={() => void submitOffer()} disabled={submitting || !offerInput}
-            className="text-xs bg-[#2EC4A5] text-white rounded-lg px-3 py-1.5 font-semibold hover:bg-[#26a88d] disabled:opacity-50">
-            {submitting ? "…" : "Offer"}
-          </button>
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <input type="number" min="1" placeholder="Make an offer ₹/mo"
+              value={offerInput} onChange={e => setOfferInput(e.target.value)}
+              className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-[#2EC4A5] min-w-0" />
+            <button onClick={() => void submitOffer()} disabled={submitting || !offerInput}
+              className="text-xs bg-[#2EC4A5] text-white rounded-lg px-3 py-1.5 font-semibold hover:bg-[#26a88d] disabled:opacity-50">
+              {submitting ? "…" : "Offer"}
+            </button>
+          </div>
+          {toggleTermsButton}
+          {termsForm}
         </div>
       )}
     </div>
@@ -501,6 +641,7 @@ export function ShadowTeacherRequestWidget() {
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [commitProfId, setCommitProfId] = useState<number | null>(null);
   const [commitStartDate, setCommitStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [commitAcknowledged, setCommitAcknowledged] = useState(false);
 
   // Trial booking modal state
   const [trialModalOpen, setTrialModalOpen] = useState(false);
@@ -750,9 +891,8 @@ export function ShadowTeacherRequestWidget() {
       if (data.directPay) {
         if (data.blocked) {
           toast({
-            title: "Teacher hasn't verified their UPI ID yet",
-            description: "We've notified them. Try again once they've verified it.",
-            variant: "destructive",
+            title: "Almost ready",
+            description: "We've prompted your teacher to finalize their payment details. Please try again in a few minutes.",
           });
           return;
         }
@@ -1156,12 +1296,33 @@ export function ShadowTeacherRequestWidget() {
 
   // ── Commit date-picker dialog (rendered in trial_done and shortlisted returns) ──
   const CommitDialog = commitDialogOpen && commitProfId !== null ? (
-    <Dialog open onOpenChange={(o) => { if (!o) { setCommitDialogOpen(false); setCommitProfId(null); } }}>
+    <Dialog open onOpenChange={(o) => { if (!o) { setCommitDialogOpen(false); setCommitProfId(null); setCommitAcknowledged(false); } }}>
       <DialogContent className="max-w-sm rounded-2xl">
         <DialogHeader>
           <DialogTitle className="text-base font-bold text-[#1A2340]">Pick a Start Date</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2">
+          <div className="bg-teal-50 border border-teal-200 rounded-xl p-3.5 space-y-2">
+            <p className="text-sm font-semibold text-teal-800">Includly&apos;s protections apply only to on-platform engagements</p>
+            <p className="text-xs text-teal-700">By keeping this engagement on Includly, you keep:</p>
+            <ul className="text-xs text-teal-700 space-y-1 list-disc pl-4">
+              <li>Daily attendance &amp; session tracking</li>
+              <li>Holiday &amp; leave management</li>
+              <li>Your teacher reserved for you — they can&apos;t be matched with other Includly parents while engaged with you</li>
+              <li>Dispute mediation and replacement support if things don&apos;t work out</li>
+            </ul>
+            <p className="text-xs text-teal-700">Taking the engagement off-platform after committing means these protections no longer apply.</p>
+          </div>
+          <label className="flex items-start gap-2 cursor-pointer text-xs text-[#1A2340]">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-[#2EC4A5] cursor-pointer"
+              checked={commitAcknowledged}
+              onChange={(e) => setCommitAcknowledged(e.target.checked)}
+              data-testid="commit-acknowledge-checkbox"
+            />
+            <span>I understand — I want to keep this engagement on Includly</span>
+          </label>
           <p className="text-sm text-gray-600">When should the engagement begin? The teacher will enter your start code on this date to activate things.</p>
           <input
             type="date"
@@ -1172,15 +1333,16 @@ export function ShadowTeacherRequestWidget() {
           />
         </div>
         <DialogFooter className="gap-2">
-          <Button variant="outline" className="rounded-xl" onClick={() => { setCommitDialogOpen(false); setCommitProfId(null); }}>Cancel</Button>
+          <Button variant="outline" className="rounded-xl" onClick={() => { setCommitDialogOpen(false); setCommitProfId(null); setCommitAcknowledged(false); }}>Cancel</Button>
           <Button
-            className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl"
-            disabled={choosingId !== null || !commitStartDate}
+            className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl disabled:opacity-60"
+            disabled={choosingId !== null || !commitStartDate || !commitAcknowledged}
             onClick={async () => {
               const profId = commitProfId!;
               const sd = commitStartDate;
               setCommitDialogOpen(false);
               setCommitProfId(null);
+              setCommitAcknowledged(false);
               await handleChoose(profId, sd);
             }}
           >
@@ -1210,6 +1372,9 @@ export function ShadowTeacherRequestWidget() {
             If you commit to {trialName}, your trial fee of ₹{trialFee.toLocaleString("en-IN")} will be credited against the first month&apos;s salary.
             Walking away closes this request — no refund on the trial fee.
           </p>
+          <div className="border-l-4 border-teal-400 bg-white/70 rounded-r-lg px-3 py-2.5 text-xs text-teal-800">
+            <span className="font-semibold">💚 When you commit, stay on Includly.</span> You get attendance tracking, leave management, teacher-exclusivity, and dispute support — protections that only apply while the engagement runs on-platform.
+          </div>
           <div className="flex gap-3">
             <Button
               className="flex-1 gap-2 bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl"
@@ -1265,6 +1430,10 @@ export function ShadowTeacherRequestWidget() {
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS.shortlisted}`}>
             {match.candidates.length} candidate{match.candidates.length !== 1 ? "s" : ""}
           </span>
+        </div>
+
+        <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 text-xs text-teal-800">
+          <span className="font-semibold">💚 Committing on Includly keeps you protected.</span> Attendance tracking, leave management, teacher-exclusivity, and dispute support only apply to on-platform engagements.
         </div>
 
         {match.candidates.length === 0 ? (
@@ -1409,58 +1578,19 @@ export function ShadowTeacherRequestWidget() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={!!directPayInfo} onOpenChange={(o) => { if (!o) setDirectPayInfo(null); }}>
-          <DialogContent className="max-w-sm rounded-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-base font-bold text-[#1A2340]">Pay {directPayInfo?.teacherName} directly</DialogTitle>
-            </DialogHeader>
-            {directPayInfo && (
-              <div className="space-y-4 py-2">
-                <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm text-orange-800">
-                  Send <strong>₹{directPayInfo.trialFeeInr.toLocaleString("en-IN")}</strong> via UPI directly to your teacher.
-                  The platform does not hold this payment.
-                </div>
-                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Teacher&apos;s UPI ID</p>
-                    <p className="text-sm font-mono font-semibold text-[#1A2340]">{directPayInfo.upiVpa}</p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-lg text-xs shrink-0"
-                    onClick={() => { void navigator.clipboard.writeText(directPayInfo.upiVpa); toast({ title: "UPI ID copied" }); }}
-                  >
-                    Copy
-                  </Button>
-                </div>
-                <p className="text-xs text-gray-500">
-                  Once you&apos;ve sent the payment via your UPI app, tap confirm below to book the trial day.
-                </p>
-              </div>
-            )}
-            <DialogFooter className="flex gap-2 pt-1">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1 rounded-xl"
-                onClick={() => setDirectPayInfo(null)}
-                disabled={markingDirectPayPaid}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white rounded-xl gap-1"
-                disabled={markingDirectPayPaid}
-                onClick={() => void handleConfirmDirectPayPaid()}
-              >
-                {markingDirectPayPaid ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
-                I&apos;ve Paid
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {directPayInfo && match && (
+          <UpiPayQRDialog
+            open={!!directPayInfo}
+            onOpenChange={(o) => { if (!o) setDirectPayInfo(null); }}
+            vpa={directPayInfo.upiVpa}
+            teacherName={directPayInfo.teacherName}
+            amountInr={directPayInfo.trialFeeInr}
+            note={`Includly trial - ${directPayInfo.teacherName}`}
+            txnRef={`inc-t-${match.id}`}
+            submitting={markingDirectPayPaid}
+            onPaidConfirm={handleConfirmDirectPayPaid}
+          />
+        )}
       </div>
     </>);
   }

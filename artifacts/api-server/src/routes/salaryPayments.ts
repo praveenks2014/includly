@@ -9,6 +9,7 @@ import {
   engagementSalaryConfirmationsTable,
   adminSettingsTable,
   professionalProfilesTable,
+  usersTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { createInAppNotification } from "../lib/notificationService";
@@ -297,7 +298,7 @@ router.post("/engagements/:id/salary-confirmations", requireAuth, requireRole("p
     .where(eq(professionalProfilesTable.id, eng.professionalId))
     .limit(1);
   if (!prof?.upiVpa || !prof.upiVerifiedAt) {
-    res.status(409).json({ error: "professional_upi_unverified", message: "This teacher hasn't verified their UPI ID yet." });
+    res.status(409).json({ error: "professional_upi_unverified", message: "Payment details for this teacher are being finalized. Please try again in a moment." });
     return;
   }
 
@@ -330,6 +331,38 @@ router.post("/engagements/:id/salary-confirmations", requireAuth, requireRole("p
   } catch { /* non-blocking */ }
 
   res.status(201).json(confirmation);
+});
+
+// GET /engagements/:id/direct-pay-info — parent fetches teacher's verified VPA + amount for QR
+router.get("/engagements/:id/direct-pay-info", requireAuth, requireRole("parent"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const eng = await getEngagementForParent(id, req.userId!);
+  if (!eng) { res.status(404).json({ error: "Engagement not found" }); return; }
+  if (eng.platformSalaryEnabled) {
+    res.status(409).json({ error: "platform_salary_enabled", message: "This engagement's salary is paid through the platform." });
+    return;
+  }
+
+  const [row] = await db
+    .select({
+      upiVpa: professionalProfilesTable.upiVpa,
+      upiVerifiedAt: professionalProfilesTable.upiVerifiedAt,
+      teacherName: usersTable.fullName,
+    })
+    .from(professionalProfilesTable)
+    .innerJoin(usersTable, eq(usersTable.id, professionalProfilesTable.userId))
+    .where(eq(professionalProfilesTable.id, eng.professionalId))
+    .limit(1);
+
+  const verified = !!(row?.upiVpa && row?.upiVerifiedAt);
+  res.json({
+    verified,
+    vpa: verified ? row!.upiVpa : null,
+    teacherName: row?.teacherName ?? null,
+    monthlyFeeInr: eng.monthlyFeeInr,
+  });
 });
 
 // POST /engagements/:id/salary-confirmations/:confId/confirm — teacher confirms receipt
