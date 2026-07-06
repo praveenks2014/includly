@@ -21,6 +21,7 @@ import { StarRating } from "@/components/StarRating";
 import { ShadowTeacherRequestWidget } from "@/components/ShadowTeacherRequestWidget";
 import { ComingSoon } from "@/components/ComingSoon";
 import { EngagementProgress } from "@/components/EngagementProgress";
+import { UpiPayQRDialog } from "@/components/UpiPayQRDialog";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { fetchWithAuth } from "@/lib/api";
 import { getSpecialtyLabel } from "@/lib/specialties";
@@ -1334,6 +1335,13 @@ function ShadowTeacherTab() {
   const [fullBuyoutDate, setFullBuyoutDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [payingMonth, setPayingMonth] = useState("");
   const [payingInProgress, setPayingInProgress] = useState(false);
+  const [salaryQRInfo, setSalaryQRInfo] = useState<{
+    vpa: string;
+    teacherName: string;
+    amountInr: number;
+    month: string;
+  } | null>(null);
+  const [salaryPaidConfirming, setSalaryPaidConfirming] = useState(false);
   const [stTab, setStTab] = useState<"overview" | "logs" | "goals" | "trends" | "payments" | "lifecycle">("overview");
   const [editingStartDate, setEditingStartDate] = useState(false);
   const [reRequestLoading, setReRequestLoading] = useState(false);
@@ -1450,20 +1458,51 @@ function ShadowTeacherTab() {
     if (!active || !payingMonth.trim()) return;
     setPayingInProgress(true);
     try {
+      const resp = await fetchWithAuth(`/api/engagements/${active.id}/direct-pay-info`);
+      const body = await resp.json() as {
+        verified?: boolean; vpa?: string | null; teacherName?: string | null;
+        monthlyFeeInr?: number; error?: string; message?: string;
+      };
+      if (!resp.ok) { throw new Error(body.message ?? body.error ?? "Could not open payment"); }
+      if (!body.verified || !body.vpa) {
+        toast({
+          title: "Almost ready",
+          description: "We've prompted your teacher to finalize their payment details. Please try again in a few minutes.",
+        });
+        return;
+      }
+      setSalaryQRInfo({
+        vpa: body.vpa,
+        teacherName: body.teacherName ?? "your teacher",
+        amountInr: body.monthlyFeeInr ?? Number(active.monthlyFeeInr),
+        month: payingMonth,
+      });
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally {
+      setPayingInProgress(false);
+    }
+  }
+
+  async function handleSalaryPaidConfirmed() {
+    if (!active || !salaryQRInfo) return;
+    setSalaryPaidConfirming(true);
+    try {
       const resp = await fetchWithAuth(`/api/engagements/${active.id}/salary-confirmations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ month: payingMonth }),
+        body: JSON.stringify({ month: salaryQRInfo.month }),
       });
       const body = await resp.json() as { error?: string; message?: string };
       if (!resp.ok) { throw new Error(body.message ?? body.error ?? "Failed to mark as paid"); }
       queryClient.invalidateQueries({ queryKey: ["salary-confirmations", active.id] });
       setPayingMonth("");
+      setSalaryQRInfo(null);
       toast({ title: "Marked as paid — waiting for teacher to confirm receipt" });
     } catch (err) {
       toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" });
     } finally {
-      setPayingInProgress(false);
+      setSalaryPaidConfirming(false);
     }
   }
 
@@ -1881,7 +1920,7 @@ function ShadowTeacherTab() {
               <Button onClick={handleMarkSalaryPaidDirect} disabled={payingInProgress || !payingMonth.trim()}
                 className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-sm">
                 {payingInProgress ? <Loader2 size={14} className="animate-spin mr-1" /> : <IndianRupee size={14} className="mr-1" />}
-                Mark ₹{Number(active.monthlyFeeInr).toLocaleString("en-IN")} as Paid
+                Pay ₹{Number(active.monthlyFeeInr).toLocaleString("en-IN")} via UPI
               </Button>
             </div>
           ) : active.status !== "ended" && (
@@ -1899,6 +1938,20 @@ function ShadowTeacherTab() {
                 Pay ₹{Number(active.monthlyFeeInr).toLocaleString("en-IN")} via Razorpay
               </Button>
             </div>
+          )}
+
+          {salaryQRInfo && (
+            <UpiPayQRDialog
+              open={!!salaryQRInfo}
+              onOpenChange={(o) => { if (!o) setSalaryQRInfo(null); }}
+              vpa={salaryQRInfo.vpa}
+              teacherName={salaryQRInfo.teacherName}
+              amountInr={salaryQRInfo.amountInr}
+              note={`Includly salary ${salaryQRInfo.month}`}
+              txnRef={`inc-s-${active.id}-${salaryQRInfo.month}`}
+              submitting={salaryPaidConfirming}
+              onPaidConfirm={handleSalaryPaidConfirmed}
+            />
           )}
 
           {active.platformSalaryEnabled === false ? (

@@ -14,6 +14,15 @@ export const negotiationOffersTable = pgTable("negotiation_offers", {
   raisedByUserId: integer("raised_by_user_id").notNull().references(() => usersTable.id),
   raisedByRole: text("raised_by_role").notNull(),
   amountInr: integer("amount_inr").notNull(),
+  // Non-salary agreed terms, negotiated as part of the offer package.
+  // Data-capture only: no downstream automation reads these yet. Loss-of-pay
+  // calc, absence tracking, retainer payouts, and leave request flows are
+  // separate future work — do not assume these are enforced.
+  absenceRetainerPct: integer("absence_retainer_pct").notNull().default(50),
+  absenceFreeDaysPerMonth: integer("absence_free_days_per_month").notNull().default(4),
+  summerRetainerPct: integer("summer_retainer_pct").notNull().default(0),
+  summerRetainerMonths: integer("summer_retainer_months").notNull().default(0),
+  leaveTermsNotes: text("leave_terms_notes"),
   status: negotiationOfferStatusEnum("status").notNull().default("pending"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
