@@ -104,6 +104,7 @@ export default function OnboardPage() {
   const [vertical, setVertical] = useState<VerticalValue | "">(
     (existingProfile?.vertical as VerticalValue | undefined) ?? ""
   );
+  const isShadowTeacher = vertical === "shadow_teacher";
   const [form, setForm] = useState({
     fullName: existingProfile?.fullName ?? "",
     bio: existingProfile?.bio ?? "",
@@ -437,7 +438,9 @@ export default function OnboardPage() {
           {isEditing && step === 0 ? "Update your role" : STEP_HEADINGS[step]}
         </h1>
         <p className="text-gray-500 mt-[7px] leading-relaxed" style={{ fontSize: 13.5 }}>
-          {STEP_SUBTITLES[step]}
+          {step === 4 && isShadowTeacher
+            ? "Let parents know your expected monthly salary range. You can always update this later."
+            : STEP_SUBTITLES[step]}
         </p>
       </div>
 
@@ -658,7 +661,9 @@ export default function OnboardPage() {
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="pricingMinINR" className="text-sm font-medium">Min. rate (₹)</Label>
+                <Label htmlFor="pricingMinINR" className="text-sm font-medium">
+                  {isShadowTeacher ? "Min. monthly salary (₹)" : "Min. rate per hour (₹)"}
+                </Label>
                 <div className="relative mt-1">
                   <IndianRupee size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -667,14 +672,16 @@ export default function OnboardPage() {
                     min={0}
                     value={form.pricingMinINR}
                     onChange={(e) => setField("pricingMinINR", e.target.value)}
-                    placeholder="500"
+                    placeholder={isShadowTeacher ? "15000" : "500"}
                     className="pl-7"
                     data-testid="input-pricingMinINR"
                   />
                 </div>
               </div>
               <div>
-                <Label htmlFor="pricingMaxINR" className="text-sm font-medium">Max. rate (₹)</Label>
+                <Label htmlFor="pricingMaxINR" className="text-sm font-medium">
+                  {isShadowTeacher ? "Max. monthly salary (₹)" : "Max. rate per hour (₹)"}
+                </Label>
                 <div className="relative mt-1">
                   <IndianRupee size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -683,7 +690,7 @@ export default function OnboardPage() {
                     min={0}
                     value={form.pricingMaxINR}
                     onChange={(e) => setField("pricingMaxINR", e.target.value)}
-                    placeholder="2000"
+                    placeholder={isShadowTeacher ? "30000" : "2000"}
                     className="pl-7"
                     data-testid="input-pricingMaxINR"
                   />
@@ -692,7 +699,7 @@ export default function OnboardPage() {
             </div>
             {form.pricingMinINR && form.pricingMaxINR && (
               <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-800 font-medium">
-                Profile will show: ₹{Number(form.pricingMinINR).toLocaleString("en-IN")} – ₹{Number(form.pricingMaxINR).toLocaleString("en-IN")} / session
+                Profile will show: ₹{Number(form.pricingMinINR).toLocaleString("en-IN")} – ₹{Number(form.pricingMaxINR).toLocaleString("en-IN")} {isShadowTeacher ? "/ month" : "/ hour"}
               </div>
             )}
             <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700 leading-relaxed">

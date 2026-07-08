@@ -278,7 +278,7 @@ function HomeTab({ profile, firstName, onTabChange }: {
   const steps = [
     { label: "Personal Details", done: !!(profile?.fullName && profile?.bio && profile?.city), tab: "profile" as ProTab },
     { label: "Specialties", done: !!profile?.specialty, tab: "profile" as ProTab },
-    { label: "Session Details", done: !!(profile?.pricingMinINR || profile?.pricingMaxINR), tab: "profile" as ProTab },
+    { label: profile?.specialty === "shadow_teacher" ? "Salary Details" : "Session Details", done: !!(profile?.pricingMinINR || profile?.pricingMaxINR), tab: "profile" as ProTab },
     { label: "Contact Info", done: !!(profile?.phone && profile?.email), tab: "profile" as ProTab },
     { label: "Upload Certifications", done: certs.length > 0, tab: "certifications" as ProTab },
     { label: "ID Verified", done: profile?.verificationStatus === "verified", tab: "verification" as ProTab },
@@ -564,6 +564,8 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
     );
   }
 
+  const isShadowTeacher = profile.specialty === "shadow_teacher";
+
   const statusColors: Record<string, string> = {
     verified: "bg-green-50 text-green-700 border-green-200",
     pending: "bg-amber-50 text-amber-700 border-amber-200",
@@ -616,7 +618,7 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
           {profile.yearsExperience > 0 && <span>{profile.yearsExperience} yrs exp.</span>}
           {profile.averageRating && <span className="flex items-center gap-1"><Star size={11} className="fill-[#FFB830] text-[#FFB830]" />{profile.averageRating.toFixed(1)}</span>}
           {(profile.pricingMinINR || profile.pricingMaxINR) && (
-            <span>₹{profile.pricingMinINR ?? "?"}–₹{profile.pricingMaxINR ?? "?"}/session</span>
+            <span>₹{profile.pricingMinINR ?? "?"}–₹{profile.pricingMaxINR ?? "?"}{isShadowTeacher ? "/month" : "/hour"}</span>
           )}
         </div>
       </div>
@@ -706,20 +708,22 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
 
           {/* Session */}
           <div className="space-y-4 pt-4 border-t border-gray-50">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Session Details</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">
+              {isShadowTeacher ? "Salary Details" : "Session Details"}
+            </p>
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
-                <Label className="text-sm">Min Fee (₹)</Label>
+                <Label className="text-sm">{isShadowTeacher ? "Min Monthly Salary (₹)" : "Min Rate per Hour (₹)"}</Label>
                 <div className="relative mt-1">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₹</span>
-                  <Input type="number" min={0} value={form.pricingMinINR} onChange={(e) => setForm((f) => ({ ...f, pricingMinINR: Number(e.target.value) }))} className="pl-7 rounded-lg focus-visible:ring-[#2EC4A5]" aria-label="Minimum fee" />
+                  <Input type="number" min={0} value={form.pricingMinINR} onChange={(e) => setForm((f) => ({ ...f, pricingMinINR: Number(e.target.value) }))} className="pl-7 rounded-lg focus-visible:ring-[#2EC4A5]" aria-label={isShadowTeacher ? "Minimum monthly salary" : "Minimum rate per hour"} />
                 </div>
               </div>
               <div>
-                <Label className="text-sm">Max Fee (₹)</Label>
+                <Label className="text-sm">{isShadowTeacher ? "Max Monthly Salary (₹)" : "Max Rate per Hour (₹)"}</Label>
                 <div className="relative mt-1">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₹</span>
-                  <Input type="number" min={0} value={form.pricingMaxINR} onChange={(e) => setForm((f) => ({ ...f, pricingMaxINR: Number(e.target.value) }))} className="pl-7 rounded-lg focus-visible:ring-[#2EC4A5]" aria-label="Maximum fee" />
+                  <Input type="number" min={0} value={form.pricingMaxINR} onChange={(e) => setForm((f) => ({ ...f, pricingMaxINR: Number(e.target.value) }))} className="pl-7 rounded-lg focus-visible:ring-[#2EC4A5]" aria-label={isShadowTeacher ? "Maximum monthly salary" : "Maximum rate per hour"} />
                 </div>
               </div>
             </div>

@@ -48,6 +48,8 @@ const CONDITIONS_OPTIONS = [
   { value: "intellectual_disability", label: "Intellectual Disability" },
   { value: "multiple_disabilities", label: "Multiple Disabilities" },
   { value: "sensory_processing", label: "Sensory Processing Disorder" },
+  { value: "no_experience", label: "No experience" },
+  { value: "others", label: "Others" },
 ];
 
 const GRADE_LEVELS = [
@@ -132,6 +134,7 @@ const THERAPIST_DISCIPLINES = [
   "Developmental Therapy",
   "Special Education",
   "Psychotherapy / Counselling",
+  "Other",
 ];
 
 const THERAPIST_CONDITIONS = [
@@ -145,6 +148,7 @@ const THERAPIST_CONDITIONS = [
   { value: "learning_disabilities", label: "Learning Disabilities" },
   { value: "intellectual_disability", label: "Intellectual Disability" },
   { value: "anxiety_ocd", label: "Anxiety / OCD" },
+  { value: "others", label: "Others" },
 ];
 
 const SESSION_MODES = [
@@ -163,7 +167,9 @@ const AGE_GROUPS = [
 
 type ShadowForm = {
   highestEducation: string;
+  highestEducationOther: string;
   conditionsSupported: string[];
+  conditionsSupportedOther: string;
   settings: string[];
   gradeLevels: string[];
   approaches: string[];
@@ -182,9 +188,11 @@ type TutorForm = {
 
 type TherapistForm = {
   discipline: string;
+  disciplineOther: string;
   rciRegistered: boolean | null;
   rciCrrNumber: string;
   conditionsTreated: string[];
+  conditionsTreatedOther: string;
   sessionModes: string[];
   ageGroups: string[];
   certKey: string;
@@ -200,7 +208,7 @@ function SelectField({
 }: {
   label: string;
   value: string;
-  options: string[];
+  options: { value: string; label: string }[];
   onChange: (v: string) => void;
   placeholder?: string;
   required?: boolean;
@@ -219,8 +227,8 @@ function SelectField({
         >
           <option value="">{placeholder ?? "Select one…"}</option>
           {options.map((o) => (
-            <option key={o} value={o}>
-              {o}
+            <option key={o.value} value={o.value}>
+              {o.label}
             </option>
           ))}
         </select>
@@ -228,6 +236,22 @@ function SelectField({
       </div>
     </div>
   );
+}
+
+// Options where the underlying value is identical to its displayed label
+// (plain string lists like EDUCATION_OPTIONS / THERAPIST_DISCIPLINES).
+function toSelectOptions(values: string[]): { value: string; label: string }[] {
+  return values.map((v) => ({ value: v, label: v }));
+}
+
+// Enforces that selecting `exclusiveValue` clears every other selection, and
+// selecting anything else clears `exclusiveValue` — used for "No experience"
+// vs. the rest of the multi-select chip list.
+function applyExclusiveOption(next: string[], prev: string[], exclusiveValue: string): string[] {
+  const justAddedExclusive = next.includes(exclusiveValue) && !prev.includes(exclusiveValue);
+  if (justAddedExclusive) return [exclusiveValue];
+  if (next.includes(exclusiveValue) && next.length > 1) return next.filter((v) => v !== exclusiveValue);
+  return next;
 }
 
 function ChipsField({
@@ -350,11 +374,8 @@ function IdentityDocumentSection({
         <SelectField
           label="Document type"
           value={idDocType}
-          options={ID_DOC_TYPES.map((o) => o.label)}
-          onChange={(label) => {
-            const match = ID_DOC_TYPES.find((o) => o.label === label);
-            setIdDocType(match ? match.value : idDocType);
-          }}
+          options={ID_DOC_TYPES}
+          onChange={setIdDocType}
         />
       </div>
 
@@ -390,11 +411,15 @@ function RciCertificateSection({
   setRciCertFileKey,
   alreadySubmitted,
   disabled,
+  rciCrrNumber,
+  setRciCrrNumber,
 }: {
   rciCertFileKey: string;
   setRciCertFileKey: (v: string) => void;
   alreadySubmitted: boolean;
   disabled: boolean;
+  rciCrrNumber: string;
+  setRciCrrNumber: (v: string) => void;
 }) {
   if (alreadySubmitted) {
     return (
@@ -406,14 +431,28 @@ function RciCertificateSection({
   }
 
   return (
-    <div className="space-y-2">
-      <Label className="text-sm font-semibold text-gray-800">
-        RCI certificate <span className="text-red-500 ml-1">*</span>
-      </Label>
-      <p className="text-xs text-gray-500">
-        Your Rehabilitation Council of India Certificate of Registration scan/photo — mandatory before you can appear in
-        parent search.
-      </p>
+    <div className="space-y-3">
+      <div>
+        <Label className="text-sm font-semibold text-gray-800">
+          RCI certificate <span className="text-red-500 ml-1">*</span>
+        </Label>
+        <p className="text-xs text-gray-500 mt-1">
+          Your Rehabilitation Council of India Certificate of Registration number and scan/photo — mandatory before
+          you can appear in parent search.
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label className="text-xs font-medium text-gray-600">
+          RCI certificate number <span className="text-red-500 ml-1">*</span>
+        </Label>
+        <Input
+          value={rciCrrNumber}
+          onChange={(e) => setRciCrrNumber(e.target.value)}
+          placeholder="e.g. A12345"
+          disabled={disabled}
+          className="h-10 text-sm"
+        />
+      </div>
       <FileUploadField
         label="Upload RCI certificate"
         onUploaded={setRciCertFileKey}
@@ -447,13 +486,24 @@ function ShadowTeacherForm({
 }) {
   return (
     <div className="space-y-7">
-      <SelectField
-        label="Highest education qualification"
-        value={form.highestEducation}
-        options={EDUCATION_OPTIONS}
-        onChange={(v) => setForm((f) => ({ ...f, highestEducation: v }))}
-        required
-      />
+      <div className="space-y-2">
+        <SelectField
+          label="Highest education qualification"
+          value={form.highestEducation}
+          options={toSelectOptions(EDUCATION_OPTIONS)}
+          onChange={(v) => setForm((f) => ({ ...f, highestEducation: v }))}
+          required
+        />
+        {form.highestEducation === "Other" && (
+          <Input
+            value={form.highestEducationOther}
+            onChange={(e) => setForm((f) => ({ ...f, highestEducationOther: e.target.value }))}
+            placeholder="Enter your highest qualification"
+            disabled={isSaving}
+            className="h-10 text-sm"
+          />
+        )}
+      </div>
 
       <ChipsField
         label="Conditions you have experience supporting"
@@ -463,10 +513,24 @@ function ShadowTeacherForm({
         <MultiSelectChips
           options={CONDITIONS_OPTIONS}
           selected={form.conditionsSupported}
-          onChange={(v) => setForm((f) => ({ ...f, conditionsSupported: v }))}
+          onChange={(v) =>
+            setForm((f) => ({
+              ...f,
+              conditionsSupported: applyExclusiveOption(v, f.conditionsSupported, "no_experience"),
+            }))
+          }
           color="teal"
           disabled={isSaving}
         />
+        {form.conditionsSupported.includes("others") && (
+          <Input
+            value={form.conditionsSupportedOther}
+            onChange={(e) => setForm((f) => ({ ...f, conditionsSupportedOther: e.target.value }))}
+            placeholder="Describe the conditions you have experience supporting"
+            disabled={isSaving}
+            className="h-10 text-sm mt-2"
+          />
+        )}
       </ChipsField>
 
       <ChipsField label="Settings you've worked in" required hint="Select all that apply">
@@ -630,13 +694,24 @@ function TherapistForm({
 
   return (
     <div className="space-y-7">
-      <SelectField
-        label="Your primary discipline"
-        value={form.discipline}
-        options={THERAPIST_DISCIPLINES}
-        onChange={(v) => setForm((f) => ({ ...f, discipline: v }))}
-        required
-      />
+      <div className="space-y-2">
+        <SelectField
+          label="Your primary discipline"
+          value={form.discipline}
+          options={toSelectOptions(THERAPIST_DISCIPLINES)}
+          onChange={(v) => setForm((f) => ({ ...f, discipline: v }))}
+          required
+        />
+        {form.discipline === "Other" && (
+          <Input
+            value={form.disciplineOther}
+            onChange={(e) => setForm((f) => ({ ...f, disciplineOther: e.target.value }))}
+            placeholder="Enter your primary discipline"
+            disabled={isSaving}
+            className="h-10 text-sm"
+          />
+        )}
+      </div>
 
       <YesNoField
         label="Are you RCI registered?"
@@ -660,24 +735,6 @@ function TherapistForm({
         </div>
       )}
 
-      {form.rciRegistered === true && (
-        <div className="space-y-2">
-          <Label className="text-sm font-semibold text-gray-800">
-            RCI CRR number <span className="text-red-500">*</span>
-          </Label>
-          <p className="text-xs text-gray-500">
-            Your Rehabilitation Council of India Certificate of Registration number.
-          </p>
-          <Input
-            value={form.rciCrrNumber}
-            onChange={(e) => setForm((f) => ({ ...f, rciCrrNumber: e.target.value }))}
-            placeholder="e.g. A12345"
-            disabled={isSaving}
-            className="h-10 text-sm"
-          />
-        </div>
-      )}
-
       <ChipsField
         label="Conditions / populations you work with"
         required
@@ -690,6 +747,15 @@ function TherapistForm({
           color="violet"
           disabled={isSaving}
         />
+        {form.conditionsTreated.includes("others") && (
+          <Input
+            value={form.conditionsTreatedOther}
+            onChange={(e) => setForm((f) => ({ ...f, conditionsTreatedOther: e.target.value }))}
+            placeholder="Describe the conditions / populations you work with"
+            disabled={isSaving}
+            className="h-10 text-sm mt-2"
+          />
+        )}
       </ChipsField>
 
       <ChipsField label="Session modes you offer" required hint="Select all that apply">
@@ -717,6 +783,8 @@ function TherapistForm({
         setRciCertFileKey={rciCertProps.setRciCertFileKey}
         alreadySubmitted={rciCertProps.alreadySubmitted}
         disabled={isSaving}
+        rciCrrNumber={form.rciCrrNumber}
+        setRciCrrNumber={(v) => setForm((f) => ({ ...f, rciCrrNumber: v }))}
       />
 
       <IdentityDocumentSection {...idProps} disabled={isSaving} />
@@ -747,7 +815,9 @@ export default function OnboardStage2Page() {
 
   const [shadowForm, setShadowForm] = useState<ShadowForm>({
     highestEducation: (existingVd.highestEducation as string) ?? "",
+    highestEducationOther: (existingVd.highestEducationOther as string) ?? "",
     conditionsSupported: (existingVd.conditionsSupported as string[]) ?? [],
+    conditionsSupportedOther: (existingVd.conditionsSupportedOther as string) ?? "",
     settings: (existingVd.settings as string[]) ?? [],
     gradeLevels: (existingVd.gradeLevels as string[]) ?? [],
     approaches: (existingVd.approaches as string[]) ?? [],
@@ -767,10 +837,12 @@ export default function OnboardStage2Page() {
 
   const [therapistForm, setTherapistForm] = useState<TherapistForm>({
     discipline: (existingVd.discipline as string) ?? "",
+    disciplineOther: (existingVd.disciplineOther as string) ?? "",
     rciRegistered:
       existingVd.rciRegistered !== undefined ? (existingVd.rciRegistered as boolean) : null,
     rciCrrNumber: profile?.rciCrrNumber ?? "",
     conditionsTreated: (existingVd.conditionsTreated as string[]) ?? [],
+    conditionsTreatedOther: (existingVd.conditionsTreatedOther as string) ?? "",
     sessionModes: (existingVd.sessionModes as string[]) ?? [],
     ageGroups: (existingVd.ageGroups as string[]) ?? [],
     certKey: (existingVd.certKey as string) ?? "",
@@ -814,12 +886,15 @@ export default function OnboardStage2Page() {
   }, [isLoading, profile]);
 
   function isShadowValid() {
-    return (
+    const base =
       !!shadowForm.highestEducation &&
       shadowForm.conditionsSupported.length > 0 &&
       shadowForm.settings.length > 0 &&
-      shadowForm.gradeLevels.length > 0
-    );
+      shadowForm.gradeLevels.length > 0;
+    if (!base) return false;
+    if (shadowForm.highestEducation === "Other" && !shadowForm.highestEducationOther.trim()) return false;
+    if (shadowForm.conditionsSupported.includes("others") && !shadowForm.conditionsSupportedOther.trim()) return false;
+    return true;
   }
 
   function isTutorValid() {
@@ -839,6 +914,8 @@ export default function OnboardStage2Page() {
       therapistForm.sessionModes.length > 0 &&
       therapistForm.ageGroups.length > 0;
     if (!base) return false;
+    if (therapistForm.discipline === "Other" && !therapistForm.disciplineOther.trim()) return false;
+    if (therapistForm.conditionsTreated.includes("others") && !therapistForm.conditionsTreatedOther.trim()) return false;
     if (therapistForm.rciRegistered === true) {
       if (!therapistForm.rciCrrNumber.trim()) return false;
       if (!rciCertAlreadySubmitted && !rciCertFileKey) return false;
@@ -865,7 +942,13 @@ export default function OnboardStage2Page() {
       if (isShadow) {
         verticalDetails = {
           highestEducation: shadowForm.highestEducation,
+          ...(shadowForm.highestEducation === "Other"
+            ? { highestEducationOther: shadowForm.highestEducationOther.trim() }
+            : {}),
           conditionsSupported: shadowForm.conditionsSupported,
+          ...(shadowForm.conditionsSupported.includes("others")
+            ? { conditionsSupportedOther: shadowForm.conditionsSupportedOther.trim() }
+            : {}),
           settings: shadowForm.settings,
           gradeLevels: shadowForm.gradeLevels,
           approaches: shadowForm.approaches,
@@ -887,8 +970,14 @@ export default function OnboardStage2Page() {
       } else {
         verticalDetails = {
           discipline: therapistForm.discipline,
+          ...(therapistForm.discipline === "Other"
+            ? { disciplineOther: therapistForm.disciplineOther.trim() }
+            : {}),
           rciRegistered: therapistForm.rciRegistered,
           conditionsTreated: therapistForm.conditionsTreated,
+          ...(therapistForm.conditionsTreated.includes("others")
+            ? { conditionsTreatedOther: therapistForm.conditionsTreatedOther.trim() }
+            : {}),
           sessionModes: therapistForm.sessionModes,
           ageGroups: therapistForm.ageGroups,
           ...(therapistForm.certKey ? { certKey: therapistForm.certKey } : {}),

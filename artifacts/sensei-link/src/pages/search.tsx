@@ -289,7 +289,7 @@ export default function SearchPage() {
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="budget-max">Max budget (₹/session)</Label>
+                <Label htmlFor="budget-max">Max budget (₹/hour)</Label>
                 <Input
                   id="budget-max"
                   type="number"

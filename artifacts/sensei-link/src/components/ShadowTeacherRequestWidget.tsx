@@ -764,26 +764,27 @@ function CandidateCard({
   return (
     <>
       <div className={`bg-white border rounded-2xl p-4 shadow-sm space-y-3 ${selected ? "border-[#2EC4A5]" : "border-gray-100"}`}>
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-semibold text-[#1A2340] text-sm">{displayName}</p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className="font-bold text-[#1A2340] text-base leading-tight">{displayName}</p>
               {p.verificationStatus === "verified" && (
-                <BadgeCheck size={14} className="text-[#2EC4A5] shrink-0" />
+                <BadgeCheck size={15} className="text-[#2EC4A5] shrink-0" />
               )}
               {candidate.addedBy === "admin" && (
                 <span className="text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-200">Admin pick</span>
               )}
               <ScoreBadge score={candidate.score} />
             </div>
-            <div className="flex items-center gap-3 mt-1 flex-wrap">
+            <p className="text-xs text-gray-500 mt-0.5">
+              Shadow Teacher
+              {p.yearsExperience > 0 && ` · ${p.yearsExperience} ${p.yearsExperience === 1 ? "yr" : "yrs"} experience`}
+            </p>
+            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
               {p.city && (
                 <span className="text-[11px] text-gray-400 flex items-center gap-1">
                   <MapPin size={10} />{p.displayArea ?? p.city}
                 </span>
-              )}
-              {p.yearsExperience > 0 && (
-                <span className="text-[11px] text-gray-400">{p.yearsExperience} yrs exp.</span>
               )}
               {p.averageRating && (
                 <span className="text-[11px] text-gray-400 flex items-center gap-1">

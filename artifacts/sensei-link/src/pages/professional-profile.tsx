@@ -383,12 +383,13 @@ export default function ProfessionalProfilePage() {
                       <IndianRupee size={18} className="text-green-600" />
                     </div>
                     <div>
-                      <p className="text-xs text-gray-400">Fee per session</p>
+                      <p className="text-xs text-gray-400">{p.specialty === "shadow_teacher" ? "Monthly salary" : "Rate per hour"}</p>
                       <p className="text-sm font-semibold text-green-700">
                         {p.pricingMinINR && p.pricingMaxINR
                           ? `₹${p.pricingMinINR.toLocaleString("en-IN")} – ₹${p.pricingMaxINR.toLocaleString("en-IN")}`
                           : p.pricingMinINR ? `From ₹${p.pricingMinINR.toLocaleString("en-IN")}`
                           : `Up to ₹${p.pricingMaxINR!.toLocaleString("en-IN")}`}
+                        {p.specialty === "shadow_teacher" ? " /month" : " /hour"}
                       </p>
                     </div>
                   </div>

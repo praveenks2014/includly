@@ -50,19 +50,19 @@ export function ProfessionalCard({ professional: p, distanceKm }: ProfessionalCa
     <motion.div
       whileHover={prefersReduced ? {} : { y: -4, transition: { duration: 0.2, ease: "easeOut" } }}
     >
-      <Card className="border-border/60 shadow-sm hover:shadow-md transition-shadow duration-200 bg-white/90 backdrop-blur-sm h-full">
+      <Card className="border-border/60 shadow-sm hover:shadow-md transition-shadow duration-200 bg-white h-full">
         <CardContent className="p-5">
-          {/* Header */}
-          <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
+              {/* Name + credentials */}
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <Link href={`/professionals/${p.id}`} className="hover:underline">
-                  <h3 className="font-semibold text-foreground text-base leading-tight truncate">
+                  <h3 className="font-bold text-foreground text-lg leading-tight truncate">
                     {p.fullName ?? "Specialist"}
                   </h3>
                 </Link>
                 {p.isVerified && p.verificationStatus === "verified" && (
-                  <BadgeCheck size={16} className="text-primary shrink-0" />
+                  <BadgeCheck size={17} className="text-primary shrink-0" />
                 )}
                 {p.verificationStatus === "pending" && (
                   <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded-full border border-yellow-200">
@@ -75,63 +75,73 @@ export function ProfessionalCard({ professional: p, distanceKm }: ProfessionalCa
                   </span>
                 )}
               </div>
-              <div className="flex flex-wrap gap-1 mt-1.5">
-                <span className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full ${specialtyColor}`}>
-                  <SpecialtyIcon size={11} />
-                  {isCoach && p.coachingSubType
-                    ? `${getCoachingSubTypeLabel(p.coachingSubType)} Coach`
-                    : getSpecialtyLabel(p.specialty)}
-                  {inPersonOnly && (
-                    <span className="ml-0.5 flex items-center gap-0.5 text-rose-700 font-semibold">
-                      · <MapPin size={9} /> In-Person Visit Only
-                    </span>
-                  )}
-                </span>
+
+              {/* Specialty subtitle */}
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {isCoach && p.coachingSubType
+                  ? `${getCoachingSubTypeLabel(p.coachingSubType)} Coach`
+                  : getSpecialtyLabel(p.specialty)}
                 {isCoach && p.inclusiveExperience && (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full bg-green-100 text-green-800">
-                    <Heart size={10} />
-                    Inclusive
+                  <span className="ml-1.5 inline-flex items-center gap-1 text-xs font-medium text-green-700">
+                    <Heart size={10} /> Inclusive
                   </span>
                 )}
-              </div>
+              </p>
+
+              {/* Detail bullets — specialization tags */}
+              {Array.isArray(p.specializationTags) && p.specializationTags.length > 0 && (
+                <ul className="mt-2 space-y-0.5">
+                  {[p.specializationTags.slice(0, 2), p.specializationTags.slice(2, 6)]
+                    .filter((group) => group.length > 0)
+                    .map((group, i) => (
+                      <li key={i} className="flex gap-1.5 text-sm text-foreground/80">
+                        <span className="text-muted-foreground">—</span>
+                        <span className="truncate">
+                          {group.slice(0, 2).join(", ")}
+                          {group.length > 2 && <span className="text-primary font-medium"> +{group.length - 2}</span>}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              )}
             </div>
-            {p.averageRating ? (
-              <div className="flex items-center gap-1 shrink-0">
-                <Star size={14} className="text-amber-400 fill-amber-400" />
-                <span className="text-sm font-semibold text-foreground">{p.averageRating.toFixed(1)}</span>
-                <span className="text-xs text-muted-foreground">({p.totalRatings ?? 0})</span>
-              </div>
-            ) : null}
+
+            {/* Location / mode column */}
+            <div className="text-right shrink-0 space-y-1.5">
+              {p.averageRating ? (
+                <div className="flex items-center justify-end gap-1">
+                  <Star size={13} className="text-amber-400 fill-amber-400" />
+                  <span className="text-sm font-semibold text-foreground">{p.averageRating.toFixed(1)}</span>
+                  <span className="text-xs text-muted-foreground">({p.totalRatings ?? 0})</span>
+                </div>
+              ) : null}
+              {inPersonOnly ? (
+                <p className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
+                  <MapPin size={12} />In-person only
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Online</p>
+              )}
+              {(p.displayArea || p.city) && (
+                <p className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
+                  <MapPin size={12} />
+                  {p.displayArea ?? p.city}{p.country && p.country !== "India" ? `, ${p.country}` : ""}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Bio */}
           {p.bio && (
-            <p className="text-sm text-muted-foreground line-clamp-2 mb-2">{p.bio}</p>
+            <p className="text-sm text-muted-foreground line-clamp-2 mt-3">{p.bio}</p>
           )}
 
-          {/* Specialization tags */}
-          {Array.isArray(p.specializationTags) && p.specializationTags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-3">
-              {p.specializationTags.slice(0, 4).map((tag) => (
-                <span key={tag} className="px-2 py-0.5 rounded-full text-xs bg-primary/10 text-primary border border-primary/20">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Meta */}
-          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mb-4">
+          {/* Meta row */}
+          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mt-3 pt-3 border-t border-border/50">
             <span className="flex items-center gap-1">
               <Clock size={12} />
               {p.yearsExperience} {p.yearsExperience === 1 ? "yr" : "yrs"} experience
             </span>
-            {(p.displayArea || p.city) && (
-              <span className="flex items-center gap-1">
-                <MapPin size={12} />
-                {p.displayArea ?? p.city}{p.country && p.country !== "India" ? `, ${p.country}` : ""}
-              </span>
-            )}
             {p.offersHomeVisits && (
               <span className="flex items-center gap-1">
                 <Home size={12} />
@@ -158,28 +168,18 @@ export function ProfessionalCard({ professional: p, distanceKm }: ProfessionalCa
                   : p.pricingMinINR
                     ? `From ₹${p.pricingMinINR.toLocaleString("en-IN")}`
                     : `Up to ₹${p.pricingMaxINR!.toLocaleString("en-IN")}`}
-                {" "}/session
+                {" "}/hour
               </span>
             )}
           </div>
 
-          {/* Contact + CTA */}
-          <div className="flex items-center justify-between gap-3 pt-3 border-t border-border/50">
-            <div className="flex-1 min-w-0">
-              {p.phone && (
-                <p className="text-xs font-mono text-foreground">{p.phone}</p>
-              )}
-              {p.email && (
-                <p className="text-xs font-mono truncate text-foreground">{p.email}</p>
-              )}
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <Link href={`/professionals/${p.id}`}>
-                <Button variant="outline" size="sm" data-testid={`view-profile-${p.id}`}>
-                  View profile
-                </Button>
-              </Link>
-            </div>
+          {/* CTA */}
+          <div className="flex justify-end mt-3">
+            <Link href={`/professionals/${p.id}`}>
+              <Button size="sm" className="font-medium" data-testid={`view-profile-${p.id}`}>
+                View Profile
+              </Button>
+            </Link>
           </div>
         </CardContent>
       </Card>
