@@ -22,6 +22,19 @@ export const shadowMatchCandidatesTable = pgTable(
     removedByUserId: integer("removed_by_user_id").references(() => usersTable.id, {
       onDelete: "set null",
     }),
+    // Redesigned parent↔teacher journey (Task 1 schema-only — request → interview → trial).
+    // Data-capture only for now; no API/frontend built yet, no automation reads these.
+    // requestStatus values: not_sent | sent | accepted | rejected (stored as text, not
+    //   enum, to avoid enum-alter migration friction while the flow is still being
+    //   iterated).
+    requestStatus: text("request_status").notNull().default("not_sent"),
+    rejectionNote: text("rejection_note"),
+    interviewSlotsJson: text("interview_slots_json"),
+    interviewConfirmedSlot: text("interview_confirmed_slot"),
+    meetLink: text("meet_link"),
+    interviewDoneAt: timestamp("interview_done_at", { withTimezone: true }),
+    trialDaysRequested: integer("trial_days_requested"),
+    trialDaysAccepted: integer("trial_days_accepted"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

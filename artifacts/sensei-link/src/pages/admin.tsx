@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import {
@@ -96,6 +97,7 @@ interface AdminMatchRow {
   trialFeePaidInr: number | null;
   trialProviderPaymentId: string | null;
   trialCreditApplied: boolean | null;
+  activationFeeEnabled: boolean;
   candidates: AdminMatchCandidate[];
 }
 
@@ -2471,6 +2473,7 @@ function AdminShadowTeacherTab() {
   const [addingCandidate, setAddingCandidate] = useState(false);
   const [removingCandidate, setRemovingCandidate] = useState<number | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [togglingActivationFee, setTogglingActivationFee] = useState<number | null>(null);
 
   const { data: rows, isLoading, refetch } = useQuery<AdminMatchRow[]>({
     queryKey: ["admin-shadow-teacher"],
@@ -2542,6 +2545,23 @@ function AdminShadowTeacherTab() {
       void refetch();
     } catch { toast({ title: "Network error", variant: "destructive" }); }
     finally { setRemovingCandidate(null); }
+  }
+
+  // Task 3i — per-match admin toggle for the teacher's one-time activation fee.
+  async function handleToggleActivationFee(matchId: number, enabled: boolean) {
+    setTogglingActivationFee(matchId);
+    try {
+      const res = await fetchWithAuth(`/api/admin/shadow-match/${matchId}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activationFeeEnabled: enabled }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { toast({ title: data.error ?? "Could not update setting", variant: "destructive" }); return; }
+      toast({ title: enabled ? "Activation fee enabled ✓" : "Activation fee waived ✓" });
+      void refetch();
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setTogglingActivationFee(null); }
   }
 
   const canAssign = (status: string) => !["cancelled", "refunded", "committed"].includes(status);
@@ -2625,6 +2645,24 @@ function AdminShadowTeacherTab() {
                     </div>
                   </div>
                 </div>
+
+                {/* Expanded: Per-match settings (Task 3i) */}
+                {isExpanded && (
+                  <div className="border-t border-gray-100 px-5 py-4 bg-gray-50/30 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-700">Charge teacher activation fee</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        When off, the assigned teacher skips the one-time activation fee and goes straight to start.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={m.activationFeeEnabled}
+                      disabled={togglingActivationFee === m.id}
+                      onCheckedChange={(checked) => void handleToggleActivationFee(m.id, checked)}
+                      aria-label="Charge teacher activation fee"
+                    />
+                  </div>
+                )}
 
                 {/* Expanded: Trial payment section */}
                 {isExpanded && m.trialFeePaidInr != null && (

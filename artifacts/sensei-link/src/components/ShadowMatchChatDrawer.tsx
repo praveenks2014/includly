@@ -2,8 +2,107 @@ import { useState, useEffect, useRef } from "react";
 import { fetchWithAuth } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, X, Send, Lock, ShieldCheck, MapPin } from "lucide-react";
+import { Loader2, X, Send, Lock, ShieldCheck, MapPin, CheckCircle2, XCircle, CalendarClock, Video, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+// ── Structured-message card renderer — Task 3g ──────────────────────────────
+// Each msgType posted by the redesigned parent<->teacher journey endpoints
+// (Task 2a) carries a JSON body specific to that action. Rendered as a
+// non-bubble "system card" distinct from regular chat bubbles.
+interface InterviewSlotPayload { date: string; time: string; label?: string; }
+
+function StructuredMessageCard({ msgType, body }: { msgType: string; body: string }) {
+  let data: Record<string, unknown> = {};
+  try { data = JSON.parse(body) as Record<string, unknown>; } catch { /* malformed — render with empty data */ }
+
+  const base = "max-w-[85%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed border space-y-1.5";
+
+  switch (msgType) {
+    case "request_sent":
+      return (
+        <div className={`${base} bg-blue-50 border-blue-200 text-blue-800`}>
+          <p className="font-semibold flex items-center gap-1.5"><Send size={12} /> Shadowing request sent</p>
+        </div>
+      );
+    case "request_accepted":
+      return (
+        <div className={`${base} bg-green-50 border-green-200 text-green-800`}>
+          <p className="font-semibold flex items-center gap-1.5"><CheckCircle2 size={12} /> Request accepted</p>
+        </div>
+      );
+    case "request_rejected":
+      return (
+        <div className={`${base} bg-red-50 border-red-200 text-red-800`}>
+          <p className="font-semibold flex items-center gap-1.5"><XCircle size={12} /> Request declined</p>
+          {typeof data["note"] === "string" && data["note"] && <p className="italic">"{data["note"]}"</p>}
+        </div>
+      );
+    case "interview_proposed": {
+      const slots = Array.isArray(data["slots"]) ? (data["slots"] as InterviewSlotPayload[]) : [];
+      return (
+        <div className={`${base} bg-purple-50 border-purple-200 text-purple-800`}>
+          <p className="font-semibold flex items-center gap-1.5"><CalendarClock size={12} /> Interview slots proposed</p>
+          <ul className="space-y-0.5">
+            {slots.map((s, i) => (
+              <li key={i}>{s.label ? `${s.label} — ` : ""}{s.date} at {s.time}</li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+    case "interview_confirmed": {
+      const confirmedSlot = typeof data["confirmedSlot"] === "string" ? data["confirmedSlot"] : null;
+      const meetLink = typeof data["meetLink"] === "string" ? data["meetLink"] : null;
+      return (
+        <div className={`${base} bg-green-50 border-green-200 text-green-800`}>
+          <p className="font-semibold flex items-center gap-1.5"><CheckCircle2 size={12} /> Interview confirmed</p>
+          {confirmedSlot && <p>{confirmedSlot}</p>}
+          {meetLink && (
+            <a
+              href={meetLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 w-full h-8 rounded-lg bg-[#2EC4A5] hover:bg-[#26a88d] text-white font-semibold no-underline"
+            >
+              <Video size={12} />
+              Join Interview
+            </a>
+          )}
+        </div>
+      );
+    }
+    case "interview_done":
+      return (
+        <div className={`${base} bg-teal-50 border-teal-200 text-teal-800`}>
+          <p className="font-semibold flex items-center gap-1.5"><CheckCircle2 size={12} /> Interview marked complete</p>
+        </div>
+      );
+    case "trial_requested": {
+      const trialDays = typeof data["trialDays"] === "number" ? data["trialDays"] : null;
+      return (
+        <div className={`${base} bg-orange-50 border-orange-200 text-orange-800`}>
+          <p className="font-semibold flex items-center gap-1.5"><Star size={12} /> Trial requested{trialDays ? ` — ${trialDays} day${trialDays > 1 ? "s" : ""}` : ""}</p>
+        </div>
+      );
+    }
+    case "trial_accepted": {
+      const trialDays = typeof data["trialDays"] === "number" ? data["trialDays"] : null;
+      return (
+        <div className={`${base} bg-orange-50 border-orange-200 text-orange-800`}>
+          <p className="font-semibold flex items-center gap-1.5"><CheckCircle2 size={12} /> Trial accepted{trialDays ? ` — ${trialDays} day${trialDays > 1 ? "s" : ""}` : ""}</p>
+        </div>
+      );
+    }
+    default:
+      return null;
+  }
+}
+
+const STRUCTURED_MSG_TYPES = new Set([
+  "request_sent", "request_accepted", "request_rejected",
+  "interview_proposed", "interview_confirmed", "interview_done",
+  "trial_requested", "trial_accepted",
+]);
 
 interface ChatMessage {
   id: number;
@@ -171,6 +270,16 @@ export function ShadowMatchChatDrawer({
           ) : (
             messages.map((m) => {
               const isMe = m.senderId === myUserId;
+              if (m.msgType && STRUCTURED_MSG_TYPES.has(m.msgType)) {
+                return (
+                  <div key={m.id} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
+                    <StructuredMessageCard msgType={m.msgType} body={m.body} />
+                    <p className="text-[10px] text-gray-400 mt-0.5 px-1">
+                      {new Date(m.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </div>
+                );
+              }
               if (m.msgType === "location") {
                 let locText = m.body;
                 let mapsHref: string | undefined;

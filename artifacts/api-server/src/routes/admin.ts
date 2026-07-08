@@ -22,6 +22,7 @@ import {
   settingsAuditLogTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
+import { z } from "zod";
 import {
   AdminListProfessionalsQueryParams,
   UpdateAdminSettingsBody,
@@ -1077,6 +1078,27 @@ router.delete("/purge-non-admin-users", async (req, res): Promise<void> => {
     .where(ne(usersTable.role, "admin"))
     .returning({ id: usersTable.id, role: usersTable.role });
   res.json({ deleted: deleted.length, ids: deleted.map((u) => u.id) });
+});
+
+// ── PATCH /admin/shadow-match/:matchId/settings — per-match admin toggles ─
+// Task 2d. Currently supports activationFeeEnabled only; extend the Zod body
+// when more per-match toggles are needed.
+const UpdateShadowMatchSettingsBody = z.object({
+  activationFeeEnabled: z.boolean(),
+});
+router.patch("/admin/shadow-match/:matchId/settings", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  if (isNaN(matchId)) { res.status(400).json({ error: "Invalid matchId" }); return; }
+  const parsed = UpdateShadowMatchSettingsBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [updated] = await db
+    .update(shadowTeacherMatchesTable)
+    .set({ activationFeeEnabled: parsed.data.activationFeeEnabled, updatedAt: new Date() })
+    .where(eq(shadowTeacherMatchesTable.id, matchId))
+    .returning({ id: shadowTeacherMatchesTable.id, activationFeeEnabled: shadowTeacherMatchesTable.activationFeeEnabled });
+  if (!updated) { res.status(404).json({ error: "Match not found" }); return; }
+  res.json({ matchId: updated.id, activationFeeEnabled: updated.activationFeeEnabled });
 });
 
 export default router;

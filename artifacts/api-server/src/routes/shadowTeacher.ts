@@ -588,6 +588,19 @@ router.get("/shadow-teacher/my-request", requireAuth, requireRole("parent"), asy
       addedBy: c.addedBy,
       profile: maskedPro,
       threadId: thread?.id ?? null,
+      // Task 2c — expose expected salary range at top level for the parent UI
+      expectedSalaryMin: pro.pricingMinINR,
+      expectedSalaryMax: pro.pricingMaxINR,
+      // Task 2a — redesigned-flow state fields so the UI can gate buttons
+      // without a follow-up fetch
+      requestStatus: c.requestStatus,
+      rejectionNote: c.rejectionNote,
+      interviewSlotsJson: c.interviewSlotsJson,
+      interviewConfirmedSlot: c.interviewConfirmedSlot,
+      meetLink: c.meetLink,
+      interviewDoneAt: c.interviewDoneAt,
+      trialDaysRequested: c.trialDaysRequested,
+      trialDaysAccepted: c.trialDaysAccepted,
     };
   }).filter(Boolean);
 
@@ -622,6 +635,16 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       trialDirectPay:              shadowTeacherMatchesTable.trialDirectPay,
       trialDirectPayMarkedPaidAt:  shadowTeacherMatchesTable.trialDirectPayMarkedPaidAt,
       trialDirectPayConfirmedAt:   shadowTeacherMatchesTable.trialDirectPayConfirmedAt,
+      // Redesigned journey (Task 3B) — request → interview → trial state on
+      // the teacher's own candidate row.
+      requestStatus:          shadowMatchCandidatesTable.requestStatus,
+      rejectionNote:          shadowMatchCandidatesTable.rejectionNote,
+      interviewSlotsJson:     shadowMatchCandidatesTable.interviewSlotsJson,
+      interviewConfirmedSlot: shadowMatchCandidatesTable.interviewConfirmedSlot,
+      meetLink:               shadowMatchCandidatesTable.meetLink,
+      interviewDoneAt:        shadowMatchCandidatesTable.interviewDoneAt,
+      trialDaysRequested:     shadowMatchCandidatesTable.trialDaysRequested,
+      trialDaysAccepted:      shadowMatchCandidatesTable.trialDaysAccepted,
     })
     .from(shadowMatchCandidatesTable)
     .innerJoin(shadowTeacherMatchesTable, eq(shadowMatchCandidatesTable.matchId, shadowTeacherMatchesTable.id))
@@ -682,6 +705,14 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       trialDirectPay:             c.trialDirectPay             ?? false,
       trialDirectPayMarkedPaidAt: c.trialDirectPayMarkedPaidAt ?? null,
       trialDirectPayConfirmedAt:  c.trialDirectPayConfirmedAt  ?? null,
+      requestStatus:          c.requestStatus,
+      rejectionNote:          c.rejectionNote          ?? null,
+      interviewSlotsJson:     c.interviewSlotsJson     ?? null,
+      interviewConfirmedSlot: c.interviewConfirmedSlot ?? null,
+      meetLink:               c.meetLink               ?? null,
+      interviewDoneAt:        c.interviewDoneAt        ?? null,
+      trialDaysRequested:     c.trialDaysRequested     ?? null,
+      trialDaysAccepted:      c.trialDaysAccepted      ?? null,
       threadId:        thread?.threadId ?? null,
       messageCount:    counts ? Number(counts.messageCount) : 0,
       lastMessageAt:   counts?.lastMessageAt ?? null,
@@ -1027,6 +1058,411 @@ router.delete("/shadow-teacher/:matchId/candidates/:candidateId/offers/:offerId"
     .where(eq(negotiationOffersTable.id, offerId))
     .returning();
   res.json(withdrawn);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── Redesigned parent↔teacher journey (Task 2) ────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// Flow: parent sends request → teacher accepts/rejects → parent proposes
+// interview slots → teacher confirms one → auto-Jitsi link generated → parent
+// marks interview done → negotiation ping-pong (existing, unchanged) → parent
+// requests trial days (1-3) → teacher accepts ≤ that number → match moves to
+// 'trial_pending' (existing status).
+//
+// Each endpoint posts a structured chat message (msgType names below) into the
+// existing masked shadow_match_messages thread and notifies the counterparty.
+// Chat body is JSON with action-specific data; the GET messages endpoint
+// already exempts non-'text' msgTypes from body masking.
+
+async function postCandidateStructuredMessage(params: {
+  matchId: number;
+  candidateProfessionalId: number;
+  senderId: number;
+  msgType: string;
+  data: Record<string, unknown>;
+}): Promise<void> {
+  let [thread] = await db
+    .select()
+    .from(shadowMatchThreadsTable)
+    .where(and(
+      eq(shadowMatchThreadsTable.matchId, params.matchId),
+      eq(shadowMatchThreadsTable.professionalId, params.candidateProfessionalId),
+    ));
+  if (!thread) {
+    const [created] = await db.insert(shadowMatchThreadsTable).values({
+      matchId: params.matchId,
+      professionalId: params.candidateProfessionalId,
+    }).returning();
+    thread = created!;
+  }
+  await db.insert(shadowMatchMessagesTable).values({
+    threadId: thread.id,
+    senderId: params.senderId,
+    body: JSON.stringify(params.data),
+    msgType: params.msgType,
+  });
+}
+
+async function getTeacherUserIdForProfessional(professionalId: number): Promise<number | null> {
+  const [row] = await db
+    .select({ userId: professionalProfilesTable.userId })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, professionalId))
+    .limit(1);
+  return row?.userId ?? null;
+}
+
+// ── POST /shadow-teacher/:matchId/candidates/:candidateId/send-request ────
+router.post("/shadow-teacher/:matchId/candidates/:candidateId/send-request", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  if (ctx.myRole !== "parent") { res.status(403).json({ error: "Only the parent can send a request" }); return; }
+  if (ctx.match.status !== "shortlisted") { res.status(409).json({ error: "Requests can only be sent while the match is shortlisted" }); return; }
+  if (ctx.candidate.requestStatus !== "not_sent") { res.status(409).json({ error: "Request has already been sent for this candidate" }); return; }
+
+  const [updated] = await db
+    .update(shadowMatchCandidatesTable)
+    .set({ requestStatus: "sent" })
+    .where(eq(shadowMatchCandidatesTable.id, candidateId))
+    .returning();
+
+  await postCandidateStructuredMessage({
+    matchId,
+    candidateProfessionalId: ctx.candidate.professionalId,
+    senderId: req.userId!,
+    msgType: "request_sent",
+    data: {},
+  });
+
+  const teacherUserId = await getTeacherUserIdForProfessional(ctx.candidate.professionalId);
+  if (teacherUserId) {
+    void notifyMatchChatMessage(teacherUserId, "A parent").catch(() => {});
+    void createInAppNotification(teacherUserId, {
+      type: "shadow_request_received",
+      title: "A parent has sent you a request",
+      body: "Log in to accept or decline this parent's request.",
+      relatedType: "match",
+      relatedId: matchId,
+    }).catch(() => {});
+  }
+  res.status(201).json(updated);
+});
+
+// ── POST /shadow-teacher/:matchId/candidates/:candidateId/respond-request ─
+const RespondRequestBody = z.object({
+  action: z.enum(["accept", "reject"]),
+  note: z.string().max(500).optional(),
+});
+router.post("/shadow-teacher/:matchId/candidates/:candidateId/respond-request", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const parsed = RespondRequestBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  if (ctx.myRole !== "professional") { res.status(403).json({ error: "Only the invited teacher can respond" }); return; }
+  if (ctx.candidate.requestStatus !== "sent") { res.status(409).json({ error: "No pending request to respond to" }); return; }
+
+  const newStatus = parsed.data.action === "accept" ? "accepted" : "rejected";
+  const [updated] = await db
+    .update(shadowMatchCandidatesTable)
+    .set({
+      requestStatus: newStatus,
+      rejectionNote: parsed.data.action === "reject" ? (parsed.data.note ?? null) : null,
+    })
+    .where(eq(shadowMatchCandidatesTable.id, candidateId))
+    .returning();
+
+  await postCandidateStructuredMessage({
+    matchId,
+    candidateProfessionalId: ctx.candidate.professionalId,
+    senderId: req.userId!,
+    msgType: parsed.data.action === "accept" ? "request_accepted" : "request_rejected",
+    data: parsed.data.action === "reject" ? { note: parsed.data.note ?? null } : {},
+  });
+
+  void notifyMatchChatMessage(ctx.match.parentId, "A shadow teacher").catch(() => {});
+  void createInAppNotification(ctx.match.parentId, {
+    type: parsed.data.action === "accept" ? "shadow_request_accepted" : "shadow_request_rejected",
+    title: parsed.data.action === "accept" ? "A candidate accepted your request" : "A candidate declined your request",
+    body: parsed.data.action === "accept"
+      ? "Open the app to schedule an interview."
+      : "Open the app to try another candidate.",
+    relatedType: "match",
+    relatedId: matchId,
+  }).catch(() => {});
+  res.status(200).json(updated);
+});
+
+// ── POST /shadow-teacher/:matchId/candidates/:candidateId/propose-interview ─
+const ProposeInterviewBody = z.object({
+  slots: z.array(z.object({
+    date: z.string().min(1),
+    time: z.string().min(1),
+    label: z.string().max(100).optional(),
+  })).min(1).max(3),
+});
+router.post("/shadow-teacher/:matchId/candidates/:candidateId/propose-interview", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const parsed = ProposeInterviewBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  if (ctx.myRole !== "parent") { res.status(403).json({ error: "Only the parent can propose interview slots" }); return; }
+  if (ctx.candidate.requestStatus !== "accepted") { res.status(409).json({ error: "The teacher has not accepted your request yet" }); return; }
+  if (ctx.candidate.interviewConfirmedSlot) { res.status(409).json({ error: "Interview has already been confirmed" }); return; }
+
+  // Re-propose allowed while no slot is confirmed — overwrites previous slots.
+  const [updated] = await db
+    .update(shadowMatchCandidatesTable)
+    .set({ interviewSlotsJson: JSON.stringify(parsed.data.slots) })
+    .where(eq(shadowMatchCandidatesTable.id, candidateId))
+    .returning();
+
+  await postCandidateStructuredMessage({
+    matchId,
+    candidateProfessionalId: ctx.candidate.professionalId,
+    senderId: req.userId!,
+    msgType: "interview_proposed",
+    data: { slots: parsed.data.slots },
+  });
+
+  const teacherUserId = await getTeacherUserIdForProfessional(ctx.candidate.professionalId);
+  if (teacherUserId) {
+    void notifyMatchChatMessage(teacherUserId, "A parent").catch(() => {});
+    void createInAppNotification(teacherUserId, {
+      type: "interview_proposed",
+      title: "Parent proposed interview slots",
+      body: `Pick one of ${parsed.data.slots.length} slot(s) to confirm the interview.`,
+      relatedType: "match",
+      relatedId: matchId,
+    }).catch(() => {});
+  }
+  res.status(200).json(updated);
+});
+
+// ── POST /shadow-teacher/:matchId/candidates/:candidateId/confirm-interview ─
+const ConfirmInterviewBody = z.object({
+  confirmedSlot: z.string().min(1),
+});
+router.post("/shadow-teacher/:matchId/candidates/:candidateId/confirm-interview", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const parsed = ConfirmInterviewBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  if (ctx.myRole !== "professional") { res.status(403).json({ error: "Only the invited teacher can confirm the interview" }); return; }
+  if (!ctx.candidate.interviewSlotsJson) { res.status(409).json({ error: "No interview slots have been proposed yet" }); return; }
+  if (ctx.candidate.interviewConfirmedSlot) { res.status(409).json({ error: "Interview has already been confirmed" }); return; }
+
+  // Validate confirmedSlot is one of the proposed slots (accept a few common
+  // encodings: "date time", "dateTtime", or the "label" if provided).
+  let proposedSlots: Array<{ date: string; time: string; label?: string }> = [];
+  try {
+    proposedSlots = JSON.parse(ctx.candidate.interviewSlotsJson) as Array<{ date: string; time: string; label?: string }>;
+  } catch {
+    res.status(500).json({ error: "Stored interview slots are malformed" });
+    return;
+  }
+  const slotMatches = proposedSlots.some((s) => {
+    return parsed.data.confirmedSlot === `${s.date}T${s.time}`
+      || parsed.data.confirmedSlot === `${s.date} ${s.time}`
+      || (s.label !== undefined && parsed.data.confirmedSlot === s.label);
+  });
+  if (!slotMatches) { res.status(400).json({ error: "confirmedSlot must be one of the proposed slots" }); return; }
+
+  const meetLink = `https://meet.jit.si/includly-${matchId}-${candidateId}`;
+  const [updated] = await db
+    .update(shadowMatchCandidatesTable)
+    .set({
+      interviewConfirmedSlot: parsed.data.confirmedSlot,
+      meetLink,
+    })
+    .where(eq(shadowMatchCandidatesTable.id, candidateId))
+    .returning();
+
+  await postCandidateStructuredMessage({
+    matchId,
+    candidateProfessionalId: ctx.candidate.professionalId,
+    senderId: req.userId!,
+    msgType: "interview_confirmed",
+    data: { confirmedSlot: parsed.data.confirmedSlot, meetLink },
+  });
+
+  void notifyMatchChatMessage(ctx.match.parentId, "A shadow teacher").catch(() => {});
+  void createInAppNotification(ctx.match.parentId, {
+    type: "interview_confirmed",
+    title: "Interview confirmed",
+    body: `Join link: ${meetLink}`,
+    relatedType: "match",
+    relatedId: matchId,
+  }).catch(() => {});
+  res.status(200).json(updated);
+});
+
+// ── POST /shadow-teacher/:matchId/candidates/:candidateId/mark-interview-done ─
+router.post("/shadow-teacher/:matchId/candidates/:candidateId/mark-interview-done", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  if (ctx.myRole !== "parent") { res.status(403).json({ error: "Only the parent can mark the interview as done" }); return; }
+  if (!ctx.candidate.meetLink) { res.status(409).json({ error: "No confirmed interview to mark as done" }); return; }
+  if (ctx.candidate.interviewDoneAt) { res.status(409).json({ error: "Interview is already marked as done" }); return; }
+
+  const [updated] = await db
+    .update(shadowMatchCandidatesTable)
+    .set({ interviewDoneAt: new Date() })
+    .where(eq(shadowMatchCandidatesTable.id, candidateId))
+    .returning();
+
+  await postCandidateStructuredMessage({
+    matchId,
+    candidateProfessionalId: ctx.candidate.professionalId,
+    senderId: req.userId!,
+    msgType: "interview_done",
+    data: {},
+  });
+
+  const teacherUserId = await getTeacherUserIdForProfessional(ctx.candidate.professionalId);
+  if (teacherUserId) {
+    void createInAppNotification(teacherUserId, {
+      type: "interview_done",
+      title: "Interview marked complete",
+      body: "Parent marked the interview as complete. Salary negotiation can begin.",
+      relatedType: "match",
+      relatedId: matchId,
+    }).catch(() => {});
+  }
+  res.status(200).json(updated);
+});
+
+// ── POST /shadow-teacher/:matchId/candidates/:candidateId/request-trial ─
+const RequestTrialV2Body = z.object({
+  trialDays: z.number().int().min(1).max(3),
+});
+router.post("/shadow-teacher/:matchId/candidates/:candidateId/request-trial", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const parsed = RequestTrialV2Body.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  if (ctx.myRole !== "parent") { res.status(403).json({ error: "Only the parent can request a trial" }); return; }
+
+  const [acceptedOffer] = await db
+    .select({ id: negotiationOffersTable.id })
+    .from(negotiationOffersTable)
+    .where(and(
+      eq(negotiationOffersTable.matchId, matchId),
+      eq(negotiationOffersTable.candidateId, candidateId),
+      eq(negotiationOffersTable.status, "accepted"),
+    ))
+    .limit(1);
+  if (!acceptedOffer) { res.status(409).json({ error: "A salary offer must be accepted before requesting a trial" }); return; }
+  if (ctx.candidate.trialDaysAccepted != null) { res.status(409).json({ error: "Trial has already been accepted for this candidate" }); return; }
+
+  const [updated] = await db
+    .update(shadowMatchCandidatesTable)
+    .set({ trialDaysRequested: parsed.data.trialDays })
+    .where(eq(shadowMatchCandidatesTable.id, candidateId))
+    .returning();
+
+  await postCandidateStructuredMessage({
+    matchId,
+    candidateProfessionalId: ctx.candidate.professionalId,
+    senderId: req.userId!,
+    msgType: "trial_requested",
+    data: { trialDays: parsed.data.trialDays },
+  });
+
+  const teacherUserId = await getTeacherUserIdForProfessional(ctx.candidate.professionalId);
+  if (teacherUserId) {
+    void notifyMatchChatMessage(teacherUserId, "A parent").catch(() => {});
+    void createInAppNotification(teacherUserId, {
+      type: "trial_requested",
+      title: `Parent requested a ${parsed.data.trialDays}-day trial`,
+      body: "Accept the same number of days or counter with fewer.",
+      relatedType: "match",
+      relatedId: matchId,
+    }).catch(() => {});
+  }
+  res.status(200).json(updated);
+});
+
+// ── POST /shadow-teacher/:matchId/candidates/:candidateId/accept-trial ─
+const AcceptTrialV2Body = z.object({
+  trialDays: z.number().int().min(1),
+});
+router.post("/shadow-teacher/:matchId/candidates/:candidateId/accept-trial", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const parsed = AcceptTrialV2Body.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  if (ctx.myRole !== "professional") { res.status(403).json({ error: "Only the invited teacher can accept a trial" }); return; }
+  if (ctx.candidate.trialDaysRequested == null) { res.status(409).json({ error: "No trial has been requested for this candidate" }); return; }
+  if (parsed.data.trialDays > ctx.candidate.trialDaysRequested) {
+    res.status(400).json({ error: `trialDays must be <= ${ctx.candidate.trialDaysRequested} (the number the parent requested)` });
+    return;
+  }
+  if (ctx.candidate.trialDaysAccepted != null) { res.status(409).json({ error: "Trial has already been accepted" }); return; }
+
+  // Task 3 correction: accept-trial only records the negotiated trial length.
+  // It must NOT flip match.status or set selectedProfessionalId — those two
+  // fields are owned by the existing payment-verify step (verify-trial-payment /
+  // mark-trial-direct-pay-paid), which also generates trialStartOtp at the same
+  // time. Setting status='trial_pending' here would make the existing trial
+  // payment endpoints reject with "not awaiting trial payment" (they require
+  // status='shortlisted') and leave the match with no trialStartOtp. match.trialDays
+  // is still set here so the existing payment flow picks up the correct
+  // multiplied fee (see Task 2b) once the parent proceeds to pay.
+  await db
+    .update(shadowMatchCandidatesTable)
+    .set({ trialDaysAccepted: parsed.data.trialDays })
+    .where(eq(shadowMatchCandidatesTable.id, candidateId));
+  await db
+    .update(shadowTeacherMatchesTable)
+    .set({
+      trialDays: parsed.data.trialDays,
+      updatedAt: new Date(),
+    })
+    .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  await postCandidateStructuredMessage({
+    matchId,
+    candidateProfessionalId: ctx.candidate.professionalId,
+    senderId: req.userId!,
+    msgType: "trial_accepted",
+    data: { trialDays: parsed.data.trialDays },
+  });
+
+  void notifyMatchChatMessage(ctx.match.parentId, "A shadow teacher").catch(() => {});
+  void createInAppNotification(ctx.match.parentId, {
+    type: "trial_accepted",
+    title: `Trial accepted for ${parsed.data.trialDays} day${parsed.data.trialDays > 1 ? "s" : ""}`,
+    body: "You can now book the trial payment when ready.",
+    relatedType: "match",
+    relatedId: matchId,
+  }).catch(() => {});
+
+  const [updatedCandidate] = await db
+    .select()
+    .from(shadowMatchCandidatesTable)
+    .where(eq(shadowMatchCandidatesTable.id, candidateId));
+  res.status(200).json(updatedCandidate);
 });
 
 // ── POST /shadow-teacher/:matchId/commit/order + /commit/verify ─────────────
@@ -1516,7 +1952,11 @@ router.post("/shadow-teacher/:matchId/request-trial", requireAuth, requireRole("
   }
 
   const settings = await getSettings();
-  const trialFeeInr = (settings as Record<string, unknown>)["trialFeeInr"] as number ?? 500;
+  const baseTrialFeeInr = (settings as Record<string, unknown>)["trialFeeInr"] as number ?? 500;
+  // Task 2b — multiply the per-day trial fee by the confirmed trial length (1-3
+  // days). match.trialDays is set by the redesigned accept-trial endpoint; if
+  // null (legacy flow), multiplier defaults to 1 for backward compat.
+  const trialFeeInr = baseTrialFeeInr * (match.trialDays ?? 1);
   const trialDirectPayEnabled = (settings as Record<string, unknown>)["trialDirectPayEnabled"] as boolean ?? false;
 
   // ── Direct-pay branch: parent pays the teacher's verified UPI directly, no Razorpay order ──
@@ -1646,7 +2086,10 @@ router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requir
   if (!activeCand) { res.status(409).json({ error: "Selected professional is no longer an active candidate for this match" }); return; }
 
   const settings = await getSettings();
-  const trialFeeInr = (settings as Record<string, unknown>)["trialFeeInr"] as number ?? 500;
+  const baseTrialFeeInr = (settings as Record<string, unknown>)["trialFeeInr"] as number ?? 500;
+  // Task 2b — same multiplier as the request-trial payment path so the recorded
+  // direct-pay amount matches what was quoted to the parent.
+  const trialFeeInr = baseTrialFeeInr * (match.trialDays ?? 1);
 
   const trialStartOtp = generateOtp();
 
@@ -2171,6 +2614,7 @@ router.get("/shadow-teacher/requests", requireAuth, requireRole("admin"), async 
       trialFeePaidInr: shadowTeacherMatchesTable.trialFeePaidInr,
       trialProviderPaymentId: shadowTeacherMatchesTable.trialProviderPaymentId,
       trialCreditApplied: shadowTeacherEngagementsTable.trialCreditApplied,
+      activationFeeEnabled: shadowTeacherMatchesTable.activationFeeEnabled,
     })
     .from(shadowTeacherMatchesTable)
     .leftJoin(usersTable, eq(shadowTeacherMatchesTable.parentId, usersTable.id))

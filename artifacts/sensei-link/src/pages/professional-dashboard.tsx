@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { FileUploadField } from "@/components/FileUploadField";
 import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel } from "@/lib/specialties";
@@ -38,7 +39,7 @@ import {
   Clock, AlertCircle, Eye, Phone, Mail, MapPin, Star, Unlock,
   Edit3, Save, HelpCircle, BadgeCheck, FileText, ChevronRight,
   Menu, X, Plus, Trash2, TrendingUp, Check, MessageSquare, Send, ChevronLeft,
-  Users, Minus, Camera, Share2, RefreshCw,
+  Users, Minus, Camera, Share2, RefreshCw, Video,
 } from "lucide-react";
 import { ShadowMatchChatDrawer } from "@/components/ShadowMatchChatDrawer";
 import { ComingSoon } from "@/components/ComingSoon";
@@ -3308,10 +3309,25 @@ interface Candidacy {
   trialDirectPay:             boolean;
   trialDirectPayMarkedPaidAt: string | null;
   trialDirectPayConfirmedAt:  string | null;
+  // Redesigned journey (Task 3B) — request → interview → trial state.
+  requestStatus:          string;
+  rejectionNote:          string | null;
+  interviewSlotsJson:     string | null;
+  interviewConfirmedSlot: string | null;
+  meetLink:               string | null;
+  interviewDoneAt:        string | null;
+  trialDaysRequested:     number | null;
+  trialDaysAccepted:      number | null;
   threadId:            number | null;
   messageCount:        number;
   lastMessageAt:       string | null;
   createdAt:           string;
+}
+
+interface CandidacyInterviewSlot {
+  date: string;
+  time: string;
+  label?: string;
 }
 
 const MATCH_STATUS_LABEL: Record<string, string> = {
@@ -3433,7 +3449,232 @@ function CandidacyOfferSection({ matchId, candidateId, myUserId }: { matchId: nu
   );
 }
 
-function CandidacyCard({ candidacy: c, onOpen, myUserId }: { candidacy: Candidacy; onOpen: () => void; myUserId: number }) {
+// ── RespondRequestBlock — Task 3e: teacher accepts/declines the shadowing request ──
+function RespondRequestBlock({ candidacy: c, onUpdated }: { candidacy: Candidacy; onUpdated: () => void }) {
+  const { toast } = useToast();
+  const [declineOpen, setDeclineOpen] = useState(false);
+  const [declineNote, setDeclineNote] = useState("");
+  const [responding, setResponding] = useState(false);
+
+  if (c.requestStatus !== "sent") return null;
+
+  async function respond(action: "accept" | "reject") {
+    setResponding(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/respond-request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, note: action === "reject" ? (declineNote.trim() || undefined) : undefined }),
+      });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not respond", variant: "destructive" }); return; }
+      setDeclineOpen(false);
+      onUpdated();
+    } finally { setResponding(false); }
+  }
+
+  return (
+    <div className="mb-3 p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3">
+      <p className="text-sm font-bold text-blue-900">Shadowing Request</p>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-blue-800">
+        {c.childCity && <span>📍 {c.childCity}</span>}
+        {(c.childBudgetMinInr || c.childBudgetMaxInr) && (
+          <span>💰 ₹{c.childBudgetMinInr?.toLocaleString("en-IN") ?? "?"} – ₹{c.childBudgetMaxInr?.toLocaleString("en-IN") ?? "?"}/mo</span>
+        )}
+        {c.childPreferredModes.length > 0 && <span>🎓 {c.childPreferredModes.join(", ")}</span>}
+        {c.childConditions.length > 0 && <span className="col-span-2">🏥 {c.childConditions.join(", ")}</span>}
+      </div>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          onClick={() => void respond("accept")}
+          disabled={responding}
+          className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs h-8 rounded-xl"
+        >
+          {responding ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} className="mr-1" />}
+          Accept
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setDeclineOpen(true)}
+          disabled={responding}
+          className="flex-1 border-red-200 text-red-600 hover:bg-red-50 text-xs h-8 rounded-xl"
+        >
+          <XCircle size={12} className="mr-1" />
+          Decline
+        </Button>
+      </div>
+
+      <Dialog open={declineOpen} onOpenChange={setDeclineOpen}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#1A2340]">Decline Request</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-2">
+            <Label className="text-xs font-semibold text-gray-600">
+              Reason <span className="font-normal text-gray-400">(optional, shown to the parent)</span>
+            </Label>
+            <Textarea
+              rows={3}
+              maxLength={500}
+              value={declineNote}
+              onChange={(e) => setDeclineNote(e.target.value)}
+              placeholder="e.g. Not available for this location right now"
+              className="text-sm rounded-xl resize-none"
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="rounded-xl" onClick={() => setDeclineOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white rounded-xl"
+              disabled={responding}
+              onClick={() => void respond("reject")}
+            >
+              {responding ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+              Confirm Decline
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ── TeacherInterviewSection — Task 3e: view proposed slots, confirm one, join ──
+function TeacherInterviewSection({ candidacy: c, onUpdated }: { candidacy: Candidacy; onUpdated: () => void }) {
+  const { toast } = useToast();
+  const [confirming, setConfirming] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+
+  if (c.requestStatus !== "accepted") return null;
+
+  let proposedSlots: CandidacyInterviewSlot[] = [];
+  if (c.interviewSlotsJson) {
+    try { proposedSlots = JSON.parse(c.interviewSlotsJson) as CandidacyInterviewSlot[]; } catch { /* ignore malformed */ }
+  }
+
+  async function confirmSlot() {
+    if (!selectedSlot) return;
+    setConfirming(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/confirm-interview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmedSlot: selectedSlot }),
+      });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not confirm interview", variant: "destructive" }); return; }
+      onUpdated();
+    } finally { setConfirming(false); }
+  }
+
+  if (c.interviewConfirmedSlot) {
+    return (
+      <div className="mb-3 p-4 bg-teal-50 border border-teal-200 rounded-xl space-y-2">
+        <p className="text-sm font-bold text-teal-900">Interview scheduled for {c.interviewConfirmedSlot}</p>
+        {c.meetLink && (
+          <a
+            href={c.meetLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 w-full h-9 rounded-lg bg-[#2EC4A5] hover:bg-[#26a88d] text-white font-semibold text-xs no-underline"
+          >
+            <Video size={13} />
+            Join Interview
+          </a>
+        )}
+      </div>
+    );
+  }
+
+  if (proposedSlots.length === 0) {
+    return (
+      <div className="mb-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+        <p className="text-xs font-semibold text-amber-800">Waiting for parent to propose interview times</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-3 p-4 bg-purple-50 border border-purple-200 rounded-xl space-y-2">
+      <p className="text-sm font-bold text-purple-900">Choose an interview slot</p>
+      <div className="space-y-1.5">
+        {proposedSlots.map((s, i) => {
+          const key = `${s.date}T${s.time}`;
+          const isChosen = selectedSlot === key;
+          return (
+            <button
+              key={i}
+              onClick={() => setSelectedSlot(key)}
+              className={`w-full text-left text-xs px-3 py-2 rounded-lg border ${isChosen ? "bg-purple-600 text-white border-purple-600" : "bg-white text-purple-800 border-purple-200"}`}
+            >
+              {s.label ? `${s.label} — ` : ""}{s.date} at {s.time}
+            </button>
+          );
+        })}
+      </div>
+      <Button
+        size="sm"
+        onClick={() => void confirmSlot()}
+        disabled={!selectedSlot || confirming}
+        className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs h-8 rounded-xl"
+      >
+        {confirming ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
+        Confirm Slot
+      </Button>
+    </div>
+  );
+}
+
+// ── TeacherTrialAcceptSection — Task 3f: teacher offers up to trialDaysRequested ──
+function TeacherTrialAcceptSection({ candidacy: c, onUpdated }: { candidacy: Candidacy; onUpdated: () => void }) {
+  const { toast } = useToast();
+  const [trialDays, setTrialDays] = useState(1);
+  const [accepting, setAccepting] = useState(false);
+
+  if (c.trialDaysRequested == null || c.trialDaysAccepted != null) return null;
+
+  async function acceptTrial() {
+    setAccepting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/accept-trial`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trialDays }),
+      });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not accept trial", variant: "destructive" }); return; }
+      onUpdated();
+    } finally { setAccepting(false); }
+  }
+
+  return (
+    <div className="mb-3 p-4 bg-orange-50 border border-orange-200 rounded-xl space-y-2">
+      <p className="text-sm font-bold text-orange-900">
+        Parent wants a {c.trialDaysRequested}-day trial. How many days can you offer?
+      </p>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          min={1}
+          max={c.trialDaysRequested}
+          value={trialDays}
+          onChange={(e) => setTrialDays(Math.max(1, Math.min(c.trialDaysRequested!, parseInt(e.target.value || "1", 10))))}
+          className="w-20 text-sm border border-orange-200 rounded-lg px-3 py-1.5 outline-none focus:ring-1 focus:ring-orange-400 bg-white"
+        />
+        <Button
+          size="sm"
+          onClick={() => void acceptTrial()}
+          disabled={accepting}
+          className="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-xs h-9 rounded-xl"
+        >
+          {accepting ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
+          Confirm Trial Days
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function CandidacyCard({ candidacy: c, onOpen, myUserId, onUpdated }: { candidacy: Candidacy; onOpen: () => void; myUserId: number; onUpdated: () => void }) {
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-[0_4px_24px_rgba(26,35,64,0.06)]">
       <div className="flex items-start justify-between gap-3 mb-3">
@@ -3467,6 +3708,10 @@ function CandidacyCard({ candidacy: c, onOpen, myUserId }: { candidacy: Candidac
         )}
       </div>
 
+      <RespondRequestBlock candidacy={c} onUpdated={onUpdated} />
+      <TeacherInterviewSection candidacy={c} onUpdated={onUpdated} />
+      <TeacherTrialAcceptSection candidacy={c} onUpdated={onUpdated} />
+
       {c.matchStatus === "trial_pending" && c.isSelected && c.trialLocation && (
         <div className="mb-2 p-3 bg-orange-50 border border-orange-200 rounded-xl space-y-1">
           <p className="text-xs font-semibold text-orange-800">📍 Trial location</p>
@@ -3493,7 +3738,9 @@ function CandidacyCard({ candidacy: c, onOpen, myUserId }: { candidacy: Candidac
         <TrialOtpEntry matchId={c.matchId} type="end" />
       )}
 
-      {["shortlisted", "trial_done"].includes(c.matchStatus) && c.candidateId !== null && (
+      {/* Task 3B parity with 3c — negotiation only unlocks once the interview is
+          marked done, matching the parent-side gate. */}
+      {["shortlisted", "trial_done"].includes(c.matchStatus) && c.candidateId !== null && c.interviewDoneAt != null && (
         <CandidacyOfferSection matchId={c.matchId} candidateId={c.candidateId!} myUserId={myUserId} />
       )}
 
@@ -3710,13 +3957,19 @@ function EnquiriesTab() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Candidacy | null>(null);
 
-  useEffect(() => {
-    fetchWithAuth("/api/shadow-teacher/my-candidacies")
+  // Task 3B — named so the redesigned-journey action components (respond-request,
+  // confirm-interview, accept-trial) can refresh this plain-state list after a
+  // mutation. This tab predates React Query adoption in this file; re-fetching
+  // directly avoids a larger unrelated refactor to useQuery.
+  function refetchCandidacies() {
+    return fetchWithAuth("/api/shadow-teacher/my-candidacies")
       .then(r => r.json())
       .then((data: unknown) => { if (Array.isArray(data)) setCandidacies(data as Candidacy[]); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { void refetchCandidacies(); }, []);
 
   if (loading) {
     return (
@@ -3763,7 +4016,7 @@ function EnquiriesTab() {
           </p>
         </div>
         {actionable.map((c) => (
-          <CandidacyCard key={c.candidateId} candidacy={c} onOpen={() => setSelected(c)} myUserId={(me as unknown as { id?: number })?.id ?? 0} />
+          <CandidacyCard key={c.candidateId} candidacy={c} onOpen={() => setSelected(c)} myUserId={(me as unknown as { id?: number })?.id ?? 0} onUpdated={refetchCandidacies} />
         ))}
       </div>
       {selected && (

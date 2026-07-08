@@ -67,6 +67,12 @@ export const shadowTeacherMatchesTable = pgTable("shadow_teacher_matches", {
   pendingCommitStartDate: text("pending_commit_start_date"),
   placementFeeOrderId: text("placement_fee_order_id"),
   placementFeeAmountInr: integer("placement_fee_amount_inr"),
+  // Redesigned parent↔teacher journey (Task 1 schema-only).
+  // activationFeeEnabled: per-match snapshot from admin_settings at match creation, with
+  //   admin override capability (currently no API reads it — future work).
+  // trialDays: confirmed trial days after teacher accepts (expected 1..3).
+  activationFeeEnabled: boolean("activation_fee_enabled").notNull().default(true),
+  trialDays: integer("trial_days"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

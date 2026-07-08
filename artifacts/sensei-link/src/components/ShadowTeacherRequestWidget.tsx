@@ -20,7 +20,7 @@ import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import {
   UserCheck, Loader2, CheckCircle2, Clock, IndianRupee,
   AlertCircle, RefreshCw, MessageSquare, Star, MapPin, Languages,
-  ChevronRight, BadgeCheck,
+  ChevronRight, BadgeCheck, Send, Video, XCircle, CalendarClock,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShadowMatchChatDrawer } from "./ShadowMatchChatDrawer";
@@ -56,6 +56,12 @@ interface CandidateProfile {
   email?: string | null;
 }
 
+interface InterviewSlot {
+  date: string;
+  time: string;
+  label?: string;
+}
+
 interface Candidate {
   id: number;
   professionalId: number;
@@ -64,6 +70,18 @@ interface Candidate {
   addedBy: string;
   profile: CandidateProfile;
   threadId: number | null;
+  // Redesigned journey (Task 2c) — request → interview → trial state, plus
+  // expected salary range surfaced at top level.
+  expectedSalaryMin: number | null;
+  expectedSalaryMax: number | null;
+  requestStatus: string;
+  rejectionNote: string | null;
+  interviewSlotsJson: string | null;
+  interviewConfirmedSlot: string | null;
+  meetLink: string | null;
+  interviewDoneAt: string | null;
+  trialDaysRequested: number | null;
+  trialDaysAccepted: number | null;
 }
 
 interface MatchWithCandidates {
@@ -413,6 +431,296 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
   );
 }
 
+// ── SendRequestBlock — Task 3a: requestStatus action row ──────────────────
+function SendRequestBlock({ matchId, candidate }: { matchId: number; candidate: Candidate }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [sending, setSending] = useState(false);
+
+  async function sendRequest() {
+    setSending(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/send-request`, { method: "POST" });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not send request", variant: "destructive" }); return; }
+      queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+    } finally { setSending(false); }
+  }
+
+  if (candidate.requestStatus === "not_sent") {
+    return (
+      <button
+        onClick={() => void sendRequest()}
+        disabled={sending}
+        className="w-full flex items-center justify-center gap-1.5 text-xs bg-[#2EC4A5] text-white rounded-xl py-2 font-semibold hover:bg-[#26a88d] disabled:opacity-50"
+        data-testid="button-send-request"
+      >
+        {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+        Send Request
+      </button>
+    );
+  }
+  if (candidate.requestStatus === "sent") {
+    return (
+      <div className="w-full text-center text-xs font-semibold px-2.5 py-2 rounded-xl bg-amber-50 text-amber-700 border border-amber-200">
+        Request Sent – Awaiting Response
+      </div>
+    );
+  }
+  if (candidate.requestStatus === "accepted") {
+    return (
+      <div className="w-full text-center text-xs font-semibold px-2.5 py-2 rounded-xl bg-green-50 text-green-700 border border-green-200">
+        Accepted ✓
+      </div>
+    );
+  }
+  if (candidate.requestStatus === "rejected") {
+    return (
+      <div className="w-full text-xs px-2.5 py-2 rounded-xl bg-red-50 text-red-700 border border-red-200 space-y-0.5">
+        <p className="font-semibold text-center">Declined</p>
+        {candidate.rejectionNote && <p className="text-[11px] text-red-600">{candidate.rejectionNote}</p>}
+      </div>
+    );
+  }
+  return null;
+}
+
+// ── InterviewSection — Task 3b: schedule → confirm → mark done ────────────
+function InterviewSection({ matchId, candidate }: { matchId: number; candidate: Candidate }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [slots, setSlots] = useState<InterviewSlot[]>([{ date: "", time: "", label: "" }]);
+  const [proposing, setProposing] = useState(false);
+  const [markingDone, setMarkingDone] = useState(false);
+
+  if (candidate.requestStatus !== "accepted") return null;
+
+  function updateSlot(i: number, field: keyof InterviewSlot, value: string) {
+    setSlots((prev) => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s));
+  }
+  function addSlot() {
+    setSlots((prev) => prev.length < 3 ? [...prev, { date: "", time: "", label: "" }] : prev);
+  }
+  function removeSlot(i: number) {
+    setSlots((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  async function proposeInterview() {
+    const validSlots = slots.filter((s) => s.date && s.time);
+    if (validSlots.length === 0) { toast({ title: "Add at least one date and time", variant: "destructive" }); return; }
+    setProposing(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/propose-interview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slots: validSlots.map((s) => ({ date: s.date, time: s.time, label: s.label || undefined })) }),
+      });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not propose slots", variant: "destructive" }); return; }
+      setDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+    } finally { setProposing(false); }
+  }
+
+  async function markDone() {
+    setMarkingDone(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/mark-interview-done`, { method: "POST" });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not mark interview done", variant: "destructive" }); return; }
+      queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+    } finally { setMarkingDone(false); }
+  }
+
+  let proposedSlots: InterviewSlot[] = [];
+  if (candidate.interviewSlotsJson) {
+    try { proposedSlots = JSON.parse(candidate.interviewSlotsJson) as InterviewSlot[]; } catch { /* ignore malformed */ }
+  }
+
+  return (
+    <div className="border-t border-gray-100 pt-3 space-y-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Interview</p>
+
+      {candidate.interviewDoneAt ? (
+        <div className="w-full text-center text-xs font-semibold px-2.5 py-2 rounded-xl bg-green-50 text-green-700 border border-green-200">
+          Interview Complete ✓
+        </div>
+      ) : candidate.interviewConfirmedSlot ? (
+        <div className="space-y-2">
+          <div className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-teal-800 space-y-1">
+            <p className="font-semibold">Confirmed: {candidate.interviewConfirmedSlot}</p>
+            {candidate.meetLink && (
+              <a
+                href={candidate.meetLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1.5 w-full h-9 rounded-lg bg-[#2EC4A5] hover:bg-[#26a88d] text-white font-semibold text-xs no-underline mt-1"
+              >
+                <Video size={13} />
+                Join Interview
+              </a>
+            )}
+          </div>
+          <button
+            onClick={() => void markDone()}
+            disabled={markingDone}
+            className="w-full flex items-center justify-center gap-1.5 text-xs bg-[#1A2340] text-white rounded-xl py-2 font-semibold hover:bg-[#2a3660] disabled:opacity-50"
+          >
+            {markingDone ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+            Mark Interview Done
+          </button>
+        </div>
+      ) : candidate.interviewSlotsJson ? (
+        <div className="space-y-1.5">
+          <div className="w-full text-center text-xs font-semibold px-2.5 py-2 rounded-xl bg-amber-50 text-amber-700 border border-amber-200">
+            Awaiting teacher's confirmation…
+          </div>
+          <button
+            onClick={() => { setSlots(proposedSlots.length > 0 ? proposedSlots : [{ date: "", time: "", label: "" }]); setDialogOpen(true); }}
+            className="w-full text-[11px] text-gray-500 hover:text-[#2EC4A5] underline underline-offset-2"
+          >
+            Propose different slots
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setDialogOpen(true)}
+          className="w-full flex items-center justify-center gap-1.5 text-xs bg-[#2EC4A5] text-white rounded-xl py-2 font-semibold hover:bg-[#26a88d]"
+          data-testid="button-schedule-interview"
+        >
+          <CalendarClock size={13} />
+          Schedule Interview
+        </button>
+      )}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#1A2340]">Propose Interview Slots</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-xs text-gray-500">Suggest up to 3 date/time options. The teacher will confirm one.</p>
+            {slots.map((slot, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <input type="date" value={slot.date} onChange={(e) => updateSlot(i, "date", e.target.value)}
+                  className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-[#2EC4A5]" />
+                <input type="time" value={slot.time} onChange={(e) => updateSlot(i, "time", e.target.value)}
+                  className="w-24 border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-[#2EC4A5]" />
+                {slots.length > 1 && (
+                  <button onClick={() => removeSlot(i)} className="text-gray-300 hover:text-red-500 shrink-0">
+                    <XCircle size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
+            {slots.length < 3 && (
+              <button onClick={addSlot} className="text-[11px] text-[#2EC4A5] hover:underline">+ Add another slot</button>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="rounded-xl" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl"
+              disabled={proposing}
+              onClick={() => void proposeInterview()}
+            >
+              {proposing ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+              Propose Slots
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ── TrialRequestSection — Task 3d: negotiate trial length, then hand off to
+// the existing (unchanged) trial-payment flow via onBookTrialPayment ───────
+function TrialRequestSection({
+  matchId, candidate, baseTrialFeeInr, onBookTrialPayment, bookingTrial,
+}: {
+  matchId: number;
+  candidate: Candidate;
+  baseTrialFeeInr: number;
+  onBookTrialPayment: (professionalId: number) => void;
+  bookingTrial: boolean;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [trialDays, setTrialDays] = useState(1);
+  const [requesting, setRequesting] = useState(false);
+
+  async function requestTrial() {
+    setRequesting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/request-trial`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trialDays }),
+      });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not request trial", variant: "destructive" }); return; }
+      queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+    } finally { setRequesting(false); }
+  }
+
+  if (candidate.trialDaysAccepted != null) {
+    return (
+      <div className="border-t border-gray-100 pt-3 space-y-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Trial</p>
+        <div className="w-full text-center text-xs font-semibold px-2.5 py-2 rounded-xl bg-green-50 text-green-700 border border-green-200">
+          Trial: {candidate.trialDaysAccepted} day{candidate.trialDaysAccepted > 1 ? "s" : ""} confirmed
+        </div>
+        <button
+          onClick={() => onBookTrialPayment(candidate.professionalId)}
+          disabled={bookingTrial}
+          className="w-full flex items-center justify-center gap-1.5 text-xs bg-orange-500 hover:bg-orange-600 text-white rounded-xl py-2 font-semibold disabled:opacity-50"
+        >
+          <IndianRupee size={13} />
+          Book Trial Payment — ₹{(baseTrialFeeInr * candidate.trialDaysAccepted).toLocaleString("en-IN")}
+        </button>
+      </div>
+    );
+  }
+
+  if (candidate.trialDaysRequested != null) {
+    return (
+      <div className="border-t border-gray-100 pt-3 space-y-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Trial</p>
+        <div className="w-full text-center text-xs font-semibold px-2.5 py-2 rounded-xl bg-amber-50 text-amber-700 border border-amber-200">
+          Awaiting teacher confirmation…
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t border-gray-100 pt-3 space-y-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Request Trial</p>
+      <div className="flex gap-1.5">
+        {[1, 2, 3].map((n) => (
+          <button
+            key={n}
+            onClick={() => setTrialDays(n)}
+            className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border ${trialDays === n ? "bg-[#2EC4A5] text-white border-[#2EC4A5]" : "bg-white text-gray-600 border-gray-200"}`}
+          >
+            {n} day{n > 1 ? "s" : ""}
+          </button>
+        ))}
+      </div>
+      <p className="text-[11px] text-gray-500 text-center">
+        ₹{baseTrialFeeInr.toLocaleString("en-IN")} × {trialDays} = ₹{(baseTrialFeeInr * trialDays).toLocaleString("en-IN")}
+      </p>
+      <button
+        onClick={() => void requestTrial()}
+        disabled={requesting}
+        className="w-full flex items-center justify-center gap-1.5 text-xs bg-orange-500 hover:bg-orange-600 text-white rounded-xl py-2 font-semibold disabled:opacity-50"
+        data-testid="button-request-trial"
+      >
+        {requesting ? <Loader2 size={13} className="animate-spin" /> : <Star size={13} />}
+        Request Trial
+      </button>
+    </div>
+  );
+}
+
 function CandidateCard({
   candidate,
   matchId,
@@ -421,7 +729,9 @@ function CandidateCard({
   selected,
   onChoose,
   onNotInterested,
-  onRequestTrial,
+  onBookTrialPayment,
+  bookingTrial,
+  baseTrialFeeInr,
   trialMode,
   matchStatus,
 }: {
@@ -432,7 +742,9 @@ function CandidateCard({
   selected: boolean;
   onChoose: (professionalId: number) => void;
   onNotInterested?: (candidateId: number) => void;
-  onRequestTrial?: (professionalId: number) => void;
+  onBookTrialPayment?: (professionalId: number) => void;
+  bookingTrial?: boolean;
+  baseTrialFeeInr: number;
   trialMode?: boolean;
   matchStatus?: string;
 }) {
@@ -480,18 +792,27 @@ function CandidateCard({
               )}
             </div>
           </div>
-          {(p.pricingMinINR || p.pricingMaxINR) && (
-            <div className="text-right shrink-0">
-              <p className="text-xs text-gray-400">Monthly</p>
-              <p className="text-sm font-bold text-[#1A2340]">
-                ₹{(p.pricingMinINR ?? 0).toLocaleString("en-IN")}
-                {p.pricingMaxINR && p.pricingMaxINR !== p.pricingMinINR
-                  ? `–${p.pricingMaxINR.toLocaleString("en-IN")}`
-                  : ""}
-              </p>
-            </div>
-          )}
+          <div className="text-right shrink-0">
+            <p className="text-xs text-gray-400">Expected</p>
+            <p className="text-sm font-bold text-[#1A2340]">
+              {candidate.expectedSalaryMin == null && candidate.expectedSalaryMax == null
+                ? "Salary TBD"
+                : `₹${(candidate.expectedSalaryMin ?? 0).toLocaleString("en-IN")}${
+                    candidate.expectedSalaryMax && candidate.expectedSalaryMax !== candidate.expectedSalaryMin
+                      ? `–₹${candidate.expectedSalaryMax.toLocaleString("en-IN")}`
+                      : ""
+                  }/month`}
+            </p>
+          </div>
         </div>
+
+        {!committed && !trialMode && (
+          <SendRequestBlock matchId={matchId} candidate={candidate} />
+        )}
+
+        {!committed && !trialMode && (
+          <InterviewSection matchId={matchId} candidate={candidate} />
+        )}
 
         {p.bio && <p className="text-xs text-gray-500 line-clamp-2">{p.bio}</p>}
 
@@ -514,12 +835,24 @@ function CandidateCard({
           </div>
         )}
 
-        {!committed && !trialMode && matchStatus && (
+        {/* Task 3c — negotiation only unlocks once the interview is marked done,
+            regardless of requestStatus or match status. */}
+        {!committed && !trialMode && matchStatus && candidate.interviewDoneAt != null && (
           <OfferSection
             matchId={matchId}
             candidateId={candidate.id}
             myUserId={myUserId}
             matchStatus={matchStatus}
+          />
+        )}
+
+        {!committed && !trialMode && candidate.interviewDoneAt != null && (
+          <TrialRequestSection
+            matchId={matchId}
+            candidate={candidate}
+            baseTrialFeeInr={baseTrialFeeInr}
+            onBookTrialPayment={onBookTrialPayment ?? (() => {})}
+            bookingTrial={!!bookingTrial}
           />
         )}
 
@@ -550,17 +883,6 @@ function CandidateCard({
             )
           )}
         </div>
-        {!committed && !trialMode && onRequestTrial && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full text-xs border-orange-300 text-orange-700 hover:bg-orange-50 rounded-xl mt-1 gap-1"
-            onClick={() => onRequestTrial(candidate.professionalId)}
-          >
-            <Star size={11} />
-            Request Trial Day — ₹500
-          </Button>
-        )}
         {!committed && !trialMode && !selected && onNotInterested && (
           <Button
             variant="ghost"
@@ -1234,6 +1556,7 @@ export function ShadowTeacherRequestWidget() {
             myUserId={myId}
             selected
             onChoose={() => {}}
+            baseTrialFeeInr={trialFee}
             trialMode
           />
         )}
@@ -1287,6 +1610,7 @@ export function ShadowTeacherRequestWidget() {
             myUserId={myId}
             selected
             onChoose={() => {}}
+            baseTrialFeeInr={trialFee}
             trialMode
           />
         )}
@@ -1408,6 +1732,7 @@ export function ShadowTeacherRequestWidget() {
             myUserId={myId}
             selected
             onChoose={() => {}}
+            baseTrialFeeInr={trialFee}
             trialMode
           />
         )}
@@ -1421,6 +1746,13 @@ export function ShadowTeacherRequestWidget() {
     const feePaidAt = match.feePaidAt ? new Date(match.feePaidAt) : null;
     const daysSincePaid = feePaidAt ? (Date.now() - feePaidAt.getTime()) / 86_400_000 : 0;
     const refundEligible = !committed && (match.distinctTeachersShown < 3) && (daysSincePaid >= 60);
+
+    // Task 3d — reflect the negotiated trial length (if any) in the trial-payment
+    // modal's fee display. Falls back to the flat base fee (×1) for candidates
+    // that never went through the negotiated trial-days flow.
+    const trialModalCandidate = match.candidates.find((c) => c.professionalId === trialModalProfId);
+    const modalTrialDays = trialModalCandidate?.trialDaysAccepted ?? 1;
+    const modalFeeInr = trialFee * modalTrialDays;
 
     return (
       <>{CommitDialog}<div className="space-y-4">
@@ -1459,7 +1791,9 @@ export function ShadowTeacherRequestWidget() {
                   setCommitDialogOpen(true);
                 }}
                 onNotInterested={async (candidateId) => { await handleNotInterested(candidateId); }}
-                onRequestTrial={requestingTrial ? undefined : (proId) => {
+                baseTrialFeeInr={trialFee}
+                bookingTrial={requestingTrial}
+                onBookTrialPayment={requestingTrial ? () => {} : (proId) => {
                   setTrialModalProfId(proId);
                   setTrialPreMeetingChecked(false);
                   setTrialPreMeetingNote("");
@@ -1500,7 +1834,8 @@ export function ShadowTeacherRequestWidget() {
             </DialogHeader>
             <div className="space-y-4 py-2">
               <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 text-sm text-orange-800">
-                A one-time <strong>₹{trialFee.toLocaleString("en-IN")}</strong> trial fee will be charged.
+                A one-time <strong>₹{modalFeeInr.toLocaleString("en-IN")}</strong>
+                {modalTrialDays > 1 ? ` (₹${trialFee.toLocaleString("en-IN")} × ${modalTrialDays} days)` : ""} trial fee will be charged.
                 If you commit afterwards, this amount is credited against the first month&apos;s salary.
                 The fee is <strong>non-refundable</strong> if you walk away.
               </div>
@@ -1572,7 +1907,7 @@ export function ShadowTeacherRequestWidget() {
                 }}
               >
                 <IndianRupee size={13} />
-                Pay {"\u20B9"}{trialFee.toLocaleString("en-IN")} {"&"} Book Trial
+                Pay {"\u20B9"}{modalFeeInr.toLocaleString("en-IN")} {"&"} Book Trial
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -658,7 +658,21 @@ router.patch("/engagements/:id/teacher-acceptance", requireAuth, async (req, res
 
   if (action === "accept") {
     const settings = await getSettings();
-    const activationFeeInr = ((settings as Record<string, unknown>)["activationFeeInr"] as number) ?? 999;
+    const globalActivationFeeInr = ((settings as Record<string, unknown>)["activationFeeInr"] as number) ?? 999;
+
+    // Task 2e — per-match override. Admin can toggle activation_fee_enabled=false
+    // on a specific match to waive the activation fee for that teacher; when
+    // false, skip pending_activation_fee entirely and go straight to pending_start.
+    let effectiveActivationFeeEnabled = true;
+    if (eng.matchRequestId) {
+      const [matchRow] = await db
+        .select({ activationFeeEnabled: shadowTeacherMatchesTable.activationFeeEnabled })
+        .from(shadowTeacherMatchesTable)
+        .where(eq(shadowTeacherMatchesTable.id, eng.matchRequestId))
+        .limit(1);
+      effectiveActivationFeeEnabled = matchRow?.activationFeeEnabled ?? true;
+    }
+    const activationFeeInr = effectiveActivationFeeEnabled ? globalActivationFeeInr : 0;
     const nextStatus = activationFeeInr > 0 ? "pending_activation_fee" : "pending_start";
 
     await db
@@ -803,6 +817,25 @@ router.post("/engagements/:id/activation-fee/order", requireAuth, requireRole("p
   const { eng, role } = await getEngagementWithAccess(id, req.userId!, req.userRole!);
   if (!eng || role !== "teacher") { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
   if (eng.status !== "pending_activation_fee") { res.status(409).json({ error: "Engagement is not awaiting an activation fee payment" }); return; }
+
+  // Task 2e — defensive check. If the per-match activation_fee_enabled has been
+  // toggled OFF after the engagement was already routed to pending_activation_fee,
+  // skip the fee and advance directly to pending_start.
+  if (eng.matchRequestId) {
+    const [matchRow] = await db
+      .select({ activationFeeEnabled: shadowTeacherMatchesTable.activationFeeEnabled })
+      .from(shadowTeacherMatchesTable)
+      .where(eq(shadowTeacherMatchesTable.id, eng.matchRequestId))
+      .limit(1);
+    if (matchRow && !matchRow.activationFeeEnabled) {
+      await db
+        .update(shadowTeacherEngagementsTable)
+        .set({ status: "pending_start", updatedAt: new Date() })
+        .where(eq(shadowTeacherEngagementsTable.id, id));
+      res.json({ skipped: true, status: "pending_start" });
+      return;
+    }
+  }
 
   const activationFeeInr = eng.activationFeeInr ?? 0;
   if (activationFeeInr <= 0) { res.status(409).json({ error: "No activation fee is due for this engagement" }); return; }
