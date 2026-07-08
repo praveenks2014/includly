@@ -20,6 +20,7 @@ import {
   engagementSalaryPaymentsTable,
   waitlistTable,
   settingsAuditLogTable,
+  professionalOfferingsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { z } from "zod";
@@ -29,9 +30,14 @@ import {
 } from "@workspace/api-zod";
 import {
   getVerificationRequirementsForProfessional,
+  getVerificationRequirementsForOffering,
+  locateOffering,
   computeVerificationRequirements,
   RCI_CERTIFICATE_DOC_TYPE,
+  type VerificationVertical,
 } from "../lib/verificationRequirements";
+
+const OFFERING_VERTICALS: VerificationVertical[] = ["shadow_teacher", "home_tutor", "therapist"];
 
 const clerkClient = createClerkClient({ secretKey: process.env["CLERK_SECRET_KEY"] });
 const router: IRouter = Router();
@@ -226,6 +232,134 @@ router.patch("/admin/professionals/:id/reject", ...adminGuard, async (req, res):
     .where(eq(identityVerificationsTable.professionalId, id));
 
   res.json(profile);
+});
+
+/** GET /admin/professionals/:id/offerings — primary + additional offerings, each with its own gate status. */
+router.get("/admin/professionals/:id/offerings", ...adminGuard, async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const [profile] = await db
+    .select()
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, id));
+
+  if (!profile) {
+    res.status(404).json({ error: "Professional not found" });
+    return;
+  }
+
+  const extra = await db
+    .select()
+    .from(professionalOfferingsTable)
+    .where(eq(professionalOfferingsTable.professionalId, id));
+
+  const verticals = [profile.vertical, ...extra.map((o) => o.vertical)];
+  const offerings = await Promise.all(
+    verticals.map(async (vertical) => {
+      const requirements = await getVerificationRequirementsForOffering(id, vertical);
+      const location = await locateOffering(id, vertical);
+      return {
+        vertical,
+        isPrimary: location?.isPrimary ?? (vertical === profile.vertical),
+        verificationStatus: location?.verificationStatus ?? "unsubmitted",
+        requirementsMet: requirements.met,
+        missingRequirements: requirements.missing,
+        requirementWarnings: requirements.warnings,
+      };
+    }),
+  );
+
+  res.json({ professionalId: id, offerings });
+});
+
+// Hard server-side gate, per-offering — cannot approve (and thus make an
+// OFFERING listable/matchable) unless THAT vertical's own requirements are
+// met. Reuses the exact same getVerificationRequirementsForOffering /
+// computeVerificationRequirements gate as the primary-offering approve
+// route above — never a separate/weaker check.
+router.patch("/admin/professionals/:id/offerings/:vertical/approve", ...adminGuard, async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const verticalRaw = Array.isArray(req.params.vertical) ? req.params.vertical[0] : req.params.vertical;
+  if (isNaN(id) || !OFFERING_VERTICALS.includes(verticalRaw as VerificationVertical)) {
+    res.status(400).json({ error: "Invalid id or vertical" });
+    return;
+  }
+  const vertical = verticalRaw as VerificationVertical;
+
+  const location = await locateOffering(id, vertical);
+  if (!location) {
+    res.status(404).json({ error: "Offering not found" });
+    return;
+  }
+
+  const requirements = await getVerificationRequirementsForOffering(id, vertical);
+  if (!requirements.met) {
+    res.status(400).json({
+      error: "verification_requirements_not_met",
+      message: "Cannot approve — required verification documents are missing for this offering.",
+      missing: requirements.missing,
+      warnings: requirements.warnings,
+    });
+    return;
+  }
+
+  if (location.isPrimary) {
+    // Identical write to the existing single-offering approve route above.
+    const [row] = await db
+      .update(professionalProfilesTable)
+      .set({ verificationStatus: "verified", isVerified: true })
+      .where(eq(professionalProfilesTable.id, id))
+      .returning();
+    res.json({ vertical, isPrimary: true, ...row, verificationRequirements: requirements });
+    return;
+  }
+
+  const [row] = await db
+    .update(professionalOfferingsTable)
+    .set({ verificationStatus: "verified", isVerified: true })
+    .where(eq(professionalOfferingsTable.id, location.offeringId!))
+    .returning();
+
+  res.json({ vertical, isPrimary: false, ...row, verificationRequirements: requirements });
+});
+
+router.patch("/admin/professionals/:id/offerings/:vertical/reject", ...adminGuard, async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const verticalRaw = Array.isArray(req.params.vertical) ? req.params.vertical[0] : req.params.vertical;
+  if (isNaN(id) || !OFFERING_VERTICALS.includes(verticalRaw as VerificationVertical)) {
+    res.status(400).json({ error: "Invalid id or vertical" });
+    return;
+  }
+  const vertical = verticalRaw as VerificationVertical;
+  const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : null;
+
+  const location = await locateOffering(id, vertical);
+  if (!location) {
+    res.status(404).json({ error: "Offering not found" });
+    return;
+  }
+
+  if (location.isPrimary) {
+    const [row] = await db
+      .update(professionalProfilesTable)
+      .set({ verificationStatus: "rejected", isVerified: false, rejectionReason: reason || null })
+      .where(eq(professionalProfilesTable.id, id))
+      .returning();
+    res.json({ vertical, isPrimary: true, ...row });
+    return;
+  }
+
+  const [row] = await db
+    .update(professionalOfferingsTable)
+    .set({ verificationStatus: "rejected", isVerified: false, rejectionReason: reason || null })
+    .where(eq(professionalOfferingsTable.id, location.offeringId!))
+    .returning();
+
+  res.json({ vertical, isPrimary: false, ...row });
 });
 
 router.get("/admin/stats", ...adminGuard, async (_req, res): Promise<void> => {

@@ -10,7 +10,32 @@ import {
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { SubmitIdentityVerificationBody, SubmitCertificationBody } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
-import { recomputeSubmissionStatus } from "../lib/verificationRequirements";
+import {
+  recomputeSubmissionStatus,
+  recomputeSubmissionStatusForOffering,
+  type VerificationVertical,
+} from "../lib/verificationRequirements";
+
+const KNOWN_VERTICALS: VerificationVertical[] = ["shadow_teacher", "home_tutor", "therapist"];
+
+// Identity docs and certifications are person-level (one government ID, any
+// number of certificates, shared across every offering) — but recomputing
+// "does this now meet requirements" must target the SPECIFIC offering the
+// upload was for for. Existing callers that don't pass `vertical` (the
+// original single-vertical flow) keep recomputing the primary offering
+// exactly as before — fully backward compatible.
+async function recomputeForRequestedVertical(professionalId: number, body: unknown): Promise<void> {
+  const raw = (body as Record<string, unknown> | null)?.vertical;
+  const vertical = typeof raw === "string" && KNOWN_VERTICALS.includes(raw as VerificationVertical)
+    ? (raw as VerificationVertical)
+    : null;
+
+  if (vertical) {
+    await recomputeSubmissionStatusForOffering(professionalId, vertical);
+  } else {
+    await recomputeSubmissionStatus(professionalId);
+  }
+}
 
 const router: IRouter = Router();
 const storageService = new ObjectStorageService();
@@ -162,7 +187,7 @@ router.post(
     // mandatory requirements (ID + therapist RCI cert/number) are met — an
     // ID upload alone is not enough to enter the admin review queue for a
     // therapist still missing their RCI certificate.
-    await recomputeSubmissionStatus(profile.id);
+    await recomputeForRequestedVertical(profile.id, req.body);
 
     res.status(201).json({
       id: record.id,
@@ -262,7 +287,7 @@ router.post(
     // A certification (e.g. an RCI certificate for a therapist) can be the
     // last missing requirement — recheck whether the profile is now
     // reviewable.
-    await recomputeSubmissionStatus(profile.id);
+    await recomputeForRequestedVertical(profile.id, req.body);
 
     res.status(201).json({
       id: record.id,

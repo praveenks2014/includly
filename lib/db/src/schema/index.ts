@@ -1,5 +1,6 @@
 export * from "./users";
 export * from "./professionals";
+export * from "./professionalOfferings";
 export * from "./ratings";
 export * from "./unlocks";
 export * from "./certifications";

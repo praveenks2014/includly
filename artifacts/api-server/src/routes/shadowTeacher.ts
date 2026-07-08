@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, isNull, isNotNull, sql, count, max, inArray, notInArray, gte, gt } from "drizzle-orm";
+import { eq, and, or, desc, isNull, isNotNull, sql, count, max, inArray, notInArray, gte, gt } from "drizzle-orm";
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import {
@@ -12,6 +12,7 @@ import {
   adminSettingsTable,
   usersTable,
   professionalProfilesTable,
+  professionalOfferingsTable,
   childrenTable,
   negotiationOffersTable,
   professionalAvailabilityTable,
@@ -156,21 +157,68 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
     ...matchBusyRows.map((r) => r.professionalId!),
   ])];
 
-  // Run scoring and surface up to 3 candidates
-  const allProfessionals = await db
-    .select()
+  // Run scoring and surface up to 3 candidates.
+  //
+  // A professional's PRIMARY vertical still lives directly on
+  // professional_profiles (untouched — same columns as always). A professional
+  // who added shadow-teaching as an ADDITIONAL offering (Prompt 1 multi-vertical
+  // model) has their own separate verificationStatus/pricing in
+  // professional_offerings — an RCI-verified therapist does NOT surface here
+  // just because their PRIMARY profile is verified; their shadow-teacher
+  // OFFERING must independently pass this same gate (verified + priced).
+  const rows = await db
+    .select({ profile: professionalProfilesTable, offering: professionalOfferingsTable })
     .from(professionalProfilesTable)
+    .leftJoin(
+      professionalOfferingsTable,
+      and(
+        eq(professionalOfferingsTable.professionalId, professionalProfilesTable.id),
+        eq(professionalOfferingsTable.vertical, "shadow_teacher"),
+      ),
+    )
     .where(
       and(
-        eq(professionalProfilesTable.specialty, "shadow_teacher"),
-        eq(professionalProfilesTable.verificationStatus, "verified"),
+        or(
+          // Primary offering — identical condition to before this change.
+          and(
+            eq(professionalProfilesTable.specialty, "shadow_teacher"),
+            eq(professionalProfilesTable.verificationStatus, "verified"),
+            isNotNull(professionalProfilesTable.pricingMinINR),
+          ),
+          // Additional (non-primary) shadow-teacher offering — gated
+          // independently on ITS OWN verificationStatus/pricing.
+          and(
+            isNotNull(professionalOfferingsTable.id),
+            eq(professionalOfferingsTable.verificationStatus, "verified"),
+            isNotNull(professionalOfferingsTable.pricingMinINR),
+          ),
+        )!,
         eq(professionalProfilesTable.paymentActivated, true),
-        isNotNull(professionalProfilesTable.pricingMinINR),
         // Defense-in-depth: every candidate must have a government ID on file
         sql`EXISTS (SELECT 1 FROM ${identityVerificationsTable} iv WHERE iv.professional_id = ${professionalProfilesTable.id})`,
         ...(busyProfIds.length > 0 ? [notInArray(professionalProfilesTable.id, busyProfIds)] : []),
       ),
     );
+
+  // Collapse the join back into profile-shaped rows, using the OFFERING's own
+  // pricing/verificationStatus when the match came from a non-primary offering
+  // (every other field — city, languages, experience, home visits, rating —
+  // is shared identity data and always comes from the profile row).
+  const allProfessionals = rows.map(({ profile, offering }: {
+    profile: typeof professionalProfilesTable.$inferSelect;
+    offering: typeof professionalOfferingsTable.$inferSelect | null;
+  }) => {
+    const isPrimaryMatch = profile.specialty === "shadow_teacher" && profile.verificationStatus === "verified" && profile.pricingMinINR != null;
+    if (isPrimaryMatch || !offering) {
+      return profile;
+    }
+    return {
+      ...profile,
+      pricingMinINR: offering.pricingMinINR,
+      pricingMaxINR: offering.pricingMaxINR,
+      verificationStatus: offering.verificationStatus,
+    };
+  });
 
   // School hours pre-filter: remove professionals who have NO weekday overlap with child's school hours
   const passedIds = await filterBySchoolHours(allProfessionals, match.childId ?? null);

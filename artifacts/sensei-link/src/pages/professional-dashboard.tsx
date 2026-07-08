@@ -52,6 +52,35 @@ interface Notification { id: number; title: string; body: string; read: boolean;
 interface CertDoc { id: number; documentType: string; fileKey: string; uploadedAt: string; }
 type SlotDraft = { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number; priceInr: number; };
 
+// ─── Multi-vertical offerings ──────────────────────────────────────────────
+type OfferingVertical = "shadow_teacher" | "home_tutor" | "therapist";
+interface Offering {
+  isPrimary: boolean;
+  vertical: OfferingVertical;
+  verificationStatus: string;
+  isVerified: boolean;
+  rejectionReason: string | null;
+}
+const ALL_VERTICALS: OfferingVertical[] = ["shadow_teacher", "home_tutor", "therapist"];
+const VERTICAL_LABELS: Record<OfferingVertical, string> = {
+  shadow_teacher: "Shadow Teacher",
+  home_tutor: "Home Tutor",
+  therapist: "Therapist / Special Educator",
+};
+
+function useMyOfferings() {
+  return useQuery<Offering[]>({
+    queryKey: ["my-offerings"],
+    queryFn: async () => {
+      const res = await fetchWithAuth("/api/professionals/me/offerings");
+      if (!res.ok) throw new Error("Failed to fetch offerings");
+      const data = await res.json();
+      return data.offerings as Offering[];
+    },
+    staleTime: 30_000,
+  });
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const DAYS_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -460,6 +489,105 @@ function HomeTab({ profile, firstName, onTabChange }: {
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: MY PROFILE
 // ═══════════════════════════════════════════════════════════════════════════════
+const VERIFICATION_BADGE: Record<string, { label: string; className: string }> = {
+  unsubmitted: { label: "Not submitted", className: "bg-gray-100 text-gray-600 border-gray-200" },
+  pending: { label: "Pending review", className: "bg-yellow-50 text-yellow-700 border-yellow-200" },
+  verified: { label: "Verified", className: "bg-green-50 text-green-700 border-green-200" },
+  rejected: { label: "Rejected", className: "bg-red-50 text-red-700 border-red-200" },
+};
+
+// A professional's primary vertical is set at signup. This card lets them
+// ADD further verticals (e.g. a therapist who also shadow-teaches) — each
+// added offering goes through its own Stage-2 questions and must pass its
+// OWN verification gate independently before it's listable.
+function AdditionalOfferingsCard() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
+  const { data: offerings = [], isLoading } = useMyOfferings();
+  const [adding, setAdding] = useState(false);
+  const [picking, setPicking] = useState(false);
+
+  if (isLoading) return null;
+
+  const takenVerticals = new Set(offerings.map((o) => o.vertical));
+  const availableVerticals = ALL_VERTICALS.filter((v) => !takenVerticals.has(v));
+  const additionalOfferings = offerings.filter((o) => !o.isPrimary);
+
+  async function handleAdd(vertical: OfferingVertical) {
+    setAdding(true);
+    try {
+      const res = await fetchWithAuth("/api/professionals/me/offerings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vertical }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Could not add offering");
+      }
+      await queryClient.invalidateQueries({ queryKey: ["my-offerings"] });
+      setLocation(`/onboarding/pro/stage2/${vertical}`);
+    } catch (err: unknown) {
+      toast({ title: "Error", description: err instanceof Error ? err.message : "Something went wrong", variant: "destructive" });
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-3">
+      <p className="text-sm font-semibold text-[#1A2340]">Your Services</p>
+      <p className="text-xs text-gray-400">
+        Offer more than one service? Add another vertical — each is verified and listed independently.
+      </p>
+
+      {additionalOfferings.length > 0 && (
+        <div className="space-y-2">
+          {additionalOfferings.map((o) => {
+            const badge = VERIFICATION_BADGE[o.verificationStatus] ?? VERIFICATION_BADGE.unsubmitted;
+            return (
+              <div key={o.vertical} className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-gray-100">
+                <span className="text-sm text-[#1A2340]">{VERTICAL_LABELS[o.vertical]}</span>
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${badge.className}`}>{badge.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {availableVerticals.length > 0 && (
+        picking ? (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {availableVerticals.map((v) => (
+              <Button
+                key={v}
+                size="sm"
+                variant="outline"
+                disabled={adding}
+                onClick={() => handleAdd(v)}
+                className="rounded-xl border-[#2EC4A5] text-[#2EC4A5] hover:bg-[#2EC4A5]/10"
+              >
+                {adding ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+                {VERTICAL_LABELS[v]}
+              </Button>
+            ))}
+          </div>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPicking(true)}
+            className="gap-1.5 rounded-xl border-gray-200 hover:border-[#2EC4A5] hover:text-[#2EC4A5]"
+          >
+            <Plus size={14} /> Add another service
+          </Button>
+        )
+      )}
+    </div>
+  );
+}
+
 function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -645,6 +773,8 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
           </Button>
         </div>
       )}
+
+      <AdditionalOfferingsCard />
 
       {/* Edit form */}
       {!editing ? (

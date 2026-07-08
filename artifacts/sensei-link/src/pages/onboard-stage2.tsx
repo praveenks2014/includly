@@ -7,7 +7,7 @@ import {
   useGetMyIdentityVerification,
   useGetMyCertifications,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -463,6 +463,30 @@ function RciCertificateSection({
   );
 }
 
+// A professional's PRIMARY vertical (set at signup) hydrates from
+// useGetMyProfessionalProfile as before. An ADDITIONAL vertical they're
+// adding later hydrates from its own professional_offerings row instead —
+// fetched here so this same Stage-2 form can complete either one.
+interface MyOffering {
+  isPrimary: boolean;
+  vertical: VerticalValue;
+  verticalDetails: unknown;
+  rciCrrNumber: string | null;
+  verificationStatus: string;
+}
+
+function useMyOfferings() {
+  return useQuery<MyOffering[]>({
+    queryKey: ["my-offerings"],
+    queryFn: async () => {
+      const res = await fetchWithAuth("/api/professionals/me/offerings");
+      if (!res.ok) throw new Error("Failed to fetch offerings");
+      const data = await res.json();
+      return data.offerings as MyOffering[];
+    },
+  });
+}
+
 type IdentitySectionProps = {
   idDocType: string;
   setIdDocType: (v: string) => void;
@@ -800,7 +824,8 @@ export default function OnboardStage2Page() {
   const { data: profile, isLoading: profileLoading } = useGetMyProfessionalProfile();
   const { data: idVerificationRaw, isLoading: idLoading } = useGetMyIdentityVerification();
   const { data: certsRaw, isLoading: certsLoading } = useGetMyCertifications();
-  const isLoading = profileLoading || idLoading || certsLoading;
+  const { data: offerings, isLoading: offeringsLoading } = useMyOfferings();
+  const isLoading = profileLoading || idLoading || certsLoading || offeringsLoading;
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const vertical = (params.vertical ?? profile?.vertical ?? "shadow_teacher") as VerticalValue;
@@ -809,9 +834,16 @@ export default function OnboardStage2Page() {
   const isTutor = vertical === "home_tutor";
   const isTherapist = vertical === "therapist";
 
+  // Is this vertical the professional's original/primary one, or an
+  // additional offering they're adding on top of it?
+  const isAdditionalOffering = !!profile && vertical !== profile.vertical;
+  const myOffering = offerings?.find((o) => o.vertical === vertical);
+
   const [isSaving, setIsSaving] = useState(false);
 
-  const existingVd = (profile?.verticalDetails ?? {}) as Record<string, unknown>;
+  const existingVd = (
+    isAdditionalOffering ? (myOffering?.verticalDetails ?? {}) : (profile?.verticalDetails ?? {})
+  ) as Record<string, unknown>;
 
   const [shadowForm, setShadowForm] = useState<ShadowForm>({
     highestEducation: (existingVd.highestEducation as string) ?? "",
@@ -840,7 +872,7 @@ export default function OnboardStage2Page() {
     disciplineOther: (existingVd.disciplineOther as string) ?? "",
     rciRegistered:
       existingVd.rciRegistered !== undefined ? (existingVd.rciRegistered as boolean) : null,
-    rciCrrNumber: profile?.rciCrrNumber ?? "",
+    rciCrrNumber: (isAdditionalOffering ? myOffering?.rciCrrNumber : profile?.rciCrrNumber) ?? "",
     conditionsTreated: (existingVd.conditionsTreated as string[]) ?? [],
     conditionsTreatedOther: (existingVd.conditionsTreatedOther as string) ?? "",
     sessionModes: (existingVd.sessionModes as string[]) ?? [],
@@ -955,7 +987,10 @@ export default function OnboardStage2Page() {
           homeSession: shadowForm.homeSession,
           ...(shadowForm.certKey ? { certKey: shadowForm.certKey } : {}),
         };
-        if (shadowForm.homeSession !== null) {
+        // offersHomeVisits is a shared, account-level field — only meaningful
+        // to set from the primary offering's Stage-2 form. An additional
+        // offering can't yet express "home visits for this vertical only".
+        if (shadowForm.homeSession !== null && !isAdditionalOffering) {
           extraPatch.offersHomeVisits = shadowForm.homeSession;
         }
       } else if (isTutor) {
@@ -987,7 +1022,10 @@ export default function OnboardStage2Page() {
         }
       }
 
-      const patchRes = await fetchWithAuth("/api/professionals/me", {
+      const patchUrl = isAdditionalOffering
+        ? `/api/professionals/me/offerings/${vertical}`
+        : "/api/professionals/me";
+      const patchRes = await fetchWithAuth(patchUrl, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ verticalDetails, ...extraPatch }),
@@ -998,14 +1036,15 @@ export default function OnboardStage2Page() {
         throw new Error((body as { error?: string }).error ?? "Save failed");
       }
 
-      // Government ID is mandatory for every vertical — submit it to the
-      // real verification queue (not just verticalDetails) so the admin
-      // approve endpoint's hard gate can see it.
+      // Government ID is person-level (shared across every offering) — but
+      // `vertical` tells the backend WHICH offering's requirements to
+      // recheck afterward. Harmless to always send: for the primary
+      // vertical it resolves to the exact same recompute as before.
       if (!identityAlreadySubmitted && idFileKey) {
         const idRes = await fetchWithAuth("/api/verifications/identity", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ documentType: idDocType, fileKey: idFileKey, dpdpConsent }),
+          body: JSON.stringify({ documentType: idDocType, fileKey: idFileKey, dpdpConsent, vertical }),
         });
         if (!idRes.ok) {
           const body = await idRes.json().catch(() => ({}));
@@ -1019,7 +1058,7 @@ export default function OnboardStage2Page() {
         const certRes = await fetchWithAuth("/api/verifications/certifications", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ documentType: "rci_certificate", fileKey: rciCertFileKey }),
+          body: JSON.stringify({ documentType: "rci_certificate", fileKey: rciCertFileKey, vertical }),
         });
         if (!certRes.ok) {
           const body = await certRes.json().catch(() => ({}));
@@ -1033,11 +1072,13 @@ export default function OnboardStage2Page() {
         await fetchWithAuth("/api/verifications/certifications", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ documentType: "training_certificate", fileKey: shadowForm.certKey }),
+          body: JSON.stringify({ documentType: "training_certificate", fileKey: shadowForm.certKey, vertical }),
         }).catch(() => {});
       }
 
-      if (!isTherapist) {
+      // Free activation is account-level, not per-offering — already true by
+      // the time a professional is adding a second/third offering.
+      if (!isTherapist && !isAdditionalOffering) {
         const activateRes = await fetchWithAuth("/api/professionals/me/free-activate", {
           method: "POST",
         });
@@ -1050,12 +1091,18 @@ export default function OnboardStage2Page() {
       await queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
       await queryClient.invalidateQueries({ queryKey: ["/api/verifications/identity"] });
       await queryClient.invalidateQueries({ queryKey: ["/api/verifications/certifications"] });
+      await queryClient.invalidateQueries({ queryKey: ["my-offerings"] });
 
       if (isTherapist && therapistForm.rciRegistered === false) {
         toast({
           title: "Profile saved as draft",
           description:
             "Your profile has been saved. You'll need to add your RCI CRR number before you can appear in parent search.",
+        });
+      } else if (isAdditionalOffering) {
+        toast({
+          title: "Service added!",
+          description: `Your ${meta.title} offering has been submitted for review. It's verified and listed independently of your other services.`,
         });
       } else {
         toast({
