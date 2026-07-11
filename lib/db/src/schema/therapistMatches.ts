@@ -69,6 +69,14 @@ export const therapistMatchesTable = pgTable("therapist_matches", {
   budgetMinInr: integer("budget_min_inr"),
   budgetMaxInr: integer("budget_max_inr"),
   wantsAssessmentFirst: boolean("wants_assessment_first"),
+  // Assessment-fee tracking (Pass 1 API) — mirrors the matching-fee pattern
+  // above (direct match-level fields, not a payments-table row), since
+  // there's exactly one assessment per match, same as exactly one matching
+  // fee. Needed for book-assessment/refund-assessment.
+  assessmentFeeOrderId: text("assessment_fee_order_id"),
+  assessmentFeePaymentId: text("assessment_fee_payment_id"),
+  assessmentFeePaidInr: integer("assessment_fee_paid_inr"),
+  assessmentFeeRefundedAt: timestamp("assessment_fee_refunded_at", { withTimezone: true }),
 
   extraNotes: text("extra_notes"),
   adminNotes: text("admin_notes"),
