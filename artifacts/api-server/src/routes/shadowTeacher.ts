@@ -26,6 +26,7 @@ import { rankCandidates, maskBody, type MatchSnapshot, type TierDef } from "../l
 import { notifyMatchShortlisted, notifyMatchChatMessage, notifyParentOnTrialDone, createInAppNotification } from "../lib/notificationService";
 import { generateOtp } from "../lib/otp";
 import { creditWallet } from "../lib/ledger";
+import { resolveStuckShadowTeacherMatch } from "../lib/stuckEngagementResolver";
 
 const router: IRouter = Router();
 
@@ -587,7 +588,15 @@ router.get("/shadow-teacher/my-request", requireAuth, requireRole("parent"), asy
     .limit(1);
 
   if (!matches.length) { res.json([]); return; }
-  const match = matches[0]!;
+  let match = matches[0]!;
+
+  // Stuck-engagement lazy-timeout resolution — resolve before building the
+  // response, so the parent's read reflects post-resolution state
+  // immediately (not stale "still pending"). See stuckEngagementResolver.ts.
+  await resolveStuckShadowTeacherMatch(match.id);
+  const [freshMatch] = await db.select().from(shadowTeacherMatchesTable).where(eq(shadowTeacherMatchesTable.id, match.id));
+  if (freshMatch) match = freshMatch;
+
   const committed = match.status === "committed";
 
   // Load active (not removed) candidates
@@ -675,7 +684,7 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
 
   if (!pro) { res.status(404).json({ error: "Professional profile not found" }); return; }
 
-  const candidates = await db
+  let candidates = await db
     .select({
       candidateId: shadowMatchCandidatesTable.id,
       matchId:     shadowMatchCandidatesTable.matchId,
@@ -714,6 +723,52 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       ),
     )
     .orderBy(desc(shadowMatchCandidatesTable.createdAt));
+
+  if (candidates.length > 0) {
+    // Stuck-engagement lazy-timeout resolution — resolve every distinct
+    // match this professional has a live candidacy in, then re-fetch so the
+    // response reflects post-resolution state. See stuckEngagementResolver.ts.
+    const distinctMatchIds = [...new Set(candidates.map((c) => c.matchId))] as number[];
+    await Promise.all(distinctMatchIds.map((id) => resolveStuckShadowTeacherMatch(id)));
+
+    candidates = await db
+      .select({
+        candidateId: shadowMatchCandidatesTable.id,
+        matchId:     shadowMatchCandidatesTable.matchId,
+        createdAt:   shadowMatchCandidatesTable.createdAt,
+        matchStatus:            shadowTeacherMatchesTable.status,
+        selectedProfessionalId: shadowTeacherMatchesTable.selectedProfessionalId,
+        childCity:              shadowTeacherMatchesTable.childCity,
+        childConditions:        shadowTeacherMatchesTable.childConditions,
+        childBudgetMinInr:      shadowTeacherMatchesTable.childBudgetMinInr,
+        childBudgetMaxInr:      shadowTeacherMatchesTable.childBudgetMaxInr,
+        childPreferredModes:    shadowTeacherMatchesTable.childPreferredModes,
+        childGoalsAreas:        shadowTeacherMatchesTable.childGoalsAreas,
+        preMeetingRequested:    shadowTeacherMatchesTable.preMeetingRequested,
+        preMeetingNote:         shadowTeacherMatchesTable.preMeetingNote,
+        trialLocation:          shadowTeacherMatchesTable.trialLocation,
+        trialDirectPay:              shadowTeacherMatchesTable.trialDirectPay,
+        trialDirectPayMarkedPaidAt:  shadowTeacherMatchesTable.trialDirectPayMarkedPaidAt,
+        trialDirectPayConfirmedAt:   shadowTeacherMatchesTable.trialDirectPayConfirmedAt,
+        requestStatus:          shadowMatchCandidatesTable.requestStatus,
+        rejectionNote:          shadowMatchCandidatesTable.rejectionNote,
+        interviewSlotsJson:     shadowMatchCandidatesTable.interviewSlotsJson,
+        interviewConfirmedSlot: shadowMatchCandidatesTable.interviewConfirmedSlot,
+        meetLink:               shadowMatchCandidatesTable.meetLink,
+        interviewDoneAt:        shadowMatchCandidatesTable.interviewDoneAt,
+        trialDaysRequested:     shadowMatchCandidatesTable.trialDaysRequested,
+        trialDaysAccepted:      shadowMatchCandidatesTable.trialDaysAccepted,
+      })
+      .from(shadowMatchCandidatesTable)
+      .innerJoin(shadowTeacherMatchesTable, eq(shadowMatchCandidatesTable.matchId, shadowTeacherMatchesTable.id))
+      .where(
+        and(
+          eq(shadowMatchCandidatesTable.professionalId, pro.id),
+          isNull(shadowMatchCandidatesTable.removedAt),
+        ),
+      )
+      .orderBy(desc(shadowMatchCandidatesTable.createdAt));
+  }
 
   if (candidates.length === 0) { res.json([]); return; }
 
@@ -2163,6 +2218,10 @@ router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requir
       preMeetingNote: preMeetingRequested ? (preMeetingNote ?? null) : null,
       trialStartOtp,
       trialLocation: trialLocation ?? null,
+      // Stuck-engagement lazy-timeout resolution — stamp precisely when this
+      // state was entered (write-only, no behavior change). See
+      // stuckEngagementResolver.ts.
+      trialPendingSince: new Date(),
       updatedAt: new Date(),
     })
     .where(eq(shadowTeacherMatchesTable.id, matchId));
@@ -2395,9 +2454,12 @@ router.post("/shadow-teacher/:matchId/verify-trial-start-otp", requireAuth, requ
 
   const trialEndOtp = generateOtp();
 
+  // Stuck-engagement lazy-timeout resolution — stamp precisely when this
+  // state was entered (write-only, no behavior change). See
+  // stuckEngagementResolver.ts.
   await db
     .update(shadowTeacherMatchesTable)
-    .set({ status: "trial_started", trialEndOtp, updatedAt: new Date() })
+    .set({ status: "trial_started", trialEndOtp, trialStartedSince: new Date(), updatedAt: new Date() })
     .where(eq(shadowTeacherMatchesTable.id, matchId));
 
   res.json({ matchId, status: "trial_started" });
@@ -2680,6 +2742,18 @@ router.get("/shadow-teacher/requests", requireAuth, requireRole("admin"), async 
     .leftJoin(professionalProfilesTable, eq(shadowTeacherMatchesTable.matchedProfessionalId, professionalProfilesTable.id))
     .leftJoin(shadowTeacherEngagementsTable, eq(shadowTeacherEngagementsTable.matchRequestId, shadowTeacherMatchesTable.id))
     .orderBy(desc(shadowTeacherMatchesTable.createdAt));
+
+  // Stuck-engagement lazy-timeout resolution, piggybacked on this admin view
+  // for wider coverage. Narrowed to non-terminal statuses only, since this
+  // endpoint has no pagination and returns every match ever created.
+  // Deliberately NOT re-fetching `rows` afterward (unlike the parent/
+  // professional read paths above) — this is a lower-stakes admin
+  // convenience view; a resolution that just happened here will show up on
+  // the next load rather than this exact response. See stuckEngagementResolver.ts.
+  const resolvableIds = rows
+    .filter((r) => ["committed", "trial_pending", "trial_started"].includes(r.status))
+    .map((r) => r.id);
+  await Promise.all(resolvableIds.map((id) => resolveStuckShadowTeacherMatch(id)));
 
   // Attach candidates per request
   const matchIds = rows.map((r) => r.id);

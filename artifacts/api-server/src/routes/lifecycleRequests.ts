@@ -675,11 +675,16 @@ router.patch("/engagements/:id/teacher-acceptance", requireAuth, async (req, res
     const activationFeeInr = effectiveActivationFeeEnabled ? globalActivationFeeInr : 0;
     const nextStatus = activationFeeInr > 0 ? "pending_activation_fee" : "pending_start";
 
+    // Stuck-engagement lazy-timeout resolution — stamp precisely when this
+    // state was entered (write-only, no behavior change). See
+    // stuckEngagementResolver.ts.
     await db
       .update(shadowTeacherEngagementsTable)
       .set({
         status: nextStatus,
         activationFeeInr: activationFeeInr > 0 ? activationFeeInr : null,
+        pendingActivationFeeSince: nextStatus === "pending_activation_fee" ? new Date() : null,
+        pendingStartSince: nextStatus === "pending_start" ? new Date() : null,
         updatedAt: new Date(),
       })
       .where(eq(shadowTeacherEngagementsTable.id, id));
@@ -830,7 +835,7 @@ router.post("/engagements/:id/activation-fee/order", requireAuth, requireRole("p
     if (matchRow && !matchRow.activationFeeEnabled) {
       await db
         .update(shadowTeacherEngagementsTable)
-        .set({ status: "pending_start", updatedAt: new Date() })
+        .set({ status: "pending_start", pendingStartSince: new Date(), updatedAt: new Date() })
         .where(eq(shadowTeacherEngagementsTable.id, id));
       res.json({ skipped: true, status: "pending_start" });
       return;
@@ -908,7 +913,7 @@ router.post("/engagements/:id/activation-fee/verify", requireAuth, requireRole("
 
   await db
     .update(shadowTeacherEngagementsTable)
-    .set({ status: "pending_start", activationFeePaymentId: paymentRow!.id, updatedAt: new Date() })
+    .set({ status: "pending_start", activationFeePaymentId: paymentRow!.id, pendingStartSince: new Date(), updatedAt: new Date() })
     .where(eq(shadowTeacherEngagementsTable.id, id));
 
   try {
