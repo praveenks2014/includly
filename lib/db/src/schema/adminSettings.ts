@@ -65,6 +65,17 @@ export const adminSettingsTable = pgTable("admin_settings", {
   activationFeeTimeoutDays: integer("activation_fee_timeout_days").notNull().default(7),
   otpStartTimeoutDays: integer("otp_start_timeout_days").notNull().default(7),
   otpEndTimeoutDays: integer("otp_end_timeout_days").notNull().default(7),
+  // Tutor/therapist trial-fee destination (Tutor/Therapist Pass 1). Default
+  // false = platform revenue via Razorpay-collect (no compliance issue — the
+  // platform keeps this fee, never remits it). Snapshotted onto
+  // tutor_matches.trial_direct_pay / therapist_matches.trial_direct_pay at
+  // request-trial-payment time — flipping this later never changes an
+  // in-flight trial's payment mode. When true, collection moves to
+  // direct-pay/verified-UPI-QR (same reasoning as shadow-teacher's
+  // platformSalaryEnabled/trialDirectPayEnabled design): the platform must
+  // never collect money that belongs to the professional.
+  tutorTrialFeeGoesToProfessional: boolean("tutor_trial_fee_goes_to_professional").notNull().default(false),
+  therapistTrialFeeGoesToProfessional: boolean("therapist_trial_fee_goes_to_professional").notNull().default(false),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
