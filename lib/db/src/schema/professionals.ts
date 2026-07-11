@@ -39,6 +39,14 @@ export const verificationStatusEnum = pgEnum("verification_status", [
   "rejected",
 ]);
 
+// Therapist-only — the professional chooses this at offering setup. Nullable:
+// meaningless for shadow_teacher/home_tutor offerings, and unset until a
+// therapist explicitly picks one.
+export const therapistBillingCadenceEnum = pgEnum("therapist_billing_cadence", [
+  "per_session",
+  "monthly",
+]);
+
 export const professionalProfilesTable = pgTable("professional_profiles", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
@@ -82,6 +90,13 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   rciCrrNumber: text("rci_crr_number"),
   rciVerified: boolean("rci_verified").notNull().default(false),
   certifications: json("certifications"),
+  // Therapist-only billing cadence choice (Prompt 2C) — see therapist_billing_cadence.
+  billingCadence: therapistBillingCadenceEnum("billing_cadence"),
+  // Listing-fee gate (Prompt 2D) — additive to the verification gate, admin
+  // toggle-controlled per category. Snapshot fields so a later fee-amount
+  // change never retroactively affects someone who already paid.
+  listingFeePaidAt: timestamp("listing_fee_paid_at", { withTimezone: true }),
+  listingFeePaymentId: integer("listing_fee_payment_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

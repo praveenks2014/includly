@@ -35,6 +35,28 @@ export const adminSettingsTable = pgTable("admin_settings", {
   activationFeeInr: integer("activation_fee_inr").notNull().default(999),
   platformSalaryEnabled: boolean("platform_salary_enabled").notNull().default(false),
   trialDirectPayEnabled: boolean("trial_direct_pay_enabled").notNull().default(true),
+  // Tutor & Therapist verticals (Prompt 2) — same snapshot-at-transition-time
+  // convention as the shadow-teacher fees above.
+  tutorMatchingFeeInr: integer("tutor_matching_fee_inr").notNull().default(500),
+  tutorPlacementFeeInr: integer("tutor_placement_fee_inr").notNull().default(1500),
+  tutorActivationFeeInr: integer("tutor_activation_fee_inr").notNull().default(500),
+  tutorTrialFeeInr: integer("tutor_trial_fee_inr").notNull().default(300),
+  therapistMatchingFeeInr: integer("therapist_matching_fee_inr").notNull().default(750),
+  therapistPlacementFeeInr: integer("therapist_placement_fee_inr").notNull().default(4000),
+  therapistActivationFeeInr: integer("therapist_activation_fee_inr").notNull().default(1500),
+  therapistTrialFeeInr: integer("therapist_trial_fee_inr").notNull().default(500),
+  therapistAssessmentFeeInr: integer("therapist_assessment_fee_inr").notNull().default(1500),
+  // Listing-fee gate (Prompt 2D) — a fee to be listable/matchable at all,
+  // per category, fully admin-toggle-controlled. Deliberately all OFF and
+  // all zero by default: this is a lever to turn on later, never a launch
+  // default. Additive to the existing verification gate, never a replacement
+  // — see the candidate-surfacing query changes.
+  shadowTeacherListingFeeEnabled: boolean("shadow_teacher_listing_fee_enabled").notNull().default(false),
+  shadowTeacherListingFeeInr: integer("shadow_teacher_listing_fee_inr").notNull().default(0),
+  tutorListingFeeEnabled: boolean("tutor_listing_fee_enabled").notNull().default(false),
+  tutorListingFeeInr: integer("tutor_listing_fee_inr").notNull().default(0),
+  therapistListingFeeEnabled: boolean("therapist_listing_fee_enabled").notNull().default(false),
+  therapistListingFeeInr: integer("therapist_listing_fee_inr").notNull().default(0),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -1,5 +1,5 @@
 import { pgTable, serial, integer, text, timestamp, boolean, json, unique } from "drizzle-orm/pg-core";
-import { professionalProfilesTable, professionalVerticalEnum, verificationStatusEnum } from "./professionals";
+import { professionalProfilesTable, professionalVerticalEnum, verificationStatusEnum, therapistBillingCadenceEnum } from "./professionals";
 
 // A professional's ADDITIONAL (non-primary) service offerings. The professional's
 // original/primary vertical stays exactly where it always was — on
@@ -22,6 +22,10 @@ export const professionalOfferingsTable = pgTable("professional_offerings", {
   verificationStatus: verificationStatusEnum("verification_status").notNull().default("unsubmitted"),
   isVerified: boolean("is_verified").notNull().default(false),
   rejectionReason: text("rejection_reason"),
+  // Mirrors the same two additions on professional_profiles — see there for rationale.
+  billingCadence: therapistBillingCadenceEnum("billing_cadence"),
+  listingFeePaidAt: timestamp("listing_fee_paid_at", { withTimezone: true }),
+  listingFeePaymentId: integer("listing_fee_payment_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [

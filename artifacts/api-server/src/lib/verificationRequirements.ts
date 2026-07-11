@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   db,
   professionalProfilesTable,
@@ -6,6 +6,7 @@ import {
   identityVerificationsTable,
   professionalCertificationsTable,
 } from "@workspace/db";
+import { resolveOffering } from "./offeringResolver";
 
 /**
  * Document-type convention used by the Certifications upload flow to mark a
@@ -135,76 +136,12 @@ export async function recomputeSubmissionStatus(professionalId: number): Promise
 // ─── Multi-vertical offerings ──────────────────────────────────────────────
 // A professional's ORIGINAL vertical stays on professional_profiles itself
 // (untouched, same columns as always). Any ADDITIONAL vertical they add lives
-// in professional_offerings, one row per (professionalId, vertical). Every
-// function below resolves which of the two locations a given vertical lives
-// in, then defers to the exact same computeVerificationRequirements /
-// recomputeSubmissionStatus logic already used for the single-vertical path
-// — never a parallel gate.
-
-export interface OfferingLocation {
-  isPrimary: boolean;
-  offeringId: number | null; // null when isPrimary — lives on professional_profiles itself
-  vertical: VerificationVertical;
-  rciCrrNumber: string | null;
-  verificationStatus: string;
-}
-
-/**
- * Finds where a given vertical's data lives for this professional: their
- * primary profile row (if it matches profile.vertical) or a
- * professional_offerings row. Returns null if the professional has neither —
- * i.e. they haven't added this vertical at all.
- */
-export async function locateOffering(
-  professionalId: number,
-  vertical: VerificationVertical,
-): Promise<OfferingLocation | null> {
-  const [profile] = await db
-    .select({
-      vertical: professionalProfilesTable.vertical,
-      rciCrrNumber: professionalProfilesTable.rciCrrNumber,
-      verificationStatus: professionalProfilesTable.verificationStatus,
-    })
-    .from(professionalProfilesTable)
-    .where(eq(professionalProfilesTable.id, professionalId));
-
-  if (!profile) return null;
-
-  if (profile.vertical === vertical) {
-    return {
-      isPrimary: true,
-      offeringId: null,
-      vertical: profile.vertical,
-      rciCrrNumber: profile.rciCrrNumber,
-      verificationStatus: profile.verificationStatus,
-    };
-  }
-
-  const [offering] = await db
-    .select({
-      id: professionalOfferingsTable.id,
-      vertical: professionalOfferingsTable.vertical,
-      rciCrrNumber: professionalOfferingsTable.rciCrrNumber,
-      verificationStatus: professionalOfferingsTable.verificationStatus,
-    })
-    .from(professionalOfferingsTable)
-    .where(
-      and(
-        eq(professionalOfferingsTable.professionalId, professionalId),
-        eq(professionalOfferingsTable.vertical, vertical),
-      ),
-    );
-
-  if (!offering) return null;
-
-  return {
-    isPrimary: false,
-    offeringId: offering.id,
-    vertical: offering.vertical,
-    rciCrrNumber: offering.rciCrrNumber,
-    verificationStatus: offering.verificationStatus,
-  };
-}
+// in professional_offerings, one row per (professionalId, vertical).
+// resolveOffering() (offeringResolver.ts) is the SINGLE shared function that
+// resolves which of the two locations a given vertical lives in — every
+// function below calls it rather than re-implementing that branch, then
+// defers to the exact same computeVerificationRequirements /
+// recomputeSubmissionStatus logic already used for the single-vertical path.
 
 /**
  * Per-offering equivalent of getVerificationRequirementsForProfessional —
@@ -216,8 +153,8 @@ export async function getVerificationRequirementsForOffering(
   professionalId: number,
   vertical: VerificationVertical,
 ): Promise<VerificationRequirements> {
-  const location = await locateOffering(professionalId, vertical);
-  if (!location) {
+  const offering = await resolveOffering(professionalId, vertical);
+  if (!offering) {
     return { met: false, missing: ["offering_not_found"], warnings: [] };
   }
 
@@ -232,10 +169,31 @@ export async function getVerificationRequirementsForOffering(
     .where(eq(professionalCertificationsTable.professionalId, professionalId));
 
   return computeVerificationRequirements(
-    { vertical: location.vertical, rciCrrNumber: location.rciCrrNumber },
+    { vertical: offering.vertical, rciCrrNumber: offering.rciCrrNumber },
     !!identityDoc,
     certs.map((c) => c.documentType),
   );
+}
+
+/**
+ * The actual listability gate: is this professional's OFFERING for this
+ * vertical admin-approved AND verified? Used by tutor/therapist candidate
+ * surfacing exactly as shadow-teacher's surfacing uses the equivalent
+ * profile-row check — same resolveOffering() call, not a separate/weaker check.
+ *
+ * CROSS-REFERENCE: this single-professional check is DUPLICATED — not shared
+ * code — in shadow-teacher's bulk candidate-surfacing SQL query
+ * (surfaceCandidatesForMatch() in artifacts/api-server/src/routes/
+ * shadowTeacher.ts, the primary-row-OR-offering-row WHERE clause). That
+ * query can't call this function directly (would be N+1 against hundreds of
+ * candidates per match), so it re-encodes the same rule as a SQL JOIN
+ * instead. If what makes an offering "listable" ever changes here (e.g. the
+ * listing-fee gate), THAT query must be updated too — check both before
+ * assuming a change here is complete.
+ */
+export async function isOfferingListable(professionalId: number, vertical: VerificationVertical): Promise<boolean> {
+  const offering = await resolveOffering(professionalId, vertical);
+  return !!offering && offering.verificationStatus === "verified";
 }
 
 /**
@@ -248,20 +206,20 @@ export async function recomputeSubmissionStatusForOffering(
   professionalId: number,
   vertical: VerificationVertical,
 ): Promise<void> {
-  const location = await locateOffering(professionalId, vertical);
-  if (!location || location.verificationStatus === "verified") return;
+  const offering = await resolveOffering(professionalId, vertical);
+  if (!offering || offering.verificationStatus === "verified") return;
 
-  if (location.isPrimary) {
+  if (offering.isPrimary) {
     await recomputeSubmissionStatus(professionalId);
     return;
   }
 
   const requirements = await getVerificationRequirementsForOffering(professionalId, vertical);
 
-  if (requirements.met && location.verificationStatus !== "pending") {
+  if (requirements.met && offering.verificationStatus !== "pending") {
     await db
       .update(professionalOfferingsTable)
       .set({ verificationStatus: "pending" })
-      .where(eq(professionalOfferingsTable.id, location.offeringId!));
+      .where(eq(professionalOfferingsTable.id, offering.offeringId!));
   }
 }

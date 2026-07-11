@@ -31,11 +31,11 @@ import {
 import {
   getVerificationRequirementsForProfessional,
   getVerificationRequirementsForOffering,
-  locateOffering,
   computeVerificationRequirements,
   RCI_CERTIFICATE_DOC_TYPE,
   type VerificationVertical,
 } from "../lib/verificationRequirements";
+import { resolveOffering } from "../lib/offeringResolver";
 
 const OFFERING_VERTICALS: VerificationVertical[] = ["shadow_teacher", "home_tutor", "therapist"];
 
@@ -261,7 +261,7 @@ router.get("/admin/professionals/:id/offerings", ...adminGuard, async (req, res)
   const offerings = await Promise.all(
     verticals.map(async (vertical) => {
       const requirements = await getVerificationRequirementsForOffering(id, vertical);
-      const location = await locateOffering(id, vertical);
+      const location = await resolveOffering(id, vertical);
       return {
         vertical,
         isPrimary: location?.isPrimary ?? (vertical === profile.vertical),
@@ -290,7 +290,7 @@ router.patch("/admin/professionals/:id/offerings/:vertical/approve", ...adminGua
   }
   const vertical = verticalRaw as VerificationVertical;
 
-  const location = await locateOffering(id, vertical);
+  const location = await resolveOffering(id, vertical);
   if (!location) {
     res.status(404).json({ error: "Offering not found" });
     return;
@@ -337,7 +337,7 @@ router.patch("/admin/professionals/:id/offerings/:vertical/reject", ...adminGuar
   const vertical = verticalRaw as VerificationVertical;
   const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : null;
 
-  const location = await locateOffering(id, vertical);
+  const location = await resolveOffering(id, vertical);
   if (!location) {
     res.status(404).json({ error: "Offering not found" });
     return;

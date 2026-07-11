@@ -166,6 +166,17 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
   // professional_offerings — an RCI-verified therapist does NOT surface here
   // just because their PRIMARY profile is verified; their shadow-teacher
   // OFFERING must independently pass this same gate (verified + priced).
+  //
+  // CROSS-REFERENCE: the listability rule below (primary-row OR offering-row,
+  // both requiring verificationStatus='verified') is DUPLICATED — not shared
+  // code — with isOfferingListable()/resolveOffering() in
+  // artifacts/api-server/src/lib/verificationRequirements.ts and
+  // artifacts/api-server/src/lib/offeringResolver.ts. That single-professional
+  // path can't be reused here directly (it would be an N+1 query against
+  // hundreds of candidates per match); this bulk SQL JOIN encodes the same
+  // rule instead. If what makes an offering "listable" ever changes (e.g. the
+  // listing-fee gate), THIS query and THAT function must be updated together
+  // — check both before assuming a change here is complete.
   const rows = await db
     .select({ profile: professionalProfilesTable, offering: professionalOfferingsTable })
     .from(professionalProfilesTable)
