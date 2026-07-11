@@ -55,6 +55,12 @@ export const shadowTeacherMatchesTable = pgTable("shadow_teacher_matches", {
   trialStartOtp: text("trial_start_otp"),
   trialEndOtp: text("trial_end_otp"),
   trialLocation: text("trial_location"),
+  // Stuck-engagement lazy-timeout resolution — precise "waiting since" marks,
+  // stamped at the exact moment of transition in verify-trial-payment and
+  // verify-trial-start-otp respectively. Write-only additions, no
+  // business-logic change to those endpoints. See stuckEngagementResolver.ts.
+  trialPendingSince: timestamp("trial_pending_since", { withTimezone: true }),
+  trialStartedSince: timestamp("trial_started_since", { withTimezone: true }),
   // Monetization restructure — trial direct-pay flag, snapshotted from
   // admin_settings.trialDirectPayEnabled at trial-request time. Null if no trial was requested.
   trialDirectPay: boolean("trial_direct_pay"),

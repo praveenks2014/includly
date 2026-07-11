@@ -57,6 +57,14 @@ export const adminSettingsTable = pgTable("admin_settings", {
   tutorListingFeeInr: integer("tutor_listing_fee_inr").notNull().default(0),
   therapistListingFeeEnabled: boolean("therapist_listing_fee_enabled").notNull().default(false),
   therapistListingFeeInr: integer("therapist_listing_fee_inr").notNull().default(0),
+  // Stuck shadow-teacher engagement lazy-timeout resolution — how long a
+  // party may leave the other waiting before the engagement auto-cancels
+  // (with refund) or, for the OTP-end case, auto-progresses. See
+  // stuckEngagementResolver.ts.
+  commitResponseTimeoutDays: integer("commit_response_timeout_days").notNull().default(7),
+  activationFeeTimeoutDays: integer("activation_fee_timeout_days").notNull().default(7),
+  otpStartTimeoutDays: integer("otp_start_timeout_days").notNull().default(7),
+  otpEndTimeoutDays: integer("otp_end_timeout_days").notNull().default(7),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

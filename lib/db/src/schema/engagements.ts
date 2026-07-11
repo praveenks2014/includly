@@ -36,6 +36,14 @@ export const shadowTeacherEngagementsTable = pgTable("shadow_teacher_engagements
   activationFeeInr: integer("activation_fee_inr"),
   activationFeePaymentId: integer("activation_fee_payment_id"),
   activationFeeOrderId: text("activation_fee_order_id"),
+  // Stuck-engagement lazy-timeout resolution — precise "waiting since" marks
+  // for the two states createdAt doesn't cover (pending_teacher_acceptance's
+  // clock is just createdAt, already exact). Stamped at the exact moment of
+  // transition in teacher-acceptance (accept branch) and activation-fee/verify
+  // — write-only additions, no business-logic change to those endpoints. See
+  // stuckEngagementResolver.ts for how these are read.
+  pendingActivationFeeSince: timestamp("pending_activation_fee_since", { withTimezone: true }),
+  pendingStartSince: timestamp("pending_start_since", { withTimezone: true }),
   // Snapshotted from the accepted negotiation offer at commit time. Nullable so
   // pre-feature engagements don't falsely appear to have agreed to specific
   // terms. Data-capture only: no downstream automation reads these yet

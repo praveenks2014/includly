@@ -50,3 +50,4 @@ export * from "./tutorEngagementSessions";
 export * from "./therapistEngagementSessions";
 export * from "./tutorEngagementPaymentConfirmations";
 export * from "./therapistEngagementPaymentConfirmations";
+export * from "./refundResolutionLog";
