@@ -1821,6 +1821,28 @@ router.post("/tutor/engagements/:id/mark-month-paid", requireAuth, requireRole("
   res.status(201).json(confirmation);
 });
 
+// ── GET /tutor/engagements/:id/payment-confirmations — professional-only,
+// lists UNCONFIRMED direct-pay confirmations (confirmedAt IS NULL) so the
+// professional can discover which confirmationId(s) are awaiting their
+// confirm-received action below. Read-only, no writes. Same access-check
+// convention (getTutorEngagementWithAccess) as every other endpoint in
+// this file — restricted to the professional assigned to THIS engagement.
+router.get("/tutor/engagements/:id/payment-confirmations", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { eng, role } = await getTutorEngagementWithAccess(id, req.userId!, req.userRole!);
+  if (!eng || role !== "professional") { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
+
+  const rows = await db
+    .select()
+    .from(tutorEngagementPaymentConfirmationsTable)
+    .where(and(eq(tutorEngagementPaymentConfirmationsTable.engagementId, id), isNull(tutorEngagementPaymentConfirmationsTable.confirmedAt)))
+    .orderBy(desc(tutorEngagementPaymentConfirmationsTable.month));
+
+  res.json(rows);
+});
+
 router.post("/tutor/engagements/:id/payment-confirmations/:confirmationId/confirm-received", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
   const id = parseInt(req.params["id"] as string, 10);
   const confirmationId = parseInt(req.params["confirmationId"] as string, 10);

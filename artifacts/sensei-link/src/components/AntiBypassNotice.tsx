@@ -12,9 +12,14 @@ interface AntiBypassNoticeProps {
   benefits: string[];
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
+  /** Optional override for the checkbox label. Defaults to the original
+   * parent-facing phrasing below — pass an explicit string when this
+   * notice is shown to the professional themselves (they wouldn't say
+   * "my tutor" about themselves). */
+  checkboxLabel?: string;
 }
 
-export function AntiBypassNotice({ professionalLabel, benefits, checked, onCheckedChange }: AntiBypassNoticeProps) {
+export function AntiBypassNotice({ professionalLabel, benefits, checked, onCheckedChange, checkboxLabel }: AntiBypassNoticeProps) {
   return (
     <div className="space-y-2">
       <div className="bg-teal-50 border border-teal-200 rounded-xl p-3.5 space-y-2">
@@ -35,7 +40,7 @@ export function AntiBypassNotice({ professionalLabel, benefits, checked, onCheck
           onChange={(e) => onCheckedChange(e.target.checked)}
           data-testid="commit-acknowledge-checkbox"
         />
-        <span>I understand — I want to keep this engagement with my {professionalLabel} on Includly</span>
+        <span>{checkboxLabel ?? `I understand — I want to keep this engagement with my ${professionalLabel} on Includly`}</span>
       </label>
     </div>
   );

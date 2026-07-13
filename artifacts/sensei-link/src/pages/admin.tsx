@@ -1544,6 +1544,21 @@ function SettingsTab() {
   const [therapistListingFeeEnabled, setTherapistListingFeeEnabled] = useState(false);
   const [therapistListingFeeInr, setTherapistListingFeeInr] = useState<number | "">("");
 
+  const [tutorMatchingFeeInr, setTutorMatchingFeeInr] = useState<number | "">("");
+  const [tutorPlacementFeeInr, setTutorPlacementFeeInr] = useState<number | "">("");
+  const [tutorActivationFeeInr, setTutorActivationFeeInr] = useState<number | "">("");
+  const [tutorTrialFeeInr, setTutorTrialFeeInr] = useState<number | "">("");
+  const [tutorTrialFeeGoesToProfessional, setTutorTrialFeeGoesToProfessional] = useState(false);
+  const [tutorDirectPayEnabled, setTutorDirectPayEnabled] = useState(true);
+
+  const [therapistMatchingFeeInr, setTherapistMatchingFeeInr] = useState<number | "">("");
+  const [therapistPlacementFeeInr, setTherapistPlacementFeeInr] = useState<number | "">("");
+  const [therapistActivationFeeInr, setTherapistActivationFeeInr] = useState<number | "">("");
+  const [therapistTrialFeeInr, setTherapistTrialFeeInr] = useState<number | "">("");
+  const [therapistAssessmentFeeInr, setTherapistAssessmentFeeInr] = useState<number | "">("");
+  const [therapistTrialFeeGoesToProfessional, setTherapistTrialFeeGoesToProfessional] = useState(false);
+  const [therapistDirectPayEnabled, setTherapistDirectPayEnabled] = useState(true);
+
   const [isSaving, setIsSaving] = useState(false);
   const [synced, setSynced] = useState(false);
 
@@ -1570,6 +1585,19 @@ function SettingsTab() {
     setTutorListingFeeInr(settingsRec["tutorListingFeeInr"] as number ?? 0);
     setTherapistListingFeeEnabled((settingsRec["therapistListingFeeEnabled"] as boolean) ?? false);
     setTherapistListingFeeInr(settingsRec["therapistListingFeeInr"] as number ?? 0);
+    setTutorMatchingFeeInr(settingsRec["tutorMatchingFeeInr"] as number ?? 500);
+    setTutorPlacementFeeInr(settingsRec["tutorPlacementFeeInr"] as number ?? 1500);
+    setTutorActivationFeeInr(settingsRec["tutorActivationFeeInr"] as number ?? 500);
+    setTutorTrialFeeInr(settingsRec["tutorTrialFeeInr"] as number ?? 300);
+    setTutorTrialFeeGoesToProfessional((settingsRec["tutorTrialFeeGoesToProfessional"] as boolean) ?? false);
+    setTutorDirectPayEnabled((settingsRec["tutorDirectPayEnabled"] as boolean) ?? true);
+    setTherapistMatchingFeeInr(settingsRec["therapistMatchingFeeInr"] as number ?? 750);
+    setTherapistPlacementFeeInr(settingsRec["therapistPlacementFeeInr"] as number ?? 4000);
+    setTherapistActivationFeeInr(settingsRec["therapistActivationFeeInr"] as number ?? 1500);
+    setTherapistTrialFeeInr(settingsRec["therapistTrialFeeInr"] as number ?? 500);
+    setTherapistAssessmentFeeInr(settingsRec["therapistAssessmentFeeInr"] as number ?? 1500);
+    setTherapistTrialFeeGoesToProfessional((settingsRec["therapistTrialFeeGoesToProfessional"] as boolean) ?? false);
+    setTherapistDirectPayEnabled((settingsRec["therapistDirectPayEnabled"] as boolean) ?? true);
     setSynced(true);
   }
 
@@ -1600,6 +1628,19 @@ function SettingsTab() {
         tutorListingFeeInr: Number(tutorListingFeeInr) || 0,
         therapistListingFeeEnabled,
         therapistListingFeeInr: Number(therapistListingFeeInr) || 0,
+        tutorMatchingFeeInr: Number(tutorMatchingFeeInr) || 500,
+        tutorPlacementFeeInr: Number(tutorPlacementFeeInr) || 1500,
+        tutorActivationFeeInr: Number(tutorActivationFeeInr) || 500,
+        tutorTrialFeeInr: Number(tutorTrialFeeInr) || 300,
+        tutorTrialFeeGoesToProfessional,
+        tutorDirectPayEnabled,
+        therapistMatchingFeeInr: Number(therapistMatchingFeeInr) || 750,
+        therapistPlacementFeeInr: Number(therapistPlacementFeeInr) || 4000,
+        therapistActivationFeeInr: Number(therapistActivationFeeInr) || 1500,
+        therapistTrialFeeInr: Number(therapistTrialFeeInr) || 500,
+        therapistAssessmentFeeInr: Number(therapistAssessmentFeeInr) || 1500,
+        therapistTrialFeeGoesToProfessional,
+        therapistDirectPayEnabled,
       };
       await updateSettings({ data: payload });
       queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() });
@@ -1799,6 +1840,120 @@ function SettingsTab() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* ── Tutor — Fees & Payment Mode ── */}
+        <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-5">
+          <p className="text-base font-bold text-[#1A2340]">Tutor — Fees & Payment Mode</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">Matching Fee (₹)</Label>
+              <Input type="number" min={0} value={tutorMatchingFeeInr}
+                onChange={(e) => setTutorMatchingFeeInr(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">Placement Fee (₹)</Label>
+              <Input type="number" min={0} value={tutorPlacementFeeInr}
+                onChange={(e) => setTutorPlacementFeeInr(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">Activation Fee (₹)</Label>
+              <Input type="number" min={0} value={tutorActivationFeeInr}
+                onChange={(e) => setTutorActivationFeeInr(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">Trial Day Fee (₹)</Label>
+              <Input type="number" min={0} value={tutorTrialFeeInr}
+                onChange={(e) => setTutorTrialFeeInr(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+          </div>
+          <hr className="border-gray-100" />
+          <div className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50">
+            <div>
+              <p className="text-sm font-medium text-[#1A2340]">Trial fee goes to professional</p>
+              <p className="text-xs text-gray-400">When on, the trial fee is routed to the tutor directly instead of platform revenue.</p>
+            </div>
+            <button type="button" onClick={() => setTutorTrialFeeGoesToProfessional(v => !v)}
+              aria-label={tutorTrialFeeGoesToProfessional ? "Disable trial fee to professional" : "Enable trial fee to professional"}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4A5] focus-visible:ring-offset-2 ${tutorTrialFeeGoesToProfessional ? "bg-[#2EC4A5]" : "bg-gray-200"}`}>
+              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${tutorTrialFeeGoesToProfessional ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50">
+            <div>
+              <p className="text-sm font-medium text-[#1A2340]">Direct pay (ongoing sessions)</p>
+              <p className="text-xs text-gray-400">When on (default), parents pay the tutor directly for sessions. When off, routed through the platform.</p>
+            </div>
+            <button type="button" onClick={() => setTutorDirectPayEnabled(v => !v)}
+              aria-label={tutorDirectPayEnabled ? "Disable tutor direct pay" : "Enable tutor direct pay"}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4A5] focus-visible:ring-offset-2 ${tutorDirectPayEnabled ? "bg-[#2EC4A5]" : "bg-gray-200"}`}>
+              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${tutorDirectPayEnabled ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* ── Therapist — Fees & Payment Mode ── */}
+        <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-5">
+          <p className="text-base font-bold text-[#1A2340]">Therapist — Fees & Payment Mode</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">Matching Fee (₹)</Label>
+              <Input type="number" min={0} value={therapistMatchingFeeInr}
+                onChange={(e) => setTherapistMatchingFeeInr(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">Placement Fee (₹)</Label>
+              <Input type="number" min={0} value={therapistPlacementFeeInr}
+                onChange={(e) => setTherapistPlacementFeeInr(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">Activation Fee (₹)</Label>
+              <Input type="number" min={0} value={therapistActivationFeeInr}
+                onChange={(e) => setTherapistActivationFeeInr(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">Trial Day Fee (₹)</Label>
+              <Input type="number" min={0} value={therapistTrialFeeInr}
+                onChange={(e) => setTherapistTrialFeeInr(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">Assessment Fee (₹)</Label>
+              <Input type="number" min={0} value={therapistAssessmentFeeInr}
+                onChange={(e) => setTherapistAssessmentFeeInr(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+          </div>
+          <hr className="border-gray-100" />
+          <div className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50">
+            <div>
+              <p className="text-sm font-medium text-[#1A2340]">Trial fee goes to professional</p>
+              <p className="text-xs text-gray-400">When on, the trial fee is routed to the therapist directly instead of platform revenue.</p>
+            </div>
+            <button type="button" onClick={() => setTherapistTrialFeeGoesToProfessional(v => !v)}
+              aria-label={therapistTrialFeeGoesToProfessional ? "Disable trial fee to professional" : "Enable trial fee to professional"}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4A5] focus-visible:ring-offset-2 ${therapistTrialFeeGoesToProfessional ? "bg-[#2EC4A5]" : "bg-gray-200"}`}>
+              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${therapistTrialFeeGoesToProfessional ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50">
+            <div>
+              <p className="text-sm font-medium text-[#1A2340]">Direct pay (ongoing sessions)</p>
+              <p className="text-xs text-gray-400">When on (default), parents pay the therapist directly for sessions. When off, routed through the platform.</p>
+            </div>
+            <button type="button" onClick={() => setTherapistDirectPayEnabled(v => !v)}
+              aria-label={therapistDirectPayEnabled ? "Disable therapist direct pay" : "Enable therapist direct pay"}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4A5] focus-visible:ring-offset-2 ${therapistDirectPayEnabled ? "bg-[#2EC4A5]" : "bg-gray-200"}`}>
+              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${therapistDirectPayEnabled ? "translate-x-5" : "translate-x-0"}`} />
+            </button>
+          </div>
         </div>
 
         {/* ── Tiers Editor ── */}

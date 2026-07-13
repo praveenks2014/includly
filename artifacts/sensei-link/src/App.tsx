@@ -518,6 +518,18 @@ function Router() {
           </RequireAuth>
         </Route>
 
+        {(SHOW_TUTOR_SEARCH || SHOW_THERAPIST_SEARCH) && (
+          <Route path="/pro/vertical-requests">
+            <RequireAuth>
+              <RequireRole allow={["professional"]}>
+                <AppShell>
+                  <ProfessionalDashboard />
+                </AppShell>
+              </RequireRole>
+            </RequireAuth>
+          </Route>
+        )}
+
         {/* ── Centre shell ── */}
         <Route path="/centre/overview">
           <RequireAuth>

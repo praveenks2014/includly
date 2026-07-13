@@ -455,6 +455,7 @@ router.get("/therapist/my-candidacies", requireAuth, requireRole("professional")
       budgetMinInr: therapistMatchesTable.budgetMinInr,
       budgetMaxInr: therapistMatchesTable.budgetMaxInr,
       wantsAssessmentFirst: therapistMatchesTable.wantsAssessmentFirst,
+      assessmentFeePaymentId: therapistMatchesTable.assessmentFeePaymentId,
       requestStatus: therapistMatchCandidatesTable.requestStatus,
       rejectionNote: therapistMatchCandidatesTable.rejectionNote,
       interviewSlotsJson: therapistMatchCandidatesTable.interviewSlotsJson,
@@ -1999,6 +2000,28 @@ router.post("/therapist/engagements/:id/mark-month-paid", requireAuth, requireRo
   }
 
   res.status(201).json(confirmation);
+});
+
+// ── GET /therapist/engagements/:id/payment-confirmations — professional-only,
+// lists UNCONFIRMED direct-pay confirmations (confirmedAt IS NULL) so the
+// professional can discover which confirmationId(s) are awaiting their
+// confirm-received action below. Read-only, no writes. Same access-check
+// convention (getTherapistEngagementWithAccess) as every other endpoint in
+// this file — restricted to the professional assigned to THIS engagement.
+router.get("/therapist/engagements/:id/payment-confirmations", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { eng, role } = await getTherapistEngagementWithAccess(id, req.userId!, req.userRole!);
+  if (!eng || role !== "professional") { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
+
+  const rows = await db
+    .select()
+    .from(therapistEngagementPaymentConfirmationsTable)
+    .where(and(eq(therapistEngagementPaymentConfirmationsTable.engagementId, id), isNull(therapistEngagementPaymentConfirmationsTable.confirmedAt)))
+    .orderBy(desc(therapistEngagementPaymentConfirmationsTable.month));
+
+  res.json(rows);
 });
 
 router.post("/therapist/engagements/:id/payment-confirmations/:confirmationId/confirm-received", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {

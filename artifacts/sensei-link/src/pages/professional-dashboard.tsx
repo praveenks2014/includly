@@ -44,9 +44,13 @@ import {
 import { ShadowMatchChatDrawer } from "@/components/ShadowMatchChatDrawer";
 import { ComingSoon } from "@/components/ComingSoon";
 import { CityAutocomplete, type CityResult } from "@/components/CityAutocomplete";
+import { SHOW_TUTOR_SEARCH, SHOW_THERAPIST_SEARCH } from "@/features";
+import type { Vertical } from "@/components/VerticalRequestWidget";
+import { VerticalCandidacyCard, type VerticalCandidacy } from "@/components/VerticalCandidacyCard";
+import { VerticalEngagementCard, type VerticalEngagement } from "@/components/VerticalEngagementCard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type ProTab = "home" | "profile" | "availability" | "bookings" | "earnings" | "certifications" | "verification" | "notifications" | "messages" | "engagement" | "enquiries";
+type ProTab = "home" | "profile" | "availability" | "bookings" | "earnings" | "certifications" | "verification" | "notifications" | "messages" | "engagement" | "enquiries" | "vertical-requests";
 
 interface Notification { id: number; title: string; body: string; read: boolean; createdAt: string; }
 interface CertDoc { id: number; documentType: string; fileKey: string; uploadedAt: string; }
@@ -3423,6 +3427,77 @@ function EngagementTab() {
   );
 }
 
+// ─── Vertical Requests Tab (tutor/therapist — Part B) ────────────────────────
+// Additive, separate from EnquiriesTab/EngagementTab above (shadow-teacher's
+// own tabs are untouched). Gated on SHOW_TUTOR_SEARCH/SHOW_THERAPIST_SEARCH —
+// renders nothing when both are false. Grouped by vertical using
+// GET /professionals/me/offerings, so a professional only sees sections for
+// verticals they actually hold (primary or additional offering).
+
+function VerticalRequestsSection({ vertical, onUpdated }: { vertical: Vertical; onUpdated: () => void }) {
+  const apiBase = vertical === "tutor" ? "/api/tutor" : "/api/therapist";
+  const label = vertical === "tutor" ? "Tutor" : "Therapist";
+
+  const { data: candidacies = [], refetch: refetchCandidacies } = useQuery<VerticalCandidacy[]>({
+    queryKey: [`${vertical}-my-candidacies`],
+    queryFn: () => fetchWithAuth(`${apiBase}/my-candidacies`).then(r => r.json()),
+  });
+  const { data: engagements = [], refetch: refetchEngagements } = useQuery<VerticalEngagement[]>({
+    queryKey: [`${vertical}-my-engagements`],
+    queryFn: () => fetchWithAuth(`${apiBase}/engagements`).then(r => r.json()),
+  });
+
+  function handleUpdated() {
+    void refetchCandidacies();
+    void refetchEngagements();
+    onUpdated();
+  }
+
+  const activeEngagements = engagements.filter((e) => e.status !== "ended");
+
+  return (
+    <div className="space-y-4">
+      <p className="text-base font-bold text-[#1A2340]">{label} Requests</p>
+      {candidacies.length === 0 && activeEngagements.length === 0 ? (
+        <p className="text-sm text-gray-400">No {label.toLowerCase()} requests yet.</p>
+      ) : (
+        <div className="space-y-3">
+          {candidacies.map((c) => (
+            <VerticalCandidacyCard key={`c-${c.candidateId}`} vertical={vertical} candidacy={c} onUpdated={handleUpdated} />
+          ))}
+          {activeEngagements.map((e) => (
+            <VerticalEngagementCard key={`e-${e.id}`} vertical={vertical} engagement={e} onUpdated={handleUpdated} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VerticalRequestsTab() {
+  const queryClient = useQueryClient();
+
+  const { data: offerings = [] } = useQuery<{ vertical: string }[]>({
+    queryKey: ["my-offerings"],
+    queryFn: () => fetchWithAuth("/api/professionals/me/offerings").then(r => r.json()),
+    enabled: SHOW_TUTOR_SEARCH || SHOW_THERAPIST_SEARCH,
+  });
+
+  const verticals: Vertical[] = [];
+  if (SHOW_TUTOR_SEARCH && offerings.some((o) => o.vertical === "home_tutor")) verticals.push("tutor");
+  if (SHOW_THERAPIST_SEARCH && offerings.some((o) => o.vertical === "therapist")) verticals.push("therapist");
+
+  if (verticals.length === 0) return null;
+
+  return (
+    <div className="space-y-8">
+      {verticals.map((v) => (
+        <VerticalRequestsSection key={v} vertical={v} onUpdated={() => queryClient.invalidateQueries()} />
+      ))}
+    </div>
+  );
+}
+
 // ─── Enquiries Tab (shadow teachers) ─────────────────────────────────────────
 
 interface Candidacy {
@@ -4182,6 +4257,7 @@ export default function ProfessionalDashboard() {
     if (loc.startsWith("/pro/earnings"))    return "earnings";
     if (loc.startsWith("/pro/enquiries"))   return "enquiries";
     if (loc.startsWith("/pro/engagement"))  return "engagement";
+    if (loc.startsWith("/pro/vertical-requests")) return "vertical-requests";
     return "home";
   });
   useEffect(() => {
@@ -4190,6 +4266,7 @@ export default function ProfessionalDashboard() {
     else if (loc.startsWith("/pro/earnings"))        setActiveTab("earnings");
     else if (loc.startsWith("/pro/enquiries"))       setActiveTab("enquiries");
     else if (loc.startsWith("/pro/engagement"))      setActiveTab("engagement");
+    else if (loc.startsWith("/pro/vertical-requests")) setActiveTab("vertical-requests");
     else if (loc.startsWith("/pro/today"))           setActiveTab("home");
   }, [loc]);
   const firstName = me?.fullName?.split(" ")[0] ?? user?.firstName ?? "there";
@@ -4232,6 +4309,7 @@ export default function ProfessionalDashboard() {
         {activeTab === "messages"      && <MessagesTab />}
         {activeTab === "notifications" && <NotificationsTab />}
         {activeTab === "enquiries"     && <EnquiriesTab />}
+        {activeTab === "vertical-requests" && <VerticalRequestsTab />}
       </main>
     </div>
   );

@@ -12,7 +12,9 @@ import {
   Inbox,
   BookOpen,
   Sparkles,
+  ClipboardList,
 } from "lucide-react";
+import { SHOW_TUTOR_SEARCH, SHOW_THERAPIST_SEARCH } from "@/features";
 
 export type Role = "parent" | "professional" | "centre_admin" | "admin";
 
@@ -66,6 +68,14 @@ export const NAV: Record<Exclude<Role, "admin">, NavItem[]> = {
     tab("Earnings", Wallet, "/pro/earnings"),
     tab("Enquiries", Inbox, "/pro/enquiries", undefined, "shadow_teacher"),
     tab("Engagement", BookOpen, "/pro/engagement", undefined, "shadow_teacher"),
+    // No specialtyFilter — a professional's tutor/therapist involvement may
+    // be an ADDITIONAL offering, not their primary specialty, so the
+    // existing specialtyFilter (primary-specialty-only) can't gate this.
+    // VerticalRequestsTab itself checks GET /professionals/me/offerings and
+    // renders nothing if the professional holds neither vertical.
+    ...(SHOW_TUTOR_SEARCH || SHOW_THERAPIST_SEARCH
+      ? [tab("Requests", ClipboardList, "/pro/vertical-requests")]
+      : []),
   ],
   centre_admin: [
     tab("Overview", LayoutDashboard, "/centre/overview"),
