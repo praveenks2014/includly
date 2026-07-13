@@ -90,7 +90,7 @@ export function SideNav() {
           <>
             {secondaryTabs.length === 0 && <div className="my-3 border-t border-border" />}
             <Link
-              href={`/children/${selectedChildId}/edit`}
+              href={`/children/${selectedChildId}/profile`}
               replace
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 loc.startsWith("/children")

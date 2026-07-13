@@ -352,6 +352,21 @@ function Router() {
           </RequireAuth>
         </Route>
 
+        {/* Edit-from-dashboard variant of ChildOnboardingPage — same component,
+            same :id param it already reads via useParams, just wrapped in
+            AppShell so the nav stays visible. SideNav/BottomNav's "Child
+            Profile" link now points here instead of /children/:id/edit,
+            which stays registered below, untouched, chrome-less. */}
+        <Route path="/children/:id/profile">
+          <RequireAuth>
+            <RequireRole allow={["parent"]}>
+              <AppShell>
+                <ChildOnboardingPage />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
+
         {/* ── Admin (auth, existing layout — no AppShell) ── */}
         <Route path="/admin">
           <RequireAuth><AdminPage /></RequireAuth>

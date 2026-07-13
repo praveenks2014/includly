@@ -140,7 +140,7 @@ export function BottomNav() {
               })}
               {showChildProfile && (
                 <Link
-                  href={`/children/${selectedChildId}/edit`}
+                  href={`/children/${selectedChildId}/profile`}
                   onClick={() => setMoreOpen(false)}
                   className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                 >
