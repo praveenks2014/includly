@@ -1303,25 +1303,45 @@ function ShadowTeacherTab() {
 
   const { data: logs = [] } = useQuery<DailyLog[]>({
     queryKey: ["engagement-logs", active?.id],
-    queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/daily-logs`).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/engagements/${active!.id}/daily-logs`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: !!active,
   });
 
   const { data: payments = [] } = useQuery<SalaryPayment[]>({
     queryKey: ["engagement-payments", active?.id],
-    queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/payments`).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/engagements/${active!.id}/payments`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: !!active,
   });
 
   const { data: salaryConfirmations = [] } = useQuery<SalaryConfirmation[]>({
     queryKey: ["salary-confirmations", active?.id],
-    queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/salary-confirmations`).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/engagements/${active!.id}/salary-confirmations`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: !!active && active?.platformSalaryEnabled === false,
   });
 
   const { data: lifecycleRequests = [] } = useQuery<LifecycleRequest[]>({
     queryKey: ["engagement-lifecycle", active?.id],
-    queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/lifecycle`).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/engagements/${active!.id}/lifecycle`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: !!active,
   });
 

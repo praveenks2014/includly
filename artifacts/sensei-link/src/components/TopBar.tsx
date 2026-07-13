@@ -299,7 +299,10 @@ export function TopBar() {
           </DropdownMenu>
         )
       ) : (
-        <Link href={shellRoot} className="flex shrink-0 items-center gap-1.5">
+        // Hidden at md+ because SideNav (visible at md+, hidden below) already
+        // renders its own identical brand block in the sidebar header — showing
+        // both at once was the reported "duplicate Includly bar" on desktop.
+        <Link href={shellRoot} className="flex md:hidden shrink-0 items-center gap-1.5">
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-teal-600">
             <span className="text-xs font-bold text-white">In</span>
           </div>

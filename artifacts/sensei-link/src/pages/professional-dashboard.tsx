@@ -4300,7 +4300,7 @@ export default function ProfessionalDashboard() {
       <main className="px-4 sm:px-6 py-6 max-w-[900px] w-full mx-auto">
         {activeTab === "home"          && <HomeTab profile={profileTyped} firstName={firstName} onTabChange={handleTabChange} />}
         {activeTab === "profile"       && <ProfileTab profile={profileTyped} />}
-        {activeTab === "availability"  && <ComingSoon icon={CalendarCheck} title="Availability calendar coming soon" accent="teal" />}
+        {activeTab === "availability"  && <AvailabilityTab />}
         {activeTab === "bookings"      && <BookingsTab />}
         {activeTab === "earnings"      && <EarningsTab />}
         {activeTab === "certifications"&& <CertificationsTab />}
