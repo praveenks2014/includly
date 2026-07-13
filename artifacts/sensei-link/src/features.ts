@@ -22,6 +22,18 @@ export const FEATURES = {
  */
 export const SHOW_PRO_UPGRADE = false;
 
+/**
+ * SHOW_TUTOR_SEARCH / SHOW_THERAPIST_SEARCH — gate the tutor/therapist
+ * parent-facing search+match flows. CROSS-REFERENCE: the backend's own
+ * flags of the same name (artifacts/api-server/src/lib/features.ts) do NOT
+ * share state with these — both must be flipped together at launch. The
+ * backend already 404s every tutor/therapist route regardless of this
+ * flag, so this is a cosmetic gate (don't show a nav link to a dead page),
+ * not the source of truth for whether the feature is reachable.
+ */
+export const SHOW_TUTOR_SEARCH = false;
+export const SHOW_THERAPIST_SEARCH = false;
+
 export const STAT_THRESHOLDS = {
   specialists: 50,
   centres: 20,

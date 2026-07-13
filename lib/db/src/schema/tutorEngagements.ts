@@ -47,6 +47,11 @@ export const tutorEngagementsTable = pgTable("tutor_engagements", {
   activationFeeInr: integer("activation_fee_inr"),
   activationFeePaymentId: integer("activation_fee_payment_id"),
   activationFeeOrderId: text("activation_fee_order_id"),
+  // Ongoing SESSION payment mode — snapshotted from admin_settings.
+  // tutorDirectPayEnabled at commit time (see that column for the
+  // compliance rationale). true = direct-pay (default); false = collected
+  // via Razorpay instead of direct UPI.
+  directPayEnabled: boolean("direct_pay_enabled").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

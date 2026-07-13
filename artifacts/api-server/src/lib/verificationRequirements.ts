@@ -5,6 +5,7 @@ import {
   professionalOfferingsTable,
   identityVerificationsTable,
   professionalCertificationsTable,
+  adminSettingsTable,
 } from "@workspace/db";
 import { resolveOffering } from "./offeringResolver";
 
@@ -22,6 +23,37 @@ export type VerificationVertical = "shadow_teacher" | "home_tutor" | "therapist"
 export interface ProfileForRequirements {
   vertical: VerificationVertical;
   rciCrrNumber?: string | null;
+  verticalDetails?: unknown;
+}
+
+// ─── Therapist discipline → credential-kind mapping ────────────────────────
+// Not every therapist discipline is RCI-regulated in India — mirrors the
+// discipline list in artifacts/sensei-link/src/pages/onboard-stage2.tsx
+// (THERAPIST_DISCIPLINES). Duplicated, not shared, because the frontend and
+// backend are separate packages with no shared constants module — if the
+// discipline list or credential-kind mapping ever changes, update BOTH.
+export type TherapistDisciplineCredentialKind = "rci" | "ot" | "medical" | "aba" | "ancillary";
+
+const RCI_REQUIRED_DISCIPLINES = new Set([
+  "Speech & Language Therapy (SLT)",
+  "Special Education",
+  "Clinical Psychology",
+  "Rehabilitation Counselling",
+]);
+const MEDICAL_COUNCIL_DISCIPLINES = new Set(["Developmental Pediatrician", "Psychiatrist"]);
+const ABA_DISCIPLINES = new Set(["Applied Behavior Analysis (ABA)", "Behavioral Therapy"]);
+
+export function disciplineCredentialKind(discipline: string): TherapistDisciplineCredentialKind {
+  if (discipline === "Occupational Therapy (OT)") return "ot";
+  if (RCI_REQUIRED_DISCIPLINES.has(discipline)) return "rci";
+  if (MEDICAL_COUNCIL_DISCIPLINES.has(discipline)) return "medical";
+  if (ABA_DISCIPLINES.has(discipline)) return "aba";
+  // Physiotherapy, Developmental Therapy, Psychotherapy/Counselling, Other —
+  // none has one clean, nationally consistent mandatory credential in India
+  // (physiotherapy councils are fragmented state-by-state with no central
+  // body; developmental therapy is an approach, not a credential;
+  // psychotherapy/counselling has no regulator at all).
+  return "ancillary";
 }
 
 export interface VerificationRequirements {
@@ -49,15 +81,47 @@ export function computeVerificationRequirements(
   if (!hasIdentityDoc) missing.push("identity_document");
 
   if (profile.vertical === "therapist") {
-    // THERAPIST: RCI/CRR number AND the actual RCI certificate upload are
-    // both mandatory. RCI Act requires registration to practice — this is a
-    // legal requirement, not just a trust signal.
-    if (!profile.rciCrrNumber || !profile.rciCrrNumber.trim()) {
-      missing.push("rci_crr_number");
+    const vd = (profile.verticalDetails ?? {}) as Record<string, unknown>;
+    const discipline = typeof vd["discipline"] === "string" ? (vd["discipline"] as string) : "";
+    const kind = disciplineCredentialKind(discipline);
+
+    if (kind === "rci") {
+      // RCI/CRR number AND the actual RCI certificate upload are both
+      // mandatory. RCI Act requires registration to practice for these
+      // disciplines — this is a legal requirement, not just a trust signal.
+      if (!profile.rciCrrNumber || !profile.rciCrrNumber.trim()) {
+        missing.push("rci_crr_number");
+      }
+      if (!certDocumentTypes.includes(RCI_CERTIFICATE_DOC_TYPE)) {
+        missing.push("rci_certificate");
+      }
+    } else if (kind === "ot") {
+      // Occupational therapists are regulated via AIOTA membership, not RCI.
+      // NCAHP registration is captured if present but stays optional —
+      // NCAHP registers are still being rolled out nationally.
+      const aiota = vd["aiotaMembershipNumber"];
+      if (typeof aiota !== "string" || !aiota.trim()) missing.push("aiota_membership_number");
+    } else if (kind === "medical") {
+      // Developmental pediatricians and psychiatrists are medical doctors —
+      // regulated by NMC/State Medical Council, not RCI.
+      const nmc = vd["medicalCouncilRegistrationNumber"];
+      if (typeof nmc !== "string" || !nmc.trim()) missing.push("medical_council_registration_number");
+    } else if (kind === "aba") {
+      // ABA/behavioral therapists are certified via an international body
+      // (BCBA/RBT/QABA), not RCI. Whether they must additionally practice
+      // under RCI-registered supervision is a genuinely unsettled compliance
+      // question in India — supervisingProfessionalName/supervisingRciNumber
+      // are captured on the profile but deliberately NOT enforced here.
+      const credType = vd["abaCredentialType"];
+      const credNumber = vd["abaCredentialNumber"];
+      if (typeof credType !== "string" || !credType.trim() || typeof credNumber !== "string" || !credNumber.trim()) {
+        missing.push("aba_credential");
+      }
     }
-    if (!certDocumentTypes.includes(RCI_CERTIFICATE_DOC_TYPE)) {
-      missing.push("rci_certificate");
-    }
+    // kind === "ancillary" (Physiotherapy, Developmental Therapy,
+    // Psychotherapy/Counselling, Other): no discipline-specific credential
+    // is gated — identity document (already checked above) is the only
+    // mandatory requirement for this bucket.
   }
 
   if (profile.vertical === "shadow_teacher") {
@@ -82,6 +146,7 @@ export async function getVerificationRequirementsForProfessional(
     .select({
       vertical: professionalProfilesTable.vertical,
       rciCrrNumber: professionalProfilesTable.rciCrrNumber,
+      verticalDetails: professionalProfilesTable.verticalDetails,
     })
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.id, professionalId));
@@ -169,7 +234,7 @@ export async function getVerificationRequirementsForOffering(
     .where(eq(professionalCertificationsTable.professionalId, professionalId));
 
   return computeVerificationRequirements(
-    { vertical: offering.vertical, rciCrrNumber: offering.rciCrrNumber },
+    { vertical: offering.vertical, rciCrrNumber: offering.rciCrrNumber, verticalDetails: offering.verticalDetails },
     !!identityDoc,
     certs.map((c) => c.documentType),
   );
@@ -193,7 +258,20 @@ export async function getVerificationRequirementsForOffering(
  */
 export async function isOfferingListable(professionalId: number, vertical: VerificationVertical): Promise<boolean> {
   const offering = await resolveOffering(professionalId, vertical);
-  return !!offering && offering.verificationStatus === "verified";
+  if (!offering || offering.verificationStatus !== "verified") return false;
+
+  // Listing-fee gate (admin-toggle-controlled, per category). No-op when a
+  // category's toggle is off — see the cross-reference comment above: any
+  // change here must be mirrored in the bulk candidate-surfacing SQL queries.
+  const [settings] = await db.select().from(adminSettingsTable).limit(1);
+  const listingFeeEnabled =
+    vertical === "shadow_teacher" ? settings?.shadowTeacherListingFeeEnabled
+    : vertical === "home_tutor" ? settings?.tutorListingFeeEnabled
+    : settings?.therapistListingFeeEnabled;
+
+  if (listingFeeEnabled && !offering.listingFeePaidAt) return false;
+
+  return true;
 }
 
 /**

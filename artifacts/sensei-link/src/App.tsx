@@ -14,6 +14,7 @@ import { RequireChildProfile } from "@/guards/RequireChildProfile";
 import { SHELL_ROOT, isShellPath, type Role } from "@/nav/config";
 import { useGetMe } from "@workspace/api-client-react";
 import { SelectedChildProvider } from "@/contexts/SelectedChildContext";
+import { SHOW_TUTOR_SEARCH, SHOW_THERAPIST_SEARCH } from "@/features";
 
 import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home";
@@ -428,6 +429,28 @@ function Router() {
             </RequireChildProfile>
           </ParentShell>
         </Route>
+        {SHOW_TUTOR_SEARCH && (
+          <Route path="/tutor-search">
+            <ParentShell>
+              <RequireChildProfile>
+                <AppShell>
+                  <ParentDashboard />
+                </AppShell>
+              </RequireChildProfile>
+            </ParentShell>
+          </Route>
+        )}
+        {SHOW_THERAPIST_SEARCH && (
+          <Route path="/therapist-search">
+            <ParentShell>
+              <RequireChildProfile>
+                <AppShell>
+                  <ParentDashboard />
+                </AppShell>
+              </RequireChildProfile>
+            </ParentShell>
+          </Route>
+        )}
 
         {/* ── Professional shell ── */}
         <Route path="/pro/today">

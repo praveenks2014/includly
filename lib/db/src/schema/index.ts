@@ -51,3 +51,5 @@ export * from "./therapistEngagementSessions";
 export * from "./tutorEngagementPaymentConfirmations";
 export * from "./therapistEngagementPaymentConfirmations";
 export * from "./refundResolutionLog";
+export * from "./tutorEngagementPlatformPayments";
+export * from "./therapistEngagementPlatformPayments";

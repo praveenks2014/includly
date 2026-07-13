@@ -11,6 +11,7 @@ import {
 import router from "./routes";
 import webhooksRouter from "./routes/webhooks";
 import { logger } from "./lib/logger";
+import { SHOW_TUTOR_SEARCH, SHOW_THERAPIST_SEARCH } from "./lib/features";
 
 const app: Express = express();
 
@@ -33,6 +34,23 @@ app.use(
     },
   }),
 );
+
+// Earliest possible checkpoint for the tutor/therapist feature flags —
+// proactive defense-in-depth, ahead of Clerk entirely, so a disabled
+// vertical returns 404 regardless of auth state or auth-mode quirks. The
+// per-router gates in tutor.ts/therapist.ts still apply too; this is not a
+// replacement for those, just the earliest of two redundant checks.
+app.use((req, res, next) => {
+  if (!SHOW_TUTOR_SEARCH && req.path.startsWith("/api/tutor")) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (!SHOW_THERAPIST_SEARCH && req.path.startsWith("/api/therapist")) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  next();
+});
 
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 

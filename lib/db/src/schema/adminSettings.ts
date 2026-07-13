@@ -5,9 +5,6 @@ import { z } from "zod/v4";
 export const adminSettingsTable = pgTable("admin_settings", {
   id: serial("id").primaryKey(),
   contactLimitPerParent: integer("contact_limit_per_parent").notNull().default(5),
-  contactUnlockPriceInr: integer("contact_unlock_price_inr").notNull().default(0),
-  platformCommissionPct: integer("platform_commission_pct").notNull().default(0),
-  monetisationEnabled: boolean("monetisation_enabled").notNull().default(false),
   // Flow A — Shadow Teacher matching fee
   matchingFeeInr: integer("matching_fee_inr").notNull().default(500),
   matchingFeeRefundable: boolean("matching_fee_refundable").notNull().default(true),
@@ -16,6 +13,10 @@ export const adminSettingsTable = pgTable("admin_settings", {
   markupFlatInr: integer("markup_flat_inr").notNull().default(0),
   // Tax configuration (rates admin-configurable; consult CA before enabling TCS/TDS)
   gstRatePct: real("gst_rate_pct").notNull().default(18),
+  // Inactive placeholders pending CA confirmation of GST-TCS (Sec 52)/
+  // Sec 194-O TDS treatment for this marketplace — not read anywhere yet.
+  // Deliberately kept (not dead code in the "safe to remove" sense) until
+  // that tax-treatment decision is made.
   tcsEnabled: boolean("tcs_enabled").notNull().default(false),
   tdsEnabled: boolean("tds_enabled").notNull().default(false),
   // OTP + auto-cancel
@@ -76,6 +77,21 @@ export const adminSettingsTable = pgTable("admin_settings", {
   // never collect money that belongs to the professional.
   tutorTrialFeeGoesToProfessional: boolean("tutor_trial_fee_goes_to_professional").notNull().default(false),
   therapistTrialFeeGoesToProfessional: boolean("therapist_trial_fee_goes_to_professional").notNull().default(false),
+  // Ongoing SESSION payment mode for tutor/therapist (separate from the
+  // trial-fee toggle above, which only governs the one-time trial charge).
+  // Default true = direct-pay: parent pays the professional's verified UPI
+  // directly, platform never touches the money, no aggregation/compliance
+  // exposure. Snapshotted onto tutor_engagements/therapist_engagements.
+  // directPayEnabled at commit time — flipping this later never changes a
+  // live engagement. Setting either of these to false routes ongoing
+  // payments through Razorpay-collect-and-remit instead — see the loud
+  // compliance comment on tutor.ts/therapist.ts's pay-month endpoints
+  // before doing that: collecting many professionals' recurring session
+  // fees through the platform recreates the exact salary-aggregation
+  // exposure (TDS/GST/aggregation) that shadow-teacher's own
+  // platformSalaryEnabled toggle exists to isolate.
+  tutorDirectPayEnabled: boolean("tutor_direct_pay_enabled").notNull().default(true),
+  therapistDirectPayEnabled: boolean("therapist_direct_pay_enabled").notNull().default(true),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

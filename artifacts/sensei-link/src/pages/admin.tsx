@@ -38,7 +38,7 @@ import {
 } from "recharts";
 import {
   Loader2, Users, BarChart3, Settings, CheckCircle, XCircle, Clock,
-  ShieldAlert, UserCheck, TrendingUp, FileText, Eye, ExternalLink, Bell,
+  ShieldAlert, UserCheck, FileText, Eye, ExternalLink, Bell,
   IndianRupee, CreditCard, Menu, X, UserX, Shield, ChevronRight, Flag,
   Building2, Plus, Check, Edit2, Trash2, Package, AlertTriangle,
 } from "lucide-react";
@@ -1521,10 +1521,6 @@ function SettingsTab() {
   const { mutateAsync: updateSettings } = useUpdateAdminSettings();
 
   const [contactLimit, setContactLimit] = useState<number | "">("");
-  const [unlockPrice, setUnlockPrice] = useState<number | "">("");
-  const [commissionPct, setCommissionPct] = useState<number | "">("");
-  const [monetisationEnabled, setMonetisationEnabled] = useState(false);
-  const [showMonetisationModal, setShowMonetisationModal] = useState(false);
 
   const [matchingFeeInr, setMatchingFeeInr] = useState<number | "">("");
   const [matchingFeeRefundable, setMatchingFeeRefundable] = useState(true);
@@ -1541,14 +1537,18 @@ function SettingsTab() {
   const [platformSalaryEnabled, setPlatformSalaryEnabled] = useState(false);
   const [trialDirectPayEnabled, setTrialDirectPayEnabled] = useState(true);
 
+  const [shadowTeacherListingFeeEnabled, setShadowTeacherListingFeeEnabled] = useState(false);
+  const [shadowTeacherListingFeeInr, setShadowTeacherListingFeeInr] = useState<number | "">("");
+  const [tutorListingFeeEnabled, setTutorListingFeeEnabled] = useState(false);
+  const [tutorListingFeeInr, setTutorListingFeeInr] = useState<number | "">("");
+  const [therapistListingFeeEnabled, setTherapistListingFeeEnabled] = useState(false);
+  const [therapistListingFeeInr, setTherapistListingFeeInr] = useState<number | "">("");
+
   const [isSaving, setIsSaving] = useState(false);
   const [synced, setSynced] = useState(false);
 
   if (settings && !synced) {
     setContactLimit(settings.contactLimitPerParent ?? 5);
-    setUnlockPrice(settings.contactUnlockPriceInr ?? 0);
-    setCommissionPct(settings.platformCommissionPct ?? 0);
-    setMonetisationEnabled(settings.monetisationEnabled ?? false);
     const settingsRec = settings as unknown as Record<string, unknown>;
     setMatchingFeeInr(settingsRec["matchingFeeInr"] as number ?? 500);
     setMatchingFeeRefundable((settingsRec["matchingFeeRefundable"] as boolean) ?? true);
@@ -1564,33 +1564,44 @@ function SettingsTab() {
     setActivationFeeInr(settingsRec["activationFeeInr"] as number ?? 999);
     setPlatformSalaryEnabled((settingsRec["platformSalaryEnabled"] as boolean) ?? false);
     setTrialDirectPayEnabled((settingsRec["trialDirectPayEnabled"] as boolean) ?? true);
+    setShadowTeacherListingFeeEnabled((settingsRec["shadowTeacherListingFeeEnabled"] as boolean) ?? false);
+    setShadowTeacherListingFeeInr(settingsRec["shadowTeacherListingFeeInr"] as number ?? 0);
+    setTutorListingFeeEnabled((settingsRec["tutorListingFeeEnabled"] as boolean) ?? false);
+    setTutorListingFeeInr(settingsRec["tutorListingFeeInr"] as number ?? 0);
+    setTherapistListingFeeEnabled((settingsRec["therapistListingFeeEnabled"] as boolean) ?? false);
+    setTherapistListingFeeInr(settingsRec["therapistListingFeeInr"] as number ?? 0);
     setSynced(true);
   }
 
   async function handleSave() {
     setIsSaving(true);
     try {
-      await updateSettings({
-        data: {
-          contactLimitPerParent: Number(contactLimit) || 5,
-          contactUnlockPriceInr: Number(unlockPrice) || 0,
-          platformCommissionPct: Number(commissionPct) || 0,
-          monetisationEnabled,
-          matchingFeeInr: Number(matchingFeeInr) || 500,
-          matchingFeeRefundable,
-          trialFeeInr: Number(trialFeeInr) || 500,
-          salaryPlatformCutPct: Number(salaryPlatformCutPct) || 10,
-          noticePeriodDays: Number(noticePeriodDays) || 30,
-          parentBuyoutDays: Number(parentBuyoutDays) || 15,
-          markupPct: Number(markupPct) || 10,
-          gstRatePct: Number(gstRatePct) || 18,
-          tiersJson: JSON.stringify(tiers),
-          placementFeeInr: Number(placementFeeInr) || 2999,
-          activationFeeInr: Number(activationFeeInr) || 999,
-          platformSalaryEnabled,
-          trialDirectPayEnabled,
-        },
-      });
+      // Built as a variable (not an inline object literal) so it can carry fields
+      // added to admin_settings after the generated UpdateAdminSettingsBody type —
+      // the backend validates against the live Drizzle schema regardless.
+      const payload = {
+        contactLimitPerParent: Number(contactLimit) || 5,
+        matchingFeeInr: Number(matchingFeeInr) || 500,
+        matchingFeeRefundable,
+        trialFeeInr: Number(trialFeeInr) || 500,
+        salaryPlatformCutPct: Number(salaryPlatformCutPct) || 10,
+        noticePeriodDays: Number(noticePeriodDays) || 30,
+        parentBuyoutDays: Number(parentBuyoutDays) || 15,
+        markupPct: Number(markupPct) || 10,
+        gstRatePct: Number(gstRatePct) || 18,
+        tiersJson: JSON.stringify(tiers),
+        placementFeeInr: Number(placementFeeInr) || 2999,
+        activationFeeInr: Number(activationFeeInr) || 999,
+        platformSalaryEnabled,
+        trialDirectPayEnabled,
+        shadowTeacherListingFeeEnabled,
+        shadowTeacherListingFeeInr: Number(shadowTeacherListingFeeInr) || 0,
+        tutorListingFeeEnabled,
+        tutorListingFeeInr: Number(tutorListingFeeInr) || 0,
+        therapistListingFeeEnabled,
+        therapistListingFeeInr: Number(therapistListingFeeInr) || 0,
+      };
+      await updateSettings({ data: payload });
       queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() });
       toast({ title: "Settings saved ✓" });
     } catch {
@@ -1609,24 +1620,6 @@ function SettingsTab() {
   return (
     <>
       <div className="max-w-2xl space-y-6">
-        {monetisationEnabled ? (
-          <div className="flex items-start gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
-            <IndianRupee size={18} className="text-green-600 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-green-800">Monetisation is active</p>
-              <p className="text-xs text-green-600 mt-0.5">Parents are charged ₹{Number(unlockPrice) || 0} per contact unlock. Platform commission: {Number(commissionPct) || 0}%.</p>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-start gap-3 p-4 bg-[#FFB830]/10 border border-[#FFB830]/30 rounded-xl">
-            <TrendingUp size={18} className="text-[#FFB830] mt-0.5 shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-[#1A2340]">Platform is currently free</p>
-              <p className="text-xs text-gray-500 mt-0.5">Enable monetisation below to charge parents per unlock via Razorpay.</p>
-            </div>
-          </div>
-        )}
-
         {/* ── Contact Unlocks ── */}
         <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-5">
           <p className="text-base font-bold text-[#1A2340]">Contact Unlocks</p>
@@ -1636,37 +1629,6 @@ function SettingsTab() {
             <Input id="contact-limit" type="number" min={1} max={1000} value={contactLimit}
               onChange={(e) => setContactLimit(e.target.value === "" ? "" : Number(e.target.value))}
               className="rounded-lg focus-visible:ring-[#2EC4A5] max-w-xs" />
-          </div>
-          <hr className="border-gray-100" />
-          <div>
-            <p className="text-sm font-semibold text-[#1A2340] mb-1">Monetisation</p>
-            <p className="text-xs text-gray-400 mb-4">Control whether parents are charged for contact unlocks.</p>
-            <div className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50 mb-4">
-              <div>
-                <p className="text-sm font-medium text-[#1A2340]">Enable paid contact unlocks</p>
-                <p className="text-xs text-gray-400">Charge parents each time they unlock a professional's contact details.</p>
-              </div>
-              <button type="button"
-                onClick={() => !monetisationEnabled ? setShowMonetisationModal(true) : setMonetisationEnabled(false)}
-                aria-label={monetisationEnabled ? "Disable monetisation" : "Enable monetisation"}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4A5] focus-visible:ring-offset-2 ${monetisationEnabled ? "bg-[#2EC4A5]" : "bg-gray-200"}`}>
-                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${monetisationEnabled ? "translate-x-5" : "translate-x-0"}`} />
-              </button>
-            </div>
-            <div className={`grid grid-cols-2 gap-4 transition-opacity duration-200 ${monetisationEnabled ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
-              <div>
-                <Label htmlFor="unlock-price" className="text-sm font-semibold text-[#1A2340]">Unlock Price (₹)</Label>
-                <Input id="unlock-price" type="number" min={0} max={10000} value={unlockPrice}
-                  onChange={(e) => setUnlockPrice(e.target.value === "" ? "" : Number(e.target.value))}
-                  className="rounded-lg focus-visible:ring-[#2EC4A5] mt-1.5" disabled={!monetisationEnabled} />
-              </div>
-              <div>
-                <Label htmlFor="commission-pct" className="text-sm font-semibold text-[#1A2340]">Platform Commission (%)</Label>
-                <Input id="commission-pct" type="number" min={0} max={100} value={commissionPct}
-                  onChange={(e) => setCommissionPct(e.target.value === "" ? "" : Number(e.target.value))}
-                  className="rounded-lg focus-visible:ring-[#2EC4A5] mt-1.5" disabled={!monetisationEnabled} />
-              </div>
-            </div>
           </div>
         </div>
 
@@ -1805,6 +1767,40 @@ function SettingsTab() {
           </div>
         </div>
 
+        {/* ── Listing Fees ── */}
+        <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-5">
+          <div>
+            <p className="text-base font-bold text-[#1A2340]">Listing Fees</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Per-category fee to be listable/matchable at all. Additive to the verification gate —
+              off by default, and has no effect on a category until its toggle is enabled.
+            </p>
+          </div>
+          {([
+            { label: "Shadow Teacher", enabled: shadowTeacherListingFeeEnabled, setEnabled: setShadowTeacherListingFeeEnabled, fee: shadowTeacherListingFeeInr, setFee: setShadowTeacherListingFeeInr },
+            { label: "Tutor", enabled: tutorListingFeeEnabled, setEnabled: setTutorListingFeeEnabled, fee: tutorListingFeeInr, setFee: setTutorListingFeeInr },
+            { label: "Therapist", enabled: therapistListingFeeEnabled, setEnabled: setTherapistListingFeeEnabled, fee: therapistListingFeeInr, setFee: setTherapistListingFeeInr },
+          ] as const).map((row) => (
+            <div key={row.label} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50">
+              <div>
+                <p className="text-sm font-medium text-[#1A2340]">{row.label}</p>
+                <p className="text-xs text-gray-400">Charge a listing fee before a {row.label.toLowerCase()} can be surfaced to parents.</p>
+              </div>
+              <div className="flex items-center gap-4">
+                <Input type="number" min={0} value={row.fee}
+                  onChange={(e) => row.setFee(e.target.value === "" ? "" : Number(e.target.value))}
+                  disabled={!row.enabled}
+                  className="rounded-lg focus-visible:ring-[#2EC4A5] w-28 disabled:opacity-40" />
+                <button type="button" onClick={() => row.setEnabled(!row.enabled)}
+                  aria-label={row.enabled ? `Disable ${row.label} listing fee` : `Enable ${row.label} listing fee`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4A5] focus-visible:ring-offset-2 ${row.enabled ? "bg-[#2EC4A5]" : "bg-gray-200"}`}>
+                  <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${row.enabled ? "translate-x-5" : "translate-x-0"}`} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
         {/* ── Tiers Editor ── */}
         <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-4">
           <div className="flex items-center justify-between">
@@ -1854,30 +1850,6 @@ function SettingsTab() {
           Save All Settings
         </Button>
       </div>
-
-      <Dialog open={showMonetisationModal} onOpenChange={setShowMonetisationModal}>
-        <DialogContent className="max-w-sm shadow-[0_8px_40px_rgba(26,35,64,0.12)]">
-          <DialogHeader>
-            <DialogTitle className="font-serif text-[#1A2340]">Enable Monetisation?</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-1">
-            <div className="flex items-start gap-3 p-3 bg-[#FF6B6B]/5 border border-[#FF6B6B]/20 rounded-xl">
-              <IndianRupee size={16} className="text-[#FF6B6B] mt-0.5 shrink-0" />
-              <p className="text-sm text-gray-600">
-                Parents will be charged <strong>₹{Number(unlockPrice) || 0}</strong> per contact unlock via Razorpay. This takes effect immediately on Save.
-              </p>
-            </div>
-            <p className="text-xs text-gray-400">Make sure the unlock price and commission are configured correctly before enabling.</p>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="ghost" onClick={() => setShowMonetisationModal(false)}>Cancel</Button>
-            <Button className="bg-[#2EC4A5] hover:bg-[#26a88d] focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
-              onClick={() => { setMonetisationEnabled(true); setShowMonetisationModal(false); }}>
-              Enable Monetisation
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

@@ -19,6 +19,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
 import { StarRating } from "@/components/StarRating";
 import { ShadowTeacherRequestWidget } from "@/components/ShadowTeacherRequestWidget";
+import { TutorRequestWidget, TherapistRequestWidget } from "@/components/VerticalRequestWidget";
+import { SHOW_TUTOR_SEARCH, SHOW_THERAPIST_SEARCH } from "@/features";
 import { ComingSoon } from "@/components/ComingSoon";
 import { EngagementProgress } from "@/components/EngagementProgress";
 import { UpiPayQRDialog } from "@/components/UpiPayQRDialog";
@@ -35,7 +37,7 @@ import {
   User, IndianRupee, ArrowLeft, Building2, AlertTriangle,
 } from "lucide-react";
 
-type Tab = "home" | "find" | "services" | "progress" | "bookings" | "messages" | "notifications" | "shadow-teacher";
+type Tab = "home" | "find" | "services" | "progress" | "bookings" | "messages" | "notifications" | "shadow-teacher" | "tutor-search" | "therapist-search";
 
 interface ProgressNote {
   bookingId: number;
@@ -2225,6 +2227,20 @@ function ShadowTeacherTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// TUTOR / THERAPIST (B6) — request→interview→trial→commit only. Deliberately
+// NOT replicating ShadowTeacherTab's full engagement-management UI (daily
+// logs, salary payments, lifecycle/buyout) — that's out of B6's scope.
+// ═══════════════════════════════════════════════════════════════════════════════
+function TutorTab() {
+  const { selectedChildId } = useSelectedChild();
+  return <TutorRequestWidget key={selectedChildId ?? "no-child"} />;
+}
+function TherapistTab() {
+  const { selectedChildId } = useSelectedChild();
+  return <TherapistRequestWidget key={selectedChildId ?? "no-child"} />;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // SERVICES (hub chooser)
 // ═══════════════════════════════════════════════════════════════════════════════
 function ServicesTab() {
@@ -2280,7 +2296,16 @@ function ServicesTab() {
     { icon: Search, title: "Therapists & Specialists", desc: "OT, speech, psychology, paediatrics & more", accent: "bg-blue-50 text-blue-600", onClick: () => setView("find") },
     { icon: HelpCircle, title: "Parent Coaching", desc: "1:1 guidance from experienced coaches", accent: "bg-violet-50 text-violet-600", onClick: () => setView("find") },
     { icon: Building2, title: "Therapy Centres", desc: "Centre-based programmes near you", accent: "bg-amber-50 text-amber-600", onClick: () => setView("centre") },
-    { icon: BookOpen, title: "Home Tutors", desc: "Academic support tailored for your child", accent: "bg-rose-50 text-rose-600", onClick: () => setView("tutor") },
+    {
+      icon: BookOpen,
+      title: "Home Tutors",
+      desc: "Academic support tailored for your child",
+      accent: "bg-rose-50 text-rose-600",
+      onClick: () => (SHOW_TUTOR_SEARCH ? setLocation("/tutor-search") : setView("tutor")),
+    },
+    ...(SHOW_THERAPIST_SEARCH
+      ? [{ icon: Search, title: "Therapist / Special Educator Match", desc: "Get matched with a verified, RCI-registered therapist", accent: "bg-violet-50 text-violet-600", onClick: () => setLocation("/therapist-search") }]
+      : []),
   ];
 
   return (
@@ -2433,6 +2458,8 @@ export default function ParentDashboard() {
     if (loc.startsWith("/bookings"))       return "bookings";
     if (loc.startsWith("/inbox"))          return "messages";
     if (loc.startsWith("/shadow-teacher")) return "shadow-teacher";
+    if (loc.startsWith("/tutor-search")) return "tutor-search";
+    if (loc.startsWith("/therapist-search")) return "therapist-search";
     return "home";
   })();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -2458,6 +2485,8 @@ export default function ParentDashboard() {
       progress: "/progress",
       bookings: "/bookings",
       "shadow-teacher": "/shadow-teacher",
+      "tutor-search": "/tutor-search",
+      "therapist-search": "/therapist-search",
       messages: "/inbox",
     };
     const route = routes[tab];
@@ -2476,6 +2505,8 @@ export default function ParentDashboard() {
             {activeTab === "progress"       && <ProgressTab />}
             {activeTab === "bookings"       && <BookingsTab />}
             {activeTab === "shadow-teacher" && <ShadowTeacherTab />}
+            {activeTab === "tutor-search"     && <TutorTab />}
+            {activeTab === "therapist-search" && <TherapistTab />}
             {activeTab === "messages"       && <MessagesTab />}
           </>
         )}

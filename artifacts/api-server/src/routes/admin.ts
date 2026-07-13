@@ -21,12 +21,12 @@ import {
   waitlistTable,
   settingsAuditLogTable,
   professionalOfferingsTable,
+  insertAdminSettingSchema,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { z } from "zod";
 import {
   AdminListProfessionalsQueryParams,
-  UpdateAdminSettingsBody,
 } from "@workspace/api-zod";
 import {
   getVerificationRequirementsForProfessional,
@@ -483,7 +483,7 @@ router.get("/settings/me", requireAuth, async (_req, res): Promise<void> => {
 });
 
 router.patch("/admin/settings", ...adminGuard, async (req, res): Promise<void> => {
-  const parsed = UpdateAdminSettingsBody.safeParse(req.body);
+  const parsed = insertAdminSettingSchema.partial().safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;

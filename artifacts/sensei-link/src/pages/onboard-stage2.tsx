@@ -134,8 +134,38 @@ const THERAPIST_DISCIPLINES = [
   "Developmental Therapy",
   "Special Education",
   "Psychotherapy / Counselling",
+  "Clinical Psychology",
+  "Developmental Pediatrician",
+  "Psychiatrist",
+  "Rehabilitation Counselling",
   "Other",
 ];
+
+// Not every therapist discipline is RCI-regulated in India — mirrors the
+// backend's disciplineCredentialKind() in
+// artifacts/api-server/src/lib/verificationRequirements.ts. Duplicated, not
+// shared, because frontend/backend are separate packages with no shared
+// constants module — keep both in sync if this mapping ever changes.
+type TherapistCredentialKind = "rci" | "ot" | "medical" | "aba" | "ancillary";
+
+const RCI_REQUIRED_DISCIPLINES = new Set([
+  "Speech & Language Therapy (SLT)",
+  "Special Education",
+  "Clinical Psychology",
+  "Rehabilitation Counselling",
+]);
+const MEDICAL_COUNCIL_DISCIPLINES = new Set(["Developmental Pediatrician", "Psychiatrist"]);
+const ABA_DISCIPLINES = new Set(["Applied Behavior Analysis (ABA)", "Behavioral Therapy"]);
+
+function disciplineCredentialKind(discipline: string): TherapistCredentialKind {
+  if (discipline === "Occupational Therapy (OT)") return "ot";
+  if (RCI_REQUIRED_DISCIPLINES.has(discipline)) return "rci";
+  if (MEDICAL_COUNCIL_DISCIPLINES.has(discipline)) return "medical";
+  if (ABA_DISCIPLINES.has(discipline)) return "aba";
+  return "ancillary";
+}
+
+const ABA_CREDENTIAL_TYPES = ["BCBA", "RBT", "QABA"];
 
 const THERAPIST_CONDITIONS = [
   { value: "autism_asd", label: "Autism (ASD)" },
@@ -189,8 +219,25 @@ type TutorForm = {
 type TherapistForm = {
   discipline: string;
   disciplineOther: string;
+  // "rci" kind — Speech & Language Therapy, Special Education, Clinical
+  // Psychology, Rehabilitation Counselling
   rciRegistered: boolean | null;
   rciCrrNumber: string;
+  // "ot" kind — Occupational Therapy
+  aiotaMembershipNumber: string;
+  ncahpRegistrationNumber: string; // optional — NCAHP still rolling out
+  // "medical" kind — Developmental Pediatrician, Psychiatrist
+  medicalCouncilRegistrationNumber: string;
+  // "aba" kind — ABA / Behavioral Therapy
+  abaCredentialType: string; // "BCBA" | "RBT" | "QABA"
+  abaCredentialNumber: string;
+  individuallyCredentialed: boolean | null; // capture-only, not enforced
+  supervisingProfessionalName: string; // capture-only, not enforced
+  supervisingRciNumber: string; // capture-only, not enforced
+  // "ancillary" kind — Physiotherapy, Developmental Therapy,
+  // Psychotherapy/Counselling, Other. All optional, no gate.
+  statePhysioCouncilNumber: string; // Physiotherapy only
+  ancillaryCertificationBody: string;
   conditionsTreated: string[];
   conditionsTreatedOther: string;
   sessionModes: string[];
@@ -714,7 +761,8 @@ function TherapistForm({
   idProps: IdentitySectionProps;
   rciCertProps: { rciCertFileKey: string; setRciCertFileKey: (v: string) => void; alreadySubmitted: boolean };
 }) {
-  const showRciBlock = form.rciRegistered === false;
+  const kind = disciplineCredentialKind(form.discipline);
+  const showRciBlock = kind === "rci" && form.rciRegistered === false;
 
   return (
     <div className="space-y-7">
@@ -737,25 +785,179 @@ function TherapistForm({
         )}
       </div>
 
-      <YesNoField
-        label="Are you RCI registered?"
-        required
-        value={form.rciRegistered}
-        onChange={(v) => setForm((f) => ({ ...f, rciRegistered: v }))}
-        color="violet"
-      />
+      {/* Credential section — branches by discipline. Each discipline shows
+          ONLY its own correct credential field(s); the "RCI Number" label
+          never appears for OT, Developmental Pediatrician, Psychiatrist, or
+          ABA/Behavioral Therapy. */}
+      {kind === "rci" && (
+        <>
+          <YesNoField
+            label="Are you RCI registered?"
+            required
+            value={form.rciRegistered}
+            onChange={(v) => setForm((f) => ({ ...f, rciRegistered: v }))}
+            color="violet"
+          />
+          {showRciBlock && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-4 space-y-1.5">
+              <div className="flex items-center gap-2 text-amber-700 font-semibold text-sm">
+                <AlertTriangle size={15} />
+                Profile will be saved as a draft
+              </div>
+              <p className="text-xs text-amber-700 leading-relaxed">
+                RCI registration is required for this discipline to appear in parent search on Includly. You can
+                still complete your profile and submit for review, but you <strong>will not be listed</strong> until
+                you obtain your RCI CRR number and update your profile.
+              </p>
+            </div>
+          )}
+        </>
+      )}
 
-      {showRciBlock && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-4 space-y-1.5">
-          <div className="flex items-center gap-2 text-amber-700 font-semibold text-sm">
-            <AlertTriangle size={15} />
-            Profile will be saved as a draft
+      {kind === "ot" && (
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold text-gray-800">
+              AIOTA membership number <span className="text-red-500 ml-1">*</span>
+            </Label>
+            <p className="text-xs text-gray-500">
+              Your All India Occupational Therapists&apos; Association membership number — mandatory to appear in
+              parent search.
+            </p>
+            <Input
+              value={form.aiotaMembershipNumber}
+              onChange={(e) => setForm((f) => ({ ...f, aiotaMembershipNumber: e.target.value }))}
+              placeholder="e.g. AIOTA/12345"
+              disabled={isSaving}
+              className="h-10 text-sm"
+            />
           </div>
-          <p className="text-xs text-amber-700 leading-relaxed">
-            RCI registration is required for therapists to appear in parent search on Includly. You can still
-            complete your profile and submit for review, but you <strong>will not be listed</strong> until
-            you obtain your RCI CRR number and update your profile.
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-gray-600">
+              NCAHP registration number <span className="text-gray-400 ml-1">(optional — if you have one)</span>
+            </Label>
+            <Input
+              value={form.ncahpRegistrationNumber}
+              onChange={(e) => setForm((f) => ({ ...f, ncahpRegistrationNumber: e.target.value }))}
+              placeholder="e.g. NCAHP/12345"
+              disabled={isSaving}
+              className="h-10 text-sm"
+            />
+          </div>
+        </div>
+      )}
+
+      {kind === "medical" && (
+        <div className="space-y-2">
+          <Label className="text-sm font-semibold text-gray-800">
+            NMC / State Medical Council registration number <span className="text-red-500 ml-1">*</span>
+          </Label>
+          <p className="text-xs text-gray-500">
+            Your National Medical Commission or State Medical Council registration number — mandatory to appear in
+            parent search.
           </p>
+          <Input
+            value={form.medicalCouncilRegistrationNumber}
+            onChange={(e) => setForm((f) => ({ ...f, medicalCouncilRegistrationNumber: e.target.value }))}
+            placeholder="e.g. MCI/12345"
+            disabled={isSaving}
+            className="h-10 text-sm"
+          />
+        </div>
+      )}
+
+      {kind === "aba" && (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <SelectField
+              label="Credential type"
+              value={form.abaCredentialType}
+              options={toSelectOptions(ABA_CREDENTIAL_TYPES)}
+              onChange={(v) => setForm((f) => ({ ...f, abaCredentialType: v }))}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold text-gray-800">
+              Credential number <span className="text-red-500 ml-1">*</span>
+            </Label>
+            <Input
+              value={form.abaCredentialNumber}
+              onChange={(e) => setForm((f) => ({ ...f, abaCredentialNumber: e.target.value }))}
+              placeholder="e.g. 1-23-45678"
+              disabled={isSaving}
+              className="h-10 text-sm"
+            />
+          </div>
+          <YesNoField
+            label="Are you individually credentialed, or do you practice under a supervising RCI-registered professional / therapy centre?"
+            value={form.individuallyCredentialed}
+            onChange={(v) => setForm((f) => ({ ...f, individuallyCredentialed: v }))}
+            color="violet"
+          />
+          <p className="text-xs text-gray-400 leading-relaxed -mt-2">
+            This is captured for our records only — not yet a requirement to be listed. Whether ABA/behavioral
+            therapists must practice under RCI supervision is still an unsettled area in Indian regulation.
+          </p>
+          {form.individuallyCredentialed === false && (
+            <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50/60 p-3">
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-gray-600">Supervising professional&apos;s name</Label>
+                <Input
+                  value={form.supervisingProfessionalName}
+                  onChange={(e) => setForm((f) => ({ ...f, supervisingProfessionalName: e.target.value }))}
+                  placeholder="Full name"
+                  disabled={isSaving}
+                  className="h-10 text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-gray-600">Supervising professional&apos;s RCI number</Label>
+                <Input
+                  value={form.supervisingRciNumber}
+                  onChange={(e) => setForm((f) => ({ ...f, supervisingRciNumber: e.target.value }))}
+                  placeholder="e.g. A12345"
+                  disabled={isSaving}
+                  className="h-10 text-sm"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {kind === "ancillary" && (
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold text-gray-800">
+              Certification / governing body <span className="text-gray-400 ml-1">(optional)</span>
+            </Label>
+            <p className="text-xs text-gray-500">
+              e.g. your yoga/art-therapy certifying body, or the relevant professional association for your
+              discipline. There&apos;s no single mandatory regulator for this discipline in India today.
+            </p>
+            <Input
+              value={form.ancillaryCertificationBody}
+              onChange={(e) => setForm((f) => ({ ...f, ancillaryCertificationBody: e.target.value }))}
+              placeholder="e.g. Indian Association of Yoga Therapists"
+              disabled={isSaving}
+              className="h-10 text-sm"
+            />
+          </div>
+          {form.discipline === "Physiotherapy" && (
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-gray-600">
+                State physiotherapy council registration number <span className="text-gray-400 ml-1">(if your state requires one)</span>
+              </Label>
+              <Input
+                value={form.statePhysioCouncilNumber}
+                onChange={(e) => setForm((f) => ({ ...f, statePhysioCouncilNumber: e.target.value }))}
+                placeholder="e.g. HRPC/12345"
+                disabled={isSaving}
+                className="h-10 text-sm"
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -802,14 +1004,16 @@ function TherapistForm({
         />
       </ChipsField>
 
-      <RciCertificateSection
-        rciCertFileKey={rciCertProps.rciCertFileKey}
-        setRciCertFileKey={rciCertProps.setRciCertFileKey}
-        alreadySubmitted={rciCertProps.alreadySubmitted}
-        disabled={isSaving}
-        rciCrrNumber={form.rciCrrNumber}
-        setRciCrrNumber={(v) => setForm((f) => ({ ...f, rciCrrNumber: v }))}
-      />
+      {kind === "rci" && (
+        <RciCertificateSection
+          rciCertFileKey={rciCertProps.rciCertFileKey}
+          setRciCertFileKey={rciCertProps.setRciCertFileKey}
+          alreadySubmitted={rciCertProps.alreadySubmitted}
+          disabled={isSaving}
+          rciCrrNumber={form.rciCrrNumber}
+          setRciCrrNumber={(v) => setForm((f) => ({ ...f, rciCrrNumber: v }))}
+        />
+      )}
 
       <IdentityDocumentSection {...idProps} disabled={isSaving} />
     </div>
@@ -873,6 +1077,17 @@ export default function OnboardStage2Page() {
     rciRegistered:
       existingVd.rciRegistered !== undefined ? (existingVd.rciRegistered as boolean) : null,
     rciCrrNumber: (isAdditionalOffering ? myOffering?.rciCrrNumber : profile?.rciCrrNumber) ?? "",
+    aiotaMembershipNumber: (existingVd.aiotaMembershipNumber as string) ?? "",
+    ncahpRegistrationNumber: (existingVd.ncahpRegistrationNumber as string) ?? "",
+    medicalCouncilRegistrationNumber: (existingVd.medicalCouncilRegistrationNumber as string) ?? "",
+    abaCredentialType: (existingVd.abaCredentialType as string) ?? "",
+    abaCredentialNumber: (existingVd.abaCredentialNumber as string) ?? "",
+    individuallyCredentialed:
+      existingVd.individuallyCredentialed !== undefined ? (existingVd.individuallyCredentialed as boolean) : null,
+    supervisingProfessionalName: (existingVd.supervisingProfessionalName as string) ?? "",
+    supervisingRciNumber: (existingVd.supervisingRciNumber as string) ?? "",
+    statePhysioCouncilNumber: (existingVd.statePhysioCouncilNumber as string) ?? "",
+    ancillaryCertificationBody: (existingVd.ancillaryCertificationBody as string) ?? "",
     conditionsTreated: (existingVd.conditionsTreated as string[]) ?? [],
     conditionsTreatedOther: (existingVd.conditionsTreatedOther as string) ?? "",
     sessionModes: (existingVd.sessionModes as string[]) ?? [],
@@ -939,19 +1154,34 @@ export default function OnboardStage2Page() {
   }
 
   function isTherapistValid() {
+    const kind = disciplineCredentialKind(therapistForm.discipline);
     const base =
       !!therapistForm.discipline &&
-      therapistForm.rciRegistered !== null &&
       therapistForm.conditionsTreated.length > 0 &&
       therapistForm.sessionModes.length > 0 &&
-      therapistForm.ageGroups.length > 0;
+      therapistForm.ageGroups.length > 0 &&
+      // "rci" kind still asks the yes/no question (existing draft-save
+      // pattern, unchanged); the other kinds go straight to their required
+      // field(s) below, with no "not yet obtained" escape hatch, since none
+      // was requested for AIOTA/medical-council/ABA credentials.
+      (kind !== "rci" || therapistForm.rciRegistered !== null);
     if (!base) return false;
     if (therapistForm.discipline === "Other" && !therapistForm.disciplineOther.trim()) return false;
     if (therapistForm.conditionsTreated.includes("others") && !therapistForm.conditionsTreatedOther.trim()) return false;
-    if (therapistForm.rciRegistered === true) {
+
+    if (kind === "rci" && therapistForm.rciRegistered === true) {
       if (!therapistForm.rciCrrNumber.trim()) return false;
       if (!rciCertAlreadySubmitted && !rciCertFileKey) return false;
+    } else if (kind === "ot") {
+      if (!therapistForm.aiotaMembershipNumber.trim()) return false;
+      // NCAHP registration number is optional — not checked.
+    } else if (kind === "medical") {
+      if (!therapistForm.medicalCouncilRegistrationNumber.trim()) return false;
+    } else if (kind === "aba") {
+      if (!therapistForm.abaCredentialType || !therapistForm.abaCredentialNumber.trim()) return false;
+      // Supervising-professional fields are capture-only — not checked.
     }
+    // kind === "ancillary": no required field — optional certification body only.
     return true;
   }
 
@@ -1003,12 +1233,47 @@ export default function OnboardStage2Page() {
           ...(tutorForm.certKey ? { certKey: tutorForm.certKey } : {}),
         };
       } else {
+        const credentialKind = disciplineCredentialKind(therapistForm.discipline);
         verticalDetails = {
           discipline: therapistForm.discipline,
           ...(therapistForm.discipline === "Other"
             ? { disciplineOther: therapistForm.disciplineOther.trim() }
             : {}),
-          rciRegistered: therapistForm.rciRegistered,
+          ...(credentialKind === "rci" ? { rciRegistered: therapistForm.rciRegistered } : {}),
+          ...(credentialKind === "ot"
+            ? {
+                aiotaMembershipNumber: therapistForm.aiotaMembershipNumber.trim(),
+                ...(therapistForm.ncahpRegistrationNumber.trim()
+                  ? { ncahpRegistrationNumber: therapistForm.ncahpRegistrationNumber.trim() }
+                  : {}),
+              }
+            : {}),
+          ...(credentialKind === "medical"
+            ? { medicalCouncilRegistrationNumber: therapistForm.medicalCouncilRegistrationNumber.trim() }
+            : {}),
+          ...(credentialKind === "aba"
+            ? {
+                abaCredentialType: therapistForm.abaCredentialType,
+                abaCredentialNumber: therapistForm.abaCredentialNumber.trim(),
+                individuallyCredentialed: therapistForm.individuallyCredentialed,
+                ...(therapistForm.individuallyCredentialed === false
+                  ? {
+                      supervisingProfessionalName: therapistForm.supervisingProfessionalName.trim(),
+                      supervisingRciNumber: therapistForm.supervisingRciNumber.trim(),
+                    }
+                  : {}),
+              }
+            : {}),
+          ...(credentialKind === "ancillary"
+            ? {
+                ...(therapistForm.ancillaryCertificationBody.trim()
+                  ? { ancillaryCertificationBody: therapistForm.ancillaryCertificationBody.trim() }
+                  : {}),
+                ...(therapistForm.discipline === "Physiotherapy" && therapistForm.statePhysioCouncilNumber.trim()
+                  ? { statePhysioCouncilNumber: therapistForm.statePhysioCouncilNumber.trim() }
+                  : {}),
+              }
+            : {}),
           conditionsTreated: therapistForm.conditionsTreated,
           ...(therapistForm.conditionsTreated.includes("others")
             ? { conditionsTreatedOther: therapistForm.conditionsTreatedOther.trim() }
@@ -1017,7 +1282,7 @@ export default function OnboardStage2Page() {
           ageGroups: therapistForm.ageGroups,
           ...(therapistForm.certKey ? { certKey: therapistForm.certKey } : {}),
         };
-        if (therapistForm.rciRegistered === true) {
+        if (credentialKind === "rci" && therapistForm.rciRegistered === true) {
           extraPatch.rciCrrNumber = therapistForm.rciCrrNumber.trim();
         }
       }
@@ -1054,7 +1319,17 @@ export default function OnboardStage2Page() {
 
       // Therapist RCI certificate is mandatory once they claim RCI
       // registration — required alongside the CRR number for approval.
-      if (isTherapist && therapistForm.rciRegistered === true && !rciCertAlreadySubmitted && rciCertFileKey) {
+      // Explicitly re-checks the discipline's credential kind (not just
+      // rciRegistered) in case a stale rciRegistered=true value lingers
+      // from before the professional switched away from an RCI-required
+      // discipline to a different one.
+      if (
+        isTherapist &&
+        disciplineCredentialKind(therapistForm.discipline) === "rci" &&
+        therapistForm.rciRegistered === true &&
+        !rciCertAlreadySubmitted &&
+        rciCertFileKey
+      ) {
         const certRes = await fetchWithAuth("/api/verifications/certifications", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1093,7 +1368,7 @@ export default function OnboardStage2Page() {
       await queryClient.invalidateQueries({ queryKey: ["/api/verifications/certifications"] });
       await queryClient.invalidateQueries({ queryKey: ["my-offerings"] });
 
-      if (isTherapist && therapistForm.rciRegistered === false) {
+      if (isTherapist && disciplineCredentialKind(therapistForm.discipline) === "rci" && therapistForm.rciRegistered === false) {
         toast({
           title: "Profile saved as draft",
           description:
@@ -1194,7 +1469,7 @@ export default function OnboardStage2Page() {
             <p className="text-sm text-gray-500 leading-relaxed">
               These details help parents find the right match for their child.
               {vertical === "therapist" &&
-                " Therapist profiles require RCI registration to appear in search."}
+                " Therapist profiles require the credentials your discipline calls for to appear in search."}
             </p>
           </div>
 
@@ -1254,7 +1529,7 @@ export default function OnboardStage2Page() {
           >
             {isSaving ? (
               <Loader2 size={16} className="animate-spin" />
-            ) : isTherapist && therapistForm.rciRegistered === false ? (
+            ) : isTherapist && disciplineCredentialKind(therapistForm.discipline) === "rci" && therapistForm.rciRegistered === false ? (
               <>
                 Save as draft
                 <ArrowRight size={16} />

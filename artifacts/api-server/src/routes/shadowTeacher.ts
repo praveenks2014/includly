@@ -158,6 +158,9 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
     ...matchBusyRows.map((r) => r.professionalId!),
   ])];
 
+  const settings = await getSettings();
+  const shadowTeacherListingFeeEnabled = (settings as Record<string, unknown>)["shadowTeacherListingFeeEnabled"] as boolean | undefined;
+
   // Run scoring and surface up to 3 candidates.
   //
   // A professional's PRIMARY vertical still lives directly on
@@ -191,18 +194,21 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
     .where(
       and(
         or(
-          // Primary offering — identical condition to before this change.
+          // Primary offering — identical condition to before this change,
+          // plus the listing-fee gate (no-op unless the toggle is on).
           and(
             eq(professionalProfilesTable.specialty, "shadow_teacher"),
             eq(professionalProfilesTable.verificationStatus, "verified"),
             isNotNull(professionalProfilesTable.pricingMinINR),
+            ...(shadowTeacherListingFeeEnabled ? [isNotNull(professionalProfilesTable.listingFeePaidAt)] : []),
           ),
           // Additional (non-primary) shadow-teacher offering — gated
-          // independently on ITS OWN verificationStatus/pricing.
+          // independently on ITS OWN verificationStatus/pricing/listing-fee.
           and(
             isNotNull(professionalOfferingsTable.id),
             eq(professionalOfferingsTable.verificationStatus, "verified"),
             isNotNull(professionalOfferingsTable.pricingMinINR),
+            ...(shadowTeacherListingFeeEnabled ? [isNotNull(professionalOfferingsTable.listingFeePaidAt)] : []),
           ),
         )!,
         eq(professionalProfilesTable.paymentActivated, true),
@@ -237,7 +243,6 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
   const passedSet = new Set(passedIds);
   const professionals = allProfessionals.filter((p) => passedSet.has(p.id));
 
-  const settings = await getSettings();
   const tiers = parseTiers(settings.tiersJson);
   const snap: MatchSnapshot = {
     childCity: match.childCity ?? null,
