@@ -2204,11 +2204,23 @@ router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requir
     );
   if (!activeCand) { res.status(409).json({ error: "Selected professional is no longer an active candidate for this match" }); return; }
 
-  const settings = await getSettings();
-  const baseTrialFeeInr = (settings as Record<string, unknown>)["trialFeeInr"] as number ?? 500;
-  // Task 2b — same multiplier as the request-trial payment path so the recorded
-  // direct-pay amount matches what was quoted to the parent.
-  const trialFeeInr = baseTrialFeeInr * (match.trialDays ?? 1);
+  const razorpay = getRazorpay();
+  if (!razorpay) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
+
+  // Use the amount actually charged on the Razorpay order, not a live
+  // re-read of admin_settings.trialFeeInr — the admin fee could have
+  // changed between request-trial-payment (order creation) and this verify
+  // step, and the stored snapshot must reflect what was really collected.
+  type RazorpayOrderEntity = { amount?: number };
+  let order: RazorpayOrderEntity;
+  try {
+    order = (await razorpay.orders.fetch(razorpayOrderId)) as unknown as RazorpayOrderEntity;
+  } catch (err) {
+    console.error("[shadow-teacher/verify-trial-payment] Razorpay order fetch failed:", err);
+    res.status(400).json({ error: "Unable to verify payment with Razorpay" });
+    return;
+  }
+  const trialFeePaidInr = Math.round((order.amount ?? 0) / 100);
 
   const trialStartOtp = generateOtp();
 
@@ -2217,7 +2229,7 @@ router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requir
     .set({
       status: "trial_pending",
       trialProviderPaymentId: razorpayPaymentId,
-      trialFeePaidInr: trialFeeInr,
+      trialFeePaidInr,
       selectedProfessionalId,
       preMeetingRequested,
       preMeetingNote: preMeetingRequested ? (preMeetingNote ?? null) : null,

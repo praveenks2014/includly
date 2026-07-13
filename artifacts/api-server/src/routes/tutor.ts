@@ -825,13 +825,28 @@ router.post("/tutor/:matchId/verify-trial-payment", requireAuth, requireRole("pa
     .where(and(eq(tutorMatchCandidatesTable.matchId, matchId), eq(tutorMatchCandidatesTable.professionalId, selectedProfessionalId), isNull(tutorMatchCandidatesTable.removedAt)));
   if (!activeCand) { res.status(409).json({ error: "Selected professional is no longer an active candidate for this match" }); return; }
 
-  const settings = await getSettings();
-  const trialFeeInr = settings.tutorTrialFeeInr * (match.trialDays ?? 1);
+  const razorpay = getRazorpay();
+  if (!razorpay) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
+
+  // Use the amount actually charged on the Razorpay order, not a live
+  // re-read of admin_settings.tutorTrialFeeInr — the admin fee could have
+  // changed between request-trial-payment (order creation) and this verify
+  // step, and the stored snapshot must reflect what was really collected.
+  type RazorpayOrderEntity = { amount?: number };
+  let order: RazorpayOrderEntity;
+  try {
+    order = (await razorpay.orders.fetch(razorpayOrderId)) as unknown as RazorpayOrderEntity;
+  } catch (err) {
+    console.error("[tutor/verify-trial-payment] Razorpay order fetch failed:", err);
+    res.status(400).json({ error: "Unable to verify payment with Razorpay" });
+    return;
+  }
+  const trialFeePaidInr = Math.round((order.amount ?? 0) / 100);
   const trialStartOtp = generateOtp();
 
   await db
     .update(tutorMatchesTable)
-    .set({ status: "trial_pending", trialProviderPaymentId: razorpayPaymentId, trialFeePaidInr: trialFeeInr, selectedProfessionalId, trialStartOtp, updatedAt: new Date() })
+    .set({ status: "trial_pending", trialProviderPaymentId: razorpayPaymentId, trialFeePaidInr, selectedProfessionalId, trialStartOtp, updatedAt: new Date() })
     .where(eq(tutorMatchesTable.id, matchId));
 
   void createInAppNotification(match.parentId, {
