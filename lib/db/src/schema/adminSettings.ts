@@ -66,6 +66,11 @@ export const adminSettingsTable = pgTable("admin_settings", {
   activationFeeTimeoutDays: integer("activation_fee_timeout_days").notNull().default(7),
   otpStartTimeoutDays: integer("otp_start_timeout_days").notNull().default(7),
   otpEndTimeoutDays: integer("otp_end_timeout_days").notNull().default(7),
+  // Direct-pay confirmation lazy-timeout (D3) — how long a professional may
+  // leave a parent's "marked paid" unconfirmed before it's auto-treated as
+  // confirmed. Same lazy-evaluation-on-read pattern as the timeouts above,
+  // no cron. See paymentConfirmationResolver.ts.
+  paymentConfirmationDefaultDays: integer("payment_confirmation_default_days").notNull().default(7),
   // Tutor/therapist trial-fee destination (Tutor/Therapist Pass 1). Default
   // false = platform revenue via Razorpay-collect (no compliance issue — the
   // platform keeps this fee, never remits it). Snapshotted onto

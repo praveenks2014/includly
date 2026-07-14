@@ -23,7 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { fetchWithAuth } from "@/lib/api";
 import { loadRazorpayScript } from "@/lib/razorpay";
 import { AntiBypassNotice } from "./AntiBypassNotice";
-import { Loader2, IndianRupee, CheckCircle2 } from "lucide-react";
+import { Loader2, IndianRupee, CheckCircle2, Video } from "lucide-react";
 import type { Vertical } from "./VerticalRequestWidget";
 
 const API_BASE: Record<Vertical, string> = { tutor: "/api/tutor", therapist: "/api/therapist" };
@@ -66,6 +66,11 @@ interface VerticalSession {
   otpLockedAt: string | null;
   paidAmountInr?: number | null;
   paidAt?: string | null;
+  meetLink?: string | null;
+  topicsCovered?: string | null;
+  childEngagementNotes?: string | null;
+  nextSessionNotes?: string | null;
+  goalProgress?: "better" | "same" | "needs_attention" | null;
 }
 
 interface PendingConfirmation {
@@ -325,6 +330,99 @@ function SessionOtpEntry({ vertical, engagementId, session, type, onUpdated }: {
   );
 }
 
+const GOAL_PROGRESS_LABEL: Record<string, string> = {
+  better: "Better",
+  same: "Same",
+  needs_attention: "Needs attention",
+};
+
+function SessionProgressNotesForm({ vertical, engagementId, session, onUpdated }: { vertical: Vertical; engagementId: number; session: VerticalSession; onUpdated: () => void }) {
+  const { toast } = useToast();
+  const hasNotes = !!(session.topicsCovered || session.childEngagementNotes || session.nextSessionNotes || session.goalProgress);
+  const [editing, setEditing] = useState(!hasNotes);
+  const [topicsCovered, setTopicsCovered] = useState(session.topicsCovered ?? "");
+  const [childEngagementNotes, setChildEngagementNotes] = useState(session.childEngagementNotes ?? "");
+  const [nextSessionNotes, setNextSessionNotes] = useState(session.nextSessionNotes ?? "");
+  const [goalProgress, setGoalProgress] = useState<"better" | "same" | "needs_attention">(session.goalProgress ?? "same");
+  const [saving, setSaving] = useState(false);
+
+  if (!editing) {
+    return (
+      <div className="mt-1.5 p-2 rounded-lg bg-teal-50 border border-teal-100 space-y-1">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-semibold text-teal-800 uppercase">Session notes</p>
+          <button onClick={() => setEditing(true)} className="text-[10px] text-teal-600 hover:underline">Edit</button>
+        </div>
+        {session.topicsCovered && <p className="text-xs text-gray-600"><span className="font-medium">Covered:</span> {session.topicsCovered}</p>}
+        {session.childEngagementNotes && <p className="text-xs text-gray-600"><span className="font-medium">Engagement:</span> {session.childEngagementNotes}</p>}
+        {session.nextSessionNotes && <p className="text-xs text-gray-600"><span className="font-medium">Next session:</span> {session.nextSessionNotes}</p>}
+        {session.goalProgress && <p className="text-xs text-gray-600"><span className="font-medium">Goal progress:</span> {GOAL_PROGRESS_LABEL[session.goalProgress]}</p>}
+      </div>
+    );
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      const res = await fetchWithAuth(`${API_BASE[vertical]}/engagements/${engagementId}/sessions/${session.id}/progress-notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topicsCovered: topicsCovered.trim() || undefined, childEngagementNotes: childEngagementNotes.trim() || undefined, nextSessionNotes: nextSessionNotes.trim() || undefined, goalProgress }),
+      });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not save notes", variant: "destructive" }); return; }
+      setEditing(false);
+      onUpdated();
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="mt-1.5 p-2.5 rounded-lg bg-gray-50 border border-gray-100 space-y-2">
+      <input
+        type="text"
+        placeholder="What was covered"
+        value={topicsCovered}
+        onChange={(e) => setTopicsCovered(e.target.value)}
+        maxLength={1000}
+        className="w-full h-8 text-xs border border-gray-200 rounded-lg px-2 outline-none focus:ring-1 focus:ring-[#2EC4A5] bg-white"
+      />
+      <input
+        type="text"
+        placeholder="How the child engaged"
+        value={childEngagementNotes}
+        onChange={(e) => setChildEngagementNotes(e.target.value)}
+        maxLength={1000}
+        className="w-full h-8 text-xs border border-gray-200 rounded-lg px-2 outline-none focus:ring-1 focus:ring-[#2EC4A5] bg-white"
+      />
+      <input
+        type="text"
+        placeholder="Notes for next session"
+        value={nextSessionNotes}
+        onChange={(e) => setNextSessionNotes(e.target.value)}
+        maxLength={1000}
+        className="w-full h-8 text-xs border border-gray-200 rounded-lg px-2 outline-none focus:ring-1 focus:ring-[#2EC4A5] bg-white"
+      />
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-gray-500">Goal progress:</span>
+        <select
+          value={goalProgress}
+          onChange={(e) => setGoalProgress(e.target.value as typeof goalProgress)}
+          className="h-7 text-xs border border-gray-200 rounded-lg px-1.5 bg-white"
+        >
+          <option value="better">Better</option>
+          <option value="same">Same</option>
+          <option value="needs_attention">Needs attention</option>
+        </select>
+      </div>
+      <div className="flex gap-2">
+        {hasNotes && <Button size="sm" variant="outline" className="flex-1 h-7 text-xs rounded-lg" onClick={() => setEditing(false)}>Cancel</Button>}
+        <Button size="sm" onClick={() => void save()} disabled={saving} className="flex-1 h-7 text-xs rounded-lg bg-[#2EC4A5] hover:bg-[#26a88d] text-white">
+          {saving ? <Loader2 size={11} className="animate-spin" /> : "Save notes"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function ActiveSessionsSection({ vertical, eng, onUpdated }: { vertical: Vertical; eng: VerticalEngagement; onUpdated: () => void }) {
   const { data: sessions = [], refetch } = useQuery<VerticalSession[]>({
     queryKey: [`${vertical}-engagement-sessions`, eng.id],
@@ -339,16 +437,16 @@ function ActiveSessionsSection({ vertical, eng, onUpdated }: { vertical: Vertica
     onUpdated();
   }
 
-  const upcoming = sessions.filter(s => s.status === "scheduled" || s.status === "started");
+  const relevant = sessions.filter(s => s.status === "scheduled" || s.status === "started" || s.status === "completed");
 
   return (
     <div className="mb-3 p-4 bg-white border border-gray-100 rounded-xl space-y-2">
       <p className="text-sm font-bold text-[#1A2340]">Sessions</p>
-      {upcoming.length === 0 ? (
+      {relevant.length === 0 ? (
         <p className="text-xs text-gray-400">No scheduled sessions yet.</p>
       ) : (
         <div className="space-y-2">
-          {upcoming.map((s) => (
+          {relevant.map((s) => (
             <div key={s.id} className="p-2.5 rounded-lg border border-gray-100 bg-gray-50/50">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-[#1A2340]">{s.sessionDate}{s.startTime ? ` · ${s.startTime}` : ""}</span>
@@ -357,8 +455,20 @@ function ActiveSessionsSection({ vertical, eng, onUpdated }: { vertical: Vertica
               {vertical === "therapist" && eng.billingCadence === "per_session" && s.status === "completed" && (
                 <p className="text-[10px] text-gray-400 mt-1">{s.paidAt ? `Paid ₹${s.paidAmountInr?.toLocaleString("en-IN")}` : "Payment pending"}</p>
               )}
+              {s.meetLink && (s.status === "scheduled" || s.status === "started") && (
+                <a
+                  href={s.meetLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 mt-1.5 text-xs font-medium text-[#2EC4A5] hover:text-[#26a88d] no-underline"
+                >
+                  <Video size={12} />
+                  Join video call
+                </a>
+              )}
               {s.status === "scheduled" && <SessionOtpEntry vertical={vertical} engagementId={eng.id} session={s} type="start" onUpdated={handleSessionUpdated} />}
               {s.status === "started" && <SessionOtpEntry vertical={vertical} engagementId={eng.id} session={s} type="end" onUpdated={handleSessionUpdated} />}
+              {s.status === "completed" && <SessionProgressNotesForm vertical={vertical} engagementId={eng.id} session={s} onUpdated={handleSessionUpdated} />}
             </div>
           ))}
         </div>

@@ -21,6 +21,7 @@ import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { AntiBypassNotice } from "./AntiBypassNotice";
 import { UpiPayQRDialog } from "./UpiPayQRDialog";
+import { ReviewModal } from "./ReviewModal";
 import {
   Loader2, CheckCircle2, IndianRupee, MapPin, Star, Languages,
   ChevronRight, BadgeCheck, ShieldCheck, Send, Video, XCircle, CalendarClock, ClipboardCheck,
@@ -117,6 +118,7 @@ interface MatchWithCandidates {
   trialStartOtp: string | null;
   trialEndOtp: string | null;
   trialDays: number | null;
+  trialMeetLink?: string | null;
   trialDirectPay: boolean | null;
   wantsAssessmentFirst?: boolean; // therapist only
   assessmentFeePaymentId?: string | null; // therapist only
@@ -675,6 +677,7 @@ export function VerticalRequestWidget({ vertical }: { vertical: Vertical }) {
 
   const [directPayInfo, setDirectPayInfo] = useState<{ professionalId: number; vpa: string; professionalName: string; amountInr: number } | null>(null);
   const [markingDirectPayPaid, setMarkingDirectPayPaid] = useState(false);
+  const [reviewingProfessionalId, setReviewingProfessionalId] = useState<number | null>(null);
 
   const status = match?.status ?? null;
   const isActive = status && !["cancelled", "refunded"].includes(status);
@@ -1085,6 +1088,17 @@ export function VerticalRequestWidget({ vertical }: { vertical: Vertical }) {
             <p className="text-xs text-indigo-600">Show this to {trialName} when the trial {status === "trial_pending" ? "begins" : "ends"}</p>
           </div>
         )}
+        {match.trialMeetLink && (
+          <a
+            href={match.trialMeetLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 w-full h-10 rounded-xl bg-[#2EC4A5] hover:bg-[#26a88d] text-white font-semibold text-sm no-underline"
+          >
+            <Video size={15} />
+            Join Trial Call
+          </a>
+        )}
         {trialCandidate && (
           <TrustSignalCard cfg={cfg} candidate={trialCandidate} matchId={match.id} committed={false} selected onChoose={() => {}} baseTrialFeeInr={trialFee} trialMode matchStatus={status} />
         )}
@@ -1150,8 +1164,21 @@ export function VerticalRequestWidget({ vertical }: { vertical: Vertical }) {
               {choosingId ? <Loader2 size={14} className="animate-spin" /> : <ChevronRight size={14} />}
               Commit to {trialName}
             </Button>
+            {match.selectedProfessionalId && (
+              <Button
+                variant="outline"
+                className="w-full gap-2 rounded-xl"
+                onClick={() => setReviewingProfessionalId(match.selectedProfessionalId)}
+              >
+                <Star size={14} />
+                Rate your trial with {trialName}
+              </Button>
+            )}
           </div>
         </div>
+        {reviewingProfessionalId !== null && (
+          <ReviewModal professionalId={reviewingProfessionalId} onClose={() => setReviewingProfessionalId(null)} />
+        )}
       </>
     );
   }

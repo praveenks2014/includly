@@ -705,6 +705,7 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       preMeetingRequested:    shadowTeacherMatchesTable.preMeetingRequested,
       preMeetingNote:         shadowTeacherMatchesTable.preMeetingNote,
       trialLocation:          shadowTeacherMatchesTable.trialLocation,
+      trialMeetLink:          shadowTeacherMatchesTable.trialMeetLink,
       trialDirectPay:              shadowTeacherMatchesTable.trialDirectPay,
       trialDirectPayMarkedPaidAt:  shadowTeacherMatchesTable.trialDirectPayMarkedPaidAt,
       trialDirectPayConfirmedAt:   shadowTeacherMatchesTable.trialDirectPayConfirmedAt,
@@ -752,6 +753,7 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
         preMeetingRequested:    shadowTeacherMatchesTable.preMeetingRequested,
         preMeetingNote:         shadowTeacherMatchesTable.preMeetingNote,
         trialLocation:          shadowTeacherMatchesTable.trialLocation,
+        trialMeetLink:          shadowTeacherMatchesTable.trialMeetLink,
         trialDirectPay:              shadowTeacherMatchesTable.trialDirectPay,
         trialDirectPayMarkedPaidAt:  shadowTeacherMatchesTable.trialDirectPayMarkedPaidAt,
         trialDirectPayConfirmedAt:   shadowTeacherMatchesTable.trialDirectPayConfirmedAt,
@@ -821,6 +823,7 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       preMeetingRequested:    c.preMeetingRequested   ?? false,
       preMeetingNote:         c.preMeetingNote        ?? null,
       trialLocation:          c.trialLocation         ?? null,
+      trialMeetLink:          c.trialMeetLink         ?? null,
       trialDirectPay:             c.trialDirectPay             ?? false,
       trialDirectPayMarkedPaidAt: c.trialDirectPayMarkedPaidAt ?? null,
       trialDirectPayConfirmedAt:  c.trialDirectPayConfirmedAt  ?? null,
@@ -2223,6 +2226,7 @@ router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requir
   const trialFeePaidInr = Math.round((order.amount ?? 0) / 100);
 
   const trialStartOtp = generateOtp();
+  const trialMeetLink = `https://meet.jit.si/includly-trial-${matchId}-${selectedProfessionalId}`;
 
   await db
     .update(shadowTeacherMatchesTable)
@@ -2234,6 +2238,7 @@ router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requir
       preMeetingRequested,
       preMeetingNote: preMeetingRequested ? (preMeetingNote ?? null) : null,
       trialStartOtp,
+      trialMeetLink,
       trialLocation: trialLocation ?? null,
       // Stuck-engagement lazy-timeout resolution — stamp precisely when this
       // state was entered (write-only, no behavior change). See
@@ -2311,6 +2316,7 @@ router.post("/shadow-teacher/:matchId/mark-trial-direct-pay-paid", requireAuth, 
   }
 
   const trialStartOtp = generateOtp();
+  const trialMeetLink = `https://meet.jit.si/includly-trial-${matchId}-${selectedProfessionalId}`;
 
   // Note: trialFeePaidInr is intentionally left unset here — the platform never
   // held these funds (parent paid the teacher directly), so there is nothing to
@@ -2323,6 +2329,7 @@ router.post("/shadow-teacher/:matchId/mark-trial-direct-pay-paid", requireAuth, 
       preMeetingRequested,
       preMeetingNote: preMeetingRequested ? (preMeetingNote ?? null) : null,
       trialStartOtp,
+      trialMeetLink,
       trialLocation: trialLocation ?? null,
       trialDirectPayMarkedPaidAt: new Date(),
       updatedAt: new Date(),

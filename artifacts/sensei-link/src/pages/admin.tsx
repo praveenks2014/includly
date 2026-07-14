@@ -1559,6 +1559,8 @@ function SettingsTab() {
   const [therapistTrialFeeGoesToProfessional, setTherapistTrialFeeGoesToProfessional] = useState(false);
   const [therapistDirectPayEnabled, setTherapistDirectPayEnabled] = useState(true);
 
+  const [paymentConfirmationDefaultDays, setPaymentConfirmationDefaultDays] = useState<number | "">("");
+
   const [isSaving, setIsSaving] = useState(false);
   const [synced, setSynced] = useState(false);
 
@@ -1598,6 +1600,7 @@ function SettingsTab() {
     setTherapistAssessmentFeeInr(settingsRec["therapistAssessmentFeeInr"] as number ?? 1500);
     setTherapistTrialFeeGoesToProfessional((settingsRec["therapistTrialFeeGoesToProfessional"] as boolean) ?? false);
     setTherapistDirectPayEnabled((settingsRec["therapistDirectPayEnabled"] as boolean) ?? true);
+    setPaymentConfirmationDefaultDays(settingsRec["paymentConfirmationDefaultDays"] as number ?? 7);
     setSynced(true);
   }
 
@@ -1641,6 +1644,7 @@ function SettingsTab() {
         therapistAssessmentFeeInr: Number(therapistAssessmentFeeInr) || 1500,
         therapistTrialFeeGoesToProfessional,
         therapistDirectPayEnabled,
+        paymentConfirmationDefaultDays: Number(paymentConfirmationDefaultDays) || 7,
       };
       await updateSettings({ data: payload });
       queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() });
@@ -1805,6 +1809,23 @@ function SettingsTab() {
                 onChange={(e) => setGstRatePct(e.target.value === "" ? "" : Number(e.target.value))}
                 className="rounded-lg focus-visible:ring-[#2EC4A5]" />
             </div>
+          </div>
+        </div>
+
+        {/* ── Payment Confirmation Default (D3) ── */}
+        <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-5">
+          <div>
+            <p className="text-base font-bold text-[#1A2340]">Payment Confirmation Default</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Applies to shadow-teacher, tutor, and therapist direct-pay confirmations. If a professional
+              doesn't confirm a parent's "marked paid" within this many days, it's automatically treated as confirmed.
+            </p>
+          </div>
+          <div className="max-w-xs">
+            <Label className="text-sm font-semibold text-[#1A2340]">Auto-confirm after (days)</Label>
+            <Input type="number" min={1} value={paymentConfirmationDefaultDays}
+              onChange={(e) => setPaymentConfirmationDefaultDays(e.target.value === "" ? "" : Number(e.target.value))}
+              className="rounded-lg focus-visible:ring-[#2EC4A5]" />
           </div>
         </div>
 

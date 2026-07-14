@@ -3,7 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { therapistEngagementsTable } from "./therapistEngagements";
 import { usersTable } from "./users";
-import { engagementSessionStatusEnum } from "./tutorEngagementSessions";
+import { engagementSessionStatusEnum, sessionGoalProgressEnum } from "./tutorEngagementSessions";
 
 // Per-session attendance log for an ongoing therapist engagement — see
 // tutor_engagement_sessions for the full rationale. Reuses the same
@@ -17,6 +17,9 @@ export const therapistEngagementSessionsTable = pgTable(
     sessionDate: text("session_date").notNull(),
     startTime: text("start_time"),
     endTime: text("end_time"),
+    // Same deterministic meet.jit.si pattern already used for interview
+    // meetLink — generated once at session-scheduling time.
+    meetLink: text("meet_link"),
     status: engagementSessionStatusEnum("status").notNull().default("scheduled"),
     startOtp: text("start_otp"),
     endOtp: text("end_otp"),
@@ -33,6 +36,12 @@ export const therapistEngagementSessionsTable = pgTable(
     paidAmountInr: integer("paid_amount_inr"),
     paidAt: timestamp("paid_at", { withTimezone: true }),
     notes: text("notes"),
+    // Post-session progress feedback (D2) — professional-authored, parent-
+    // visible, only meaningful once status='completed'.
+    topicsCovered: text("topics_covered"),
+    childEngagementNotes: text("child_engagement_notes"),
+    nextSessionNotes: text("next_session_notes"),
+    goalProgress: sessionGoalProgressEnum("goal_progress"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },

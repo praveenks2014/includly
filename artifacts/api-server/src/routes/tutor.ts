@@ -28,6 +28,7 @@ import { isOfferingListable } from "../lib/verificationRequirements";
 import { creditWallet } from "../lib/ledger";
 import { resolveOffering } from "../lib/offeringResolver";
 import { SHOW_TUTOR_SEARCH } from "../lib/features";
+import { resolveOverdueTutorConfirmations } from "../lib/paymentConfirmationResolver";
 
 // Same lockout threshold as sessionsV2.ts's OTP pattern (not exported there,
 // so re-declared here rather than importing a private constant).
@@ -442,6 +443,7 @@ router.get("/tutor/my-candidacies", requireAuth, requireRole("professional"), as
       interviewDoneAt: tutorMatchCandidatesTable.interviewDoneAt,
       trialDaysRequested: tutorMatchCandidatesTable.trialDaysRequested,
       trialDaysAccepted: tutorMatchCandidatesTable.trialDaysAccepted,
+      trialMeetLink: tutorMatchesTable.trialMeetLink,
     })
     .from(tutorMatchCandidatesTable)
     .innerJoin(tutorMatchesTable, eq(tutorMatchCandidatesTable.matchId, tutorMatchesTable.id))
@@ -843,10 +845,11 @@ router.post("/tutor/:matchId/verify-trial-payment", requireAuth, requireRole("pa
   }
   const trialFeePaidInr = Math.round((order.amount ?? 0) / 100);
   const trialStartOtp = generateOtp();
+  const trialMeetLink = `https://meet.jit.si/includly-trial-${matchId}-${selectedProfessionalId}`;
 
   await db
     .update(tutorMatchesTable)
-    .set({ status: "trial_pending", trialProviderPaymentId: razorpayPaymentId, trialFeePaidInr, selectedProfessionalId, trialStartOtp, updatedAt: new Date() })
+    .set({ status: "trial_pending", trialProviderPaymentId: razorpayPaymentId, trialFeePaidInr, selectedProfessionalId, trialStartOtp, trialMeetLink, updatedAt: new Date() })
     .where(eq(tutorMatchesTable.id, matchId));
 
   void createInAppNotification(match.parentId, {
@@ -891,10 +894,11 @@ router.post("/tutor/:matchId/mark-trial-paid", requireAuth, requireRole("parent"
   }
 
   const trialStartOtp = generateOtp();
+  const trialMeetLink = `https://meet.jit.si/includly-trial-${matchId}-${selectedProfessionalId}`;
 
   await db
     .update(tutorMatchesTable)
-    .set({ status: "trial_pending", selectedProfessionalId, trialStartOtp, trialDirectPayMarkedPaidAt: new Date(), updatedAt: new Date() })
+    .set({ status: "trial_pending", selectedProfessionalId, trialStartOtp, trialMeetLink, trialDirectPayMarkedPaidAt: new Date(), updatedAt: new Date() })
     .where(eq(tutorMatchesTable.id, matchId));
 
   void createInAppNotification(match.parentId, {
@@ -1663,7 +1667,17 @@ router.post("/tutor/engagements/:id/sessions", requireAuth, async (req: Request,
     return;
   }
 
-  res.status(201).json(session);
+  // Same deterministic meet.jit.si pattern already used for interview/trial
+  // meetLink — the session's own id is only known after insert, hence the
+  // follow-up update rather than setting it in the initial values().
+  const meetLink = `https://meet.jit.si/includly-session-${session.id}`;
+  const [updated] = await db
+    .update(tutorEngagementSessionsTable)
+    .set({ meetLink })
+    .where(eq(tutorEngagementSessionsTable.id, session.id))
+    .returning();
+
+  res.status(201).json(updated ?? session);
 });
 
 router.get("/tutor/engagements/:id/sessions", requireAuth, async (req: Request, res: Response): Promise<void> => {
@@ -1769,6 +1783,53 @@ router.post("/tutor/engagements/:id/sessions/:sessionId/end-otp", requireAuth, r
   res.json(updated);
 });
 
+// ── POST /tutor/engagements/:id/sessions/:sessionId/progress-notes (D2) ──
+// Professional-only, short structured post-session feedback — NOT a
+// diagnostic/clinical assessment tool, deliberately flat (one row per
+// session, not decomposed per child goal). Only valid once the session is
+// actually completed. Parent sees this automatically via the existing
+// full-row GET /tutor/engagements/:id/sessions (no separate read endpoint
+// needed).
+const SessionProgressNotesBody = z.object({
+  topicsCovered: z.string().max(1000).optional(),
+  childEngagementNotes: z.string().max(1000).optional(),
+  nextSessionNotes: z.string().max(1000).optional(),
+  goalProgress: z.enum(["better", "same", "needs_attention"]).optional(),
+});
+
+router.post("/tutor/engagements/:id/sessions/:sessionId/progress-notes", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  const sessionId = parseInt(req.params["sessionId"] as string, 10);
+  if (isNaN(id) || isNaN(sessionId)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const parsed = SessionProgressNotesBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const { eng, role } = await getTutorEngagementWithAccess(id, req.userId!, req.userRole!);
+  if (!eng || role !== "professional") { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
+
+  const [session] = await db.select().from(tutorEngagementSessionsTable).where(and(eq(tutorEngagementSessionsTable.id, sessionId), eq(tutorEngagementSessionsTable.engagementId, id))).limit(1);
+  if (!session) { res.status(404).json({ error: "Session not found" }); return; }
+  if (session.status !== "completed") { res.status(409).json({ error: "Progress notes can only be added to a completed session" }); return; }
+
+  const [updated] = await db
+    .update(tutorEngagementSessionsTable)
+    .set({
+      topicsCovered: parsed.data.topicsCovered ?? null,
+      childEngagementNotes: parsed.data.childEngagementNotes ?? null,
+      nextSessionNotes: parsed.data.nextSessionNotes ?? null,
+      goalProgress: parsed.data.goalProgress ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(tutorEngagementSessionsTable.id, sessionId))
+    .returning();
+  if (!updated) {
+    console.error(`[tutor/session-progress-notes] returning() came back empty for sessionId=${sessionId}`);
+    res.status(500).json({ error: "update_failed" });
+    return;
+  }
+  res.json(updated);
+});
+
 // ── Payment cadence — tutor is ALWAYS monthly ─────────────────────────────
 // amountInr is never hardcoded — computed as perSessionFeeInr × count of
 // completed sessions in the given month at the moment of marking.
@@ -1833,6 +1894,10 @@ router.get("/tutor/engagements/:id/payment-confirmations", requireAuth, requireR
 
   const { eng, role } = await getTutorEngagementWithAccess(id, req.userId!, req.userRole!);
   if (!eng || role !== "professional") { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
+
+  // D3 — lazy-resolve any confirmation the professional never responded to
+  // within the admin-configured window before returning the list.
+  await resolveOverdueTutorConfirmations(id);
 
   const rows = await db
     .select()

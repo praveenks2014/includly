@@ -88,16 +88,16 @@ const CATEGORY_CARDS = [
 
 const HOW_IT_WORKS = {
   parents: [
-    { num: "01", icon: <UserCheck size={20} className="text-teal-600" />, title: "Create your child's profile", desc: "Add your child's needs, conditions, school, and therapy goals. Profiles help specialists understand your child from day one." },
-    { num: "02", icon: <Sparkles size={20} className="text-teal-600" />, title: "Get matched", desc: "Receive scored shadow teacher candidates tailored to your child, or search therapists, special educators, and specialists directly." },
-    { num: "03", icon: <Phone size={20} className="text-teal-600" />, title: "Connect & try", desc: "Chat, agree on terms, and book a trial day (shadow teachers) or a first session (therapists and specialists)." },
-    { num: "04", icon: <CheckCircle2 size={20} className="text-teal-600" />, title: "Track progress", desc: "Daily logs, goals, and milestones — tracked in your engagement workspace so nothing is lost." },
+    { num: "01", icon: <UserCheck size={20} className="text-teal-600" />, title: "Create your child's profile & request a match", desc: "Add your child's needs, conditions, and goals. A small matching fee gets you a shortlist of scored shadow teacher, tutor, or therapist candidates." },
+    { num: "02", icon: <Phone size={20} className="text-teal-600" />, title: "Interview, then try a paid trial", desc: "Chat with shortlisted candidates, schedule an interview, and book a trial day or session with your top choice before committing to anyone." },
+    { num: "03", icon: <Sparkles size={20} className="text-teal-600" />, title: "Commit to an ongoing engagement", desc: "Found the right fit? Pay a one-time placement fee to start the engagement — weekly sessions, salary, or subscription, depending on the service." },
+    { num: "04", icon: <CheckCircle2 size={20} className="text-teal-600" />, title: "Track progress, pay, and wrap up anytime", desc: "Daily logs and session notes keep you updated. Pay each month through the app, and end the engagement whenever you're ready — no long-term lock-in." },
   ],
   professionals: [
-    { num: "01", icon: <UserCheck size={20} className="text-teal-600" />, title: "Create your profile", desc: "Add your specialty, experience, location, availability, and session rates. First month is completely free." },
-    { num: "02", icon: <ShieldCheck size={20} className="text-teal-600" />, title: "Get verified", desc: "Upload your ID and credentials. Our team reviews and approves with a verified badge within 48 hours." },
-    { num: "03", icon: <Search size={20} className="text-teal-600" />, title: "Get matched & booked", desc: "Appear in parent search results, receive shadow teacher candidacies, or get direct session bookings from families nearby." },
-    { num: "04", icon: <Heart size={20} className="text-teal-600" />, title: "Deliver & earn", desc: "Run sessions or engagements, log progress, and get paid securely through the platform." },
+    { num: "01", icon: <UserCheck size={20} className="text-teal-600" />, title: "Create your profile & get verified", desc: "Add your specialty, experience, and rates, then upload ID and credentials. First month is completely free." },
+    { num: "02", icon: <Search size={20} className="text-teal-600" />, title: "Get shortlisted & interviewed", desc: "Appear in parent searches or receive candidacies. Accept requests you're interested in and confirm an interview slot with the family." },
+    { num: "03", icon: <ShieldCheck size={20} className="text-teal-600" />, title: "Run a trial, then accept the engagement", desc: "Deliver a paid trial session. If the family commits, accept the engagement — an activation fee may apply — then confirm your start code to begin." },
+    { num: "04", icon: <Heart size={20} className="text-teal-600" />, title: "Deliver sessions & get paid", desc: "Log each session, mark it complete, and get paid — directly via UPI or through the platform, depending on the engagement's payment setting." },
   ],
   centres: [
     { num: "01", icon: <Building2 size={20} className="text-teal-600" />, title: "Register your centre", desc: "Complete the setup wizard with your centre's profile, specialties, focus areas, and location." },

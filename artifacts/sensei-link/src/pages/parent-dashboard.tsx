@@ -6,7 +6,6 @@ import {
   useGetMe,
   useGetMySessions,
   useSearchProfessionals,
-  useCreateRating,
   useGetWalletBalance,
   getGetMeQueryKey,
 } from "@workspace/api-client-react";
@@ -17,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
-import { StarRating } from "@/components/StarRating";
+import { ReviewModal } from "@/components/ReviewModal";
 import { ShadowTeacherRequestWidget } from "@/components/ShadowTeacherRequestWidget";
 import { TutorRequestWidget, TherapistRequestWidget } from "@/components/VerticalRequestWidget";
 import { SHOW_TUTOR_SEARCH, SHOW_THERAPIST_SEARCH } from "@/features";
@@ -261,50 +260,9 @@ function SessionCard({ s, compact = false }: { s: SessionBookingWithDetails; com
   );
 }
 
-// ─── Review modal ─────────────────────────────────────────────────────────────
-function ReviewModal({ professionalId, onClose }: { professionalId: number; onClose: () => void }) {
-  const { toast } = useToast();
-  const { mutateAsync: createRating, isPending } = useCreateRating();
-  const [stars, setStars] = useState(5);
-  const [review, setReview] = useState("");
-
-  async function submit() {
-    try {
-      await createRating({ data: { professionalId, score: stars, comment: review.trim() || undefined } });
-      toast({ title: "Review submitted!" });
-      onClose();
-    } catch {
-      toast({ title: "Could not submit review", variant: "destructive" });
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
-      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-gray-900">Leave a review</h3>
-          <button onClick={onClose}><X size={18} className="text-gray-400" /></button>
-        </div>
-        <div className="mb-4">
-          <StarRating value={stars} onChange={setStars} interactive />
-        </div>
-        <textarea
-          className="w-full border border-gray-200 rounded-xl p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-400"
-          rows={3}
-          placeholder="Share your experience…"
-          value={review}
-          onChange={(e) => setReview(e.target.value)}
-        />
-        <div className="flex gap-2 mt-4">
-          <Button variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
-          <Button className="flex-1 bg-teal-600 hover:bg-teal-700" onClick={submit} disabled={isPending}>
-            {isPending ? <Loader2 size={14} className="animate-spin" /> : "Submit"}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ReviewModal moved to @/components/ReviewModal — now shared with
+// VerticalRequestWidget.tsx (D2: reused for post-trial rating, not
+// duplicated).
 
 // ─── Chat modal ────────────────────────────────────────────────────────────────
 function ChatModal({ professionalId, professionalName, threadId, childName, onClose }: { professionalId: number; professionalName: string; threadId?: number; childName?: string | null; onClose: () => void }) {

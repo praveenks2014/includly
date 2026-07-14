@@ -55,6 +55,9 @@ export const shadowTeacherMatchesTable = pgTable("shadow_teacher_matches", {
   trialStartOtp: text("trial_start_otp"),
   trialEndOtp: text("trial_end_otp"),
   trialLocation: text("trial_location"),
+  // Same deterministic meet.jit.si pattern already used for interview
+  // meetLink — generated once at verify-trial-payment/mark-trial-direct-pay-paid time.
+  trialMeetLink: text("trial_meet_link"),
   // Stuck-engagement lazy-timeout resolution — precise "waiting since" marks,
   // stamped at the exact moment of transition in verify-trial-payment and
   // verify-trial-start-otp respectively. Write-only additions, no

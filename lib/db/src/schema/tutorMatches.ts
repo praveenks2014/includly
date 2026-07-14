@@ -64,6 +64,9 @@ export const tutorMatchesTable = pgTable("tutor_matches", {
   trialStartOtp: text("trial_start_otp"),
   trialEndOtp: text("trial_end_otp"),
   trialLocation: text("trial_location"),
+  // Same deterministic meet.jit.si pattern already used for interview
+  // meetLink — generated once at verify-trial-payment time.
+  trialMeetLink: text("trial_meet_link"),
   trialDirectPay: boolean("trial_direct_pay"),
   trialDirectPayMarkedPaidAt: timestamp("trial_direct_pay_marked_paid_at", { withTimezone: true }),
   trialDirectPayConfirmedAt: timestamp("trial_direct_pay_confirmed_at", { withTimezone: true }),

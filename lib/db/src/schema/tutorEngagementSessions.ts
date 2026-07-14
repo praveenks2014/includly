@@ -25,6 +25,15 @@ export const engagementSessionStatusEnum = pgEnum("engagement_session_status", [
   "no_show",
 ]);
 
+// Post-session progress feedback (D2) — deliberately short and descriptive,
+// not a diagnostic/clinical assessment tool. One flat form per session, not
+// decomposed per individual child goal — session-specific snapshot only.
+export const sessionGoalProgressEnum = pgEnum("session_goal_progress", [
+  "better",
+  "same",
+  "needs_attention",
+]);
+
 export const tutorEngagementSessionsTable = pgTable(
   "tutor_engagement_sessions",
   {
@@ -33,6 +42,9 @@ export const tutorEngagementSessionsTable = pgTable(
     sessionDate: text("session_date").notNull(),
     startTime: text("start_time"),
     endTime: text("end_time"),
+    // Same deterministic meet.jit.si pattern already used for interview
+    // meetLink — generated once at session-scheduling time.
+    meetLink: text("meet_link"),
     status: engagementSessionStatusEnum("status").notNull().default("scheduled"),
     startOtp: text("start_otp"),
     endOtp: text("end_otp"),
@@ -43,6 +55,12 @@ export const tutorEngagementSessionsTable = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
     markedByUserId: integer("marked_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
     notes: text("notes"),
+    // Post-session progress feedback (D2) — professional-authored, parent-
+    // visible, only meaningful once status='completed'.
+    topicsCovered: text("topics_covered"),
+    childEngagementNotes: text("child_engagement_notes"),
+    nextSessionNotes: text("next_session_notes"),
+    goalProgress: sessionGoalProgressEnum("goal_progress"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },

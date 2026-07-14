@@ -13,6 +13,7 @@ import {
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { createInAppNotification } from "../lib/notificationService";
+import { resolveOverdueShadowTeacherConfirmations } from "../lib/paymentConfirmationResolver";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -438,6 +439,10 @@ router.get("/engagements/:id/salary-confirmations", requireAuth, async (req, res
     res.status(403).json({ error: "Access denied" });
     return;
   }
+
+  // D3 — lazy-resolve any confirmation the teacher never responded to
+  // within the admin-configured window before returning the list.
+  await resolveOverdueShadowTeacherConfirmations(id);
 
   const rows = await db
     .select()

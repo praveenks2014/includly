@@ -47,6 +47,7 @@ export interface VerticalCandidacy {
   interviewDoneAt: string | null;
   trialDaysRequested: number | null;
   trialDaysAccepted: number | null;
+  trialMeetLink?: string | null;
   // tutor-only
   subjects?: string[] | null;
   board?: string | null;
@@ -336,6 +337,26 @@ function TrialAcceptSection({ vertical, candidacy: c, onUpdated }: { vertical: V
   );
 }
 
+function TrialJoinSection({ candidacy: c }: { candidacy: VerticalCandidacy }) {
+  if (!c.trialMeetLink) return null;
+  if (c.matchStatus !== "trial_pending" && c.matchStatus !== "trial_started") return null;
+
+  return (
+    <div className="mb-3 p-4 bg-teal-50 border border-teal-200 rounded-xl space-y-2">
+      <p className="text-sm font-bold text-teal-900">Trial video link</p>
+      <a
+        href={c.trialMeetLink}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-center gap-1.5 w-full h-9 rounded-lg bg-[#2EC4A5] hover:bg-[#26a88d] text-white font-semibold text-xs no-underline"
+      >
+        <Video size={13} />
+        Join Trial Call
+      </a>
+    </div>
+  );
+}
+
 const MATCH_STATUS_LABEL: Record<string, string> = {
   shortlisted: "Shortlisted",
   pending_commitment: "Pending commitment",
@@ -368,6 +389,7 @@ export function VerticalCandidacyCard({ vertical, candidacy: c, onUpdated }: { v
       <InterviewSection vertical={vertical} candidacy={c} onUpdated={onUpdated} />
       {vertical === "therapist" && isSelected && <AssessmentSection vertical={vertical} candidacy={c} onUpdated={onUpdated} />}
       <TrialAcceptSection vertical={vertical} candidacy={c} onUpdated={onUpdated} />
+      <TrialJoinSection candidacy={c} />
     </div>
   );
 }
