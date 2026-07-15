@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, pgEnum, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, pgEnum, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -27,6 +27,18 @@ export const shadowTeacherEngagementsTable = pgTable("shadow_teacher_engagements
   trialCreditInr: integer("trial_credit_inr").notNull().default(0),
   trialCreditApplied: boolean("trial_credit_applied").notNull().default(false),
   startOtp: text("start_otp"),
+  // Block-only weekly commitment, captured from the TEACHER at accept time (not
+  // the parent at commit) — the teacher is the one whose calendar this
+  // represents. Required on the accept action itself; nullable only because
+  // pre-feature rows (accepted before this existed) have none. Shape:
+  // { dayOfWeek: 0-6, startTime: "HH:MM", endTime: "HH:MM" }[]
+  recurringScheduleJson: jsonb("recurring_schedule_json"),
+  // Terms-of-engagement acknowledgment — a record of agreed terms, not a
+  // binding contract. Stamped independently since parent acknowledges at
+  // commit and teacher acknowledges at accept (two different moments).
+  // Nullable for pre-feature rows.
+  parentTermsAcknowledgedAt: timestamp("parent_terms_acknowledged_at", { withTimezone: true }),
+  teacherTermsAcknowledgedAt: timestamp("teacher_terms_acknowledged_at", { withTimezone: true }),
   // Monetization restructure — per-row snapshot of the salary model in effect for this
   // engagement. Backfilled true for all pre-existing rows so their behavior never changes;
   // new rows snapshot the live admin_settings.platformSalaryEnabled value at commit time.

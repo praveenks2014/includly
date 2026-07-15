@@ -25,6 +25,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShadowMatchChatDrawer } from "./ShadowMatchChatDrawer";
 import { UpiPayQRDialog } from "./UpiPayQRDialog";
+import { TermsAcknowledgment } from "./TermsAcknowledgment";
 import { useGetMe } from "@workspace/api-client-react";
 
 interface Child {
@@ -136,11 +137,11 @@ function useChildren() {
 }
 
 function useMatchingFee() {
-  return useQuery<{ matchingFeeInr: number; trialFeeInr: number }>({
+  return useQuery<{ matchingFeeInr: number; trialFeeInr: number; noticePeriodDays: number }>({
     queryKey: ["shadow-teacher-pricing"],
     queryFn: async () => {
       const res = await fetch(`${getApiBase()}/shadow-teacher/pricing`);
-      return res.json() as Promise<{ matchingFeeInr: number; trialFeeInr: number }>;
+      return res.json() as Promise<{ matchingFeeInr: number; trialFeeInr: number; noticePeriodDays: number }>;
     },
     staleTime: 5 * 60_000,
   });
@@ -965,6 +966,7 @@ export function ShadowTeacherRequestWidget() {
   const [commitProfId, setCommitProfId] = useState<number | null>(null);
   const [commitStartDate, setCommitStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [commitAcknowledged, setCommitAcknowledged] = useState(false);
+  const [commitTermsChecked, setCommitTermsChecked] = useState(false);
 
   // Trial booking modal state
   const [trialModalOpen, setTrialModalOpen] = useState(false);
@@ -1092,7 +1094,7 @@ export function ShadowTeacherRequestWidget() {
       const orderRes = await fetchWithAuth(`/api/shadow-teacher/${match.id}/commit/order`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ selectedProfessionalId: professionalId, startDate }),
+        body: JSON.stringify({ selectedProfessionalId: professionalId, startDate, termsAcknowledged: true }),
       });
       const orderData = await orderRes.json() as {
         error?: string; message?: string; engagementId?: number;
@@ -1141,6 +1143,7 @@ export function ShadowTeacherRequestWidget() {
                   razorpayOrderId: response.razorpay_order_id,
                   razorpayPaymentId: response.razorpay_payment_id,
                   razorpaySignature: response.razorpay_signature,
+                  termsAcknowledged: true,
                 }),
               });
               const vd = await vRes.json() as { error?: string; message?: string; engagementId?: number };
@@ -1620,8 +1623,17 @@ export function ShadowTeacherRequestWidget() {
   }
 
   // ── Commit date-picker dialog (rendered in trial_done and shortlisted returns) ──
+  const commitCandidate = match?.candidates.find((c) => c.professionalId === commitProfId) ?? null;
+  const commitFeeLabel = commitCandidate == null || (commitCandidate.expectedSalaryMin == null && commitCandidate.expectedSalaryMax == null)
+    ? "To be confirmed"
+    : `₹${(commitCandidate.expectedSalaryMin ?? 0).toLocaleString("en-IN")}${
+        commitCandidate.expectedSalaryMax && commitCandidate.expectedSalaryMax !== commitCandidate.expectedSalaryMin
+          ? `–₹${commitCandidate.expectedSalaryMax.toLocaleString("en-IN")}`
+          : ""
+      } (expected — confirmed when the teacher accepts)`;
+
   const CommitDialog = commitDialogOpen && commitProfId !== null ? (
-    <Dialog open onOpenChange={(o) => { if (!o) { setCommitDialogOpen(false); setCommitProfId(null); setCommitAcknowledged(false); } }}>
+    <Dialog open onOpenChange={(o) => { if (!o) { setCommitDialogOpen(false); setCommitProfId(null); setCommitAcknowledged(false); setCommitTermsChecked(false); } }}>
       <DialogContent className="max-w-sm rounded-2xl">
         <DialogHeader>
           <DialogTitle className="text-base font-bold text-[#1A2340]">Pick a Start Date</DialogTitle>
@@ -1656,18 +1668,27 @@ export function ShadowTeacherRequestWidget() {
             onChange={(e) => setCommitStartDate(e.target.value)}
             className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2EC4A5]"
           />
+          <TermsAcknowledgment
+            scheduleSummary={null}
+            monthlyFeeLabel={commitFeeLabel}
+            startDate={commitStartDate}
+            noticePeriodDays={pricing?.noticePeriodDays}
+            checked={commitTermsChecked}
+            onCheckedChange={setCommitTermsChecked}
+          />
         </div>
         <DialogFooter className="gap-2">
-          <Button variant="outline" className="rounded-xl" onClick={() => { setCommitDialogOpen(false); setCommitProfId(null); setCommitAcknowledged(false); }}>Cancel</Button>
+          <Button variant="outline" className="rounded-xl" onClick={() => { setCommitDialogOpen(false); setCommitProfId(null); setCommitAcknowledged(false); setCommitTermsChecked(false); }}>Cancel</Button>
           <Button
             className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl disabled:opacity-60"
-            disabled={choosingId !== null || !commitStartDate || !commitAcknowledged}
+            disabled={choosingId !== null || !commitStartDate || !commitAcknowledged || !commitTermsChecked}
             onClick={async () => {
               const profId = commitProfId!;
               const sd = commitStartDate;
               setCommitDialogOpen(false);
               setCommitProfId(null);
               setCommitAcknowledged(false);
+              setCommitTermsChecked(false);
               await handleChoose(profId, sd);
             }}
           >

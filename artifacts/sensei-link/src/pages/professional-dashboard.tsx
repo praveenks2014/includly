@@ -30,7 +30,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { FileUploadField } from "@/components/FileUploadField";
 import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel } from "@/lib/specialties";
-import { fetchWithAuth } from "@/lib/api";
+import { fetchWithAuth, getApiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { loadRazorpayScript } from "@/lib/razorpay";
 import {
@@ -42,6 +42,7 @@ import {
   Users, Minus, Camera, Share2, RefreshCw, Video,
 } from "lucide-react";
 import { ShadowMatchChatDrawer } from "@/components/ShadowMatchChatDrawer";
+import { TermsAcknowledgment } from "@/components/TermsAcknowledgment";
 import { ComingSoon } from "@/components/ComingSoon";
 import { CityAutocomplete, type CityResult } from "@/components/CityAutocomplete";
 import { SHOW_TUTOR_SEARCH, SHOW_THERAPIST_SEARCH } from "@/features";
@@ -55,6 +56,7 @@ type ProTab = "home" | "profile" | "availability" | "bookings" | "earnings" | "c
 interface Notification { id: number; title: string; body: string; read: boolean; createdAt: string; }
 interface CertDoc { id: number; documentType: string; fileKey: string; uploadedAt: string; }
 type SlotDraft = { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number; priceInr: number; };
+type RecurringScheduleSlot = { dayOfWeek: number; startTime: string; endTime: string; };
 
 // ─── Multi-vertical offerings ──────────────────────────────────────────────
 type OfferingVertical = "shadow_teacher" | "home_tutor" | "therapist";
@@ -120,6 +122,13 @@ function calcEndTime(start: string, mins: number) {
   const [h, m] = start.split(":").map(Number);
   const total = h * 60 + m + mins;
   return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+function formatScheduleSummary(slots: RecurringScheduleSlot[]): string | null {
+  if (slots.length === 0) return null;
+  return [...slots]
+    .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime))
+    .map((s) => `${DAYS_SHORT[s.dayOfWeek]} ${fmtTime(s.startTime)}–${fmtTime(s.endTime)}`)
+    .join(", ");
 }
 
 
@@ -1103,6 +1112,81 @@ function AvailabilityTab() {
       </div>
 
       <p className="text-xs text-gray-400 text-center">Changes are only saved when you click "Save" above.</p>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Recurring weekly schedule editor — used at teacher-acceptance time to capture
+// the block-only commitment (no price/duration; this isn't a bookable listing).
+// ═══════════════════════════════════════════════════════════════════════════════
+function TeacherScheduleEditor({ slots, onChange }: { slots: RecurringScheduleSlot[]; onChange: (slots: RecurringScheduleSlot[]) => void; }) {
+  function addSlot(day: number) {
+    const daySlots = slots.filter((s) => s.dayOfWeek === day);
+    const lastEnd = daySlots.length > 0
+      ? daySlots.reduce((max, s) => (s.endTime > max ? s.endTime : max), "00:00")
+      : "09:00";
+    onChange([...slots, { dayOfWeek: day, startTime: lastEnd, endTime: calcEndTime(lastEnd, 60) }]);
+  }
+  function removeSlot(idx: number) {
+    onChange(slots.filter((_, i) => i !== idx));
+  }
+  function updateSlot(idx: number, field: "startTime" | "endTime", value: string) {
+    onChange(slots.map((s, i) => (i === idx ? { ...s, [field]: value } : s)));
+  }
+
+  return (
+    <div className="space-y-2.5">
+      <p className="text-xs font-semibold text-[#1A2340]">Your weekly commitment</p>
+      <p className="text-[11px] text-gray-500">
+        Add the day(s) and time(s) you're committing to for this engagement. This blocks your calendar — required before you can accept.
+      </p>
+      <div className="space-y-2">
+        {[1, 2, 3, 4, 5, 6, 0].map((day) => {
+          const daySlots = slots.map((s, i) => ({ ...s, _idx: i })).filter((s) => s.dayOfWeek === day);
+          return (
+            <div key={day} className="border border-gray-100 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 bg-gray-50/60">
+                <div className="flex items-center gap-2">
+                  <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold ${daySlots.length > 0 ? "bg-[#2EC4A5] text-white" : "bg-gray-200 text-gray-500"}`}>
+                    {DAYS_SHORT[day]}
+                  </span>
+                  <p className="text-xs font-medium text-[#1A2340]">{DAYS_FULL[day]}</p>
+                </div>
+                <button type="button" onClick={() => addSlot(day)} className="flex items-center gap-1 text-[11px] text-[#2EC4A5] hover:text-[#26a88d] font-medium" aria-label={`Add commitment for ${DAYS_FULL[day]}`}>
+                  <Plus size={12} /> Add
+                </button>
+              </div>
+              {daySlots.length > 0 && (
+                <div className="px-3 py-2 space-y-1.5">
+                  {daySlots.map(({ _idx: idx, ...slot }) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <Input
+                        type="time"
+                        value={slot.startTime}
+                        onChange={(e) => updateSlot(idx, "startTime", e.target.value)}
+                        className="h-7 text-xs w-24 rounded-lg focus-visible:ring-[#2EC4A5]"
+                        aria-label="Start time"
+                      />
+                      <span className="text-gray-400 text-[11px]">to</span>
+                      <Input
+                        type="time"
+                        value={slot.endTime}
+                        onChange={(e) => updateSlot(idx, "endTime", e.target.value)}
+                        className="h-7 text-xs w-24 rounded-lg focus-visible:ring-[#2EC4A5]"
+                        aria-label="End time"
+                      />
+                      <button type="button" onClick={() => removeSlot(idx)} className="ml-auto text-gray-300 hover:text-red-400 transition-colors p-1 rounded-lg" aria-label="Remove commitment">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -2276,15 +2360,34 @@ function EngagementTab() {
 
   // ── Teacher acceptance state ────────────────────────────────────────────────
   const [submittingAcceptance, setSubmittingAcceptance] = useState(false);
+  const [acceptanceSchedule, setAcceptanceSchedule] = useState<RecurringScheduleSlot[]>([]);
+  const [acceptanceTermsChecked, setAcceptanceTermsChecked] = useState(false);
+
+  const { data: shadowTeacherPricing } = useQuery<{ noticePeriodDays: number }>({
+    queryKey: ["shadow-teacher-pricing-notice"],
+    queryFn: async () => {
+      const res = await fetch(`${getApiBase()}/shadow-teacher/pricing`);
+      return res.json() as Promise<{ noticePeriodDays: number }>;
+    },
+    staleTime: 5 * 60_000,
+  });
 
   async function handleTeacherAcceptance(action: "accept" | "decline") {
     if (!active) return;
+    if (action === "accept" && acceptanceSchedule.length === 0) {
+      toast({ title: "Add your weekly commitment before accepting", variant: "destructive" });
+      return;
+    }
+    if (action === "accept" && !acceptanceTermsChecked) {
+      toast({ title: "Please agree to the terms of engagement before accepting", variant: "destructive" });
+      return;
+    }
     setSubmittingAcceptance(true);
     try {
       const res = await fetchWithAuth(`/api/engagements/${active.id}/teacher-acceptance`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify(action === "accept" ? { action, recurringSchedule: acceptanceSchedule, termsAcknowledged: acceptanceTermsChecked } : { action }),
       });
       if (!res.ok) { const e = await res.json() as { error?: string }; throw new Error(e.error ?? "Failed"); }
       queryClient.invalidateQueries({ queryKey: ["pro-engagements"] });
@@ -2753,6 +2856,15 @@ function EngagementTab() {
                 <p className="text-xs text-gray-500">
                   By accepting you commit to starting on the proposed date and entering the parent's start code to activate the engagement.
                 </p>
+                <TeacherScheduleEditor slots={acceptanceSchedule} onChange={setAcceptanceSchedule} />
+                <TermsAcknowledgment
+                  scheduleSummary={formatScheduleSummary(acceptanceSchedule)}
+                  monthlyFeeLabel={`₹${parseFloat(active.monthlyFeeInr).toLocaleString("en-IN")}`}
+                  startDate={active.startDate}
+                  noticePeriodDays={shadowTeacherPricing?.noticePeriodDays}
+                  checked={acceptanceTermsChecked}
+                  onCheckedChange={setAcceptanceTermsChecked}
+                />
                 {needsUpiVerification && (
                   <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
                     <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
@@ -2778,7 +2890,7 @@ function EngagementTab() {
                   <Button
                     size="sm"
                     onClick={() => void handleTeacherAcceptance("accept")}
-                    disabled={submittingAcceptance || needsUpiVerification}
+                    disabled={submittingAcceptance || needsUpiVerification || acceptanceSchedule.length === 0 || !acceptanceTermsChecked}
                     className="flex-1 bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-xs font-semibold disabled:opacity-60"
                   >
                     {submittingAcceptance && <Loader2 size={12} className="animate-spin mr-1" />}

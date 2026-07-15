@@ -4,6 +4,7 @@
  * scoreCandidate() is a pure function — no DB calls, fully unit-testable.
  * maskBody()       applies server-side redaction before messages leave the API.
  */
+import { haversineKm } from "./geo";
 
 export interface MatchSnapshot {
   childCity: string | null;
@@ -34,18 +35,6 @@ export interface TierDef {
   minSalaryInr: number;
   maxSalaryInr: number;
   minExperienceYears?: number;
-}
-
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function scoreCityGeo(snap: MatchSnapshot, pro: ProfessionalForScoring): number {

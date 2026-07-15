@@ -20,6 +20,8 @@ export type CreateChildPayload = {
   gender?: string;
   city?: string;
   area?: string;
+  lat?: number | null;
+  lng?: number | null;
   notes?: string;
   diagnosisStatus?: string;
   conditions?: string[];

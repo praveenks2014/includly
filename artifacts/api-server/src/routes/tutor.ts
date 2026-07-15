@@ -29,6 +29,7 @@ import { creditWallet } from "../lib/ledger";
 import { resolveOffering } from "../lib/offeringResolver";
 import { SHOW_TUTOR_SEARCH } from "../lib/features";
 import { resolveOverdueTutorConfirmations } from "../lib/paymentConfirmationResolver";
+import { hasScheduleConflict } from "../lib/scheduleConflict";
 
 // Same lockout threshold as sessionsV2.ts's OTP pattern (not exported there,
 // so re-declared here rather than importing a private constant).
@@ -1647,6 +1648,14 @@ router.post("/tutor/engagements/:id/sessions", requireAuth, async (req: Request,
   const { eng, role } = await getTutorEngagementWithAccess(id, req.userId!, req.userRole!);
   if (!eng || !role) { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
   if (eng.status !== "active") { res.status(409).json({ error: "Engagement must be active to schedule a session" }); return; }
+
+  if (parsed.data.startTime && parsed.data.endTime) {
+    const conflict = await hasScheduleConflict(eng.professionalId, parsed.data.sessionDate, parsed.data.startTime, parsed.data.endTime);
+    if (conflict) {
+      res.status(409).json({ error: "time_conflict", message: "This professional already has a commitment during that time." });
+      return;
+    }
+  }
 
   const now = new Date();
   const [session] = await db

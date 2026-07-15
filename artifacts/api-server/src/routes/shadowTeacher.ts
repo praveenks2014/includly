@@ -39,7 +39,7 @@ function getRazorpay() {
 
 async function getSettings() {
   const [s] = await db.select().from(adminSettingsTable).limit(1);
-  return s ?? { matchingFeeInr: 500, matchingFeeRefundable: true, tiersJson: null, trialFeeInr: 500 };
+  return s ?? { matchingFeeInr: 500, matchingFeeRefundable: true, tiersJson: null, trialFeeInr: 500, noticePeriodDays: 30 };
 }
 
 function parseTiers(tiersJson: string | null): TierDef[] {
@@ -244,6 +244,11 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
   const professionals = allProfessionals.filter((p) => passedSet.has(p.id));
 
   const tiers = parseTiers(settings.tiersJson);
+  // KNOWN GAP: childLat/childLng are hardcoded null here, so scoreCityGeo's
+  // haversine branch never actually runs for matching today — it silently
+  // falls back to exact-city-string matching. Not fixed as part of the D-day
+  // candidate-card distance work; this is shadow-teacher's SCHOOL-distance
+  // question (parked separately), not the tutor/therapist HOME-distance one.
   const snap: MatchSnapshot = {
     childCity: match.childCity ?? null,
     childLat: null,
@@ -297,7 +302,11 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
 // ── GET /shadow-teacher/pricing — public: returns matching fee + trial fee ────
 router.get("/shadow-teacher/pricing", async (_req: Request, res: Response): Promise<void> => {
   const s = await getSettings();
-  res.json({ matchingFeeInr: s.matchingFeeInr, trialFeeInr: (s as Record<string, unknown>)["trialFeeInr"] as number ?? 500 });
+  res.json({
+    matchingFeeInr: s.matchingFeeInr,
+    trialFeeInr: (s as Record<string, unknown>)["trialFeeInr"] as number ?? 500,
+    noticePeriodDays: (s as Record<string, unknown>)["noticePeriodDays"] as number ?? 30,
+  });
 });
 
 // ── GET /shadow-teacher/re-request-eligibility — waiver check for re-requests ─
@@ -1594,6 +1603,7 @@ router.post("/shadow-teacher/:matchId/candidates/:candidateId/accept-trial", req
 const CommitBody = z.object({
   selectedProfessionalId: z.number().int().positive(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  termsAcknowledged: z.boolean().optional(),
 });
 
 type CommitContextError = { status: number; body: { error: string; message?: string; pendingAmountInr?: number; teacherName?: string | null } };
@@ -1718,10 +1728,12 @@ async function finalizeCommit(params: {
   summerRetainerPct: number | null;
   summerRetainerMonths: number | null;
   leaveTermsNotes: string | null;
+  parentTermsAcknowledgedAt: Date;
 }) {
   const {
     match, teacher, selectedProfessionalId, monthlyFeeInr, placementFeeInr, placementFeePaymentId,
     absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
+    parentTermsAcknowledgedAt,
   } = params;
   const settings = await getSettings();
   const platformSalaryEnabled = ((settings as Record<string, unknown>)["platformSalaryEnabled"] as boolean) ?? false;
@@ -1771,6 +1783,7 @@ async function finalizeCommit(params: {
       summerRetainerPct,
       summerRetainerMonths,
       leaveTermsNotes,
+      parentTermsAcknowledgedAt,
     })
     .returning();
 
@@ -1836,7 +1849,8 @@ router.post("/shadow-teacher/:matchId/commit/order", requireAuth, requireRole("p
 
   const parsed = CommitBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { selectedProfessionalId, startDate } = parsed.data;
+  const { selectedProfessionalId, startDate, termsAcknowledged } = parsed.data;
+  if (!termsAcknowledged) { res.status(400).json({ error: "termsAcknowledged is required to commit to this engagement" }); return; }
 
   const ctx = await loadCommitContext(matchId, req.userId!, selectedProfessionalId);
   if ("error" in ctx) { res.status(ctx.error.status).json(ctx.error.body); return; }
@@ -1855,6 +1869,7 @@ router.post("/shadow-teacher/:matchId/commit/order", requireAuth, requireRole("p
       placementFeeInr: 0,
       placementFeePaymentId: null,
       absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
+      parentTermsAcknowledgedAt: new Date(),
     });
     res.json({ engagementId: engagement.id, teacherFullName: teacher.fullName, phone: teacher.phone, email: teacher.email, waived: true });
     return;
@@ -1906,6 +1921,7 @@ const CommitVerifyBody = z.object({
   razorpayOrderId: z.string(),
   razorpayPaymentId: z.string(),
   razorpaySignature: z.string(),
+  termsAcknowledged: z.boolean().optional(),
 });
 
 router.post("/shadow-teacher/:matchId/commit/verify", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
@@ -1914,7 +1930,7 @@ router.post("/shadow-teacher/:matchId/commit/verify", requireAuth, requireRole("
 
   const parsed = CommitVerifyBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = parsed.data;
+  const { razorpayOrderId, razorpayPaymentId, razorpaySignature, termsAcknowledged } = parsed.data;
 
   const keySecret = process.env["RAZORPAY_KEY_SECRET"];
   if (!keySecret) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
@@ -1927,6 +1943,8 @@ router.post("/shadow-teacher/:matchId/commit/verify", requireAuth, requireRole("
 
   // Idempotency: already committed — return the existing engagement rather
   // than re-processing (guards against double-submit of /commit/verify).
+  // Checked before the termsAcknowledged gate so a legitimate retry of an
+  // already-finalized commit isn't blocked by a resend that omits it.
   if (match.status === "committed") {
     const [existingEngagement] = await db
       .select({ id: shadowTeacherEngagementsTable.id })
@@ -1938,6 +1956,7 @@ router.post("/shadow-teacher/:matchId/commit/verify", requireAuth, requireRole("
     return;
   }
 
+  if (!termsAcknowledged) { res.status(400).json({ error: "termsAcknowledged is required to commit to this engagement" }); return; }
   if (!["shortlisted", "trial_done"].includes(match.status)) { res.status(400).json({ error: "Match is not awaiting placement fee payment" }); return; }
   if (!match.placementFeeOrderId || match.placementFeeOrderId !== razorpayOrderId) { res.status(400).json({ error: "Order ID mismatch" }); return; }
   if (!match.pendingCommitProfessionalId) { res.status(409).json({ error: "No pending commitment found for this match" }); return; }
@@ -2005,6 +2024,7 @@ router.post("/shadow-teacher/:matchId/commit/verify", requireAuth, requireRole("
     placementFeeInr,
     placementFeePaymentId: paymentRow!.id,
     absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
+    parentTermsAcknowledgedAt: new Date(),
   });
 
   res.json({ engagementId: engagement.id, teacherFullName: teacher.fullName, phone: teacher.phone, email: teacher.email });
@@ -2629,6 +2649,9 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
     if (candidates.length > 0) {
       const settings = await getSettings();
       const tiers = parseTiers(settings.tiersJson);
+      // KNOWN GAP: see the identical note on the main matching path above —
+      // childLat/childLng are hardcoded null here too, so geo-scoring never
+      // runs on refill either.
       const snap: MatchSnapshot = {
         childCity: match.childCity ?? null,
         childLat: null,

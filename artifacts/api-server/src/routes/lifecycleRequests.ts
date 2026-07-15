@@ -64,6 +64,18 @@ const RaiseLifecycleBody = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
+const RecurringScheduleSlot = z.object({
+  dayOfWeek: z.number().int().min(0).max(6),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
+const TeacherAcceptanceBody = z.object({
+  action: z.enum(["accept", "decline"]),
+  recurringSchedule: z.array(RecurringScheduleSlot).min(1).optional(),
+  termsAcknowledged: z.boolean().optional(),
+});
+
 router.post("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise<void> => {
   const id = parseInt(req.params["id"] as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -629,9 +641,14 @@ router.patch("/engagements/:id/teacher-acceptance", requireAuth, async (req, res
   const id = parseInt(req.params["id"] as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
-  const { action } = req.body ?? {};
-  if (!["accept", "decline"].includes(action as string)) {
-    res.status(400).json({ error: "action must be accept or decline" }); return;
+  const parsed = TeacherAcceptanceBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { action, recurringSchedule, termsAcknowledged } = parsed.data;
+  if (action === "accept" && (!recurringSchedule || recurringSchedule.length === 0)) {
+    res.status(400).json({ error: "recurringSchedule is required to accept this engagement" }); return;
+  }
+  if (action === "accept" && !termsAcknowledged) {
+    res.status(400).json({ error: "termsAcknowledged is required to accept this engagement" }); return;
   }
 
   const { eng, role } = await getEngagementWithAccess(id, req.userId!, req.userRole!);
@@ -685,6 +702,8 @@ router.patch("/engagements/:id/teacher-acceptance", requireAuth, async (req, res
         activationFeeInr: activationFeeInr > 0 ? activationFeeInr : null,
         pendingActivationFeeSince: nextStatus === "pending_activation_fee" ? new Date() : null,
         pendingStartSince: nextStatus === "pending_start" ? new Date() : null,
+        recurringScheduleJson: recurringSchedule,
+        teacherTermsAcknowledgedAt: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(shadowTeacherEngagementsTable.id, id));

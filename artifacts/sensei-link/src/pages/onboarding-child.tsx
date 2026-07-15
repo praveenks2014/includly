@@ -12,6 +12,7 @@ import {
 } from "@workspace/api-client-react";
 import { WheelDatePicker } from "@/components/WheelDatePicker";
 import { WheelTimePicker } from "@/components/WheelTimePicker";
+import { CityAutocomplete } from "@/components/CityAutocomplete";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,6 +21,8 @@ type WizardData = {
   dob: string;
   gender: string;
   city: string;
+  lat: number | null;
+  lng: number | null;
   diagnosisStatus: string;
   conditions: string[];
   schoolType: string;
@@ -51,6 +54,8 @@ const DEFAULT: WizardData = {
   dob: "",
   gender: "",
   city: "",
+  lat: null,
+  lng: null,
   diagnosisStatus: "",
   conditions: [],
   schoolType: "",
@@ -283,6 +288,8 @@ export default function ChildOnboardingPage() {
       dob:                  (c.dob as string) ?? "",
       gender:               (c.gender as string) ?? "",
       city:                 (c.city as string) ?? "",
+      lat:                  (c.lat as number | null) ?? null,
+      lng:                  (c.lng as number | null) ?? null,
       diagnosisStatus:      (c.diagnosisStatus as string) ?? "",
       conditions:           (c.conditions as string[]) ?? [],
       schoolType:           (c.schoolType as string) ?? "",
@@ -360,6 +367,8 @@ export default function ChildOnboardingPage() {
       ...(data.dob && { dob: data.dob }),
       ...(data.gender && { gender: data.gender }),
       ...(data.city.trim() && { city: data.city.trim() }),
+      ...(data.lat != null && { lat: data.lat }),
+      ...(data.lng != null && { lng: data.lng }),
       ...(data.diagnosisStatus && { diagnosisStatus: data.diagnosisStatus }),
       ...(data.conditions.length > 0 && { conditions: data.conditions }),
       ...(data.schoolType && { schoolType: data.schoolType }),
@@ -441,9 +450,10 @@ export default function ChildOnboardingPage() {
             </Field>
 
             <Field label="City">
-              <TextInput
-                value={data.city}
-                onChange={(v) => update("city", v)}
+              <CityAutocomplete
+                city={data.city}
+                onSelect={(result) => setData((prev) => ({ ...prev, city: result.city, lat: result.lat, lng: result.lng }))}
+                onManualChange={(city) => setData((prev) => ({ ...prev, city, lat: null, lng: null }))}
                 placeholder="e.g. Hyderabad"
               />
             </Field>
