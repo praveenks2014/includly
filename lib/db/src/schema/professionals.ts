@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean, real, pgEnum, json } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, real, pgEnum, json, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -97,6 +97,20 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   // change never retroactively affects someone who already paid.
   listingFeePaidAt: timestamp("listing_fee_paid_at", { withTimezone: true }),
   listingFeePaymentId: integer("listing_fee_payment_id"),
+  // Shadow-teacher listing decoupled from calendar/slot availability — see
+  // shadowTeacher.ts's filterBySchoolHours(). earliestStartDate is the
+  // teacher's own stated earliest date to begin a NEW engagement; used
+  // (alongside a current engagement's notice-period end, if any) to compute
+  // effective availability shown per candidate and scored against a parent's
+  // desired start date — never a listing exclusion by itself.
+  // generalAvailabilityJson is descriptive-display only (same
+  // {dayOfWeek,startTime,endTime}[] shape as shadow_teacher_engagements'
+  // recurringScheduleJson, captured via the same TeacherScheduleEditor
+  // pattern) — NOT the professional_availability/AvailabilityTab table,
+  // which is the tutor/therapist bookable-slots system and is not read for
+  // shadow-teacher matching at all beyond Rule 1's booked-commitment check.
+  earliestStartDate: text("earliest_start_date"),
+  generalAvailabilityJson: jsonb("general_availability_json"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

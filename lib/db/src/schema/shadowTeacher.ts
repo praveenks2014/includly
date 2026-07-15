@@ -43,6 +43,10 @@ export const shadowTeacherMatchesTable = pgTable("shadow_teacher_matches", {
   childBudgetMaxInr: integer("child_budget_max_inr"),
   childGoalsAreas: text("child_goals_areas").array(),
   childPreferredModes: text("child_preferred_modes").array(),
+  // Compatibility signal only (see scoreStartDate in shadowTeacherScoring.ts)
+  // — never excludes a candidate, only ranks them relative to how well their
+  // effective availability lines up with this date.
+  childDesiredStartDate: text("child_desired_start_date"),
   extraNotes: text("extra_notes"),
   selectedProfessionalId: integer("selected_professional_id").references(() => professionalProfilesTable.id, { onDelete: "set null" }),
   feePaidAt: timestamp("fee_paid_at", { withTimezone: true }),
