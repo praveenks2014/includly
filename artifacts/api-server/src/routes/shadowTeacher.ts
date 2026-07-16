@@ -19,14 +19,20 @@ import {
   connectThreadsTable,
   paymentsTable,
   identityVerificationsTable,
+  tutorEngagementsTable,
+  tutorEngagementSessionsTable,
+  therapistEngagementsTable,
+  therapistEngagementSessionsTable,
+  sessionBookingsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { z } from "zod/v4";
-import { rankCandidates, maskBody, type MatchSnapshot, type TierDef } from "../lib/shadowTeacherScoring";
+import { rankCandidates, maskBody, type MatchSnapshot, type ProfessionalForScoring, type TierDef } from "../lib/shadowTeacherScoring";
 import { notifyMatchShortlisted, notifyMatchChatMessage, notifyParentOnTrialDone, createInAppNotification } from "../lib/notificationService";
 import { generateOtp } from "../lib/otp";
 import { creditWallet } from "../lib/ledger";
 import { resolveStuckShadowTeacherMatch } from "../lib/stuckEngagementResolver";
+import { overlaps } from "../lib/scheduleConflict";
 
 const router: IRouter = Router();
 
@@ -48,15 +54,24 @@ function parseTiers(tiersJson: string | null): TierDef[] {
 }
 
 /**
- * School-hours pre-filter for shadow-teacher matching.
+ * School-hours EXCLUSION for shadow-teacher matching (Rule 1).
  *
- * A professional is KEPT when:
- *  - The child has no school hours set (null → no filter)
- *  - The professional has NO weekday availability (assumed fully flexible)
- *  - The professional has at least one weekday slot that overlaps with the
- *    child's school hours (shadow teachers must be available during school)
+ * Decoupled from generic calendar/slot availability — a shadow-teacher
+ * candidate is excluded ONLY if they have an ACTUAL EXISTING COMMITMENT
+ * whose hours genuinely overlap the child's school hours. Two sources:
+ *  1. Their own shadow-teaching commitment — recurringScheduleJson on any
+ *     non-ended engagement (active or notice_period; the latter is no
+ *     longer hard-excluded from listing by busyProfIds, but its committed
+ *     hours are still real until its endDate).
+ *  2. An actual BOOKED cross-vertical commitment (multi-vertical
+ *     professional) — confirmed session_bookings, or scheduled/started
+ *     tutor_engagement_sessions/therapist_engagement_sessions. A merely
+ *     DECLARED (unbooked) professional_availability slot is NOT a
+ *     conflict — nothing has actually been committed to there.
  *
- * Weekday = dayOfWeek 1-5 (Mon-Fri).  Overlap test: slotStart < schoolEnd && slotEnd > schoolStart.
+ * A professional with no commitment in either source (or no school hours
+ * set on the child) passes through untouched, same "flexible" default as
+ * before.
  */
 async function filterBySchoolHours(
   professionals: { id: number }[],
@@ -76,35 +91,114 @@ async function filterBySchoolHours(
   const schoolEnd   = child.schoolEndTime;
   const proIds      = professionals.map((p) => p.id);
 
-  const slots = await db
+  // Source 1 — own shadow-teaching commitment.
+  const ownEngagements = await db
     .select({
-      professionalId: professionalAvailabilityTable.professionalId,
-      startTime:      professionalAvailabilityTable.startTime,
-      endTime:        professionalAvailabilityTable.endTime,
+      professionalId: shadowTeacherEngagementsTable.professionalId,
+      recurringScheduleJson: shadowTeacherEngagementsTable.recurringScheduleJson,
     })
-    .from(professionalAvailabilityTable)
-    .where(
-      and(
-        inArray(professionalAvailabilityTable.professionalId, proIds),
-        eq(professionalAvailabilityTable.isActive, true),
-        sql`${professionalAvailabilityTable.dayOfWeek} BETWEEN 1 AND 5`,
-      ),
-    );
+    .from(shadowTeacherEngagementsTable)
+    .where(and(
+      inArray(shadowTeacherEngagementsTable.professionalId, proIds),
+      sql`${shadowTeacherEngagementsTable.status} != 'ended'`,
+    ));
 
-  const slotsByPro = new Map<number, { startTime: string; endTime: string }[]>();
-  for (const slot of slots) {
-    const arr = slotsByPro.get(slot.professionalId) ?? [];
-    arr.push({ startTime: slot.startTime, endTime: slot.endTime });
-    slotsByPro.set(slot.professionalId, arr);
+  const overlapIds = new Set<number>();
+  for (const eng of ownEngagements) {
+    const slots = (eng.recurringScheduleJson as { dayOfWeek: number; startTime: string; endTime: string }[] | null) ?? [];
+    for (const s of slots) {
+      if (s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && overlaps(s.startTime, s.endTime, schoolStart, schoolEnd)) {
+        overlapIds.add(eng.professionalId);
+        break;
+      }
+    }
   }
 
-  return professionals
-    .filter((p) => {
-      const proSlots = slotsByPro.get(p.id);
-      if (!proSlots || proSlots.length === 0) return true; // flexible — no slots recorded → pass
-      return proSlots.some((s) => s.startTime < schoolEnd && s.endTime > schoolStart);
-    })
-    .map((p) => p.id);
+  // Source 2 — actual booked cross-vertical commitments.
+  const [tutorSessions, therapistSessions, bookings] = await Promise.all([
+    db
+      .select({ professionalId: tutorEngagementsTable.professionalId, date: tutorEngagementSessionsTable.sessionDate, startTime: tutorEngagementSessionsTable.startTime, endTime: tutorEngagementSessionsTable.endTime })
+      .from(tutorEngagementSessionsTable)
+      .innerJoin(tutorEngagementsTable, eq(tutorEngagementSessionsTable.engagementId, tutorEngagementsTable.id))
+      .where(and(
+        inArray(tutorEngagementsTable.professionalId, proIds),
+        inArray(tutorEngagementSessionsTable.status, ["scheduled", "started"]),
+        isNotNull(tutorEngagementSessionsTable.startTime),
+        isNotNull(tutorEngagementSessionsTable.endTime),
+      )),
+    db
+      .select({ professionalId: therapistEngagementsTable.professionalId, date: therapistEngagementSessionsTable.sessionDate, startTime: therapistEngagementSessionsTable.startTime, endTime: therapistEngagementSessionsTable.endTime })
+      .from(therapistEngagementSessionsTable)
+      .innerJoin(therapistEngagementsTable, eq(therapistEngagementSessionsTable.engagementId, therapistEngagementsTable.id))
+      .where(and(
+        inArray(therapistEngagementsTable.professionalId, proIds),
+        inArray(therapistEngagementSessionsTable.status, ["scheduled", "started"]),
+        isNotNull(therapistEngagementSessionsTable.startTime),
+        isNotNull(therapistEngagementSessionsTable.endTime),
+      )),
+    db
+      .select({ professionalId: sessionBookingsTable.professionalId, date: sessionBookingsTable.bookedDate, startTime: sessionBookingsTable.startTime, endTime: sessionBookingsTable.endTime })
+      .from(sessionBookingsTable)
+      .where(and(
+        inArray(sessionBookingsTable.professionalId, proIds),
+        eq(sessionBookingsTable.status, "confirmed"),
+      )),
+  ]);
+
+  for (const row of [...tutorSessions, ...therapistSessions, ...bookings]) {
+    if (!row.startTime || !row.endTime) continue;
+    const dayOfWeek = new Date(row.date + "T00:00:00Z").getUTCDay();
+    if (dayOfWeek >= 1 && dayOfWeek <= 5 && overlaps(row.startTime, row.endTime, schoolStart, schoolEnd)) {
+      overlapIds.add(row.professionalId);
+    }
+  }
+
+  return professionals.filter((p) => !overlapIds.has(p.id)).map((p) => p.id);
+}
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function maxDateStr(a: string | null, b: string | null): string | null {
+  if (!a) return b;
+  if (!b) return a;
+  return a > b ? a : b;
+}
+
+/**
+ * Effective "available from" date per candidate (Rule 2 support) — never an
+ * exclusion, purely a display/scoring input. MAX(earliestStartDate, current
+ * notice_period engagement's endDate + 1 day). No non-ended engagement, or
+ * one that's not in notice_period (those are still hard-excluded by
+ * busyProfIds and never reach this call) -> just earliestStartDate.
+ */
+async function computeEffectiveAvailableFrom(
+  professionals: { id: number; earliestStartDate: string | null }[],
+): Promise<Map<number, string | null>> {
+  const proIds = professionals.map((p) => p.id);
+  const noticeRows = proIds.length > 0
+    ? await db
+        .select({ professionalId: shadowTeacherEngagementsTable.professionalId, endDate: shadowTeacherEngagementsTable.endDate })
+        .from(shadowTeacherEngagementsTable)
+        .where(and(
+          inArray(shadowTeacherEngagementsTable.professionalId, proIds),
+          eq(shadowTeacherEngagementsTable.status, "notice_period"),
+        ))
+    : [];
+
+  const noticeEndByPro = new Map<number, string | null>();
+  for (const row of noticeRows) noticeEndByPro.set(row.professionalId, row.endDate);
+
+  const result = new Map<number, string | null>();
+  for (const p of professionals) {
+    const noticeEnd = noticeEndByPro.get(p.id);
+    const availableAfterNotice = noticeEnd ? addDays(noticeEnd, 1) : null;
+    result.set(p.id, maxDateStr(p.earliestStartDate, availableAfterNotice));
+  }
+  return result;
 }
 
 function maskProfile(
@@ -135,11 +229,15 @@ type MatchRow = typeof shadowTeacherMatchesTable.$inferSelect;
 // Called from both the paid verify-request-payment path and the waived request path.
 // Returns the number of candidates surfaced.
 async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
-  // Exclude shadow teachers who already have an active (non-ended) engagement
+  // Exclude shadow teachers who already have an engagement that isn't ended
+  // AND isn't in notice_period — a notice_period engagement has a known
+  // endDate, so those candidates are no longer hard-excluded; they're
+  // listed (subject to Rule 1's overlap check) with their effective
+  // availability computed and scored (Rule 2), not filtered by it.
   const engBusyRows = await db
     .select({ professionalId: shadowTeacherEngagementsTable.professionalId })
     .from(shadowTeacherEngagementsTable)
-    .where(sql`${shadowTeacherEngagementsTable.status} != 'ended'`);
+    .where(sql`${shadowTeacherEngagementsTable.status} != 'ended' AND ${shadowTeacherEngagementsTable.status} != 'notice_period'`);
 
   // Also exclude teachers selected in an in-flight match (no engagement created yet)
   const matchBusyRows = await db
@@ -238,10 +336,21 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
     };
   });
 
-  // School hours pre-filter: remove professionals who have NO weekday overlap with child's school hours
+  // School-hours exclusion (Rule 1): remove professionals whose ACTUAL
+  // EXISTING commitment hours (own shadow-teaching schedule, or a booked
+  // tutor/therapist session) overlap the child's school hours.
   const passedIds = await filterBySchoolHours(allProfessionals, match.childId ?? null);
   const passedSet = new Set(passedIds);
   const professionals = allProfessionals.filter((p) => passedSet.has(p.id));
+
+  // Rule 2 support: effective availability per candidate, never an exclusion.
+  const availabilityMap = await computeEffectiveAvailableFrom(
+    professionals.map((p) => ({ id: p.id, earliestStartDate: p.earliestStartDate })),
+  );
+  const professionalsForScoring: ProfessionalForScoring[] = professionals.map((p) => ({
+    ...p,
+    effectiveAvailableFrom: availabilityMap.get(p.id) ?? p.earliestStartDate,
+  }));
 
   const tiers = parseTiers(settings.tiersJson);
   // KNOWN GAP: childLat/childLng are hardcoded null here, so scoreCityGeo's
@@ -257,9 +366,10 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
     childBudgetMinInr: match.childBudgetMinInr ?? null,
     childBudgetMaxInr: match.childBudgetMaxInr ?? null,
     childPreferredModes: match.childPreferredModes ?? null,
+    childDesiredStartDate: match.childDesiredStartDate ?? null,
   };
 
-  const ranked = rankCandidates(snap, professionals, tiers, 3);
+  const ranked = rankCandidates(snap, professionalsForScoring, tiers, 3);
   let candidateCount = 0;
 
   if (ranked.length > 0) {
@@ -637,6 +747,14 @@ router.get("/shadow-teacher/my-request", requireAuth, requireRole("parent"), asy
     ? await db.select().from(shadowMatchThreadsTable).where(eq(shadowMatchThreadsTable.matchId, match.id))
     : [];
 
+  // Effective availability per candidate (Rule 2 support) — for card display,
+  // recomputed live rather than stored, since it can change whenever a
+  // teacher's earliestStartDate or their engagement's notice-period status
+  // changes.
+  const availabilityMap = await computeEffectiveAvailableFrom(
+    profProfiles.map((p) => ({ id: p.id, earliestStartDate: p.earliestStartDate })),
+  );
+
   const candidates = candidateRows.map((c) => {
     const pro = profProfiles.find((p) => p.id === c.professionalId);
     const thread = threads.find((t) => t.professionalId === c.professionalId);
@@ -683,6 +801,8 @@ router.get("/shadow-teacher/my-request", requireAuth, requireRole("parent"), asy
       interviewDoneAt: c.interviewDoneAt,
       trialDaysRequested: c.trialDaysRequested,
       trialDaysAccepted: c.trialDaysAccepted,
+      // For the upcoming candidate-card display — never used to exclude.
+      effectiveAvailableFrom: availabilityMap.get(pro.id) ?? pro.earliestStartDate,
     };
   }).filter(Boolean);
 
@@ -2641,7 +2761,7 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
         ),
       );
 
-    // Apply school-hours filter on refill too
+    // School-hours exclusion (Rule 1) on refill too
     const refillPassedIds = await filterBySchoolHours(allCandidates, match.childId ?? null);
     const refillPassedSet = new Set(refillPassedIds);
     const candidates = allCandidates.filter((p) => refillPassedSet.has(p.id));
@@ -2652,6 +2772,13 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
       // KNOWN GAP: see the identical note on the main matching path above —
       // childLat/childLng are hardcoded null here too, so geo-scoring never
       // runs on refill either.
+      const refillAvailabilityMap = await computeEffectiveAvailableFrom(
+        candidates.map((p) => ({ id: p.id, earliestStartDate: p.earliestStartDate })),
+      );
+      const candidatesForScoring: ProfessionalForScoring[] = candidates.map((p) => ({
+        ...p,
+        effectiveAvailableFrom: refillAvailabilityMap.get(p.id) ?? p.earliestStartDate,
+      }));
       const snap: MatchSnapshot = {
         childCity: match.childCity ?? null,
         childLat: null,
@@ -2660,6 +2787,7 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
         childBudgetMinInr: match.childBudgetMinInr ?? null,
         childBudgetMaxInr: match.childBudgetMaxInr ?? null,
         childPreferredModes: match.childPreferredModes ?? null,
+        childDesiredStartDate: match.childDesiredStartDate ?? null,
       };
 
       const [maxRankRow] = await db
@@ -2668,7 +2796,7 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
         .where(eq(shadowMatchCandidatesTable.matchId, matchId));
       const nextRank = (maxRankRow?.maxRank ?? 0) + 1;
 
-      const ranked = rankCandidates(snap, candidates, tiers, 1);
+      const ranked = rankCandidates(snap, candidatesForScoring, tiers, 1);
       if (ranked.length > 0) {
         await db.insert(shadowMatchCandidatesTable).values({
           matchId,

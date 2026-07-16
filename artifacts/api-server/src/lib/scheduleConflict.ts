@@ -13,7 +13,10 @@ function timeToMinutes(t: string): number {
   return (h ?? 0) * 60 + (m ?? 0);
 }
 
-function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+// Exported so other exclusion/conflict checks (e.g. shadowTeacher.ts's
+// school-hours overlap rule) can reuse the same interval-overlap primitive
+// instead of re-deriving it.
+export function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
   return timeToMinutes(aStart) < timeToMinutes(bEnd) && timeToMinutes(bStart) < timeToMinutes(aEnd);
 }
 

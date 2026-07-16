@@ -14,6 +14,10 @@ export interface MatchSnapshot {
   childBudgetMinInr: number | null;
   childBudgetMaxInr: number | null;
   childPreferredModes: string[] | null;
+  // Compatibility signal only — never excludes a candidate. See scoreStartDate.
+  // Optional: tutor.ts/therapist.ts also reuse this scoring lib and don't
+  // capture a desired start date — absent means neutral score for everyone.
+  childDesiredStartDate?: string | null;
 }
 
 export interface ProfessionalForScoring {
@@ -29,6 +33,12 @@ export interface ProfessionalForScoring {
   verificationStatus: string;
   averageRating: number | null;
   travelRadiusKm: number;
+  // MAX(earliestStartDate, current notice_period engagement's endDate + 1
+  // day) — computed by the caller (shadowTeacher.ts), null if neither input
+  // is known. Never engaged -> just earliestStartDate. Optional for the same
+  // reason as childDesiredStartDate: tutor/therapist matching doesn't
+  // compute it, and absent scores neutrally.
+  effectiveAvailableFrom?: string | null;
 }
 
 export interface TierDef {
@@ -112,6 +122,26 @@ function scoreVerified(pro: ProfessionalForScoring): number {
   return 0;
 }
 
+// Compatibility scoring only — NEVER excludes a candidate (Rule 2). A
+// candidate whose effective availability is later than the parent's desired
+// start date just ranks lower, in proportion to the gap; a huge gap floors
+// at 0 like every other scorer here, it doesn't remove them from the list.
+// Missing data on either side scores a neutral default (~half of max),
+// matching scoreLanguage's convention for "nothing to compare".
+function scoreStartDate(snap: MatchSnapshot, pro: ProfessionalForScoring): number {
+  if (!snap.childDesiredStartDate || !pro.effectiveAvailableFrom) return 8;
+  if (pro.effectiveAvailableFrom <= snap.childDesiredStartDate) return 15;
+
+  const gapDays = Math.round(
+    (new Date(pro.effectiveAvailableFrom + "T00:00:00Z").getTime() -
+      new Date(snap.childDesiredStartDate + "T00:00:00Z").getTime()) /
+      86_400_000,
+  );
+  if (gapDays <= 7) return 10;
+  if (gapDays <= 30) return 5;
+  return 0;
+}
+
 export interface ScoredCandidate {
   professionalId: number;
   score: number;
@@ -121,6 +151,7 @@ export interface ScoredCandidate {
   languageScore: number;
   homeVisitScore: number;
   verifiedScore: number;
+  startDateScore: number;
   ratingBonus: number;
 }
 
@@ -135,6 +166,7 @@ export function scoreCandidate(
   const languageScore = scoreLanguage(snap, pro);
   const homeVisitScore = scoreHomeVisit(snap, pro);
   const verifiedScore = scoreVerified(pro);
+  const startDateScore = scoreStartDate(snap, pro);
   const ratingBonus = pro.averageRating != null ? (pro.averageRating / 5) * 5 : 0;
 
   const score =
@@ -143,7 +175,8 @@ export function scoreCandidate(
     experienceScore +
     languageScore +
     homeVisitScore +
-    verifiedScore;
+    verifiedScore +
+    startDateScore;
 
   return {
     professionalId: pro.id,
@@ -154,6 +187,7 @@ export function scoreCandidate(
     languageScore,
     homeVisitScore,
     verifiedScore,
+    startDateScore,
     ratingBonus: Math.round(ratingBonus * 10) / 10,
   };
 }
