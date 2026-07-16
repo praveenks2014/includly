@@ -157,7 +157,16 @@ export default function ChooseRolePage() {
         },
       });
 
-      setLocation("/dashboard");
+      // Navigate straight to the parent shell, not /dashboard — that route's
+      // LegacyDashboardRedirect re-reads `me` via its own fresh useGetMe()
+      // call, which can still return the React-Query cache's pre-PATCH
+      // value (invalidateQueries above only flags it stale; it doesn't
+      // force a synchronous refetch for a query nothing is actively
+      // observing yet). That stale onboardingComplete:false bounced the
+      // user straight back to /onboarding — this sidesteps the race
+      // entirely, matching how the centre_admin path already navigates
+      // directly to its destination instead of through /dashboard.
+      setLocation("/home");
     } catch {
       toast({ title: "Something went wrong", description: "Please try again.", variant: "destructive" });
     } finally {
