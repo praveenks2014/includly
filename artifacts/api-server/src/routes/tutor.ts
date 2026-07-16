@@ -378,6 +378,11 @@ router.get("/tutor/my-request", requireAuth, requireRole("parent"), async (req: 
     profProfiles.map((p: typeof professionalProfilesTable.$inferSelect): [number, typeof professionalProfilesTable.$inferSelect] => [p.id, p]),
   );
 
+  // Profile photo — trust signal shown on the candidate card.
+  const userIds = profProfiles.map((p) => p.userId);
+  const avatarRows = userIds.length ? await db.select({ id: usersTable.id, avatarUrl: usersTable.avatarUrl }).from(usersTable).where(inArray(usersTable.id, userIds)) : [];
+  const avatarByUserId = new Map(avatarRows.map((r) => [r.id, r.avatarUrl]));
+
   const candidates = candidateRows
     .map((c: TutorCandidateRow) => {
       const p = profById.get(c.professionalId);
@@ -408,6 +413,7 @@ router.get("/tutor/my-request", requireAuth, requireRole("parent"), async (req: 
           pricingMaxINR: p.pricingMaxINR,
           languages: p.languages,
           offersHomeVisits: p.offersHomeVisits,
+          avatarUrl: avatarByUserId.get(p.userId) ?? null,
         },
       };
     })

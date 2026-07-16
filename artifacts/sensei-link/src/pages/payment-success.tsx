@@ -3,6 +3,7 @@ import { Link, useSearch } from "wouter";
 import { CheckCircle2, ArrowRight, Search, Loader2, Phone, Mail, MapPin, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getApiBase } from "@/lib/api";
+import { avatarSrc } from "@/components/ProfessionalAvatar";
 
 interface ProfessionalSnapshot {
   fullName: string;
@@ -66,7 +67,7 @@ function TeacherCard({
       <div className="flex items-start gap-3">
         {professional.avatarUrl ? (
           <img
-            src={professional.avatarUrl}
+            src={avatarSrc(professional.avatarUrl)!}
             alt={professional.fullName}
             className="w-12 h-12 rounded-full object-cover shrink-0"
           />

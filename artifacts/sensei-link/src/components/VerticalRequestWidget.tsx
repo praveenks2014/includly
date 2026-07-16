@@ -22,6 +22,7 @@ import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { AntiBypassNotice } from "./AntiBypassNotice";
 import { UpiPayQRDialog } from "./UpiPayQRDialog";
 import { ReviewModal } from "./ReviewModal";
+import { ProfessionalAvatar } from "./ProfessionalAvatar";
 import {
   Loader2, CheckCircle2, IndianRupee, MapPin, Star, Languages,
   ChevronRight, BadgeCheck, ShieldCheck, Send, Video, XCircle, CalendarClock, ClipboardCheck,
@@ -83,6 +84,7 @@ interface CandidateProfile {
   languages: string[] | null;
   offersHomeVisits: boolean;
   rciVerified?: boolean | null; // therapist only
+  avatarUrl?: string | null;
 }
 
 interface InterviewSlot {
@@ -559,7 +561,8 @@ function TrustSignalCard({ cfg, candidate, matchId, committed, selected, onChoos
 
   return (
     <div className={`bg-white border rounded-2xl p-4 shadow-sm space-y-3 ${selected ? "border-[#2EC4A5]" : "border-gray-100"}`}>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start gap-3">
+        <ProfessionalAvatar avatarUrl={p.avatarUrl} fullName={displayName} size="md" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <p className="font-bold text-[#1A2340] text-base leading-tight">{displayName}</p>

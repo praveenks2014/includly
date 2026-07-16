@@ -17,6 +17,7 @@ import { BookingWidget } from "@/components/BookingWidget";
 import { BookingWidgetV2 } from "@/components/BookingWidgetV2";
 import { ShadowTeacherRequestWidget } from "@/components/ShadowTeacherRequestWidget";
 import { AssessmentBookingModal } from "@/components/AssessmentBookingModal";
+import { avatarSrc } from "@/components/ProfessionalAvatar";
 import { useToast } from "@/hooks/use-toast";
 import {
   BadgeCheck, MapPin, Phone, Mail, Lock, ArrowLeft,
@@ -284,7 +285,7 @@ export default function ProfessionalProfilePage() {
         <div className="flex flex-col sm:flex-row gap-4 -mt-14 sm:-mt-16 mb-6">
           <div className="relative z-10 w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-[#2EC4A5] border-4 border-white shadow-lg flex items-center justify-center shrink-0 overflow-hidden">
             {p.avatarUrl ? (
-              <img src={p.avatarUrl} alt={p.fullName ?? "Profile photo"} className="w-full h-full object-cover" />
+              <img src={avatarSrc(p.avatarUrl)!} alt={p.fullName ?? "Profile photo"} className="w-full h-full object-cover" />
             ) : (
               <span className="text-white text-2xl sm:text-3xl font-bold font-serif">{initials}</span>
             )}

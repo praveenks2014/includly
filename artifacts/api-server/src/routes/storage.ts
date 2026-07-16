@@ -15,6 +15,7 @@ import {
   pendingUploadsTable,
   engagementDailyLogsTable,
   shadowTeacherEngagementsTable,
+  usersTable,
 } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -223,6 +224,57 @@ router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Resp
     }
     req.log.error({ err: error }, "Error serving object");
     res.status(500).json({ error: "Failed to serve object" });
+  }
+});
+
+/**
+ * GET /storage/avatars/*
+ *
+ * Serve profile-photo objects. No auth required — a candidate's photo is
+ * meant to be shown to any parent/professional browsing them, exactly like
+ * the name/bio on the same card, so gating it behind requireAuth (and a
+ * plain <img> tag can't send an Authorization header anyway) would just
+ * break inline rendering the way avatarUrl already silently did before this
+ * route existed. Guarded by checking the path is an ACTUAL avatar someone
+ * uploaded (matches a users.avatar_url row) — not a general-purpose public
+ * file server for the private object dir.
+ */
+router.get("/storage/avatars/*path", async (req: Request, res: Response) => {
+  try {
+    const raw = req.params.path;
+    const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
+    const objectPath = `/objects/${wildcardPath}`;
+
+    const [owner] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.avatarUrl, objectPath))
+      .limit(1);
+
+    if (!owner) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+    const response = await objectStorageService.downloadObject(objectFile);
+
+    res.status(response.status);
+    response.headers.forEach((value, key) => res.setHeader(key, value));
+
+    if (response.body) {
+      const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
+      nodeStream.pipe(res);
+    } else {
+      res.end();
+    }
+  } catch (error) {
+    if (error instanceof ObjectNotFoundError) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    req.log.error({ err: error }, "Error serving avatar");
+    res.status(500).json({ error: "Failed to serve avatar" });
   }
 });
 

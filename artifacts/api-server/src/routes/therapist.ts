@@ -392,6 +392,11 @@ router.get("/therapist/my-request", requireAuth, requireRole("parent"), async (r
     profProfiles.map((p: typeof professionalProfilesTable.$inferSelect): [number, typeof professionalProfilesTable.$inferSelect] => [p.id, p]),
   );
 
+  // Profile photo — trust signal shown on the candidate card.
+  const userIds = profProfiles.map((p) => p.userId);
+  const avatarRows = userIds.length ? await db.select({ id: usersTable.id, avatarUrl: usersTable.avatarUrl }).from(usersTable).where(inArray(usersTable.id, userIds)) : [];
+  const avatarByUserId = new Map(avatarRows.map((r) => [r.id, r.avatarUrl]));
+
   const candidates = candidateRows
     .map((c: TherapistCandidateRow) => {
       const p = profById.get(c.professionalId);
@@ -428,6 +433,7 @@ router.get("/therapist/my-request", requireAuth, requireRole("parent"), async (r
           // therapist trust-signal cards (B6). Not in the tutor equivalent
           // since it's a therapist-specific credential.
           rciVerified: p.rciVerified,
+          avatarUrl: avatarByUserId.get(p.userId) ?? null,
         },
       };
     })

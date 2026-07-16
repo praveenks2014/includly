@@ -573,8 +573,10 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       coachingSubType: professionalProfilesTable.coachingSubType,
       inclusiveExperience: professionalProfilesTable.inclusiveExperience,
       distanceKm: distanceSql,
+      avatarUrl: usersTable.avatarUrl,
     })
     .from(professionalProfilesTable)
+    .leftJoin(usersTable, eq(usersTable.id, professionalProfilesTable.userId))
     .where(whereClause)
     .orderBy(...orderByClauses)
     .limit(limitNum)
@@ -615,6 +617,7 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       specializationTags: p.specializationTags ?? [],
       coachingSubType: p.coachingSubType ?? null,
       inclusiveExperience: p.inclusiveExperience,
+      avatarUrl: p.avatarUrl ?? null,
     };
   });
 

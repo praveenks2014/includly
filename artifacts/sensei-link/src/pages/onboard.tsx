@@ -18,6 +18,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { CityAutocomplete, type CityResult } from "@/components/CityAutocomplete";
+import { FileUploadField } from "@/components/FileUploadField";
+import { ProfessionalAvatar } from "@/components/ProfessionalAvatar";
 import {
   Loader2,
   CheckCircle2,
@@ -100,6 +102,9 @@ export default function OnboardPage() {
 
   const [step, setStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [avatarFileKey, setAvatarFileKey] = useState("");
+  const [savingAvatar, setSavingAvatar] = useState(false);
+  const [avatarSaved, setAvatarSaved] = useState(false);
 
   const [vertical, setVertical] = useState<VerticalValue | "">(
     (existingProfile?.vertical as VerticalValue | undefined) ?? ""
@@ -269,6 +274,21 @@ export default function OnboardPage() {
       toast({ title: "Save failed", description: msg, variant: "destructive" });
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleSaveAvatar() {
+    if (!avatarFileKey) return;
+    setSavingAvatar(true);
+    try {
+      await updateMutation.mutateAsync({ data: { avatarUrl: avatarFileKey } });
+      queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
+      setAvatarSaved(true);
+      toast({ title: "Photo added ✓" });
+    } catch {
+      toast({ title: "Could not save photo", variant: "destructive" });
+    } finally {
+      setSavingAvatar(false);
     }
   }
 
@@ -508,6 +528,23 @@ export default function OnboardPage() {
         {/* Step 1 — About you */}
         {step === 1 && (
           <div className="space-y-5">
+            <div className="flex items-center gap-4">
+              <ProfessionalAvatar avatarUrl={(existingProfile as unknown as { avatarUrl?: string | null } | undefined)?.avatarUrl} fullName={form.fullName} size="md" />
+              <div className="flex-1 space-y-1.5">
+                <Label className="text-sm font-medium">
+                  Profile photo <span className="text-gray-400 font-normal">(optional, but strongly encouraged — parents trust faces)</span>
+                </Label>
+                <div className="flex items-center gap-2">
+                  <FileUploadField label={avatarFileKey ? "Change photo" : "Add photo"} onUploaded={(key) => { setAvatarFileKey(key); setAvatarSaved(false); }} uploadedPath={avatarFileKey} accept="image/*" />
+                  {avatarFileKey && !avatarSaved && (
+                    <Button type="button" size="sm" onClick={handleSaveAvatar} disabled={savingAvatar} className="gap-1.5 rounded-xl">
+                      {savingAvatar ? <Loader2 size={13} className="animate-spin" /> : null}
+                      Save
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
             <div>
               <Label htmlFor="fullName" className="text-sm font-medium">
                 Full name <span className="text-red-500">*</span>

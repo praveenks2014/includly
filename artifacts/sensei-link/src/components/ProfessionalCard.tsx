@@ -5,6 +5,7 @@ import { useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getSpecialtyLabel, SPECIALTY_COLORS, getSpecialtyIcon, isInPersonOnly, getCoachingSubTypeLabel, getCoachingSubTypeIcon } from "@/lib/specialties";
+import { ProfessionalAvatar } from "@/components/ProfessionalAvatar";
 
 interface Professional {
   id: number;
@@ -31,6 +32,7 @@ interface Professional {
   specializationTags?: string[] | null;
   coachingSubType?: string | null;
   inclusiveExperience?: boolean;
+  avatarUrl?: string | null;
 }
 
 interface ProfessionalCardProps {
@@ -52,7 +54,8 @@ export function ProfessionalCard({ professional: p, distanceKm }: ProfessionalCa
     >
       <Card className="border-border/60 shadow-sm hover:shadow-md transition-shadow duration-200 bg-white h-full">
         <CardContent className="p-5">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <ProfessionalAvatar avatarUrl={p.avatarUrl} fullName={p.fullName} size="md" className="mt-0.5" />
             <div className="flex-1 min-w-0">
               {/* Name + credentials */}
               <div className="flex items-center gap-1.5 flex-wrap">

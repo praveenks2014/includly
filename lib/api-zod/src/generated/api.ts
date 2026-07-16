@@ -332,6 +332,7 @@ export const UpdateProfessionalProfileBody = zod.object({
     .describe(
       "UPI ID for receiving session payments (never exposed to parents\/clients)",
     ),
+  avatarUrl: zod.string().nullish(),
 });
 
 export const UpdateProfessionalProfileResponse = zod.object({
@@ -577,6 +578,7 @@ export const SearchProfessionalsResponse = zod.object({
       pricingMinINR: zod.number().nullish(),
       pricingMaxINR: zod.number().nullish(),
       paymentActivated: zod.boolean(),
+      avatarUrl: zod.string().nullish(),
     }),
   ),
   total: zod.number(),

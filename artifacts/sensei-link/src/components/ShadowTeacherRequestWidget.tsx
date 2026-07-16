@@ -26,6 +26,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShadowMatchChatDrawer } from "./ShadowMatchChatDrawer";
 import { UpiPayQRDialog } from "./UpiPayQRDialog";
 import { TermsAcknowledgment } from "./TermsAcknowledgment";
+import { ProfessionalAvatar } from "./ProfessionalAvatar";
 import { useGetMe } from "@workspace/api-client-react";
 
 interface Child {
@@ -55,6 +56,7 @@ interface CandidateProfile {
   languages: string[] | null;
   phone?: string | null;
   email?: string | null;
+  avatarUrl?: string | null;
 }
 
 interface InterviewSlot {
@@ -765,7 +767,8 @@ function CandidateCard({
   return (
     <>
       <div className={`bg-white border rounded-2xl p-4 shadow-sm space-y-3 ${selected ? "border-[#2EC4A5]" : "border-gray-100"}`}>
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <ProfessionalAvatar avatarUrl={p.avatarUrl} fullName={displayName} size="md" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <p className="font-bold text-[#1A2340] text-base leading-tight">{displayName}</p>

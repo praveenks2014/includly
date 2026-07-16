@@ -412,6 +412,7 @@ export interface UpdateProfessionalProfileBody {
   offersHomeVisits?: boolean;
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
   upiId?: string;
+  avatarUrl?: string | null;
 }
 
 export interface Rating {

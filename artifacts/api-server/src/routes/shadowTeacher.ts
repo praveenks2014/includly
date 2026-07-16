@@ -755,6 +755,18 @@ router.get("/shadow-teacher/my-request", requireAuth, requireRole("parent"), asy
     profProfiles.map((p) => ({ id: p.id, earliestStartDate: p.earliestStartDate })),
   );
 
+  // Profile photo — a trust signal shown on the card like bio, not masked
+  // pre-commitment the way fullName/phone/email are (a photo doesn't let
+  // anyone bypass the platform's messaging/commission model the way direct
+  // contact info would).
+  const userIds = profProfiles.map((p) => p.userId);
+  const avatarRows = userIds.length
+    ? await db.select({ id: usersTable.id, avatarUrl: usersTable.avatarUrl }).from(usersTable).where(
+        sql`${usersTable.id} = ANY(${sql.raw(`ARRAY[${userIds.join(",")}]::int[]`)})`,
+      )
+    : [];
+  const avatarByUserId = new Map(avatarRows.map((r) => [r.id, r.avatarUrl]));
+
   const candidates = candidateRows.map((c) => {
     const pro = profProfiles.find((p) => p.id === c.professionalId);
     const thread = threads.find((t) => t.professionalId === c.professionalId);
@@ -776,6 +788,7 @@ router.get("/shadow-teacher/my-request", requireAuth, requireRole("parent"), asy
         pricingMinINR: pro.pricingMinINR,
         pricingMaxINR: pro.pricingMaxINR,
         languages: pro.languages,
+        avatarUrl: avatarByUserId.get(pro.userId) ?? null,
       },
       committed && match.selectedProfessionalId === pro.id,
     );
