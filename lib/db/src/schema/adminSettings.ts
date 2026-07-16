@@ -54,6 +54,13 @@ export const adminSettingsTable = pgTable("admin_settings", {
   // — see the candidate-surfacing query changes.
   shadowTeacherListingFeeEnabled: boolean("shadow_teacher_listing_fee_enabled").notNull().default(false),
   shadowTeacherListingFeeInr: integer("shadow_teacher_listing_fee_inr").notNull().default(0),
+  // Auto-refresh candidate list — minimum score-gap (see scoreCandidate in
+  // shadowTeacherScoring.ts, ~115-point theoretical max) a newly-eligible
+  // professional must exceed the current best shown candidate by before
+  // being surfaced as an additional candidate. Read-time only (no cron),
+  // and capped to exactly one auto-refresh per match, ever — see
+  // shadow_match_candidates.addedBy = 'auto_refresh'.
+  shadowTeacherRefreshMinScoreGap: real("shadow_teacher_refresh_min_score_gap").notNull().default(20),
   tutorListingFeeEnabled: boolean("tutor_listing_fee_enabled").notNull().default(false),
   tutorListingFeeInr: integer("tutor_listing_fee_inr").notNull().default(0),
   therapistListingFeeEnabled: boolean("therapist_listing_fee_enabled").notNull().default(false),

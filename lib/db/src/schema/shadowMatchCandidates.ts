@@ -35,6 +35,11 @@ export const shadowMatchCandidatesTable = pgTable(
     interviewDoneAt: timestamp("interview_done_at", { withTimezone: true }),
     trialDaysRequested: integer("trial_days_requested"),
     trialDaysAccepted: integer("trial_days_accepted"),
+    // Auto-refresh notice tracking — set once the parent has been shown the
+    // "a stronger match is now available" banner for this candidate (only
+    // ever meaningful when addedBy = 'auto_refresh'). Null means the notice
+    // hasn't been dismissed/seen yet.
+    seenAt: timestamp("seen_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
