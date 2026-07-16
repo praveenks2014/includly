@@ -42,6 +42,7 @@ export const GetMeResponse = zod.object({
       "Parent's home longitude — stored only with consent for home-visit matching",
     ),
   shareHomeLocation: zod.boolean().optional(),
+  onboardingComplete: zod.boolean().optional(),
   createdAt: zod.coerce.date(),
 });
 

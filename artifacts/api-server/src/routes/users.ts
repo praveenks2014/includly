@@ -53,7 +53,7 @@ router.patch("/users/me/role", requireAuth, async (req, res): Promise<void> => {
 
   const [user] = await db
     .update(usersTable)
-    .set({ role: parsed.data.role })
+    .set({ role: parsed.data.role, onboardingComplete: true })
     .where(eq(usersTable.id, req.userId!))
     .returning();
 

@@ -65,6 +65,7 @@ export interface UserProfile {
    */
   longitude?: number | null;
   shareHomeLocation?: boolean;
+  onboardingComplete?: boolean;
   createdAt: string;
 }
 

@@ -165,6 +165,14 @@ function LegacyDashboardRedirect() {
 
   useEffect(() => {
     if (isLoading) return;
+    // role alone can't distinguish "genuinely chose this role" from "still
+    // defaulted to parent, never onboarded" — a returning/OAuth sign-in
+    // skips the sign-up-only /onboarding redirect entirely, so this is the
+    // actual gate. Admins never go through the picker, so they're exempt.
+    if (me && me.role !== "admin" && !me.onboardingComplete) {
+      setLocation("/onboarding", { replace: true });
+      return;
+    }
     const role = (me?.role ?? "parent") as Role;
     setLocation(SHELL_ROOT[role] ?? "/", { replace: true });
   }, [isLoading, me, setLocation]);
@@ -177,17 +185,24 @@ function LegacyDashboardRedirect() {
 }
 
 function RoleRedirect({ parentTo, proTo, defaultTo }: { parentTo: string; proTo: string; defaultTo: string }) {
-  const { data: me } = useGetMe();
+  const { data: me, isLoading } = useGetMe();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
+    if (isLoading) return;
+    // Same onboarding gate as LegacyDashboardRedirect — this path has the
+    // identical gap, just lower-traffic (legacy /sessions redirect).
+    if (me && me.role !== "admin" && !me.onboardingComplete) {
+      setLocation("/onboarding", { replace: true });
+      return;
+    }
     const role = me?.role;
     const dest =
       role === "parent" ? parentTo
       : role === "professional" ? proTo
       : defaultTo;
     setLocation(dest, { replace: true });
-  }, [me, setLocation, parentTo, proTo, defaultTo]);
+  }, [isLoading, me, setLocation, parentTo, proTo, defaultTo]);
 
   return null;
 }
