@@ -12,6 +12,7 @@ import {
 } from "@workspace/db";
 import { creditWallet } from "./ledger";
 import { createInAppNotification } from "./notificationService";
+import { onProfessionalBecameEligible } from "./candidateRefresh";
 
 /**
  * Lazy-evaluation resolver for stuck shadow-teacher engagements — no cron.
@@ -194,6 +195,8 @@ async function resolvePlacementOnlyTimeout(eng: typeof shadowTeacherEngagementsT
     .update(shadowTeacherEngagementsTable)
     .set({ status: "ended", endedReason: reason, updatedAt: new Date() })
     .where(eq(shadowTeacherEngagementsTable.id, eng.id));
+  // Candidate-list auto-refresh — this teacher just became newly eligible again.
+  try { await onProfessionalBecameEligible(eng.professionalId); } catch { /* non-blocking */ }
 
   if (eng.matchRequestId) {
     await releaseCandidateAndResetMatch(eng.matchRequestId, eng.professionalId);
@@ -229,6 +232,8 @@ async function resolvePendingStartTimeout(eng: typeof shadowTeacherEngagementsTa
     .update(shadowTeacherEngagementsTable)
     .set({ status: "ended", endedReason: reason, updatedAt: new Date() })
     .where(eq(shadowTeacherEngagementsTable.id, eng.id));
+  // Candidate-list auto-refresh — this teacher just became newly eligible again.
+  try { await onProfessionalBecameEligible(eng.professionalId); } catch { /* non-blocking */ }
 
   if (eng.matchRequestId) {
     await releaseCandidateAndResetMatch(eng.matchRequestId, eng.professionalId);

@@ -12,6 +12,7 @@ import {
   VerifyRazorpayPaymentBody,
 } from "@workspace/api-zod";
 import { notifyProfessionalOnUnlock } from "../lib/notificationService";
+import { onProfessionalBecameEligible } from "../lib/candidateRefresh";
 
 const router: IRouter = Router();
 
@@ -963,6 +964,9 @@ export async function activatePayment(
         .update(professionalProfilesTable)
         .set({ paymentActivated: true })
         .where(eq(professionalProfilesTable.id, prof.id));
+      // Candidate-list auto-refresh — no-ops for non-shadow-teacher-eligible
+      // professionals (checked inside), so safe to call unconditionally here.
+      try { await onProfessionalBecameEligible(prof.id); } catch { /* non-blocking */ }
     }
     return { isSubscriptionActive: false, unlockedProfessionalId: null, paymentActivated: true };
   }

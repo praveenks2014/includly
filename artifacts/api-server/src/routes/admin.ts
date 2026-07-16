@@ -36,6 +36,7 @@ import {
   type VerificationVertical,
 } from "../lib/verificationRequirements";
 import { resolveOffering } from "../lib/offeringResolver";
+import { onProfessionalBecameEligible } from "../lib/candidateRefresh";
 
 const OFFERING_VERTICALS: VerificationVertical[] = ["shadow_teacher", "home_tutor", "therapist"];
 
@@ -203,6 +204,14 @@ router.patch("/admin/professionals/:id/approve", ...adminGuard, async (req, res)
     return;
   }
 
+  // Candidate-list auto-refresh — only relevant if this professional's
+  // PRIMARY specialty is shadow_teacher (the offering-approve route below
+  // handles the additional-offering case). Non-blocking: a refresh-logic
+  // failure must never break the approval action itself.
+  if (profile.specialty === "shadow_teacher") {
+    try { await onProfessionalBecameEligible(profile.id); } catch { /* non-blocking */ }
+  }
+
   res.json({ ...profile, verificationRequirements: requirements });
 });
 
@@ -314,6 +323,9 @@ router.patch("/admin/professionals/:id/offerings/:vertical/approve", ...adminGua
       .set({ verificationStatus: "verified", isVerified: true })
       .where(eq(professionalProfilesTable.id, id))
       .returning();
+    if (vertical === "shadow_teacher") {
+      try { await onProfessionalBecameEligible(id); } catch { /* non-blocking */ }
+    }
     res.json({ vertical, isPrimary: true, ...row, verificationRequirements: requirements });
     return;
   }
@@ -323,6 +335,10 @@ router.patch("/admin/professionals/:id/offerings/:vertical/approve", ...adminGua
     .set({ verificationStatus: "verified", isVerified: true })
     .where(eq(professionalOfferingsTable.id, location.offeringId!))
     .returning();
+
+  if (vertical === "shadow_teacher") {
+    try { await onProfessionalBecameEligible(id); } catch { /* non-blocking */ }
+  }
 
   res.json({ vertical, isPrimary: false, ...row, verificationRequirements: requirements });
 });

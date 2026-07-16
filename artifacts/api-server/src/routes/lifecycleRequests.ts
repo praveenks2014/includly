@@ -17,6 +17,7 @@ import {
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { sendPushNotification, createInAppNotification } from "../lib/notificationService";
 import { creditWallet } from "../lib/ledger";
+import { onProfessionalBecameEligible } from "../lib/candidateRefresh";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -221,6 +222,9 @@ router.post("/engagements/:id/lifecycle", requireAuth, async (req, res): Promise
       .update(shadowTeacherEngagementsTable)
       .set({ status: "notice_period", endDate: effectiveEndDate, updatedAt: new Date() })
       .where(eq(shadowTeacherEngagementsTable.id, id));
+    // Candidate-list auto-refresh — this teacher just became newly eligible
+    // (notice_period is no longer hard-excluded from listing, see Rule 2).
+    try { await onProfessionalBecameEligible(eng.professionalId); } catch { /* non-blocking */ }
   }
 
   // Notify the OTHER party about this lifecycle request
@@ -577,10 +581,15 @@ router.patch("/admin/lifecycle/:reqId", requireAuth, requireRole("admin"), async
       .limit(1);
 
     if (engNow && engNow.status !== "notice_period" && engNow.status !== "ended") {
-      await db
+      const [updatedEng] = await db
         .update(shadowTeacherEngagementsTable)
         .set({ status: "notice_period", endDate: existing.effectiveEndDate, endedReason: existing.method === "full_buyout" ? "full_buyout" : "buyout", updatedAt: new Date() })
-        .where(eq(shadowTeacherEngagementsTable.id, existing.engagementId));
+        .where(eq(shadowTeacherEngagementsTable.id, existing.engagementId))
+        .returning({ professionalId: shadowTeacherEngagementsTable.professionalId });
+      // Candidate-list auto-refresh — this teacher just became newly eligible.
+      if (updatedEng) {
+        try { await onProfessionalBecameEligible(updatedEng.professionalId); } catch { /* non-blocking */ }
+      }
     }
     // Push notification to teacher
     try {
@@ -742,6 +751,8 @@ router.patch("/engagements/:id/teacher-acceptance", requireAuth, async (req, res
     .update(shadowTeacherEngagementsTable)
     .set({ status: "ended", endedReason: "teacher_declined", updatedAt: new Date() })
     .where(eq(shadowTeacherEngagementsTable.id, id));
+  // Candidate-list auto-refresh — this teacher just became newly eligible again.
+  try { await onProfessionalBecameEligible(eng.professionalId); } catch { /* non-blocking */ }
 
   if (eng.matchRequestId) {
     // 2. Find the declining teacher's candidate row

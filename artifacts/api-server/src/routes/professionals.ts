@@ -7,6 +7,7 @@ import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAu
 import { notifyParentsOnProfileUpdate } from "../lib/notificationService";
 import { getClerkPrimaryEmail } from "../lib/clerkUser";
 import { recomputeSubmissionStatus, RCI_CERTIFICATE_DOC_TYPE } from "../lib/verificationRequirements";
+import { onProfessionalBecameEligible } from "../lib/candidateRefresh";
 import {
   GetMyProfessionalProfileResponse,
   CreateProfessionalProfileBody,
@@ -773,6 +774,8 @@ router.post("/professionals/me/free-activate", requireAuth, requireRole("profess
     .set({ paymentActivated: true, updatedAt: new Date() })
     .where(eq(professionalProfilesTable.id, profile.id))
     .returning();
+
+  try { await onProfessionalBecameEligible(profile.id); } catch { /* non-blocking */ }
 
   res.json({ message: "Profile activated (first month free)", paymentActivated: updated.paymentActivated });
 });
