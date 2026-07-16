@@ -12,6 +12,13 @@ export const usersTable = pgTable("users", {
   fullName: text("full_name"),
   avatarUrl: text("avatar_url"),
   role: userRoleEnum("role").notNull().default("parent"),
+  // True only once the user has explicitly completed the role picker (see
+  // PATCH /users/me/role) — never set at row-creation time. requireAuth
+  // defaults every new row to role='parent' before onboarding ever runs,
+  // so `role` alone can't distinguish "genuinely chose parent" from
+  // "not onboarded yet" — this flag is what the post-login routing gates
+  // on instead of trusting role directly.
+  onboardingComplete: boolean("onboarding_complete").notNull().default(false),
   city: text("city"),
   country: text("country"),
   location: text("location"),
