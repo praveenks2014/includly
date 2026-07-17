@@ -183,6 +183,18 @@ interface NegotiationOffer {
   createdAt: string;
 }
 
+// Shadow-teacher's own request-time budget presets — monthly-salary scale,
+// distinct from the generic per-child "Budget per session" field
+// (onboarding-child.tsx's BUDGET_PRESETS), which is tutor/therapist-scoped
+// and must not be reused here — that mismatch was the actual #4 bug.
+const MONTHLY_SALARY_PRESETS = [
+  { key: "0-15000",     label: "Up to ₹15,000",      min: 0,     max: 15000 },
+  { key: "15000-25000", label: "₹15,000–₹25,000",    min: 15000, max: 25000 },
+  { key: "25000-40000", label: "₹25,000–₹40,000",    min: 25000, max: 40000 },
+  { key: "40000+",      label: "₹40,000+",           min: 40000, max: null  },
+  { key: "flexible",    label: "Flexible",           min: null,  max: null  },
+];
+
 const DEFAULT_ABSENCE_RETAINER_PCT = 50;
 const DEFAULT_ABSENCE_FREE_DAYS_PER_MONTH = 4;
 const DEFAULT_SUMMER_RETAINER_PCT = 0;
@@ -971,7 +983,17 @@ export function ShadowTeacherRequestWidget() {
   });
 
   const [extraNotes, setExtraNotes] = useState("");
+  const [salaryPresetKey, setSalaryPresetKey] = useState("");
+  const [salaryBudgetMinInr, setSalaryBudgetMinInr] = useState<number | null>(null);
+  const [salaryBudgetMaxInr, setSalaryBudgetMaxInr] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  function selectSalaryPreset(preset: typeof MONTHLY_SALARY_PRESETS[number]) {
+    const toggling = preset.key === salaryPresetKey;
+    setSalaryPresetKey(toggling ? "" : preset.key);
+    setSalaryBudgetMinInr(toggling ? null : preset.min);
+    setSalaryBudgetMaxInr(toggling ? null : preset.max ?? null);
+  }
 
   // Pre-fill extra notes from the most recent previous request when the eligibility data loads.
   useEffect(() => {
@@ -1023,7 +1045,12 @@ export function ShadowTeacherRequestWidget() {
       const res = await fetchWithAuth("/api/shadow-teacher/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ childId: effectiveChildId, extraNotes: extraNotes.trim() || undefined }),
+        body: JSON.stringify({
+          childId: effectiveChildId,
+          extraNotes: extraNotes.trim() || undefined,
+          ...(salaryBudgetMinInr != null && { budgetMinInr: salaryBudgetMinInr }),
+          ...(salaryBudgetMaxInr != null && { budgetMaxInr: salaryBudgetMaxInr }),
+        }),
       });
       const data = await res.json() as {
         error?: string;
@@ -1455,12 +1482,33 @@ export function ShadowTeacherRequestWidget() {
                 {selectedChild.city && <p className="text-muted-foreground">📍 City: {selectedChild.city}</p>}
                 {selectedChild.conditions?.length ? <p className="text-muted-foreground">🏥 Conditions: {selectedChild.conditions.join(", ")}</p> : null}
                 {selectedChild.languages?.length ? <p className="text-muted-foreground">🗣️ Languages: {selectedChild.languages.join(", ")}</p> : null}
-                {(selectedChild.budgetMinInr || selectedChild.budgetMaxInr) && (
-                  <p className="text-muted-foreground">💰 Budget: ₹{selectedChild.budgetMinInr?.toLocaleString("en-IN") ?? "?"} – ₹{selectedChild.budgetMaxInr?.toLocaleString("en-IN") ?? "?"}/mo</p>
-                )}
                 {selectedChild.preferredModes?.length ? <p className="text-muted-foreground">🏠 Modes: {selectedChild.preferredModes.join(", ")}</p> : null}
               </div>
             )}
+
+            <div>
+              <Label className="text-sm mb-1.5 block">Expected monthly salary range <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                This is only used to help us match you with teachers in your range — it's never shown to the teacher.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {MONTHLY_SALARY_PRESETS.map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    onClick={() => selectSalaryPreset(p)}
+                    className={`text-xs font-semibold py-1.5 px-3 rounded-lg border ${salaryPresetKey === p.key ? "bg-[#2EC4A5] text-white border-[#2EC4A5]" : "bg-white text-gray-600 border-gray-200"}`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              {(salaryBudgetMinInr != null || salaryBudgetMaxInr != null) && (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  💰 ₹{salaryBudgetMinInr?.toLocaleString("en-IN") ?? "?"} – {salaryBudgetMaxInr != null ? `₹${salaryBudgetMaxInr.toLocaleString("en-IN")}` : "no upper limit"}/month
+                </p>
+              )}
+            </div>
 
             {eligibility?.waived && (
               <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-start gap-2.5">

@@ -82,6 +82,7 @@ async function hasInteractionStarted(matchId: number): Promise<boolean> {
 export async function onProfessionalBecameEligible(professionalId: number): Promise<void> {
   const settings = await getSettings();
   const shadowTeacherListingFeeEnabled = (settings as Record<string, unknown>)["shadowTeacherListingFeeEnabled"] as boolean | undefined;
+  const platformSalaryEnabled = (settings as Record<string, unknown>)["platformSalaryEnabled"] as boolean | undefined;
   const minScoreGap = ((settings as Record<string, unknown>)["shadowTeacherRefreshMinScoreGap"] as number | undefined) ?? 20;
 
   // Base eligibility gate — IDENTICAL conditions to the bulk surfacing query
@@ -118,6 +119,9 @@ export async function onProfessionalBecameEligible(professionalId: number): Prom
         )!,
         eq(professionalProfilesTable.paymentActivated, true),
         sql`EXISTS (SELECT 1 FROM ${identityVerificationsTable} iv WHERE iv.professional_id = ${professionalProfilesTable.id})`,
+        // Same UPI-verified listability condition as surfaceCandidatesForMatch
+        // — see that function's comment for the full reasoning.
+        ...(!platformSalaryEnabled ? [isNotNull(professionalProfilesTable.upiVerifiedAt)] : []),
       ),
     );
 

@@ -95,6 +95,7 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
 
   const settings = await getSettings();
   const shadowTeacherListingFeeEnabled = (settings as Record<string, unknown>)["shadowTeacherListingFeeEnabled"] as boolean | undefined;
+  const platformSalaryEnabled = (settings as Record<string, unknown>)["platformSalaryEnabled"] as boolean | undefined;
 
   // Run scoring and surface up to 3 candidates.
   //
@@ -149,6 +150,15 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
         eq(professionalProfilesTable.paymentActivated, true),
         // Defense-in-depth: every candidate must have a government ID on file
         sql`EXISTS (SELECT 1 FROM ${identityVerificationsTable} iv WHERE iv.professional_id = ${professionalProfilesTable.id})`,
+        // UPI-verified is a listability prerequisite under the direct-pay
+        // model (platformSalaryEnabled=false, the current default) — a
+        // parent should never be able to select a teacher who can't
+        // actually be paid. No-op if the platform ever switches to
+        // platform-mediated payroll. See lifecycleRequests.ts's
+        // teacher-acceptance endpoint for the defensive re-check kept at
+        // accept-time, since UPI details (unlike verification status) can
+        // plausibly go stale over a multi-week negotiation.
+        ...(!platformSalaryEnabled ? [isNotNull(professionalProfilesTable.upiVerifiedAt)] : []),
         ...(busyProfIds.length > 0 ? [notInArray(professionalProfilesTable.id, busyProfIds)] : []),
       ),
     );
@@ -310,6 +320,13 @@ router.get("/shadow-teacher/re-request-eligibility", requireAuth, requireRole("p
 const NewRequestBody = z.object({
   childId: z.number().int().positive(),
   extraNotes: z.string().max(2000).optional(),
+  // Parent's expected MONTHLY salary range for this shadow-teacher request —
+  // collected here, not derived from the child profile's generic
+  // "budget per session" field (that field is tutor/therapist-scoped and a
+  // different unit entirely; conflating the two silently broke scoreBudget()'s
+  // range-overlap comparison against the professional's monthly pricing).
+  budgetMinInr: z.number().int().min(0).optional(),
+  budgetMaxInr: z.number().int().min(0).optional(),
 });
 
 router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
@@ -319,7 +336,7 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
     return;
   }
 
-  const { childId, extraNotes } = parsed.data;
+  const { childId, extraNotes, budgetMinInr, budgetMaxInr } = parsed.data;
 
   // Load child (must belong to this parent)
   const [child] = await db
@@ -398,8 +415,8 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
         childCity:           child.city ?? null,
         childConditions:     child.conditions ?? null,
         childLanguages:      child.languages ?? null,
-        childBudgetMinInr:   child.budgetMinInr ?? null,
-        childBudgetMaxInr:   child.budgetMaxInr ?? null,
+        childBudgetMinInr:   budgetMinInr ?? null,
+        childBudgetMaxInr:   budgetMaxInr ?? null,
         childGoalsAreas:     child.goalsAreas ?? null,
         childPreferredModes: child.preferredModes ?? null,
         extraNotes:          extraNotes ?? null,
@@ -434,8 +451,8 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
       childCity: child.city ?? null,
       childConditions: child.conditions ?? null,
       childLanguages: child.languages ?? null,
-      childBudgetMinInr: child.budgetMinInr ?? null,
-      childBudgetMaxInr: child.budgetMaxInr ?? null,
+      childBudgetMinInr: budgetMinInr ?? null,
+      childBudgetMaxInr: budgetMaxInr ?? null,
       childGoalsAreas: child.goalsAreas ?? null,
       childPreferredModes: child.preferredModes ?? null,
       extraNotes: extraNotes ?? null,
