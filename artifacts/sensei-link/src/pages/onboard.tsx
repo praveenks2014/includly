@@ -113,6 +113,7 @@ export default function OnboardPage() {
   const [form, setForm] = useState({
     fullName: existingProfile?.fullName ?? "",
     bio: existingProfile?.bio ?? "",
+    phone: existingProfile?.phone ?? "",
     yearsExperience: existingProfile?.yearsExperience?.toString() ?? "0",
     languages: (existingProfile?.languages ?? []) as string[],
     city: existingProfile?.city ?? "",
@@ -138,6 +139,7 @@ export default function OnboardPage() {
         ...prev,
         fullName: prev.fullName || existingProfile.fullName || "",
         bio: prev.bio || existingProfile.bio || "",
+        phone: prev.phone || existingProfile.phone || "",
         yearsExperience: prev.yearsExperience !== "0" ? prev.yearsExperience : existingProfile.yearsExperience?.toString() ?? "0",
         languages: prev.languages.length > 0 ? prev.languages : (existingProfile.languages ?? []),
         city: prev.city || existingProfile.city || "",
@@ -213,6 +215,7 @@ export default function OnboardPage() {
   }
 
   const isCoachingUser = existingProfile?.specialty === "coaching";
+  const existingAvatarUrl = (existingProfile as unknown as { avatarUrl?: string | null } | undefined)?.avatarUrl ?? null;
 
   if (isCoachingUser) {
     return (
@@ -300,6 +303,7 @@ export default function OnboardPage() {
           fullName: form.fullName,
           bio: form.bio || undefined,
           yearsExperience: Number(form.yearsExperience),
+          phone: form.phone.trim() || undefined,
         },
       });
       queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
@@ -361,7 +365,12 @@ export default function OnboardPage() {
           pricingMaxINR: form.pricingMaxINR ? Number(form.pricingMaxINR) : undefined,
         },
       });
-      queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
+      // Awaited + refetchType:"all" — same fix as the parent-onboarding-loop
+      // bug. Stage2's own guard (`if (!isLoading && !profile) bounce back`)
+      // reads this exact query fresh on mount; a fire-and-forget invalidate
+      // here let stage2 see the pre-save stale cache and bounce every
+      // professional (not just parents) back to Step 0.
+      await queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey(), refetchType: "all" });
       setLocation(`/onboarding/pro/stage2/${vertical}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Could not save — please try again.";
@@ -529,13 +538,18 @@ export default function OnboardPage() {
         {step === 1 && (
           <div className="space-y-5">
             <div className="flex items-center gap-4">
-              <ProfessionalAvatar avatarUrl={(existingProfile as unknown as { avatarUrl?: string | null } | undefined)?.avatarUrl} fullName={form.fullName} size="md" />
+              <ProfessionalAvatar avatarUrl={existingAvatarUrl} fullName={form.fullName} size="md" />
               <div className="flex-1 space-y-1.5">
                 <Label className="text-sm font-medium">
                   Profile photo <span className="text-gray-400 font-normal">(optional, but strongly encouraged — parents trust faces)</span>
                 </Label>
                 <div className="flex items-center gap-2">
-                  <FileUploadField label={avatarFileKey ? "Change photo" : "Add photo"} onUploaded={(key) => { setAvatarFileKey(key); setAvatarSaved(false); }} uploadedPath={avatarFileKey} accept="image/*" />
+                  {/* Label reflects whether a photo already exists (existingAvatarUrl),
+                      not just local upload state — otherwise revisiting this step (e.g.
+                      after the stage2 bounce-back bug, or just navigating back) shows
+                      "Add photo" even though one's already saved, prompting a
+                      misleading re-upload. */}
+                  <FileUploadField label={(avatarFileKey || existingAvatarUrl) ? "Change photo" : "Add photo"} onUploaded={(key) => { setAvatarFileKey(key); setAvatarSaved(false); }} uploadedPath={avatarFileKey} accept="image/*" />
                   {avatarFileKey && !avatarSaved && (
                     <Button type="button" size="sm" onClick={handleSaveAvatar} disabled={savingAvatar} className="gap-1.5 rounded-xl">
                       {savingAvatar ? <Loader2 size={13} className="animate-spin" /> : null}
@@ -584,6 +598,20 @@ export default function OnboardPage() {
                 onChange={(e) => setField("yearsExperience", e.target.value)}
                 className="mt-1"
                 data-testid="input-yearsExperience"
+              />
+            </div>
+            <div>
+              <Label htmlFor="phone" className="text-sm font-medium">
+                Phone number <span className="text-gray-400 font-normal">(optional)</span>
+              </Label>
+              <Input
+                id="phone"
+                type="tel"
+                value={form.phone}
+                onChange={(e) => setField("phone", e.target.value)}
+                placeholder="+91 98765 43210"
+                className="mt-1"
+                data-testid="input-phone"
               />
             </div>
           </div>
