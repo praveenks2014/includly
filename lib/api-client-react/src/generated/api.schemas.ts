@@ -252,6 +252,7 @@ export interface ProfessionalDetail {
   pricingMaxINR?: number | null;
   paymentActivated: boolean;
   createdAt: string;
+  rciVerified?: boolean;
 }
 
 export interface ProfessionalSearchResult {

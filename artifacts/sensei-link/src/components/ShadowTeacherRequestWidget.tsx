@@ -9,6 +9,7 @@
  * Legacy (queued/matched) states also handled for existing records.
  */
 import { useState, useEffect, useRef } from "react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -796,39 +797,65 @@ function CandidateCard({
   });
   const myPendingOffer = cardOffers.find(o => o.status === "pending" && o.raisedByUserId === myUserId);
 
+  const profileInfo = (
+    <>
+      <ProfessionalAvatar avatarUrl={p.avatarUrl} fullName={displayName} size="md" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <p className="font-bold text-[#1A2340] text-base leading-tight">{displayName}</p>
+          {p.verificationStatus === "verified" && (
+            <BadgeCheck size={15} className="text-[#2EC4A5] shrink-0" />
+          )}
+          {candidate.addedBy === "admin" && (
+            <span className="text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-200">Admin pick</span>
+          )}
+          <ScoreBadge score={candidate.score} />
+        </div>
+        <p className="text-xs text-gray-500 mt-0.5">
+          Shadow Teacher
+          {p.yearsExperience > 0 && ` · ${p.yearsExperience} ${p.yearsExperience === 1 ? "yr" : "yrs"} experience`}
+        </p>
+        <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+          {p.city && (
+            <span className="text-[11px] text-gray-400 flex items-center gap-1">
+              <MapPin size={10} />{p.displayArea ?? p.city}
+            </span>
+          )}
+          {p.averageRating && (
+            <span className="text-[11px] text-gray-400 flex items-center gap-1">
+              <Star size={10} className="fill-[#FFB830] text-[#FFB830]" />{p.averageRating.toFixed(1)}
+            </span>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <>
       <div className={`bg-white border rounded-2xl p-4 shadow-sm space-y-3 ${selected ? "border-[#2EC4A5]" : "border-gray-100"}`}>
         <div className="flex items-start gap-3">
-          <ProfessionalAvatar avatarUrl={p.avatarUrl} fullName={displayName} size="md" />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <p className="font-bold text-[#1A2340] text-base leading-tight">{displayName}</p>
-              {p.verificationStatus === "verified" && (
-                <BadgeCheck size={15} className="text-[#2EC4A5] shrink-0" />
-              )}
-              {candidate.addedBy === "admin" && (
-                <span className="text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-200">Admin pick</span>
-              )}
-              <ScoreBadge score={candidate.score} />
+          {/* Profile-info area only — links to the full profile once
+              committed. Gated on `committed` because maskProfile()
+              (shadowTeacher.ts) deliberately nulls the professional's real
+              fullName/phone/email server-side until commit — GET
+              /professionals/:id (which the full profile page reads) is NOT
+              match-aware and always returns the real fullName, so linking
+              there pre-commit would leak identity through a side channel
+              the masking was specifically built to prevent. Post-commit,
+              displayName already shows the real name in this same card, so
+              linking through is consistent, not a new reveal. Excludes the
+              action buttons below (Chat/Choose/Not interested), which stay
+              outside and remain independently clickable either way. */}
+          {committed ? (
+            <Link href={`/p/${candidate.professionalId}`} className="flex items-start gap-3 flex-1 min-w-0 no-underline">
+              {profileInfo}
+            </Link>
+          ) : (
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              {profileInfo}
             </div>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Shadow Teacher
-              {p.yearsExperience > 0 && ` · ${p.yearsExperience} ${p.yearsExperience === 1 ? "yr" : "yrs"} experience`}
-            </p>
-            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-              {p.city && (
-                <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                  <MapPin size={10} />{p.displayArea ?? p.city}
-                </span>
-              )}
-              {p.averageRating && (
-                <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                  <Star size={10} className="fill-[#FFB830] text-[#FFB830]" />{p.averageRating.toFixed(1)}
-                </span>
-              )}
-            </div>
-          </div>
+          )}
           <div className="text-right shrink-0">
             <p className="text-xs text-gray-400">Expected</p>
             <p className="text-sm font-bold text-[#1A2340]">

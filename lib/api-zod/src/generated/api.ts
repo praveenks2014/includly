@@ -494,6 +494,7 @@ export const GetProfessionalResponse = zod.object({
   pricingMaxINR: zod.number().nullish(),
   paymentActivated: zod.boolean(),
   createdAt: zod.coerce.date(),
+  rciVerified: zod.boolean().optional(),
 });
 
 /**

@@ -12,6 +12,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { getSpecialtyLabel, SPECIALTY_COLORS } from "@/lib/specialties";
 import { BookingWidget } from "@/components/BookingWidget";
 import { BookingWidgetV2 } from "@/components/BookingWidgetV2";
@@ -23,6 +24,7 @@ import {
   BadgeCheck, MapPin, Phone, Mail, Lock, ArrowLeft,
   Loader2, Star, IndianRupee, Pencil, Clock, Home,
   Navigation, Video, Copy, CheckCircle2, Globe, GraduationCap, MessageSquare, ClipboardList,
+  ShieldCheck,
 } from "lucide-react";
 import {
   useGetAssessmentOfferings,
@@ -305,6 +307,20 @@ export default function ProfessionalProfilePage() {
                 </span>
               )}
             </div>
+            {/* RCI-VERIFIED — same prominent treatment as TrustSignalCard
+                (VerticalRequestWidget.tsx), per the deliberate design decision
+                that verified credentials matter more than price for this
+                audience. A parent clicking through from the compact card
+                should see the same signal here, not a smaller/absent one. */}
+            {p.specialty === "therapist" && (
+              <Badge
+                variant={p.rciVerified ? "default" : "outline"}
+                className={p.rciVerified ? "mb-1.5 bg-violet-600 text-white border-violet-600 gap-1 text-[11px] px-2.5 py-1" : "mb-1.5 text-gray-400 border-gray-200 gap-1 text-[11px] px-2.5 py-1"}
+              >
+                <ShieldCheck size={12} />
+                {p.rciVerified ? "RCI Verified" : "RCI verification pending"}
+              </Badge>
+            )}
             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
               <span className="font-medium text-[#2EC4A5]">{specialtyLabel}</span>
               {(p.displayArea || p.city) && (

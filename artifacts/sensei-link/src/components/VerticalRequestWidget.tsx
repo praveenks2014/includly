@@ -12,6 +12,7 @@
  * Does NOT touch ShadowTeacherRequestWidget.tsx or any shadow-teacher route.
  */
 import { useState, useEffect } from "react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -562,43 +563,51 @@ function TrustSignalCard({ cfg, candidate, matchId, committed, selected, onChoos
   return (
     <div className={`bg-white border rounded-2xl p-4 shadow-sm space-y-3 ${selected ? "border-[#2EC4A5]" : "border-gray-100"}`}>
       <div className="flex items-start gap-3">
-        <ProfessionalAvatar avatarUrl={p.avatarUrl} fullName={displayName} size="md" />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <p className="font-bold text-[#1A2340] text-base leading-tight">{displayName}</p>
-            {p.verificationStatus === "verified" && cfg.vertical === "tutor" && <BadgeCheck size={15} className="text-[#2EC4A5] shrink-0" />}
-            <ScoreBadge score={candidate.score} />
-          </div>
-          {/* RCI-VERIFIED — deliberately the single most prominent trust signal on the
-              therapist card, per B6's research citation that verified credentials
-              matter more than price for this audience. Not a small icon. */}
-          {cfg.vertical === "therapist" && (
-            <Badge
-              variant={p.rciVerified ? "default" : "outline"}
-              className={p.rciVerified ? "mt-1.5 bg-violet-600 text-white border-violet-600 gap-1 text-[11px] px-2.5 py-1" : "mt-1.5 text-gray-400 border-gray-200 gap-1 text-[11px] px-2.5 py-1"}
-            >
-              <ShieldCheck size={12} />
-              {p.rciVerified ? "RCI Verified" : "RCI verification pending"}
-            </Badge>
-          )}
-          <p className="text-xs text-gray-500 mt-1">
-            {p.yearsExperience > 0 ? `${p.yearsExperience} ${p.yearsExperience === 1 ? "yr" : "yrs"} experience` : "Experience not listed"}
-          </p>
-          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-            {p.city && (
-              <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                <MapPin size={10} />
-                {p.displayArea ?? p.city}
-              </span>
+        {/* Profile-info area only — links to the full profile. Unlike
+            shadow-teacher's CandidateCard, there's no server-side identity
+            masking for tutor/therapist (grepped both route files — no
+            maskProfile equivalent), so this link is unconditional, not
+            gated on `committed`. Excludes the action buttons below, which
+            stay outside and remain independently clickable. */}
+        <Link href={`/p/${candidate.professionalId}`} className="flex items-start gap-3 flex-1 min-w-0 no-underline">
+          <ProfessionalAvatar avatarUrl={p.avatarUrl} fullName={displayName} size="md" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className="font-bold text-[#1A2340] text-base leading-tight">{displayName}</p>
+              {p.verificationStatus === "verified" && cfg.vertical === "tutor" && <BadgeCheck size={15} className="text-[#2EC4A5] shrink-0" />}
+              <ScoreBadge score={candidate.score} />
+            </div>
+            {/* RCI-VERIFIED — deliberately the single most prominent trust signal on the
+                therapist card, per B6's research citation that verified credentials
+                matter more than price for this audience. Not a small icon. */}
+            {cfg.vertical === "therapist" && (
+              <Badge
+                variant={p.rciVerified ? "default" : "outline"}
+                className={p.rciVerified ? "mt-1.5 bg-violet-600 text-white border-violet-600 gap-1 text-[11px] px-2.5 py-1" : "mt-1.5 text-gray-400 border-gray-200 gap-1 text-[11px] px-2.5 py-1"}
+              >
+                <ShieldCheck size={12} />
+                {p.rciVerified ? "RCI Verified" : "RCI verification pending"}
+              </Badge>
             )}
-            {p.averageRating && (
-              <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                <Star size={10} className="fill-[#FFB830] text-[#FFB830]" />
-                {p.averageRating.toFixed(1)}
-              </span>
-            )}
+            <p className="text-xs text-gray-500 mt-1">
+              {p.yearsExperience > 0 ? `${p.yearsExperience} ${p.yearsExperience === 1 ? "yr" : "yrs"} experience` : "Experience not listed"}
+            </p>
+            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+              {p.city && (
+                <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                  <MapPin size={10} />
+                  {p.displayArea ?? p.city}
+                </span>
+              )}
+              {p.averageRating && (
+                <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                  <Star size={10} className="fill-[#FFB830] text-[#FFB830]" />
+                  {p.averageRating.toFixed(1)}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
+        </Link>
         <div className="text-right shrink-0">
           <p className="text-xs text-gray-400">Rate</p>
           <p className="text-sm font-bold text-[#1A2340]">
