@@ -677,8 +677,6 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       selectedProfessionalId: shadowTeacherMatchesTable.selectedProfessionalId,
       childCity:              shadowTeacherMatchesTable.childCity,
       childConditions:        shadowTeacherMatchesTable.childConditions,
-      childBudgetMinInr:      shadowTeacherMatchesTable.childBudgetMinInr,
-      childBudgetMaxInr:      shadowTeacherMatchesTable.childBudgetMaxInr,
       childPreferredModes:    shadowTeacherMatchesTable.childPreferredModes,
       childGoalsAreas:        shadowTeacherMatchesTable.childGoalsAreas,
       preMeetingRequested:    shadowTeacherMatchesTable.preMeetingRequested,
@@ -725,8 +723,6 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
         selectedProfessionalId: shadowTeacherMatchesTable.selectedProfessionalId,
         childCity:              shadowTeacherMatchesTable.childCity,
         childConditions:        shadowTeacherMatchesTable.childConditions,
-        childBudgetMinInr:      shadowTeacherMatchesTable.childBudgetMinInr,
-        childBudgetMaxInr:      shadowTeacherMatchesTable.childBudgetMaxInr,
         childPreferredModes:    shadowTeacherMatchesTable.childPreferredModes,
         childGoalsAreas:        shadowTeacherMatchesTable.childGoalsAreas,
         preMeetingRequested:    shadowTeacherMatchesTable.preMeetingRequested,
@@ -795,8 +791,9 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       isSelected:       c.selectedProfessionalId === pro.id,
       childCity:        c.childCity,
       childConditions:  c.childConditions ?? [],
-      childBudgetMinInr:   c.childBudgetMinInr  !== null ? Number(c.childBudgetMinInr)  : null,
-      childBudgetMaxInr:   c.childBudgetMaxInr  !== null ? Number(c.childBudgetMaxInr)  : null,
+      // childBudgetMinInr/MaxInr deliberately excluded — the parent's stated
+      // budget is an internal matching signal only (see scoreBudget() in
+      // shadowTeacherScoring.ts) and must never reach the teacher's client.
       childPreferredModes: c.childPreferredModes ?? [],
       childGoalsAreas:        c.childGoalsAreas       ?? null,
       preMeetingRequested:    c.preMeetingRequested   ?? false,

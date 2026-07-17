@@ -3627,8 +3627,6 @@ interface Candidacy {
   selectedProfessionalId: number | null;
   childCity:           string | null;
   childConditions:     string[];
-  childBudgetMinInr:   number | null;
-  childBudgetMaxInr:   number | null;
   childPreferredModes: string[];
   childGoalsAreas:     string | null;
   preMeetingRequested: boolean;
@@ -3805,9 +3803,6 @@ function RespondRequestBlock({ candidacy: c, onUpdated }: { candidacy: Candidacy
       <p className="text-sm font-bold text-blue-900">Shadowing Request</p>
       <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-blue-800">
         {c.childCity && <span>📍 {c.childCity}</span>}
-        {(c.childBudgetMinInr || c.childBudgetMaxInr) && (
-          <span>💰 ₹{c.childBudgetMinInr?.toLocaleString("en-IN") ?? "?"} – ₹{c.childBudgetMaxInr?.toLocaleString("en-IN") ?? "?"}/mo</span>
-        )}
         {c.childPreferredModes.length > 0 && <span>🎓 {c.childPreferredModes.join(", ")}</span>}
         {c.childConditions.length > 0 && <span className="col-span-2">🏥 {c.childConditions.join(", ")}</span>}
       </div>
@@ -4023,11 +4018,6 @@ function CandidacyCard({ candidacy: c, onOpen, myUserId, onUpdated }: { candidac
 
       <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-gray-500 mb-4">
         {c.childCity && <span>📍 {c.childCity}</span>}
-        {(c.childBudgetMinInr || c.childBudgetMaxInr) && (
-          <span>
-            💰 ₹{c.childBudgetMinInr?.toLocaleString("en-IN") ?? "?"} – ₹{c.childBudgetMaxInr?.toLocaleString("en-IN") ?? "?"}/mo
-          </span>
-        )}
         {c.childPreferredModes.length > 0 && (
           <span>🎓 {c.childPreferredModes.join(", ")}</span>
         )}
