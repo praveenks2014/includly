@@ -30,6 +30,7 @@ import { resolveOffering } from "../lib/offeringResolver";
 import { SHOW_THERAPIST_SEARCH } from "../lib/features";
 import { resolveOverdueTherapistConfirmations } from "../lib/paymentConfirmationResolver";
 import { hasScheduleConflict } from "../lib/scheduleConflict";
+import { JITSI_CONFIG_SUFFIX } from "../lib/jitsi";
 
 // Same lockout threshold as sessionsV2.ts's OTP pattern (not exported there,
 // so re-declared here rather than importing a private constant).
@@ -636,7 +637,7 @@ router.post("/therapist/:matchId/candidates/:candidateId/confirm-interview", req
   );
   if (!slotMatches) { res.status(400).json({ error: "confirmedSlot must be one of the proposed slots" }); return; }
 
-  const meetLink = `https://meet.jit.si/includly-${matchId}-${candidateId}`;
+  const meetLink = `https://meet.jit.si/includly-${matchId}-${candidateId}${JITSI_CONFIG_SUFFIX}`;
   const [updated] = await db
     .update(therapistMatchCandidatesTable)
     .set({ interviewConfirmedSlot: parsed.data.confirmedSlot, meetLink })
@@ -1029,7 +1030,7 @@ router.post("/therapist/:matchId/verify-trial-payment", requireAuth, requireRole
   }
   const trialFeePaidInr = Math.round((order.amount ?? 0) / 100);
   const trialStartOtp = generateOtp();
-  const trialMeetLink = `https://meet.jit.si/includly-trial-${matchId}-${selectedProfessionalId}`;
+  const trialMeetLink = `https://meet.jit.si/includly-trial-${matchId}-${selectedProfessionalId}${JITSI_CONFIG_SUFFIX}`;
 
   await db
     .update(therapistMatchesTable)
@@ -1078,7 +1079,7 @@ router.post("/therapist/:matchId/mark-trial-paid", requireAuth, requireRole("par
   }
 
   const trialStartOtp = generateOtp();
-  const trialMeetLink = `https://meet.jit.si/includly-trial-${matchId}-${selectedProfessionalId}`;
+  const trialMeetLink = `https://meet.jit.si/includly-trial-${matchId}-${selectedProfessionalId}${JITSI_CONFIG_SUFFIX}`;
 
   await db
     .update(therapistMatchesTable)
@@ -1867,7 +1868,7 @@ router.post("/therapist/engagements/:id/sessions", requireAuth, async (req: Requ
   // Same deterministic meet.jit.si pattern already used for interview/trial
   // meetLink — the session's own id is only known after insert, hence the
   // follow-up update rather than setting it in the initial values().
-  const meetLink = `https://meet.jit.si/includly-session-${session.id}`;
+  const meetLink = `https://meet.jit.si/includly-session-${session.id}${JITSI_CONFIG_SUFFIX}`;
   const [updated] = await db
     .update(therapistEngagementSessionsTable)
     .set({ meetLink })

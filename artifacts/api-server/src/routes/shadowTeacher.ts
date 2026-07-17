@@ -27,6 +27,7 @@ import { generateOtp } from "../lib/otp";
 import { creditWallet } from "../lib/ledger";
 import { resolveStuckShadowTeacherMatch } from "../lib/stuckEngagementResolver";
 import { getSettings, parseTiers, filterBySchoolHours, computeEffectiveAvailableFrom } from "../lib/shadowTeacherMatching";
+import { JITSI_CONFIG_SUFFIX } from "../lib/jitsi";
 
 const router: IRouter = Router();
 
@@ -1379,7 +1380,7 @@ router.post("/shadow-teacher/:matchId/candidates/:candidateId/confirm-interview"
   });
   if (!slotMatches) { res.status(400).json({ error: "confirmedSlot must be one of the proposed slots" }); return; }
 
-  const meetLink = `https://meet.jit.si/includly-${matchId}-${candidateId}`;
+  const meetLink = `https://meet.jit.si/includly-${matchId}-${candidateId}${JITSI_CONFIG_SUFFIX}`;
   const [updated] = await db
     .update(shadowMatchCandidatesTable)
     .set({
@@ -2215,7 +2216,7 @@ router.post("/shadow-teacher/:matchId/verify-trial-payment", requireAuth, requir
   const trialFeePaidInr = Math.round((order.amount ?? 0) / 100);
 
   const trialStartOtp = generateOtp();
-  const trialMeetLink = `https://meet.jit.si/includly-trial-${matchId}-${selectedProfessionalId}`;
+  const trialMeetLink = `https://meet.jit.si/includly-trial-${matchId}-${selectedProfessionalId}${JITSI_CONFIG_SUFFIX}`;
 
   await db
     .update(shadowTeacherMatchesTable)
@@ -2305,7 +2306,7 @@ router.post("/shadow-teacher/:matchId/mark-trial-direct-pay-paid", requireAuth, 
   }
 
   const trialStartOtp = generateOtp();
-  const trialMeetLink = `https://meet.jit.si/includly-trial-${matchId}-${selectedProfessionalId}`;
+  const trialMeetLink = `https://meet.jit.si/includly-trial-${matchId}-${selectedProfessionalId}${JITSI_CONFIG_SUFFIX}`;
 
   // Note: trialFeePaidInr is intentionally left unset here — the platform never
   // held these funds (parent paid the teacher directly), so there is nothing to

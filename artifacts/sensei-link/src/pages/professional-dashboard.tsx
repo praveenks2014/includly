@@ -3589,11 +3589,12 @@ function VerticalRequestsSection({ vertical, onUpdated }: { vertical: Vertical; 
 function VerticalRequestsTab() {
   const queryClient = useQueryClient();
 
-  const { data: offerings = [] } = useQuery<{ vertical: string }[]>({
-    queryKey: ["my-offerings"],
-    queryFn: () => fetchWithAuth("/api/professionals/me/offerings").then(r => r.json()),
-    enabled: SHOW_TUTOR_SEARCH || SHOW_THERAPIST_SEARCH,
-  });
+  // Reuses the existing useMyOfferings() hook (already correctly unwraps
+  // the endpoint's { offerings: [...] } response) instead of a second,
+  // broken inline query that shared its cache key ("my-offerings") but
+  // treated the raw wrapped response as a bare array — offerings.some(...)
+  // then threw "offerings.some is not a function", crashing this whole tab.
+  const { data: offerings = [] } = useMyOfferings();
 
   const verticals: Vertical[] = [];
   if (SHOW_TUTOR_SEARCH && offerings.some((o) => o.vertical === "home_tutor")) verticals.push("tutor");

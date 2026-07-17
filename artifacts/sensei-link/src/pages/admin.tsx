@@ -758,7 +758,10 @@ function ProfessionalsTab() {
   const { mutateAsync: approve } = useAdminApproveProfessional();
 
   function invalidate() {
-    queryClient.invalidateQueries({ queryKey: ["adminListProfessionals"] });
+    queryClient.invalidateQueries({
+      queryKey: getAdminListProfessionalsQueryKey({ status: resolvedStatus, page, limit: 20 }),
+      refetchType: "all",
+    });
     queryClient.invalidateQueries({ queryKey: getAdminGetStatsQueryKey() });
   }
 
