@@ -424,10 +424,15 @@ function SessionProgressNotesForm({ vertical, engagementId, session, onUpdated }
 }
 
 function ActiveSessionsSection({ vertical, eng, onUpdated }: { vertical: Vertical; eng: VerticalEngagement; onUpdated: () => void }) {
+  // Cross-user: a parent booking/confirming a session happens on their own
+  // device, no shared cache to invalidate — same 30s/20s cadence used
+  // elsewhere for this class of gap (EnquiriesTab, VerticalRequestsSection).
   const { data: sessions = [], refetch } = useQuery<VerticalSession[]>({
     queryKey: [`${vertical}-engagement-sessions`, eng.id],
     queryFn: () => fetchWithAuth(`${API_BASE[vertical]}/engagements/${eng.id}/sessions`).then(r => r.json()),
     enabled: eng.status === "active",
+    staleTime: 20_000,
+    refetchInterval: 30_000,
   });
 
   if (eng.status !== "active") return null;
@@ -483,10 +488,14 @@ function PaymentSection({ vertical, eng, onUpdated }: { vertical: Vertical; eng:
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const isMonthly = vertical === "tutor" || eng.billingCadence === "monthly";
 
+  // Cross-user: the parent submits a payment confirmation from their own
+  // device — same polling cadence as the other cross-user queries above.
   const { data: pending = [] } = useQuery<PendingConfirmation[]>({
     queryKey: [`${vertical}-payment-confirmations`, eng.id],
     queryFn: () => fetchWithAuth(`${API_BASE[vertical]}/engagements/${eng.id}/payment-confirmations`).then(r => r.json()),
     enabled: eng.status === "active" && isMonthly && eng.directPayEnabled,
+    staleTime: 20_000,
+    refetchInterval: 30_000,
   });
 
   if (eng.status !== "active") return null;

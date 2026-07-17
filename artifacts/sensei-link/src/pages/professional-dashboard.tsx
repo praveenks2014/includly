@@ -3550,13 +3550,19 @@ function VerticalRequestsSection({ vertical, onUpdated }: { vertical: Vertical; 
   const apiBase = vertical === "tutor" ? "/api/tutor" : "/api/therapist";
   const label = vertical === "tutor" ? "Tutor" : "Therapist";
 
+  // Same cross-user staleness gap as EnquiriesTab (parent acts on their own
+  // device, no shared cache to invalidate) — same 30s/20s polling cadence.
   const { data: candidacies = [], refetch: refetchCandidacies } = useQuery<VerticalCandidacy[]>({
     queryKey: [`${vertical}-my-candidacies`],
     queryFn: () => fetchWithAuth(`${apiBase}/my-candidacies`).then(r => r.json()),
+    staleTime: 20_000,
+    refetchInterval: 30_000,
   });
   const { data: engagements = [], refetch: refetchEngagements } = useQuery<VerticalEngagement[]>({
     queryKey: [`${vertical}-my-engagements`],
     queryFn: () => fetchWithAuth(`${apiBase}/engagements`).then(r => r.json()),
+    staleTime: 20_000,
+    refetchInterval: 30_000,
   });
 
   function handleUpdated() {
@@ -4275,23 +4281,24 @@ function TrialDirectPayConfirm({ matchId, confirmedAt }: { matchId: number; conf
 
 function EnquiriesTab() {
   const { data: me } = useGetMe();
-  const [candidacies, setCandidacies] = useState<Candidacy[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Candidacy | null>(null);
 
-  // Task 3B — named so the redesigned-journey action components (respond-request,
-  // confirm-interview, accept-trial) can refresh this plain-state list after a
-  // mutation. This tab predates React Query adoption in this file; re-fetching
-  // directly avoids a larger unrelated refactor to useQuery.
-  function refetchCandidacies() {
-    return fetchWithAuth("/api/shadow-teacher/my-candidacies")
-      .then(r => r.json())
-      .then((data: unknown) => { if (Array.isArray(data)) setCandidacies(data as Candidacy[]); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }
+  // Cross-user view: the parent acting (propose interview, mark done,
+  // withdraw) happens on a different device with no shared client cache
+  // to invalidate, so polling is the only way this tab converges. Interval
+  // matches useMyMatch's parent-side polling for the same underlying
+  // match-request state (ShadowTeacherRequestWidget.tsx), so both sides
+  // of the same conversation settle on a consistent staleness window.
+  const { data: candidacies = [], isLoading: loading, refetch } = useQuery<Candidacy[]>({
+    queryKey: ["shadow-teacher-my-candidacies"],
+    queryFn: () => fetchWithAuth("/api/shadow-teacher/my-candidacies").then(r => r.json()) as Promise<Candidacy[]>,
+    staleTime: 20_000,
+    refetchInterval: 30_000,
+  });
 
-  useEffect(() => { void refetchCandidacies(); }, []);
+  function refetchCandidacies() {
+    void refetch();
+  }
 
   if (loading) {
     return (
