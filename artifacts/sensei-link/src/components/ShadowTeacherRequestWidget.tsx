@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { fetchWithAuth, getApiBase } from "@/lib/api";
 import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
@@ -20,7 +21,7 @@ import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import {
   UserCheck, Loader2, CheckCircle2, Clock, IndianRupee,
   AlertCircle, RefreshCw, MessageSquare, Star, MapPin, Languages,
-  ChevronRight, BadgeCheck, Send, Video, XCircle, CalendarClock,
+  ChevronRight, BadgeCheck, Send, Video, XCircle, CalendarClock, Info,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShadowMatchChatDrawer } from "./ShadowMatchChatDrawer";
@@ -201,6 +202,20 @@ function termsSummary(o: NegotiationOffer): string {
   return parts.length === 0 ? "standard terms" : parts.join(" · ");
 }
 
+function RetainerFieldLabel({ label, tip }: { label: string; tip: string }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      {label}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Info size={11} className="text-gray-400 cursor-help shrink-0" />
+        </TooltipTrigger>
+        <TooltipContent className="max-w-[220px] text-xs">{tip}</TooltipContent>
+      </Tooltip>
+    </span>
+  );
+}
+
 function ScoreBadge({ score }: { score: number | null }) {
   if (score == null) return null;
   const color = score >= 70 ? "bg-green-100 text-green-700" : score >= 45 ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-500";
@@ -235,21 +250,26 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
     refetchInterval: 15_000,
   });
 
-  // One-shot prefill: when offers first load, seed the form from the latest
-  // offer so counter-offers iterate from the current negotiation state, not
-  // from platform defaults. Skip subsequent polls so user edits stick.
-  const prefilledRef = useRef(false);
+  // Prefill: seed the form from the current "reference offer" — the other
+  // party's pending counter if one exists, else the most recent offer of
+  // any status — so a counter always carries forward the negotiation's
+  // current terms, not platform defaults or a stale first-load snapshot.
+  // Re-runs only when the reference offer's IDENTITY changes (a new counter
+  // actually arrived), never on every poll, so an in-progress edit is never
+  // clobbered by a background refetch.
+  const prefilledOfferIdRef = useRef<number | null>(null);
   useEffect(() => {
-    if (prefilledRef.current || offers.length === 0) return;
-    const latest = offers[offers.length - 1]!;
-    setAbsenceRetainerPct(latest.absenceRetainerPct ?? DEFAULT_ABSENCE_RETAINER_PCT);
-    setAbsenceFreeDaysPerMonth(latest.absenceFreeDaysPerMonth ?? DEFAULT_ABSENCE_FREE_DAYS_PER_MONTH);
-    setSummerRetainerPct(latest.summerRetainerPct ?? DEFAULT_SUMMER_RETAINER_PCT);
-    setSummerRetainerMonths(latest.summerRetainerMonths ?? DEFAULT_SUMMER_RETAINER_MONTHS);
-    setLeaveTermsNotes(latest.leaveTermsNotes ?? "");
-    if (termsSummary(latest) !== "standard terms") setExpandTerms(true);
-    prefilledRef.current = true;
-  }, [offers]);
+    const referenceOffer = offers.find(o => o.status === "pending" && o.raisedByUserId !== myUserId)
+      ?? (offers.length > 0 ? offers[offers.length - 1] : undefined);
+    if (!referenceOffer || referenceOffer.id === prefilledOfferIdRef.current) return;
+    setAbsenceRetainerPct(referenceOffer.absenceRetainerPct ?? DEFAULT_ABSENCE_RETAINER_PCT);
+    setAbsenceFreeDaysPerMonth(referenceOffer.absenceFreeDaysPerMonth ?? DEFAULT_ABSENCE_FREE_DAYS_PER_MONTH);
+    setSummerRetainerPct(referenceOffer.summerRetainerPct ?? DEFAULT_SUMMER_RETAINER_PCT);
+    setSummerRetainerMonths(referenceOffer.summerRetainerMonths ?? DEFAULT_SUMMER_RETAINER_MONTHS);
+    setLeaveTermsNotes(referenceOffer.leaveTermsNotes ?? "");
+    if (termsSummary(referenceOffer) !== "standard terms") setExpandTerms(true);
+    prefilledOfferIdRef.current = referenceOffer.id;
+  }, [offers, myUserId]);
 
   const acceptedOffer = offers.find(o => o.status === "accepted");
   const myPendingOffer = offers.find(o => o.status === "pending" && o.raisedByUserId === myUserId);
@@ -302,28 +322,28 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
     <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-2.5 space-y-2">
       <div className="grid grid-cols-2 gap-2">
         <label className="text-[10px] text-gray-600">
-          Absence retainer (%)
+          <RetainerFieldLabel label="Absence retainer (%)" tip="If the teacher is absent, this is the % of the daily rate still paid, up to the free-days limit below." />
           <input type="number" min={0} max={100} value={absenceRetainerPct}
             onChange={e => setAbsenceRetainerPct(Math.max(0, Math.min(100, parseInt(e.target.value || "0", 10))))}
             className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5]"
             data-testid="input-absence-retainer-pct" />
         </label>
         <label className="text-[10px] text-gray-600">
-          Free absence days / mo
+          <RetainerFieldLabel label="Free absence days / mo" tip="Number of absent days per month covered by the retainer above before any different arrangement applies." />
           <input type="number" min={0} max={30} value={absenceFreeDaysPerMonth}
             onChange={e => setAbsenceFreeDaysPerMonth(Math.max(0, Math.min(30, parseInt(e.target.value || "0", 10))))}
             className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5]"
             data-testid="input-absence-free-days" />
         </label>
         <label className="text-[10px] text-gray-600">
-          Summer retainer (%)
+          <RetainerFieldLabel label="Summer retainer (%)" tip="% of the monthly fee paid during school breaks/summer to keep the teacher reserved, instead of paying the full rate." />
           <input type="number" min={0} max={100} value={summerRetainerPct}
             onChange={e => setSummerRetainerPct(Math.max(0, Math.min(100, parseInt(e.target.value || "0", 10))))}
             className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5]"
             data-testid="input-summer-retainer-pct" />
         </label>
         <label className="text-[10px] text-gray-600">
-          Summer retainer for (months)
+          <RetainerFieldLabel label="Summer retainer for (months)" tip="How many months of the year the summer retainer rate (above) applies." />
           <input type="number" min={0} max={12} value={summerRetainerMonths}
             onChange={e => setSummerRetainerMonths(Math.max(0, Math.min(12, parseInt(e.target.value || "0", 10))))}
             className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5]"
@@ -331,7 +351,7 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
         </label>
       </div>
       <label className="text-[10px] text-gray-600 block">
-        Additional leave / retainer terms (optional)
+        <RetainerFieldLabel label="Additional leave / retainer terms (optional)" tip="Anything else you've agreed on leave, absences, or retainer pay that isn't captured by the fields above." />
         <textarea rows={2} maxLength={1000} value={leaveTermsNotes}
           onChange={e => setLeaveTermsNotes(e.target.value)}
           placeholder="e.g. 2 additional paid leaves during Diwali week"
@@ -974,8 +994,6 @@ export function ShadowTeacherRequestWidget() {
   // Trial booking modal state
   const [trialModalOpen, setTrialModalOpen] = useState(false);
   const [trialModalProfId, setTrialModalProfId] = useState<number | null>(null);
-  const [trialPreMeetingChecked, setTrialPreMeetingChecked] = useState(false);
-  const [trialPreMeetingNote, setTrialPreMeetingNote] = useState("");
   const [trialLocation, setTrialLocation] = useState("");
 
   // Direct-pay trial flow state (admin-flag trialDirectPayEnabled — parent pays teacher's UPI directly)
@@ -1637,7 +1655,7 @@ export function ShadowTeacherRequestWidget() {
 
   const CommitDialog = commitDialogOpen && commitProfId !== null ? (
     <Dialog open onOpenChange={(o) => { if (!o) { setCommitDialogOpen(false); setCommitProfId(null); setCommitAcknowledged(false); setCommitTermsChecked(false); } }}>
-      <DialogContent className="max-w-sm rounded-2xl">
+      <DialogContent className="max-w-sm rounded-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base font-bold text-[#1A2340]">Pick a Start Date</DialogTitle>
         </DialogHeader>
@@ -1820,8 +1838,6 @@ export function ShadowTeacherRequestWidget() {
                 bookingTrial={requestingTrial}
                 onBookTrialPayment={requestingTrial ? () => {} : (proId) => {
                   setTrialModalProfId(proId);
-                  setTrialPreMeetingChecked(false);
-                  setTrialPreMeetingNote("");
                   setTrialModalOpen(true);
                 }}
               />
@@ -1877,36 +1893,6 @@ export function ShadowTeacherRequestWidget() {
                   onChange={(e) => setTrialLocation(e.target.value)}
                 />
               </div>
-              <div className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  id="pre-meeting-check"
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-[#2EC4A5] cursor-pointer"
-                  checked={trialPreMeetingChecked}
-                  onChange={(e) => {
-                    setTrialPreMeetingChecked(e.target.checked);
-                    if (!e.target.checked) setTrialPreMeetingNote("");
-                  }}
-                />
-                <label htmlFor="pre-meeting-check" className="text-sm text-gray-700 cursor-pointer leading-snug">
-                  I&apos;d like a brief call or meeting with this teacher <em>before</em> the trial day
-                </label>
-              </div>
-              {trialPreMeetingChecked && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-gray-600">
-                    Anything specific to discuss? <span className="font-normal text-gray-400">(optional)</span>
-                  </Label>
-                  <Textarea
-                    className="text-sm rounded-xl resize-none"
-                    rows={3}
-                    maxLength={500}
-                    placeholder="e.g. I'd like to understand their approach to behaviour management…"
-                    value={trialPreMeetingNote}
-                    onChange={(e) => setTrialPreMeetingNote(e.target.value)}
-                  />
-                </div>
-              )}
             </div>
             <DialogFooter className="flex gap-2 pt-1">
               <Button
@@ -1923,10 +1909,16 @@ export function ShadowTeacherRequestWidget() {
                 disabled={requestingTrial}
                 onClick={() => {
                   if (!trialModalProfId) return;
+                  // A separate "pre-trial call" opt-in is redundant — the
+                  // trial's own Jitsi meeting already provides that
+                  // opportunity by default, so this no longer needs its own
+                  // collection point. See professional-dashboard.tsx's
+                  // preMeetingRequested display and the DB columns behind
+                  // it — left alone for now as a separate cleanup decision.
                   void handleRequestTrial(
                     trialModalProfId,
-                    trialPreMeetingChecked,
-                    trialPreMeetingChecked && trialPreMeetingNote.trim() ? trialPreMeetingNote.trim() : null,
+                    false,
+                    null,
                     trialLocation.trim() || null,
                   );
                 }}

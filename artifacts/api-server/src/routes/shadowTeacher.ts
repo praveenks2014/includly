@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, or, desc, isNull, isNotNull, sql, count, max, inArray, notInArray, gte, gt } from "drizzle-orm";
+import { eq, and, or, desc, isNull, isNotNull, sql, count, max, inArray, notInArray, gte, gt, lt } from "drizzle-orm";
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import {
@@ -1055,25 +1055,38 @@ router.post("/shadow-teacher/:matchId/candidates/:candidateId/offers", requireAu
     .where(and(eq(negotiationOffersTable.matchId, matchId), eq(negotiationOffersTable.candidateId, candidateId), eq(negotiationOffersTable.status, "accepted")))
     .limit(1);
   if (existingAccepted) { res.status(409).json({ error: "A price has already been agreed for this candidate" }); return; }
-  // Supersede ALL pending offers (from both parties) — a new offer/counter implicitly
-  // rejects the other side's pending offer, so only one live pending offer exists at a time.
-  await db.update(negotiationOffersTable)
-    .set({ status: "superseded", updatedAt: new Date() })
-    .where(and(
-      eq(negotiationOffersTable.matchId, matchId),
-      eq(negotiationOffersTable.candidateId, candidateId),
-      eq(negotiationOffersTable.status, "pending"),
-    ));
-  const [offer] = await db.insert(negotiationOffersTable).values({
-    matchId, candidateId, raisedByUserId: req.userId!, raisedByRole: ctx.myRole,
-    amountInr: parsed.data.amountInr,
-    absenceRetainerPct: parsed.data.absenceRetainerPct,
-    absenceFreeDaysPerMonth: parsed.data.absenceFreeDaysPerMonth,
-    summerRetainerPct: parsed.data.summerRetainerPct,
-    summerRetainerMonths: parsed.data.summerRetainerMonths,
-    leaveTermsNotes: parsed.data.leaveTermsNotes,
-    status: "pending",
-  }).returning();
+  // Supersede-then-insert must be atomic AND mutually exclusive per
+  // (matchId, candidateId): a bare transaction alone doesn't stop two
+  // concurrent counters from each superseding the same prior offer and
+  // then both inserting as pending (the second request's UPDATE never
+  // sees the first request's not-yet-committed INSERT, since it only
+  // re-checks rows it already matched). The advisory lock below
+  // serializes concurrent submissions for this one negotiation so the
+  // "at most one pending offer" invariant actually holds — required for
+  // restore-on-withdraw below to have exactly one unambiguous predecessor.
+  const [offer] = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${matchId}, ${candidateId})`);
+    // Supersede ALL pending offers (from both parties) — a new offer/counter
+    // implicitly rejects the other side's pending offer, so only one live
+    // pending offer exists at a time.
+    await tx.update(negotiationOffersTable)
+      .set({ status: "superseded", updatedAt: new Date() })
+      .where(and(
+        eq(negotiationOffersTable.matchId, matchId),
+        eq(negotiationOffersTable.candidateId, candidateId),
+        eq(negotiationOffersTable.status, "pending"),
+      ));
+    return tx.insert(negotiationOffersTable).values({
+      matchId, candidateId, raisedByUserId: req.userId!, raisedByRole: ctx.myRole,
+      amountInr: parsed.data.amountInr,
+      absenceRetainerPct: parsed.data.absenceRetainerPct,
+      absenceFreeDaysPerMonth: parsed.data.absenceFreeDaysPerMonth,
+      summerRetainerPct: parsed.data.summerRetainerPct,
+      summerRetainerMonths: parsed.data.summerRetainerMonths,
+      leaveTermsNotes: parsed.data.leaveTermsNotes,
+      status: "pending",
+    }).returning();
+  });
 
   // Notify the other party about the new offer
   try {
@@ -1151,11 +1164,81 @@ router.delete("/shadow-teacher/:matchId/candidates/:candidateId/offers/:offerId"
   if (!offer) { res.status(404).json({ error: "Offer not found" }); return; }
   if (offer.raisedByUserId !== req.userId) { res.status(403).json({ error: "You can only withdraw your own offer" }); return; }
   if (offer.status !== "pending") { res.status(409).json({ error: "Only pending offers can be withdrawn" }); return; }
-  const [withdrawn] = await db.update(negotiationOffersTable)
-    .set({ status: "withdrawn", updatedAt: new Date() })
-    .where(eq(negotiationOffersTable.id, offerId))
-    .returning();
-  res.json(withdrawn);
+
+  // Same advisory lock as POST /offers — withdrawing (and possibly restoring
+  // the prior offer to pending) mutates the same "at most one pending offer"
+  // invariant, so it must serialize against concurrent submissions the same way.
+  const { withdrawn, restored } = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${matchId}, ${candidateId})`);
+    const [withdrawnRow] = await tx.update(negotiationOffersTable)
+      .set({ status: "withdrawn", updatedAt: new Date() })
+      .where(eq(negotiationOffersTable.id, offerId))
+      .returning();
+
+    // Restore the offer this withdrawal's offer actually displaced, rather
+    // than leaving the negotiation with no active offer — withdrawing a
+    // counter means "never mind, back to what was there before," not
+    // erasing the whole conversation. Only a "superseded" row qualifies: a
+    // "withdrawn" row was a deliberate retraction by its own owner and must
+    // never be resurrected by a later, unrelated withdraw. With the
+    // advisory lock above closing the concurrent-insert race (see POST
+    // /offers), the "at most one pending offer" invariant holds, so there's
+    // always at most one unambiguous superseded predecessor to restore to.
+    const [previous] = await tx.select().from(negotiationOffersTable)
+      .where(and(
+        eq(negotiationOffersTable.matchId, matchId),
+        eq(negotiationOffersTable.candidateId, candidateId),
+        eq(negotiationOffersTable.status, "superseded"),
+        lt(negotiationOffersTable.createdAt, offer.createdAt),
+      ))
+      .orderBy(desc(negotiationOffersTable.createdAt))
+      .limit(1);
+
+    if (!previous) return { withdrawn: withdrawnRow, restored: null as typeof withdrawnRow | null };
+
+    const [restoredRow] = await tx.update(negotiationOffersTable)
+      .set({ status: "pending", updatedAt: new Date() })
+      .where(eq(negotiationOffersTable.id, previous.id))
+      .returning();
+    return { withdrawn: withdrawnRow, restored: restoredRow };
+  });
+
+  // Notify the other party — either the negotiation is open again with
+  // nothing pending, or a prior offer of theirs (or, rarely, the
+  // withdrawer's own earlier offer — see restore query above) is active
+  // again. Same non-blocking pattern as the offer_raised/offer_accepted
+  // notifications above.
+  try {
+    const withdrawerLabel = ctx.myRole === "parent" ? "Parent" : "Teacher";
+    let recipientUserId: number | null = null;
+    if (ctx.myRole === "parent") {
+      const [pro] = await db.select({ userId: professionalProfilesTable.userId })
+        .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, ctx.candidate.professionalId)).limit(1);
+      recipientUserId = pro?.userId ?? null;
+    } else {
+      recipientUserId = ctx.match.parentId;
+    }
+    if (recipientUserId) {
+      if (restored) {
+        const ownerPhrase = restored.raisedByUserId === recipientUserId ? "Your" : "Their";
+        await createInAppNotification(recipientUserId, {
+          type: "offer_withdrawn",
+          title: "Offer withdrawn — prior offer restored",
+          body: `${withdrawerLabel} withdrew their offer. ${ownerPhrase} offer of ₹${restored.amountInr.toLocaleString("en-IN")}/month is active again.`,
+          relatedType: "match", relatedId: matchId,
+        });
+      } else {
+        await createInAppNotification(recipientUserId, {
+          type: "offer_withdrawn",
+          title: "Offer withdrawn",
+          body: `${withdrawerLabel} withdrew their offer. Propose a new one anytime.`,
+          relatedType: "match", relatedId: matchId,
+        });
+      }
+    }
+  } catch { /* non-blocking */ }
+
+  res.json({ withdrawn, restored });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

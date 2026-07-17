@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useUser } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -27,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { FileUploadField } from "@/components/FileUploadField";
 import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel } from "@/lib/specialties";
@@ -39,7 +40,7 @@ import {
   Clock, AlertCircle, Eye, Phone, Mail, MapPin, Star, Unlock,
   Edit3, Save, HelpCircle, BadgeCheck, FileText, ChevronRight,
   Menu, X, Plus, Trash2, TrendingUp, Check, MessageSquare, Send, ChevronLeft,
-  Users, Minus, Camera, Share2, RefreshCw, Video,
+  Users, Minus, Camera, Share2, RefreshCw, Video, Info,
 } from "lucide-react";
 import { ShadowMatchChatDrawer } from "@/components/ShadowMatchChatDrawer";
 import { TermsAcknowledgment } from "@/components/TermsAcknowledgment";
@@ -3677,18 +3678,76 @@ const MATCH_STATUS_COLOR: Record<string, string> = {
   trial_done:      "bg-purple-50 text-purple-700 border-purple-200",
 };
 
+const DEFAULT_ABSENCE_RETAINER_PCT = 50;
+const DEFAULT_ABSENCE_FREE_DAYS_PER_MONTH = 4;
+const DEFAULT_SUMMER_RETAINER_PCT = 0;
+const DEFAULT_SUMMER_RETAINER_MONTHS = 0;
+
+function termsAreCustom(o: { absenceRetainerPct: number; absenceFreeDaysPerMonth: number; summerRetainerPct: number; summerRetainerMonths: number }): boolean {
+  return o.absenceRetainerPct !== DEFAULT_ABSENCE_RETAINER_PCT
+    || o.absenceFreeDaysPerMonth !== DEFAULT_ABSENCE_FREE_DAYS_PER_MONTH
+    || o.summerRetainerPct !== DEFAULT_SUMMER_RETAINER_PCT
+    || o.summerRetainerMonths !== DEFAULT_SUMMER_RETAINER_MONTHS;
+}
+
+function RetainerFieldLabel({ label, tip }: { label: string; tip: string }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      {label}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Info size={11} className="text-gray-400 cursor-help shrink-0" />
+        </TooltipTrigger>
+        <TooltipContent className="max-w-[220px] text-xs">{tip}</TooltipContent>
+      </Tooltip>
+    </span>
+  );
+}
+
 function CandidacyOfferSection({ matchId, candidateId, myUserId }: { matchId: number; candidateId: number; myUserId: number }) {
   const [offerInput, setOfferInput] = useState("");
+  const [absenceRetainerPct, setAbsenceRetainerPct] = useState(DEFAULT_ABSENCE_RETAINER_PCT);
+  const [absenceFreeDaysPerMonth, setAbsenceFreeDaysPerMonth] = useState(DEFAULT_ABSENCE_FREE_DAYS_PER_MONTH);
+  const [summerRetainerPct, setSummerRetainerPct] = useState(DEFAULT_SUMMER_RETAINER_PCT);
+  const [summerRetainerMonths, setSummerRetainerMonths] = useState(DEFAULT_SUMMER_RETAINER_MONTHS);
+  const [leaveTermsNotes, setLeaveTermsNotes] = useState("");
+  const [expandTerms, setExpandTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: offers = [] } = useQuery<{ id: number; raisedByUserId: number; raisedByRole: string; amountInr: number; status: string }[]>({
+  const { data: offers = [] } = useQuery<{
+    id: number; raisedByUserId: number; raisedByRole: string; amountInr: number; status: string;
+    absenceRetainerPct: number; absenceFreeDaysPerMonth: number;
+    summerRetainerPct: number; summerRetainerMonths: number;
+    leaveTermsNotes: string | null;
+  }[]>({
     queryKey: ["pro-offers", matchId, candidateId],
     queryFn: () => fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/offers`).then(r => r.json()),
     enabled: myUserId > 0,
     refetchInterval: 15_000,
   });
+
+  // Prefill: seed the form from the current "reference offer" — the
+  // parent's pending counter if one exists, else the most recent offer of
+  // any status — so a counter always carries forward the negotiation's
+  // current terms instead of resetting to platform defaults. Re-runs only
+  // when the reference offer's IDENTITY changes (a new counter actually
+  // arrived), never on every poll, so an in-progress edit is never
+  // clobbered by a background refetch.
+  const prefilledOfferIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    const referenceOffer = offers.find(o => o.status === "pending" && o.raisedByUserId !== myUserId)
+      ?? (offers.length > 0 ? offers[offers.length - 1] : undefined);
+    if (!referenceOffer || referenceOffer.id === prefilledOfferIdRef.current) return;
+    setAbsenceRetainerPct(referenceOffer.absenceRetainerPct ?? DEFAULT_ABSENCE_RETAINER_PCT);
+    setAbsenceFreeDaysPerMonth(referenceOffer.absenceFreeDaysPerMonth ?? DEFAULT_ABSENCE_FREE_DAYS_PER_MONTH);
+    setSummerRetainerPct(referenceOffer.summerRetainerPct ?? DEFAULT_SUMMER_RETAINER_PCT);
+    setSummerRetainerMonths(referenceOffer.summerRetainerMonths ?? DEFAULT_SUMMER_RETAINER_MONTHS);
+    setLeaveTermsNotes(referenceOffer.leaveTermsNotes ?? "");
+    if (termsAreCustom(referenceOffer)) setExpandTerms(true);
+    prefilledOfferIdRef.current = referenceOffer.id;
+  }, [offers, myUserId]);
 
   const acceptedOffer = offers.find(o => o.status === "accepted");
   const myPendingOffer = offers.find(o => o.status === "pending" && o.raisedByUserId === myUserId);
@@ -3700,7 +3759,16 @@ function CandidacyOfferSection({ matchId, candidateId, myUserId }: { matchId: nu
     setSubmitting(true);
     try {
       const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/offers`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amountInr: amount }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amountInr: amount,
+          absenceRetainerPct,
+          absenceFreeDaysPerMonth,
+          summerRetainerPct,
+          summerRetainerMonths,
+          leaveTermsNotes: leaveTermsNotes.trim() || null,
+        }),
       });
       if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Failed", variant: "destructive" }); return; }
       setOfferInput("");
@@ -3726,6 +3794,63 @@ function CandidacyOfferSection({ matchId, candidateId, myUserId }: { matchId: nu
     } finally { setSubmitting(false); }
   }
 
+  const termsForm = expandTerms ? (
+    <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-2.5 space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <label className="text-[10px] text-gray-600">
+          <RetainerFieldLabel label="Absence retainer (%)" tip="If the teacher is absent, this is the % of the daily rate still paid, up to the free-days limit below." />
+          <input type="number" min={0} max={100} value={absenceRetainerPct}
+            onChange={e => setAbsenceRetainerPct(Math.max(0, Math.min(100, parseInt(e.target.value || "0", 10))))}
+            className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5]"
+            data-testid="input-absence-retainer-pct" />
+        </label>
+        <label className="text-[10px] text-gray-600">
+          <RetainerFieldLabel label="Free absence days / mo" tip="Number of absent days per month covered by the retainer above before any different arrangement applies." />
+          <input type="number" min={0} max={30} value={absenceFreeDaysPerMonth}
+            onChange={e => setAbsenceFreeDaysPerMonth(Math.max(0, Math.min(30, parseInt(e.target.value || "0", 10))))}
+            className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5]"
+            data-testid="input-absence-free-days" />
+        </label>
+        <label className="text-[10px] text-gray-600">
+          <RetainerFieldLabel label="Summer retainer (%)" tip="% of the monthly fee paid during school breaks/summer to keep the teacher reserved, instead of paying the full rate." />
+          <input type="number" min={0} max={100} value={summerRetainerPct}
+            onChange={e => setSummerRetainerPct(Math.max(0, Math.min(100, parseInt(e.target.value || "0", 10))))}
+            className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5]"
+            data-testid="input-summer-retainer-pct" />
+        </label>
+        <label className="text-[10px] text-gray-600">
+          <RetainerFieldLabel label="Summer retainer for (months)" tip="How many months of the year the summer retainer rate (above) applies." />
+          <input type="number" min={0} max={12} value={summerRetainerMonths}
+            onChange={e => setSummerRetainerMonths(Math.max(0, Math.min(12, parseInt(e.target.value || "0", 10))))}
+            className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5]"
+            data-testid="input-summer-retainer-months" />
+        </label>
+      </div>
+      <label className="text-[10px] text-gray-600 block">
+        <RetainerFieldLabel label="Additional leave / retainer terms (optional)" tip="Anything else you've agreed on leave, absences, or retainer pay that isn't captured by the fields above." />
+        <textarea rows={2} maxLength={1000} value={leaveTermsNotes}
+          onChange={e => setLeaveTermsNotes(e.target.value)}
+          placeholder="e.g. 2 additional paid leaves during Diwali week"
+          className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5] resize-none"
+          data-testid="input-leave-terms-notes" />
+      </label>
+      <p className="text-[10px] text-gray-400 leading-snug">
+        💡 Recorded for reference. Includly doesn&apos;t automate loss-of-pay or retainer payouts yet — this captures what you both agreed.
+      </p>
+    </div>
+  ) : null;
+
+  const toggleTermsButton = !acceptedOffer && !myPendingOffer ? (
+    <button
+      type="button"
+      onClick={() => setExpandTerms(v => !v)}
+      className="text-[10px] text-gray-500 hover:text-[#2EC4A5] underline underline-offset-2 self-start"
+      data-testid="toggle-terms"
+    >
+      {expandTerms ? "▾ Hide leave & retainer terms" : "▸ Adjust leave & retainer terms"}
+    </button>
+  ) : null;
+
   return (
     <div className="mt-2 space-y-2">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Price Negotiation</p>
@@ -3738,8 +3863,17 @@ function CandidacyOfferSection({ matchId, candidateId, myUserId }: { matchId: nu
         </div>
       ))}
       {acceptedOffer ? (
-        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+        <div className="flex flex-col gap-1 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
           <span className="text-xs font-bold text-green-800">🔒 Agreed: ₹{acceptedOffer.amountInr.toLocaleString("en-IN")}/mo</span>
+          <p className="text-[10px] text-green-700">
+            Absence retainer {acceptedOffer.absenceRetainerPct}% beyond {acceptedOffer.absenceFreeDaysPerMonth} free days/mo
+            {(acceptedOffer.summerRetainerPct > 0 || acceptedOffer.summerRetainerMonths > 0)
+              ? ` · Summer retainer ${acceptedOffer.summerRetainerPct}% × ${acceptedOffer.summerRetainerMonths}mo`
+              : ""}
+          </p>
+          {acceptedOffer.leaveTermsNotes && acceptedOffer.leaveTermsNotes.trim() && (
+            <p className="text-[10px] text-green-700 italic">Notes: {acceptedOffer.leaveTermsNotes}</p>
+          )}
         </div>
       ) : myPendingOffer ? (
         <div className="flex items-center justify-between gap-2">
@@ -3750,6 +3884,15 @@ function CandidacyOfferSection({ matchId, candidateId, myUserId }: { matchId: nu
       ) : theirPendingOffer ? (
         <div className="space-y-1.5">
           <p className="text-xs font-medium text-gray-700">Parent offered ₹{theirPendingOffer.amountInr.toLocaleString("en-IN")}/mo</p>
+          <p className="text-[10px] text-gray-500">
+            Absence retainer {theirPendingOffer.absenceRetainerPct}% beyond {theirPendingOffer.absenceFreeDaysPerMonth} free days/mo
+            {(theirPendingOffer.summerRetainerPct > 0 || theirPendingOffer.summerRetainerMonths > 0)
+              ? ` · Summer retainer ${theirPendingOffer.summerRetainerPct}% × ${theirPendingOffer.summerRetainerMonths}mo`
+              : ""}
+          </p>
+          {theirPendingOffer.leaveTermsNotes && theirPendingOffer.leaveTermsNotes.trim() && (
+            <p className="text-[10px] text-gray-500 italic">Notes: {theirPendingOffer.leaveTermsNotes}</p>
+          )}
           <div className="flex gap-2">
             <button onClick={() => void acceptOffer(theirPendingOffer.id)} disabled={submitting}
               className="flex-1 text-xs bg-green-600 text-white rounded-lg py-1.5 font-semibold hover:bg-green-700 disabled:opacity-50">Accept</button>
@@ -3760,15 +3903,21 @@ function CandidacyOfferSection({ matchId, candidateId, myUserId }: { matchId: nu
                 className="text-xs bg-[#1A2340] text-white rounded-lg px-2 font-semibold disabled:opacity-50">Send</button>
             </div>
           </div>
+          {toggleTermsButton}
+          {termsForm}
         </div>
       ) : (
-        <div className="flex gap-2">
-          <input type="number" min="1" placeholder="Propose a fee ₹/mo" value={offerInput} onChange={e => setOfferInput(e.target.value)}
-            className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-[#2EC4A5] min-w-0" />
-          <button onClick={() => void submitOffer()} disabled={submitting || !offerInput}
-            className="text-xs bg-[#2EC4A5] text-white rounded-lg px-3 py-1.5 font-semibold hover:bg-[#26a88d] disabled:opacity-50">
-            {submitting ? "…" : "Propose"}
-          </button>
+        <div className="space-y-1.5">
+          <div className="flex gap-2">
+            <input type="number" min="1" placeholder="Propose a fee ₹/mo" value={offerInput} onChange={e => setOfferInput(e.target.value)}
+              className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-[#2EC4A5] min-w-0" />
+            <button onClick={() => void submitOffer()} disabled={submitting || !offerInput}
+              className="text-xs bg-[#2EC4A5] text-white rounded-lg px-3 py-1.5 font-semibold hover:bg-[#26a88d] disabled:opacity-50">
+              {submitting ? "…" : "Propose"}
+            </button>
+          </div>
+          {toggleTermsButton}
+          {termsForm}
         </div>
       )}
     </div>

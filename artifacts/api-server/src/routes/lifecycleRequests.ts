@@ -684,6 +684,14 @@ router.patch("/engagements/:id/teacher-acceptance", requireAuth, async (req, res
 
   if (action === "accept") {
     const settings = await getSettings();
+    // Snapshotted onto the engagement below (activationFeeInr), same
+    // discipline as placement fee / matching fee / trial credit — the value
+    // in effect at accept-time is permanent for this engagement. A later
+    // admin_settings change intentionally does NOT retroactively affect
+    // engagements already accepted; it only takes effect for engagements
+    // accepted after the change. Confirmed working-as-designed 2026-07-17
+    // (tested: existing engagement kept its ₹999 snapshot after the admin
+    // setting was changed to ₹50 — not a bug).
     const globalActivationFeeInr = ((settings as Record<string, unknown>)["activationFeeInr"] as number) ?? 999;
 
     // Task 2e — per-match override. Admin can toggle activation_fee_enabled=false
