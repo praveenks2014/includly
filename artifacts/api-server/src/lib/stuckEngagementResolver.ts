@@ -36,6 +36,7 @@ async function getSettings() {
       activationFeeTimeoutDays: 7,
       otpStartTimeoutDays: 7,
       otpEndTimeoutDays: 7,
+      shadowTeacherEngagementChoiceTimeoutDays: 7,
     }
   );
 }
@@ -224,6 +225,37 @@ async function resolvePlacementOnlyTimeout(eng: typeof shadowTeacherEngagementsT
   );
 }
 
+/**
+ * #14/#15 reorder — pending_parent_payment timeout. The parent never
+ * confirmed/paid after the teacher accepted. Nothing has been collected at
+ * this point in the reordered flow, so there's no refund — just end the
+ * engagement and release the candidate, same as an active decline but
+ * tagged with a distinct endedReason so a timeout is never confused with
+ * someone actively declining in the record.
+ */
+async function resolvePendingParentPaymentTimeout(eng: typeof shadowTeacherEngagementsTable.$inferSelect): Promise<void> {
+  const reason = "parent_payment_timeout";
+
+  await db
+    .update(shadowTeacherEngagementsTable)
+    .set({ status: "ended", endedReason: reason, updatedAt: new Date() })
+    .where(eq(shadowTeacherEngagementsTable.id, eng.id));
+  try { await onProfessionalBecameEligible(eng.professionalId); } catch { /* non-blocking */ }
+
+  if (eng.matchRequestId) {
+    await releaseCandidateAndResetMatch(eng.matchRequestId, eng.professionalId);
+  }
+
+  await notifyBothParties(
+    eng.parentId,
+    eng.professionalId,
+    "This engagement was auto-cancelled because you didn't confirm and pay in time. You can return to your enquiry to choose another teacher.",
+    "This engagement was auto-cancelled because the parent didn't confirm and pay in time.",
+    "engagement_auto_cancelled",
+    eng.id,
+  );
+}
+
 /** State 3 — pending_start OTP timeout. Refund BOTH sides: no way to attribute fault for a stalled OTP exchange. */
 async function resolvePendingStartTimeout(eng: typeof shadowTeacherEngagementsTable.$inferSelect): Promise<void> {
   const reason = "otp_start_timeout";
@@ -283,6 +315,13 @@ async function resolveEngagementTimeout(eng: typeof shadowTeacherEngagementsTabl
     return;
   }
 
+  if (eng.status === "pending_parent_payment" && eng.pendingParentPaymentSince) {
+    if (eng.pendingParentPaymentSince < daysAgo(settings.shadowTeacherEngagementChoiceTimeoutDays)) {
+      await resolvePendingParentPaymentTimeout(eng);
+    }
+    return;
+  }
+
   if (eng.status === "pending_activation_fee" && eng.pendingActivationFeeSince) {
     if (eng.pendingActivationFeeSince < daysAgo(settings.activationFeeTimeoutDays)) {
       await resolvePlacementOnlyTimeout(eng, "activation_fee_timeout");
@@ -328,7 +367,10 @@ async function resolveTrialPendingTimeout(match: typeof shadowTeacherMatchesTabl
 async function resolveTrialStartedTimeout(match: typeof shadowTeacherMatchesTable.$inferSelect): Promise<void> {
   await db
     .update(shadowTeacherMatchesTable)
-    .set({ status: "trial_done", updatedAt: new Date() })
+    // trialDoneSince stamped here too (not just mark-trial-done) — otherwise
+    // a trial that auto-completes via this timeout path would never start
+    // the clock for State 6's "teacher never chose engagement" timeout below.
+    .set({ status: "trial_done", trialDoneSince: new Date(), updatedAt: new Date() })
     .where(eq(shadowTeacherMatchesTable.id, match.id));
 
   try {
@@ -343,9 +385,58 @@ async function resolveTrialStartedTimeout(match: typeof shadowTeacherMatchesTabl
 }
 
 /**
+ * #14/#15 reorder — State 6: trial_done timeout. The teacher never clicked
+ * Choose Engagement. Treated as an auto-decline — no reason given, since
+ * nobody actively declined — distinct from an active teacher decline via
+ * removedReason ("timed_out_teacher_response" vs "teacher_declined").
+ */
+async function resolveTrialDoneChoiceTimeout(match: typeof shadowTeacherMatchesTable.$inferSelect): Promise<void> {
+  if (!match.selectedProfessionalId) return;
+
+  const [candidate] = await db
+    .select({ id: shadowMatchCandidatesTable.id })
+    .from(shadowMatchCandidatesTable)
+    .where(and(
+      eq(shadowMatchCandidatesTable.matchId, match.id),
+      eq(shadowMatchCandidatesTable.professionalId, match.selectedProfessionalId),
+      isNull(shadowMatchCandidatesTable.removedAt),
+    ))
+    .limit(1);
+
+  if (candidate) {
+    await db
+      .update(shadowMatchCandidatesTable)
+      .set({ removedAt: new Date(), removedReason: "timed_out_teacher_response" })
+      .where(eq(shadowMatchCandidatesTable.id, candidate.id));
+  }
+
+  await db
+    .update(shadowTeacherMatchesTable)
+    .set({
+      status: "shortlisted",
+      selectedProfessionalId: null,
+      matchedAt: null,
+      matchedProfessionalId: null,
+      trialDoneSince: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(shadowTeacherMatchesTable.id, match.id));
+
+  try {
+    await createInAppNotification(match.parentId, {
+      type: "candidate_declined_engagement",
+      title: "Teacher didn't respond in time",
+      body: "Your shadow teacher didn't respond in time after the trial, so they've been removed from this match. You can choose another candidate from your shortlist.",
+      relatedType: "match",
+      relatedId: match.id,
+    });
+  } catch { /* non-blocking */ }
+}
+
+/**
  * Entry point — call this at the top of any read path for a shadow-teacher
  * match (GET my-request, my-candidacies, admin list views). Resolves any of
- * the 5 stuck states if their configured timeout has passed; a no-op
+ * the 7 stuck states if their configured timeout has passed; a no-op
  * otherwise. Safe to call on every read — idempotent, cheap (a handful of
  * timestamp comparisons plus conditional writes).
  */
@@ -365,6 +456,13 @@ export async function resolveStuckShadowTeacherMatch(matchId: number): Promise<v
   if (match.status === "trial_started" && match.trialStartedSince) {
     if (match.trialStartedSince < daysAgo(settings.otpEndTimeoutDays)) {
       await resolveTrialStartedTimeout(match);
+    }
+    return;
+  }
+
+  if (match.status === "trial_done" && match.trialDoneSince) {
+    if (match.trialDoneSince < daysAgo(settings.shadowTeacherEngagementChoiceTimeoutDays)) {
+      await resolveTrialDoneChoiceTimeout(match);
     }
     return;
   }

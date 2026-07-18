@@ -846,6 +846,105 @@ router.patch("/engagements/:id/teacher-acceptance", requireAuth, async (req, res
   res.json({ status: "ended", endedReason: "teacher_declined", refundedInr: refundedInr ?? undefined });
 });
 
+// ── POST /engagements/:id/decline-before-payment — PARENT declines after teacher
+// accepted but before paying (#14/#15 reorder). No refund needed — nothing has
+// been collected at this point in the reordered flow. Mirrors the
+// candidate-release/match-reset behavior of the teacher-decline path above.
+const PARENT_DECLINE_REASONS = [
+  "chose_different_teacher",
+  "changed_mind_timing",
+  "salary_concerns",
+  "no_longer_need",
+  "other",
+] as const;
+
+const PARENT_DECLINE_REASON_LABELS: Record<string, string> = {
+  chose_different_teacher: "Chose a different teacher",
+  changed_mind_timing: "Changed their mind about timing/schedule",
+  salary_concerns: "Salary/rate concerns",
+  no_longer_need: "No longer need a shadow teacher right now",
+  other: "Other",
+};
+
+const DeclineBeforePaymentBody = z.object({
+  declineReason: z.enum(PARENT_DECLINE_REASONS),
+  declineReasonNote: z.string().max(300).optional(),
+});
+
+router.post("/engagements/:id/decline-before-payment", requireAuth, requireRole("parent"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const parsed = DeclineBeforePaymentBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { declineReason, declineReasonNote } = parsed.data;
+
+  const { eng, role } = await getEngagementWithAccess(id, req.userId!, req.userRole!);
+  if (!eng || !role) { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
+  if (role !== "parent") { res.status(403).json({ error: "Only the parent can decline at this stage" }); return; }
+  if (eng.status !== "pending_parent_payment") {
+    res.status(409).json({ error: "This engagement is not awaiting your payment" }); return;
+  }
+
+  await db
+    .update(shadowTeacherEngagementsTable)
+    .set({
+      status: "ended",
+      endedReason: "parent_declined_pre_payment",
+      declineReasonDetail: declineReason,
+      declineReasonNote: declineReason === "other" ? (declineReasonNote ?? null) : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(shadowTeacherEngagementsTable.id, id));
+
+  try { await onProfessionalBecameEligible(eng.professionalId); } catch { /* non-blocking */ }
+
+  if (eng.matchRequestId) {
+    const [candidate] = await db
+      .select({ id: shadowMatchCandidatesTable.id })
+      .from(shadowMatchCandidatesTable)
+      .where(and(
+        eq(shadowMatchCandidatesTable.matchId, eng.matchRequestId),
+        eq(shadowMatchCandidatesTable.professionalId, eng.professionalId),
+        isNull(shadowMatchCandidatesTable.removedAt),
+      ))
+      .limit(1);
+    if (candidate) {
+      await db
+        .update(shadowMatchCandidatesTable)
+        .set({ removedAt: new Date(), removedByUserId: req.userId! })
+        .where(eq(shadowMatchCandidatesTable.id, candidate.id));
+    }
+    await db
+      .update(shadowTeacherMatchesTable)
+      .set({
+        status: "shortlisted",
+        selectedProfessionalId: null,
+        matchedAt: null,
+        matchedProfessionalId: null,
+        trialDoneSince: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(shadowTeacherMatchesTable.id, eng.matchRequestId));
+  }
+
+  try {
+    const reasonLabel = PARENT_DECLINE_REASON_LABELS[declineReason] ?? declineReason;
+    const [pro] = await db.select({ userId: professionalProfilesTable.userId })
+      .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, eng.professionalId)).limit(1);
+    if (pro) {
+      await createInAppNotification(pro.userId, {
+        type: "parent_declined_pre_payment",
+        title: "Parent decided not to proceed",
+        body: `The parent decided not to proceed with this engagement. Reason: ${reasonLabel}${declineReasonNote ? ` — "${declineReasonNote}"` : ""}.`,
+        relatedType: "engagement", relatedId: id,
+      });
+    }
+  } catch { /* non-blocking */ }
+
+  res.json({ status: "ended", endedReason: "parent_declined_pre_payment" });
+});
+
 // ── POST /engagements/:id/activation-fee/order + /verify — teacher pays the one-time activation fee ──
 const ActivationVerifyBody = z.object({
   razorpayOrderId: z.string(),

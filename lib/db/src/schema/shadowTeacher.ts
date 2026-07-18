@@ -68,6 +68,11 @@ export const shadowTeacherMatchesTable = pgTable("shadow_teacher_matches", {
   // business-logic change to those endpoints. See stuckEngagementResolver.ts.
   trialPendingSince: timestamp("trial_pending_since", { withTimezone: true }),
   trialStartedSince: timestamp("trial_started_since", { withTimezone: true }),
+  // Teacher-accepts-before-parent-pays reorder (#14/#15) — "since" mark for
+  // trial_done, needed because the "teacher never clicked Choose Engagement"
+  // timeout has no engagement row to hang a timestamp off yet. Same
+  // lazy-timeout convention as the two above. See stuckEngagementResolver.ts.
+  trialDoneSince: timestamp("trial_done_since", { withTimezone: true }),
   // Monetization restructure — trial direct-pay flag, snapshotted from
   // admin_settings.trialDirectPayEnabled at trial-request time. Null if no trial was requested.
   trialDirectPay: boolean("trial_direct_pay"),

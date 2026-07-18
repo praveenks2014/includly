@@ -108,6 +108,16 @@ interface MatchWithCandidates {
   trialEndOtp: string | null;
   trialLocation: string | null;
   candidates: Candidate[];
+  // #14/#15 reorder — non-null only once the teacher has accepted
+  // (choose-engagement) and the parent hasn't confirmed/paid yet.
+  pendingEngagement: {
+    id: number;
+    recurringSchedule: { dayOfWeek: number; startTime: string; endTime: string }[] | null;
+    monthlyFeeInr: number;
+    activationFeeInr: number | null;
+    teacherTermsAcknowledgedAt: string | null;
+    startDate: string;
+  } | null;
 }
 
 function useMyMatch(childId: number | null) {
@@ -183,6 +193,33 @@ interface NegotiationOffer {
   status: string;
   createdAt: string;
 }
+
+// #14/#15 reorder — read-only schedule display for the parent's Confirm
+// Engagement step (the teacher already set this at choose-engagement time;
+// the parent isn't editing it, just reviewing it). Local to this file rather
+// than shared with professional-dashboard.tsx's own formatScheduleSummary,
+// matching this codebase's established per-file duplication convention.
+const CONFIRM_DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function formatRecurringScheduleSummary(slots: { dayOfWeek: number; startTime: string; endTime: string }[] | null): string | null {
+  if (!slots || slots.length === 0) return null;
+  function fmtTime(t: string) {
+    const [h, m] = t.split(":");
+    const hr = Number(h);
+    return `${hr % 12 || 12}:${m} ${hr < 12 ? "AM" : "PM"}`;
+  }
+  return [...slots]
+    .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime))
+    .map((s) => `${CONFIRM_DAYS_SHORT[s.dayOfWeek]} ${fmtTime(s.startTime)}–${fmtTime(s.endTime)}`)
+    .join(", ");
+}
+
+const PARENT_DECLINE_REASONS: { value: string; label: string }[] = [
+  { value: "chose_different_teacher", label: "Chose a different teacher" },
+  { value: "changed_mind_timing", label: "Changed my mind about timing/schedule" },
+  { value: "salary_concerns", label: "Salary/rate concerns" },
+  { value: "no_longer_need", label: "No longer need a shadow teacher right now" },
+  { value: "other", label: "Other" },
+];
 
 // Shadow-teacher's own request-time budget presets — monthly-salary scale,
 // distinct from the generic per-child "Budget per session" field
@@ -1033,6 +1070,14 @@ export function ShadowTeacherRequestWidget() {
   const [markingTrialDone, setMarkingTrialDone] = useState(false);
   const [noCommitting, setNoCommitting] = useState(false);
 
+  // #14/#15 reorder — parent's Confirm Engagement step (teacher already accepted).
+  const [confirmingEngagement, setConfirmingEngagement] = useState(false);
+  const [confirmTermsChecked, setConfirmTermsChecked] = useState(false);
+  const [showConfirmDeclineForm, setShowConfirmDeclineForm] = useState(false);
+  const [confirmDeclineReason, setConfirmDeclineReason] = useState("");
+  const [confirmDeclineNote, setConfirmDeclineNote] = useState("");
+  const [decliningBeforePayment, setDecliningBeforePayment] = useState(false);
+
   // Commit date-picker dialog state
   const [commitDialogOpen, setCommitDialogOpen] = useState(false);
   const [commitProfId, setCommitProfId] = useState<number | null>(null);
@@ -1245,6 +1290,110 @@ export function ShadowTeacherRequestWidget() {
     } finally {
       setChoosingId(null);
     }
+  }
+
+  // ── handleConfirmEngagement — #14/#15: parent's own terms-ack + placement-fee
+  // payment on an EXISTING engagement the teacher already accepted. Mirrors
+  // handleChoose's Razorpay wiring exactly, against confirm-engagement/order+verify. ──
+  async function handleConfirmEngagement() {
+    if (!match) return;
+    setConfirmingEngagement(true);
+    try {
+      const orderRes = await fetchWithAuth(`/api/shadow-teacher/${match.id}/confirm-engagement/order`, { method: "POST" });
+      const orderData = await orderRes.json() as {
+        error?: string; message?: string; engagementId?: number;
+        waived?: boolean; status?: string; orderId?: string; amount?: number; keyId?: string;
+      };
+      if (!orderRes.ok) {
+        toast({ title: orderData.message ?? orderData.error ?? "Could not confirm engagement", variant: "destructive" });
+        return;
+      }
+
+      if (orderData.waived) {
+        toast({ title: "Engagement confirmed!", description: "Your start code is now visible in the Engagement tab." });
+        queryClient.invalidateQueries({ queryKey: ["parent-engagements"] });
+        queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+        await refetch();
+        return;
+      }
+
+      if (!orderData.orderId || !orderData.amount || !orderData.keyId) {
+        toast({ title: "Invalid payment response", variant: "destructive" });
+        return;
+      }
+
+      const loaded = await loadRazorpayScript();
+      if (!loaded) { toast({ title: "Payment gateway unavailable", variant: "destructive" }); return; }
+
+      await new Promise<void>((resolve, reject) => {
+        const rzp = new window.Razorpay({
+          key: orderData.keyId!,
+          amount: orderData.amount!,
+          currency: "INR",
+          order_id: orderData.orderId!,
+          name: "Includly",
+          description: "Shadow teacher placement fee",
+          handler: async (response: RazorpayPaymentResponse) => {
+            try {
+              const vRes = await fetchWithAuth(`/api/shadow-teacher/${match.id}/confirm-engagement/verify`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  razorpayOrderId: response.razorpay_order_id,
+                  razorpayPaymentId: response.razorpay_payment_id,
+                  razorpaySignature: response.razorpay_signature,
+                  termsAcknowledged: confirmTermsChecked,
+                }),
+              });
+              const vd = await vRes.json() as { error?: string; message?: string };
+              if (!vRes.ok) {
+                toast({ title: vd.message ?? vd.error ?? "Payment verification failed", variant: "destructive" });
+                reject(new Error("verify"));
+                return;
+              }
+              toast({ title: "Engagement confirmed!", description: "Your start code is now visible in the Engagement tab." });
+              queryClient.invalidateQueries({ queryKey: ["parent-engagements"] });
+              queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+              await refetch();
+              resolve();
+            } catch { reject(new Error("verify")); }
+          },
+          modal: { ondismiss: () => reject(new Error("dismissed")) },
+        });
+        rzp.open();
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg !== "dismissed") toast({ title: "Could not confirm engagement", description: msg, variant: "destructive" });
+      await refetch();
+    } finally {
+      setConfirmingEngagement(false);
+    }
+  }
+
+  // ── handleDeclineBeforePayment — #14/#15: parent declines after the teacher
+  // accepted but before paying. No refund — nothing collected in this flow yet. ──
+  async function handleDeclineBeforePayment(engagementId: number) {
+    if (!confirmDeclineReason) { toast({ title: "Please select a reason", variant: "destructive" }); return; }
+    setDecliningBeforePayment(true);
+    try {
+      const res = await fetchWithAuth(`/api/engagements/${engagementId}/decline-before-payment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          declineReason: confirmDeclineReason,
+          declineReasonNote: confirmDeclineReason === "other" ? (confirmDeclineNote.trim() || undefined) : undefined,
+        }),
+      });
+      if (!res.ok) {
+        const e = await res.json() as { error?: string };
+        toast({ title: e.error ?? "Could not decline", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Declined — you can choose another candidate" });
+      queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+      await refetch();
+    } finally { setDecliningBeforePayment(false); }
   }
 
   // ── handleNotInterested — soft-remove candidate, triggers server-side auto-refill ──
@@ -1804,33 +1953,19 @@ export function ShadowTeacherRequestWidget() {
       ? (trialCandidate.profile.firstName ?? `Teacher #${trialCandidate.rank}`)
       : "this teacher";
     return (
-      <>{CommitDialog}<div className="space-y-4">
+      <div className="space-y-4">
         <div className="bg-teal-50 border border-teal-200 rounded-2xl p-5 space-y-3">
           <div className="flex items-center gap-2">
-            <CheckCircle2 size={18} className="text-teal-600" />
-            <p className="font-semibold text-teal-800">Trial day complete — what would you like to do?</p>
+            <Clock size={18} className="text-teal-600" />
+            <p className="font-semibold text-teal-800">Trial day complete — waiting for {trialName} to respond</p>
           </div>
           <p className="text-sm text-teal-700">
-            If you commit to {trialName}, your trial fee of ₹{trialFee.toLocaleString("en-IN")} will be credited against the first month&apos;s salary.
-            Walking away closes this request — no refund on the trial fee.
+            {/* #14/#15 reorder — the teacher now decides whether to accept
+                (with schedule + terms) BEFORE any placement-fee payment.
+                You'll see a Confirm & Pay step here once they accept. */}
+            Your teacher needs to accept this engagement before you're asked to pay. You'll be notified as soon as they respond.
           </p>
-          <div className="border-l-4 border-teal-400 bg-white/70 rounded-r-lg px-3 py-2.5 text-xs text-teal-800">
-            <span className="font-semibold">💚 When you commit, stay on Includly.</span> You get attendance tracking, leave management, teacher-exclusivity, and dispute support — protections that only apply while the engagement runs on-platform.
-          </div>
           <div className="flex gap-3">
-            <Button
-              className="flex-1 gap-2 bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl"
-              onClick={() => {
-                if (!match.selectedProfessionalId) return;
-                setCommitProfId(match.selectedProfessionalId);
-                setCommitStartDate(new Date().toISOString().slice(0, 10));
-                setCommitDialogOpen(true);
-              }}
-              disabled={choosingId !== null}
-            >
-              {choosingId ? <Loader2 size={14} className="animate-spin" /> : <ChevronRight size={14} />}
-              Commit to {trialName}
-            </Button>
             <Button
               variant="outline"
               className="flex-1 gap-2 border-red-300 text-red-600 hover:bg-red-50 rounded-xl"
@@ -1854,7 +1989,7 @@ export function ShadowTeacherRequestWidget() {
             trialMode
           />
         )}
-      </div></>
+      </div>
     );
   }
 
@@ -2020,6 +2155,89 @@ export function ShadowTeacherRequestWidget() {
         )}
       </div>
     </>);
+  }
+
+  // ── Committed + awaiting parent payment (#14/#15 reorder) — the teacher has
+  // already accepted (choose-engagement); this is the parent's own terms-ack
+  // + placement-fee payment, reusing the same TermsAcknowledgment mechanism. ──
+  if (status === "committed" && match?.pendingEngagement) {
+    const pe = match.pendingEngagement;
+    const scheduleSummary = formatRecurringScheduleSummary(pe.recurringSchedule);
+    return (
+      <div className="bg-white border-2 border-[#2EC4A5] rounded-2xl p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 size={18} className="text-[#2EC4A5]" />
+          <p className="font-semibold text-[#1A2340]">Your teacher accepted — confirm to proceed</p>
+        </div>
+        {!showConfirmDeclineForm ? (
+          <>
+            <TermsAcknowledgment
+              scheduleSummary={scheduleSummary}
+              monthlyFeeLabel={`₹${pe.monthlyFeeInr.toLocaleString("en-IN")}`}
+              startDate={pe.startDate}
+              checked={confirmTermsChecked}
+              onCheckedChange={setConfirmTermsChecked}
+            />
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 border-red-300 text-red-600 hover:bg-red-50 rounded-xl"
+                onClick={() => setShowConfirmDeclineForm(true)}
+                disabled={confirmingEngagement}
+              >
+                Decline
+              </Button>
+              <Button
+                className="flex-1 gap-2 bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl"
+                onClick={() => void handleConfirmEngagement()}
+                disabled={confirmingEngagement || !confirmTermsChecked}
+              >
+                {confirmingEngagement ? <Loader2 size={14} className="animate-spin" /> : <ChevronRight size={14} />}
+                Confirm &amp; Pay
+              </Button>
+            </div>
+          </>
+        ) : (
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-gray-600">Why are you declining?</Label>
+            <select
+              value={confirmDeclineReason}
+              onChange={(e) => setConfirmDeclineReason(e.target.value)}
+              className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-300 bg-white"
+            >
+              <option value="">Select a reason…</option>
+              {PARENT_DECLINE_REASONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+            {confirmDeclineReason === "other" && (
+              <Textarea
+                value={confirmDeclineNote}
+                onChange={(e) => setConfirmDeclineNote(e.target.value)}
+                placeholder="Optional — tell us more"
+                maxLength={300}
+                rows={2}
+                className="text-sm rounded-xl resize-none"
+              />
+            )}
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setShowConfirmDeclineForm(false)} disabled={decliningBeforePayment} className="flex-1 text-xs">
+                Back
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => void handleDeclineBeforePayment(pe.id)}
+                disabled={decliningBeforePayment || !confirmDeclineReason}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold disabled:opacity-60"
+              >
+                {decliningBeforePayment && <Loader2 size={12} className="animate-spin mr-1" />}
+                Confirm Decline
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   }
 
   // ── Committed (brief state before engagement loads) ──────────────────────

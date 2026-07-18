@@ -22,6 +22,16 @@ export const shadowMatchCandidatesTable = pgTable(
     removedByUserId: integer("removed_by_user_id").references(() => usersTable.id, {
       onDelete: "set null",
     }),
+    // Teacher-accepts-before-parent-pays reorder (#14/#15) — category tag for
+    // WHY this candidate was removed, distinct from the normal "parent picked
+    // someone else" case (removedReason stays null there, same as today).
+    // "teacher_declined" = active decline at choose-engagement, with the
+    // dropdown reason in declineReasonDetail (and free-text in
+    // declineReasonNote when declineReasonDetail = "other").
+    // "timed_out_teacher_response" = auto-timeout, no reason chosen by anyone.
+    removedReason: text("removed_reason"),
+    declineReasonDetail: text("decline_reason_detail"),
+    declineReasonNote: text("decline_reason_note"),
     // Redesigned parent↔teacher journey (Task 1 schema-only — request → interview → trial).
     // Data-capture only for now; no API/frontend built yet, no automation reads these.
     // requestStatus values: not_sent | sent | accepted | rejected (stored as text, not

@@ -6,7 +6,7 @@ import { professionalProfilesTable } from "./professionals";
 import { shadowTeacherMatchesTable } from "./shadowTeacher";
 import { childrenTable } from "./children";
 
-export const engagementStatusEnum = pgEnum("engagement_status", ["pending_start", "active", "paused", "notice_period", "ended", "pending_teacher_acceptance", "pending_activation_fee"]);
+export const engagementStatusEnum = pgEnum("engagement_status", ["pending_start", "active", "paused", "notice_period", "ended", "pending_teacher_acceptance", "pending_activation_fee", "pending_parent_payment"]);
 
 export const shadowTeacherEngagementsTable = pgTable("shadow_teacher_engagements", {
   id: serial("id").primaryKey(),
@@ -56,6 +56,19 @@ export const shadowTeacherEngagementsTable = pgTable("shadow_teacher_engagements
   // stuckEngagementResolver.ts for how these are read.
   pendingActivationFeeSince: timestamp("pending_activation_fee_since", { withTimezone: true }),
   pendingStartSince: timestamp("pending_start_since", { withTimezone: true }),
+  // Teacher-accepts-before-parent-pays reorder (#14/#15) — "since" mark for
+  // pending_parent_payment, same lazy-timeout convention as the two above.
+  // Stamped at the exact moment of transition in choose-engagement (accept
+  // branch). See stuckEngagementResolver.ts.
+  pendingParentPaymentSince: timestamp("pending_parent_payment_since", { withTimezone: true }),
+  // Parent's pre-payment decline (#14/#15) — only ever set when a PARENT
+  // declines after the teacher has already accepted but before payment.
+  // Paired with endedReason ("parent_declined_pre_payment" vs
+  // "parent_payment_timeout") to keep an active decline distinct from an
+  // auto-timeout in the record. declineReasonNote is the optional free-text
+  // detail captured only when declineReasonDetail = "other".
+  declineReasonDetail: text("decline_reason_detail"),
+  declineReasonNote: text("decline_reason_note"),
   // Snapshotted from the accepted negotiation offer at commit time. Nullable so
   // pre-feature engagements don't falsely appear to have agreed to specific
   // terms. Data-capture only: no downstream automation reads these yet

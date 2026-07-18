@@ -3649,6 +3649,8 @@ interface Candidacy {
   messageCount:        number;
   lastMessageAt:       string | null;
   createdAt:           string;
+  // #14/#15 reorder — shown alongside "Choose Engagement" (trial_done + isSelected).
+  onPlatformIncentiveInr: number | null;
 }
 
 interface CandidacyInterviewSlot {
@@ -4146,6 +4148,137 @@ function TeacherTrialAcceptSection({ candidacy: c, onUpdated }: { candidacy: Can
   );
 }
 
+// #14/#15 reorder — teacher accepts (with schedule + terms) BEFORE any parent
+// payment. Shown only when matchStatus === "trial_done" && isSelected. Reuses
+// the exact same TeacherScheduleEditor + TermsAcknowledgment mechanism as the
+// old post-payment teacher-acceptance flow (EngagementTab) — not a second,
+// separate terms screen.
+const TEACHER_DECLINE_REASONS: { value: string; label: string }[] = [
+  { value: "schedule_mismatch", label: "Schedule doesn't work for me" },
+  { value: "salary_mismatch", label: "Salary/rate doesn't match my expectations" },
+  { value: "found_other_engagement", label: "Found another engagement" },
+  { value: "location_infeasible", label: "Location/commute isn't feasible" },
+  { value: "unavailable_start_date", label: "No longer available to start on the proposed date" },
+  { value: "other", label: "Other" },
+];
+
+function ChooseEngagementSection({ candidacy: c, onUpdated }: { candidacy: Candidacy; onUpdated: () => void }) {
+  const { toast } = useToast();
+  const [schedule, setSchedule] = useState<RecurringScheduleSlot[]>([]);
+  const [termsChecked, setTermsChecked] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [showDeclineForm, setShowDeclineForm] = useState(false);
+  const [declineReason, setDeclineReason] = useState("");
+  const [declineNote, setDeclineNote] = useState("");
+
+  async function submit(action: "accept" | "decline") {
+    if (action === "decline" && !declineReason) {
+      toast({ title: "Please select a reason", variant: "destructive" }); return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/choose-engagement`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          action === "accept"
+            ? { action, recurringSchedule: schedule, termsAcknowledged: termsChecked }
+            : { action, declineReason, declineReasonNote: declineReason === "other" ? (declineNote.trim() || undefined) : undefined },
+        ),
+      });
+      if (!res.ok) {
+        const e = await res.json() as { error?: string; message?: string };
+        toast({ title: e.message ?? e.error ?? "Something went wrong", variant: "destructive" });
+        return;
+      }
+      toast({ title: action === "accept" ? "Engagement accepted ✓" : "Declined" });
+      onUpdated();
+    } finally { setSubmitting(false); }
+  }
+
+  return (
+    <div className="mb-3 p-4 bg-white border-2 border-[#2EC4A5] rounded-2xl space-y-3">
+      <p className="text-sm font-bold text-[#1A2340]">Trial complete — Choose Engagement</p>
+      {c.onPlatformIncentiveInr != null && c.onPlatformIncentiveInr > 0 && (
+        <div className="p-2.5 bg-[#2EC4A5]/10 border border-[#2EC4A5]/20 rounded-xl">
+          <p className="text-xs text-[#1A2340]">
+            💰 You'll receive <strong>₹{c.onPlatformIncentiveInr.toLocaleString("en-IN")}</strong> once the parent completes payment through Includly.
+          </p>
+        </div>
+      )}
+      {!showDeclineForm ? (
+        <>
+          <TeacherScheduleEditor slots={schedule} onChange={setSchedule} />
+          <TermsAcknowledgment
+            scheduleSummary={formatScheduleSummary(schedule)}
+            monthlyFeeLabel="To be confirmed once you accept"
+            startDate={new Date().toISOString().slice(0, 10)}
+            checked={termsChecked}
+            onCheckedChange={setTermsChecked}
+          />
+          <div className="flex gap-2">
+            <Button
+              variant="outline" size="sm"
+              onClick={() => setShowDeclineForm(true)}
+              disabled={submitting}
+              className="flex-1 border-red-200 text-red-600 hover:bg-red-50 text-xs font-semibold"
+            >
+              Decline
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void submit("accept")}
+              disabled={submitting || schedule.length === 0 || !termsChecked}
+              className="flex-1 bg-[#2EC4A5] hover:bg-[#26a88d] text-white text-xs font-semibold disabled:opacity-60"
+            >
+              {submitting && <Loader2 size={12} className="animate-spin mr-1" />}
+              Choose Engagement
+            </Button>
+          </div>
+        </>
+      ) : (
+        <div className="space-y-2">
+          <Label className="text-xs font-medium text-gray-600">Why are you declining?</Label>
+          <select
+            value={declineReason}
+            onChange={(e) => setDeclineReason(e.target.value)}
+            className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-300 bg-white"
+          >
+            <option value="">Select a reason…</option>
+            {TEACHER_DECLINE_REASONS.map((r) => (
+              <option key={r.value} value={r.value}>{r.label}</option>
+            ))}
+          </select>
+          {declineReason === "other" && (
+            <Textarea
+              value={declineNote}
+              onChange={(e) => setDeclineNote(e.target.value)}
+              placeholder="Optional — tell us more"
+              maxLength={300}
+              rows={2}
+              className="text-sm rounded-xl resize-none"
+            />
+          )}
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowDeclineForm(false)} disabled={submitting} className="flex-1 text-xs">
+              Back
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => void submit("decline")}
+              disabled={submitting || !declineReason}
+              className="flex-1 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold disabled:opacity-60"
+            >
+              {submitting && <Loader2 size={12} className="animate-spin mr-1" />}
+              Confirm Decline
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CandidacyCard({ candidacy: c, onOpen, myUserId, onUpdated }: { candidacy: Candidacy; onOpen: () => void; myUserId: number; onUpdated: () => void }) {
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-[0_4px_24px_rgba(26,35,64,0.06)]">
@@ -4203,6 +4336,10 @@ function CandidacyCard({ candidacy: c, onOpen, myUserId, onUpdated }: { candidac
       )}
       {c.matchStatus === "trial_started" && c.isSelected && (
         <TrialOtpEntry matchId={c.matchId} type="end" />
+      )}
+
+      {c.matchStatus === "trial_done" && c.isSelected && (
+        <ChooseEngagementSection candidacy={c} onUpdated={onUpdated} />
       )}
 
       {/* Task 3B parity with 3c — negotiation only unlocks once the interview is

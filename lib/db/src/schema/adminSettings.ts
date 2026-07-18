@@ -104,6 +104,19 @@ export const adminSettingsTable = pgTable("admin_settings", {
   // platformSalaryEnabled toggle exists to isolate.
   tutorDirectPayEnabled: boolean("tutor_direct_pay_enabled").notNull().default(true),
   therapistDirectPayEnabled: boolean("therapist_direct_pay_enabled").notNull().default(true),
+  // Teacher-accepts-before-parent-pays reorder (#14/#15). The incentive
+  // amount is a legitimate tunable business number (unlike the ordering
+  // itself, which is hardcoded, not admin-configurable — see
+  // shadowTeacher.ts's choose-engagement endpoint). Payout itself is manual
+  // admin action, built later — this field only drives the messaging shown
+  // to the teacher at choose-engagement time.
+  shadowTeacherOnPlatformIncentiveInr: integer("shadow_teacher_on_platform_incentive_inr").notNull().default(0),
+  // Shared timeout for BOTH new waiting states this reorder introduces:
+  // trial_done (teacher hasn't clicked Choose Engagement) and
+  // pending_parent_payment (parent hasn't confirmed/paid). Deliberately named
+  // apart from the existing commitResponseTimeoutDays, which is a different
+  // timeout for the untouched no-trial/direct-commit path.
+  shadowTeacherEngagementChoiceTimeoutDays: integer("shadow_teacher_engagement_choice_timeout_days").notNull().default(7),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

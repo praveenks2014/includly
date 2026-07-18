@@ -673,7 +673,36 @@ router.get("/shadow-teacher/my-request", requireAuth, requireRole("parent"), asy
     };
   }).filter(Boolean);
 
-  res.json({ ...match, candidates });
+  // #14/#15 reorder — expose the pending engagement (if any) so the parent's
+  // UI can show "Confirm Engagement" with the teacher's already-accepted
+  // terms, without a follow-up fetch. Null unless the teacher has accepted
+  // and the parent hasn't confirmed/paid yet.
+  let pendingEngagement: {
+    id: number; recurringSchedule: unknown; monthlyFeeInr: number;
+    activationFeeInr: number | null; teacherTermsAcknowledgedAt: Date | null; startDate: string;
+  } | null = null;
+  if (match.status === "committed") {
+    const [eng] = await db
+      .select({
+        id: shadowTeacherEngagementsTable.id,
+        status: shadowTeacherEngagementsTable.status,
+        recurringSchedule: shadowTeacherEngagementsTable.recurringScheduleJson,
+        monthlyFeeInr: shadowTeacherEngagementsTable.monthlyFeeInr,
+        activationFeeInr: shadowTeacherEngagementsTable.activationFeeInr,
+        teacherTermsAcknowledgedAt: shadowTeacherEngagementsTable.teacherTermsAcknowledgedAt,
+        startDate: shadowTeacherEngagementsTable.startDate,
+      })
+      .from(shadowTeacherEngagementsTable)
+      .where(eq(shadowTeacherEngagementsTable.matchRequestId, match.id))
+      .orderBy(desc(shadowTeacherEngagementsTable.id))
+      .limit(1);
+    if (eng && eng.status === "pending_parent_payment") {
+      const { status: _status, ...rest } = eng;
+      pendingEngagement = rest;
+    }
+  }
+
+  res.json({ ...match, candidates, pendingEngagement });
 });
 
 // ── GET /shadow-teacher/my-candidacies — teacher sees matches they've been shortlisted for ─
@@ -798,6 +827,9 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
   const threadByMatchId  = new Map(threads.map(t => [t.matchId, t]));
   const countByThreadId  = new Map(msgCounts.map(m => [m.threadId, m]));
 
+  const settings = await getSettings();
+  const onPlatformIncentiveInr = ((settings as Record<string, unknown>)["shadowTeacherOnPlatformIncentiveInr"] as number) ?? 0;
+
   const result = candidates.map(c => {
     const thread = threadByMatchId.get(c.matchId);
     const counts = thread ? countByThreadId.get(thread.threadId) : undefined;
@@ -832,6 +864,10 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       messageCount:    counts ? Number(counts.messageCount) : 0,
       lastMessageAt:   counts?.lastMessageAt ?? null,
       createdAt:       c.createdAt,
+      // #14/#15 reorder — shown alongside the "Choose Engagement" button
+      // (matchStatus === "trial_done" && isSelected). Harmless to include
+      // for every row; only meaningful in that one state.
+      onPlatformIncentiveInr: onPlatformIncentiveInr > 0 ? onPlatformIncentiveInr : null,
     };
   });
 
@@ -1663,6 +1699,212 @@ router.post("/shadow-teacher/:matchId/candidates/:candidateId/accept-trial", req
   res.status(200).json(updatedCandidate);
 });
 
+// ── POST /shadow-teacher/:matchId/candidates/:candidateId/choose-engagement ──
+// #14/#15 reorder: the TEACHER now accepts (with schedule + terms) BEFORE any
+// parent payment, instead of after. This is the trial_done path only — the
+// no-trial/shortlisted-direct-commit path is untouched (see loadCommitContext).
+// This is a correctness/safety property, hardcoded, not admin-configurable —
+// same category as the RCI credential mapping decision.
+const TEACHER_DECLINE_REASONS = [
+  "schedule_mismatch",
+  "salary_mismatch",
+  "found_other_engagement",
+  "location_infeasible",
+  "unavailable_start_date",
+  "other",
+] as const;
+
+const TEACHER_DECLINE_REASON_LABELS: Record<string, string> = {
+  schedule_mismatch: "Schedule doesn't work for them",
+  salary_mismatch: "Salary/rate doesn't match their expectations",
+  found_other_engagement: "Found another engagement",
+  location_infeasible: "Location/commute isn't feasible",
+  unavailable_start_date: "No longer available to start on the proposed date",
+  other: "Other",
+};
+
+const ChooseEngagementBody = z.object({
+  action: z.enum(["accept", "decline"]),
+  recurringSchedule: z.array(z.object({
+    dayOfWeek: z.number().int().min(0).max(6),
+    startTime: z.string().regex(/^\d{2}:\d{2}$/),
+    endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  })).min(1).optional(),
+  termsAcknowledged: z.boolean().optional(),
+  declineReason: z.enum(TEACHER_DECLINE_REASONS).optional(),
+  declineReasonNote: z.string().max(300).optional(),
+});
+
+router.post("/shadow-teacher/:matchId/candidates/:candidateId/choose-engagement", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
+
+  const parsed = ChooseEngagementBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { action, recurringSchedule, termsAcknowledged, declineReason, declineReasonNote } = parsed.data;
+  if (action === "accept" && (!recurringSchedule || recurringSchedule.length === 0)) {
+    res.status(400).json({ error: "recurringSchedule is required to accept this engagement" }); return;
+  }
+  if (action === "accept" && !termsAcknowledged) {
+    res.status(400).json({ error: "termsAcknowledged is required to accept this engagement" }); return;
+  }
+  if (action === "decline" && !declineReason) {
+    res.status(400).json({ error: "declineReason is required to decline" }); return;
+  }
+
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  if (ctx.myRole !== "professional") { res.status(403).json({ error: "Only the invited teacher can act on this" }); return; }
+  if (ctx.match.status !== "trial_done") { res.status(409).json({ error: "This action is only available once the trial is complete" }); return; }
+  if (ctx.match.selectedProfessionalId !== ctx.candidate.professionalId) {
+    res.status(403).json({ error: "You are not the selected candidate for this match" }); return;
+  }
+
+  if (action === "decline") {
+    await db
+      .update(shadowMatchCandidatesTable)
+      .set({
+        removedAt: new Date(),
+        removedByUserId: req.userId!,
+        removedReason: "teacher_declined",
+        declineReasonDetail: declineReason,
+        declineReasonNote: declineReason === "other" ? (declineReasonNote ?? null) : null,
+      })
+      .where(eq(shadowMatchCandidatesTable.id, candidateId));
+
+    await db
+      .update(shadowTeacherMatchesTable)
+      .set({
+        status: "shortlisted",
+        selectedProfessionalId: null,
+        matchedAt: null,
+        matchedProfessionalId: null,
+        trialDoneSince: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+    try {
+      const reasonLabel = TEACHER_DECLINE_REASON_LABELS[declineReason!] ?? declineReason;
+      await createInAppNotification(ctx.match.parentId, {
+        type: "candidate_declined_engagement",
+        title: "Teacher declined to proceed",
+        body: `Your shadow teacher declined to proceed with this engagement. Reason: ${reasonLabel}${declineReasonNote ? ` — "${declineReasonNote}"` : ""}. You can choose another candidate from your shortlist.`,
+        relatedType: "match", relatedId: matchId,
+      });
+    } catch { /* non-blocking */ }
+
+    res.json({ status: "declined" });
+    return;
+  }
+
+  // ── Accept ────────────────────────────────────────────────────────────────
+  const teacherRow = await loadCommitContext(matchId, ctx.match.parentId, ctx.candidate.professionalId, ["trial_done"]);
+  if ("error" in teacherRow) { res.status(teacherRow.error.status).json(teacherRow.error.body); return; }
+  const {
+    teacher, monthlyFeeInr,
+    absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
+  } = teacherRow;
+
+  const settings = await getSettings();
+  const platformSalaryEnabled = ((settings as Record<string, unknown>)["platformSalaryEnabled"] as boolean) ?? false;
+
+  if (platformSalaryEnabled === false) {
+    const [prof] = await db
+      .select({ upiVerifiedAt: professionalProfilesTable.upiVerifiedAt })
+      .from(professionalProfilesTable)
+      .where(eq(professionalProfilesTable.id, ctx.candidate.professionalId))
+      .limit(1);
+    if (!prof?.upiVerifiedAt) {
+      res.status(409).json({
+        error: "upi_verification_required",
+        message: "Verify your UPI ID to accept this engagement. Parent will pay you directly each month.",
+      });
+      return;
+    }
+  }
+
+  // Same snapshot discipline as every other fee in the system — the value in
+  // effect right now is permanent for this engagement.
+  const globalActivationFeeInr = ((settings as Record<string, unknown>)["activationFeeInr"] as number) ?? 999;
+  let effectiveActivationFeeEnabled = true;
+  const [matchRow] = await db
+    .select({ activationFeeEnabled: shadowTeacherMatchesTable.activationFeeEnabled })
+    .from(shadowTeacherMatchesTable)
+    .where(eq(shadowTeacherMatchesTable.id, matchId))
+    .limit(1);
+  effectiveActivationFeeEnabled = matchRow?.activationFeeEnabled ?? true;
+  const activationFeeInr = effectiveActivationFeeEnabled ? globalActivationFeeInr : 0;
+
+  const trialFeePaidInr = ctx.match.trialFeePaidInr ?? 0;
+  let engagementTrialCreditInr = 0;
+  if (trialFeePaidInr > 0 && platformSalaryEnabled) {
+    engagementTrialCreditInr = trialFeePaidInr;
+  } else if (trialFeePaidInr > 0) {
+    await creditWallet(
+      ctx.match.parentId,
+      trialFeePaidInr,
+      "refund",
+      matchId,
+      "Trial fee credited to wallet — this engagement's salary is paid directly to the teacher, not through the platform.",
+    );
+  }
+
+  // No parent-supplied start date exists at this point anymore — the OLD
+  // flow's date picker (CommitDialog) ran BEFORE the teacher acted; now the
+  // teacher acts first. Falling back to the parent's originally-stated
+  // childDesiredStartDate (compatibility-scoring signal, not previously
+  // authoritative) rather than inventing a new UI step in this pass. Flagged
+  // as a known gap — worth a real date-confirmation step, later.
+  const today = new Date().toISOString().split("T")[0]!;
+  const fallbackStartDate = ctx.match.childDesiredStartDate ?? today;
+
+  const [engagement] = await db
+    .insert(shadowTeacherEngagementsTable)
+    .values({
+      parentId: ctx.match.parentId,
+      professionalId: ctx.candidate.professionalId,
+      childId: ctx.match.childId ?? null,
+      matchRequestId: matchId,
+      startDate: fallbackStartDate,
+      hoursPerWeek: 0,
+      monthlyFeeInr,
+      trialCreditInr: engagementTrialCreditInr,
+      status: "pending_parent_payment",
+      pendingParentPaymentSince: new Date(),
+      startOtp: generateOtp(),
+      platformSalaryEnabled,
+      activationFeeInr: activationFeeInr > 0 ? activationFeeInr : null,
+      recurringScheduleJson: recurringSchedule,
+      teacherTermsAcknowledgedAt: new Date(),
+      absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
+    })
+    .returning();
+
+  await db
+    .update(shadowTeacherMatchesTable)
+    .set({
+      status: "committed",
+      selectedProfessionalId: ctx.candidate.professionalId,
+      matchedAt: new Date(),
+      matchedProfessionalId: ctx.candidate.professionalId,
+      updatedAt: new Date(),
+    })
+    .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  try {
+    await createInAppNotification(ctx.match.parentId, {
+      type: "engagement_awaiting_your_payment",
+      title: "Your teacher accepted — confirm to proceed",
+      body: `${teacher.fullName ?? "Your teacher"} accepted the engagement. Review the terms and pay the placement fee to lock it in.`,
+      relatedType: "engagement", relatedId: engagement!.id,
+    });
+  } catch { /* non-blocking */ }
+
+  res.json({ engagementId: engagement!.id, status: "pending_parent_payment" });
+});
+
 // ── POST /shadow-teacher/:matchId/commit/order + /commit/verify ─────────────
 // Parent commits to a shortlisted teacher. The placement fee (admin-configured,
 // default ₹2999) is charged at this step via Razorpay. Matching fee (paid at
@@ -1689,14 +1931,24 @@ type CommitContextResult =
       leaveTermsNotes: string | null;
     };
 
-async function loadCommitContext(matchId: number, parentId: number, selectedProfessionalId: number): Promise<CommitContextResult> {
+async function loadCommitContext(
+  matchId: number,
+  parentId: number,
+  selectedProfessionalId: number,
+  // #14/#15 reorder: trial_done matches now go through choose-engagement (the
+  // teacher accepts before any payment) instead of this direct-commit path.
+  // Only the no-trial/shortlisted-direct-commit path still uses commit/order
+  // + commit/verify with the default allowed status. choose-engagement passes
+  // ["trial_done"] explicitly since it operates on a trial-completed match.
+  allowedStatuses: string[] = ["shortlisted"],
+): Promise<CommitContextResult> {
   const [match] = await db
     .select()
     .from(shadowTeacherMatchesTable)
     .where(and(eq(shadowTeacherMatchesTable.id, matchId), eq(shadowTeacherMatchesTable.parentId, parentId)));
   if (!match) return { error: { status: 404, body: { error: "Match not found" } } };
-  if (!["shortlisted", "trial_done"].includes(match.status)) {
-    return { error: { status: 400, body: { error: "Commitment is only allowed from shortlisted or trial_done status" } } };
+  if (!allowedStatuses.includes(match.status)) {
+    return { error: { status: 400, body: { error: `Commitment is only allowed from ${allowedStatuses.join(" or ")} status` } } };
   }
 
   const [candidate] = await db
@@ -2096,6 +2348,223 @@ router.post("/shadow-teacher/:matchId/commit/verify", requireAuth, requireRole("
 
   res.json({ engagementId: engagement.id, teacherFullName: teacher.fullName, phone: teacher.phone, email: teacher.email });
 });
+
+// ── POST /shadow-teacher/:matchId/confirm-engagement/order + /verify ────────
+// #14/#15 reorder — trial_done path only. The teacher has already accepted
+// (choose-engagement created the engagement at pending_parent_payment); this
+// is the PARENT's own terms-ack + placement-fee payment, operating on that
+// EXISTING engagement rather than creating a new one. Deliberately separate
+// from commit/order + commit/verify (which stay untouched for the no-trial
+// path) rather than overloading them with a second mode.
+router.post("/shadow-teacher/:matchId/confirm-engagement/order", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  if (isNaN(matchId)) { res.status(400).json({ error: "Invalid matchId" }); return; }
+
+  const [match] = await db
+    .select()
+    .from(shadowTeacherMatchesTable)
+    .where(and(eq(shadowTeacherMatchesTable.id, matchId), eq(shadowTeacherMatchesTable.parentId, req.userId!)));
+  if (!match) { res.status(404).json({ error: "Match not found" }); return; }
+
+  const [eng] = await db
+    .select()
+    .from(shadowTeacherEngagementsTable)
+    .where(eq(shadowTeacherEngagementsTable.matchRequestId, matchId))
+    .orderBy(desc(shadowTeacherEngagementsTable.id))
+    .limit(1);
+  if (!eng || eng.status !== "pending_parent_payment") {
+    res.status(409).json({ error: "This match has no engagement awaiting your payment" }); return;
+  }
+
+  const settings = await getSettings();
+  const placementFeeInr = ((settings as Record<string, unknown>)["placementFeeInr"] as number) ?? 2999;
+
+  if (placementFeeInr <= 0) {
+    // Waived — finalize immediately, no Razorpay step, same convention as commit/order's waived branch.
+    await db
+      .update(shadowTeacherEngagementsTable)
+      .set({ parentTermsAcknowledgedAt: new Date() })
+      .where(eq(shadowTeacherEngagementsTable.id, eng.id));
+    const finalized = await finalizeParentPaymentConfirmation(eng.id, 0, null);
+    res.json({ engagementId: eng.id, status: finalized.status, waived: true });
+    return;
+  }
+
+  // Idempotency — reuse a pending order for this match rather than creating
+  // a second one, same convention as commit/order.
+  if (match.placementFeeOrderId) {
+    res.json({
+      engagementId: eng.id,
+      orderId: match.placementFeeOrderId,
+      amount: (match.placementFeeAmountInr ?? placementFeeInr) * 100,
+      keyId: process.env["RAZORPAY_KEY_ID"]!,
+      resuming: true,
+    });
+    return;
+  }
+
+  const razorpay = getRazorpay();
+  if (!razorpay) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
+
+  const amount = placementFeeInr * 100;
+  const order = await razorpay.orders.create({
+    amount,
+    currency: "INR",
+    receipt: `confirm_eng_${eng.id}_${Date.now()}`,
+    notes: { engagementId: String(eng.id), matchId: String(matchId) },
+  });
+
+  await db
+    .update(shadowTeacherMatchesTable)
+    .set({ placementFeeOrderId: order.id as string, placementFeeAmountInr: placementFeeInr, updatedAt: new Date() })
+    .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  res.json({ engagementId: eng.id, orderId: order.id, amount, keyId: process.env["RAZORPAY_KEY_ID"]! });
+});
+
+const ConfirmEngagementVerifyBody = z.object({
+  razorpayOrderId: z.string(),
+  razorpayPaymentId: z.string(),
+  razorpaySignature: z.string(),
+  termsAcknowledged: z.boolean(),
+});
+
+router.post("/shadow-teacher/:matchId/confirm-engagement/verify", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  if (isNaN(matchId)) { res.status(400).json({ error: "Invalid matchId" }); return; }
+
+  const parsed = ConfirmEngagementVerifyBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  if (!parsed.data.termsAcknowledged) { res.status(400).json({ error: "termsAcknowledged is required to confirm this engagement" }); return; }
+  const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = parsed.data;
+
+  const keySecret = process.env["RAZORPAY_KEY_SECRET"];
+  if (!keySecret) { res.status(503).json({ error: "Payment gateway not configured" }); return; }
+
+  const [match] = await db
+    .select()
+    .from(shadowTeacherMatchesTable)
+    .where(and(eq(shadowTeacherMatchesTable.id, matchId), eq(shadowTeacherMatchesTable.parentId, req.userId!)));
+  if (!match) { res.status(404).json({ error: "Match not found" }); return; }
+
+  const [eng] = await db
+    .select()
+    .from(shadowTeacherEngagementsTable)
+    .where(eq(shadowTeacherEngagementsTable.matchRequestId, matchId))
+    .orderBy(desc(shadowTeacherEngagementsTable.id))
+    .limit(1);
+  if (!eng) { res.status(404).json({ error: "Engagement not found" }); return; }
+
+  // Idempotency — already confirmed, return current state rather than re-processing.
+  if (eng.status !== "pending_parent_payment") {
+    res.json({ engagementId: eng.id, status: eng.status, alreadyConfirmed: true });
+    return;
+  }
+  if (!match.placementFeeOrderId || match.placementFeeOrderId !== razorpayOrderId) {
+    res.status(400).json({ error: "Order ID mismatch" }); return;
+  }
+
+  const expectedSig = crypto.createHmac("sha256", keySecret).update(`${razorpayOrderId}|${razorpayPaymentId}`).digest("hex");
+  if (expectedSig !== razorpaySignature) { res.status(400).json({ error: "Payment signature verification failed" }); return; }
+
+  const placementFeeInr = match.placementFeeAmountInr ?? 0;
+
+  const [existingPaymentRow] = await db
+    .select()
+    .from(paymentsTable)
+    .where(and(eq(paymentsTable.providerPaymentId, razorpayPaymentId), eq(paymentsTable.plan, "plan_placement_fee")))
+    .limit(1);
+
+  let paymentRow = existingPaymentRow;
+  if (!paymentRow) {
+    [paymentRow] = await db
+      .insert(paymentsTable)
+      .values({
+        userId: req.userId!,
+        plan: "plan_placement_fee",
+        provider: "razorpay",
+        providerOrderId: razorpayOrderId,
+        providerPaymentId: razorpayPaymentId,
+        amountPaise: placementFeeInr * 100,
+        currency: "INR",
+        status: "completed",
+        professionalId: eng.professionalId,
+        metadata: JSON.stringify({ matchId, engagementId: eng.id }),
+      })
+      .returning();
+  }
+
+  await db
+    .update(shadowTeacherEngagementsTable)
+    .set({ parentTermsAcknowledgedAt: new Date() })
+    .where(eq(shadowTeacherEngagementsTable.id, eng.id));
+
+  const finalized = await finalizeParentPaymentConfirmation(eng.id, placementFeeInr, paymentRow!.id);
+
+  await db
+    .update(shadowTeacherMatchesTable)
+    .set({ pendingCommitProfessionalId: null, pendingCommitStartDate: null, updatedAt: new Date() })
+    .where(eq(shadowTeacherMatchesTable.id, matchId));
+
+  res.json({ engagementId: eng.id, status: finalized.status });
+});
+
+/**
+ * Shared finalization for confirm-engagement/verify (and its fee-waived
+ * shortcut) — transitions an EXISTING pending_parent_payment engagement
+ * using the activationFeeInr already snapshotted at choose-engagement/accept
+ * time (same branch logic that used to live in teacher-acceptance's accept
+ * branch, moved here since that snapshot now happens earlier).
+ */
+async function finalizeParentPaymentConfirmation(
+  engagementId: number,
+  placementFeeInr: number,
+  placementFeePaymentId: number | null,
+): Promise<{ status: string }> {
+  const [eng] = await db.select().from(shadowTeacherEngagementsTable).where(eq(shadowTeacherEngagementsTable.id, engagementId));
+  if (!eng) throw new Error(`Engagement ${engagementId} not found during finalizeParentPaymentConfirmation`);
+
+  const activationFeeInr = eng.activationFeeInr ?? 0;
+  const nextStatus = activationFeeInr > 0 ? "pending_activation_fee" : "pending_start";
+
+  await db
+    .update(shadowTeacherEngagementsTable)
+    .set({
+      status: nextStatus,
+      placementFeeInr: placementFeeInr > 0 ? placementFeeInr : null,
+      placementFeePaymentId,
+      pendingParentPaymentSince: null,
+      pendingActivationFeeSince: nextStatus === "pending_activation_fee" ? new Date() : null,
+      pendingStartSince: nextStatus === "pending_start" ? new Date() : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(shadowTeacherEngagementsTable.id, engagementId));
+
+  try {
+    const [profRow] = await db.select({ fullName: professionalProfilesTable.fullName, userId: professionalProfilesTable.userId })
+      .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, eng.professionalId)).limit(1);
+    await createInAppNotification(eng.parentId, {
+      type: "engagement_confirmed",
+      title: "Engagement confirmed",
+      body: nextStatus === "pending_activation_fee"
+        ? `You confirmed the engagement with ${profRow?.fullName ?? "your teacher"}. Waiting for them to pay their activation fee before your start code is ready.`
+        : `You confirmed the engagement with ${profRow?.fullName ?? "your teacher"}. Your start code will be ready on ${eng.startDate}.`,
+      relatedType: "engagement", relatedId: eng.id,
+    });
+    if (profRow) {
+      await createInAppNotification(profRow.userId, {
+        type: nextStatus === "pending_activation_fee" ? "activation_fee_due" : "engagement_confirmed",
+        title: nextStatus === "pending_activation_fee" ? "Activation fee required" : "Parent confirmed the engagement",
+        body: nextStatus === "pending_activation_fee"
+          ? `The parent confirmed and paid. Pay the one-time activation fee of ₹${activationFeeInr.toLocaleString("en-IN")} to start this engagement.`
+          : `The parent confirmed the engagement. Your start code will be ready on ${eng.startDate}.`,
+        relatedType: "engagement", relatedId: eng.id,
+      });
+    }
+  } catch { /* non-blocking */ }
+
+  return { status: nextStatus };
+}
 
 // ── POST /shadow-teacher/:matchId/commit — 410 Gone (replaced by order/verify) ─
 router.post("/shadow-teacher/:matchId/commit", requireAuth, requireRole("parent"), async (_req: Request, res: Response): Promise<void> => {
@@ -2515,7 +2984,7 @@ router.post("/shadow-teacher/:matchId/mark-trial-done", requireAuth, async (req:
 
   await db
     .update(shadowTeacherMatchesTable)
-    .set({ status: "trial_done", updatedAt: new Date() })
+    .set({ status: "trial_done", trialDoneSince: new Date(), updatedAt: new Date() })
     .where(eq(shadowTeacherMatchesTable.id, matchId));
 
   // Notify the parent so they come back to make their commit/walk-away decision.

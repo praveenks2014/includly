@@ -1539,6 +1539,10 @@ function SettingsTab() {
   const [activationFeeInr, setActivationFeeInr] = useState<number | "">("");
   const [platformSalaryEnabled, setPlatformSalaryEnabled] = useState(false);
   const [trialDirectPayEnabled, setTrialDirectPayEnabled] = useState(true);
+  // #14/#15 reorder — shadow teacher's incentive for encouraging on-platform
+  // payment. Amount is admin-configurable (same category as placementFeeInr/
+  // activationFeeInr above); the ordering itself is hardcoded, not exposed here.
+  const [shadowTeacherOnPlatformIncentiveInr, setShadowTeacherOnPlatformIncentiveInr] = useState<number | "">("");
 
   const [shadowTeacherListingFeeEnabled, setShadowTeacherListingFeeEnabled] = useState(false);
   const [shadowTeacherListingFeeInr, setShadowTeacherListingFeeInr] = useState<number | "">("");
@@ -1584,6 +1588,7 @@ function SettingsTab() {
     setActivationFeeInr(settingsRec["activationFeeInr"] as number ?? 999);
     setPlatformSalaryEnabled((settingsRec["platformSalaryEnabled"] as boolean) ?? false);
     setTrialDirectPayEnabled((settingsRec["trialDirectPayEnabled"] as boolean) ?? true);
+    setShadowTeacherOnPlatformIncentiveInr(settingsRec["shadowTeacherOnPlatformIncentiveInr"] as number ?? 0);
     setShadowTeacherListingFeeEnabled((settingsRec["shadowTeacherListingFeeEnabled"] as boolean) ?? false);
     setShadowTeacherListingFeeInr(settingsRec["shadowTeacherListingFeeInr"] as number ?? 0);
     setTutorListingFeeEnabled((settingsRec["tutorListingFeeEnabled"] as boolean) ?? false);
@@ -1628,6 +1633,7 @@ function SettingsTab() {
         activationFeeInr: Number(activationFeeInr) || 999,
         platformSalaryEnabled,
         trialDirectPayEnabled,
+        shadowTeacherOnPlatformIncentiveInr: Number(shadowTeacherOnPlatformIncentiveInr) || 0,
         shadowTeacherListingFeeEnabled,
         shadowTeacherListingFeeInr: Number(shadowTeacherListingFeeInr) || 0,
         tutorListingFeeEnabled,
@@ -1766,6 +1772,13 @@ function SettingsTab() {
               <p className="text-xs text-gray-400 mb-1.5">Charged to the teacher when they accept the engagement.</p>
               <Input type="number" min={0} value={activationFeeInr}
                 onChange={(e) => setActivationFeeInr(e.target.value === "" ? "" : Number(e.target.value))}
+                className="rounded-lg focus-visible:ring-[#2EC4A5]" />
+            </div>
+            <div>
+              <Label className="text-sm font-semibold text-[#1A2340]">On-Platform Payment Incentive (₹)</Label>
+              <p className="text-xs text-gray-400 mb-1.5">Paid to the teacher once the parent's payment lands through Includly (anti-bypass lever). Payout is a manual admin action — this only drives the messaging shown to the teacher at Choose Engagement.</p>
+              <Input type="number" min={0} value={shadowTeacherOnPlatformIncentiveInr}
+                onChange={(e) => setShadowTeacherOnPlatformIncentiveInr(e.target.value === "" ? "" : Number(e.target.value))}
                 className="rounded-lg focus-visible:ring-[#2EC4A5]" />
             </div>
           </div>
