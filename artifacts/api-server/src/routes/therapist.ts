@@ -60,8 +60,8 @@ async function getSettings() {
   return (
     s ?? {
       therapistMatchingFeeInr: 750,
-      therapistTrialFeeInr: 500,
-      therapistTrialFeeGoesToProfessional: false,
+      therapistTrialFeeInr: 0,
+      therapistTrialFeeGoesToProfessional: true,
       therapistAssessmentFeeInr: 1500,
     }
   );
@@ -238,7 +238,7 @@ router.get("/therapist/pricing", async (_req: Request, res: Response): Promise<v
   const s = settings as Record<string, unknown>;
   res.json({
     matchingFeeInr: settings.therapistMatchingFeeInr,
-    trialFeeInr: (s["therapistTrialFeeInr"] as number) ?? 500,
+    trialFeeInr: (s["therapistTrialFeeInr"] as number) ?? 0,
     placementFeeInr: (s["therapistPlacementFeeInr"] as number) ?? 4000,
     assessmentFeeInr: settings.therapistAssessmentFeeInr,
   });
@@ -941,6 +941,30 @@ router.post("/therapist/:matchId/request-trial-payment", requireAuth, requireRol
   // never collect money that belongs to the professional.
   const goesToProfessional = settings.therapistTrialFeeGoesToProfessional ?? false;
   await db.update(therapistMatchesTable).set({ trialDirectPay: goesToProfessional, updatedAt: new Date() }).where(eq(therapistMatchesTable.id, matchId));
+
+  // #24 — a ₹0 trial fee (the new default) has nothing to collect, either
+  // via UPI or Razorpay. Skip both payment branches and start the trial
+  // directly, landing in the exact same end-state as a successful
+  // verify-trial-payment (status/OTP/meet-link), just without a real charge.
+  if (trialFeeInr <= 0) {
+    const trialStartOtp = generateOtp();
+    const trialMeetLink = `https://meet.jit.si/includly-trial-${matchId}-${selectedProfessionalId}${JITSI_CONFIG_SUFFIX}`;
+    await db
+      .update(therapistMatchesTable)
+      .set({ status: "trial_pending", selectedProfessionalId, trialFeePaidInr: 0, trialStartOtp, trialMeetLink, updatedAt: new Date() })
+      .where(eq(therapistMatchesTable.id, matchId));
+
+    void createInAppNotification(match.parentId, {
+      type: "trial_otp_ready",
+      title: "Trial scheduled — your start code is ready",
+      body: "Open the app to get the start code you'll show your tutor at the beginning of the trial.",
+      relatedType: "match",
+      relatedId: matchId,
+    }).catch(() => {});
+
+    res.json({ matchId, free: true, status: "trial_pending" });
+    return;
+  }
 
   if (goesToProfessional) {
     const [proPay] = await db

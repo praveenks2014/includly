@@ -886,9 +886,18 @@ export function VerticalRequestWidget({ vertical }: { vertical: Vertical }) {
       const data = (await res.json()) as {
         error?: string; message?: string; directPay?: boolean; blocked?: boolean; trialFeeInr?: number;
         upiVpa?: string; professionalName?: string; orderId?: string; amount?: number; keyId?: string;
+        free?: boolean;
       };
       if (!res.ok) {
         toast({ title: data.message ?? data.error ?? "Could not initiate trial payment", variant: "destructive" });
+        return;
+      }
+      // #24 — a ₹0 trial fee (the new default) skips payment entirely on the
+      // backend and starts the trial directly — no UPI/Razorpay dialog to show.
+      if (data.free) {
+        toast({ title: "Trial booked!", description: `It's free — coordinate scheduling with your ${cfg.professionalLabel}.` });
+        queryClient.invalidateQueries({ queryKey: [`${cfg.vertical}-my-request`] });
+        await refetch();
         return;
       }
       if (data.directPay) {

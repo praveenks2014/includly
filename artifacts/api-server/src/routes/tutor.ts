@@ -60,8 +60,8 @@ async function getSettings() {
   return (
     s ?? {
       tutorMatchingFeeInr: 500,
-      tutorTrialFeeInr: 300,
-      tutorTrialFeeGoesToProfessional: false,
+      tutorTrialFeeInr: 0,
+      tutorTrialFeeGoesToProfessional: true,
     }
   );
 }
@@ -222,7 +222,7 @@ router.get("/tutor/pricing", async (_req: Request, res: Response): Promise<void>
   const s = settings as Record<string, unknown>;
   res.json({
     matchingFeeInr: settings.tutorMatchingFeeInr,
-    trialFeeInr: (s["tutorTrialFeeInr"] as number) ?? 300,
+    trialFeeInr: (s["tutorTrialFeeInr"] as number) ?? 0,
     placementFeeInr: (s["tutorPlacementFeeInr"] as number) ?? 1500,
   });
 });
@@ -765,6 +765,30 @@ router.post("/tutor/:matchId/request-trial-payment", requireAuth, requireRole("p
   // never collect money that belongs to the professional.
   const goesToProfessional = settings.tutorTrialFeeGoesToProfessional ?? false;
   await db.update(tutorMatchesTable).set({ trialDirectPay: goesToProfessional, updatedAt: new Date() }).where(eq(tutorMatchesTable.id, matchId));
+
+  // #24 — a ₹0 trial fee (the new default) has nothing to collect, either
+  // via UPI or Razorpay. Skip both payment branches and start the trial
+  // directly, landing in the exact same end-state as a successful
+  // verify-trial-payment (status/OTP/meet-link), just without a real charge.
+  if (trialFeeInr <= 0) {
+    const trialStartOtp = generateOtp();
+    const trialMeetLink = `https://meet.jit.si/includly-trial-${matchId}-${selectedProfessionalId}${JITSI_CONFIG_SUFFIX}`;
+    await db
+      .update(tutorMatchesTable)
+      .set({ status: "trial_pending", selectedProfessionalId, trialFeePaidInr: 0, trialStartOtp, trialMeetLink, updatedAt: new Date() })
+      .where(eq(tutorMatchesTable.id, matchId));
+
+    void createInAppNotification(match.parentId, {
+      type: "trial_otp_ready",
+      title: "Trial scheduled — your start code is ready",
+      body: "Open the app to get the start code you'll show your tutor at the beginning of the trial.",
+      relatedType: "match",
+      relatedId: matchId,
+    }).catch(() => {});
+
+    res.json({ matchId, free: true, status: "trial_pending" });
+    return;
+  }
 
   if (goesToProfessional) {
     const [proPay] = await db

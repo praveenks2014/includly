@@ -41,11 +41,14 @@ export const adminSettingsTable = pgTable("admin_settings", {
   tutorMatchingFeeInr: integer("tutor_matching_fee_inr").notNull().default(500),
   tutorPlacementFeeInr: integer("tutor_placement_fee_inr").notNull().default(1500),
   tutorActivationFeeInr: integer("tutor_activation_fee_inr").notNull().default(500),
-  tutorTrialFeeInr: integer("tutor_trial_fee_inr").notNull().default(300),
+  // #24 — trial fee defaults to 0 (paired with tutorTrialFeeGoesToProfessional
+  // defaulting true below): a free trial by default, not a platform-revenue fee.
+  tutorTrialFeeInr: integer("tutor_trial_fee_inr").notNull().default(0),
   therapistMatchingFeeInr: integer("therapist_matching_fee_inr").notNull().default(750),
   therapistPlacementFeeInr: integer("therapist_placement_fee_inr").notNull().default(4000),
   therapistActivationFeeInr: integer("therapist_activation_fee_inr").notNull().default(1500),
-  therapistTrialFeeInr: integer("therapist_trial_fee_inr").notNull().default(500),
+  // #24 — same free-by-default pairing as tutorTrialFeeInr above.
+  therapistTrialFeeInr: integer("therapist_trial_fee_inr").notNull().default(0),
   therapistAssessmentFeeInr: integer("therapist_assessment_fee_inr").notNull().default(1500),
   // Listing-fee gate (Prompt 2D) — a fee to be listable/matchable at all,
   // per category, fully admin-toggle-controlled. Deliberately all OFF and
@@ -78,17 +81,19 @@ export const adminSettingsTable = pgTable("admin_settings", {
   // confirmed. Same lazy-evaluation-on-read pattern as the timeouts above,
   // no cron. See paymentConfirmationResolver.ts.
   paymentConfirmationDefaultDays: integer("payment_confirmation_default_days").notNull().default(7),
-  // Tutor/therapist trial-fee destination (Tutor/Therapist Pass 1). Default
-  // false = platform revenue via Razorpay-collect (no compliance issue — the
-  // platform keeps this fee, never remits it). Snapshotted onto
-  // tutor_matches.trial_direct_pay / therapist_matches.trial_direct_pay at
+  // Tutor/therapist trial-fee destination (Tutor/Therapist Pass 1). #24 —
+  // default flipped to true: paired with the trial fee defaulting to 0 above,
+  // this is a free trial where there's nothing to collect either way; true
+  // is the correct steady-state default since it's the professional's money
+  // whenever a fee IS configured, never the platform's by default. Snapshotted
+  // onto tutor_matches.trial_direct_pay / therapist_matches.trial_direct_pay at
   // request-trial-payment time — flipping this later never changes an
   // in-flight trial's payment mode. When true, collection moves to
   // direct-pay/verified-UPI-QR (same reasoning as shadow-teacher's
   // platformSalaryEnabled/trialDirectPayEnabled design): the platform must
   // never collect money that belongs to the professional.
-  tutorTrialFeeGoesToProfessional: boolean("tutor_trial_fee_goes_to_professional").notNull().default(false),
-  therapistTrialFeeGoesToProfessional: boolean("therapist_trial_fee_goes_to_professional").notNull().default(false),
+  tutorTrialFeeGoesToProfessional: boolean("tutor_trial_fee_goes_to_professional").notNull().default(true),
+  therapistTrialFeeGoesToProfessional: boolean("therapist_trial_fee_goes_to_professional").notNull().default(true),
   // Ongoing SESSION payment mode for tutor/therapist (separate from the
   // trial-fee toggle above, which only governs the one-time trial charge).
   // Default true = direct-pay: parent pays the professional's verified UPI
