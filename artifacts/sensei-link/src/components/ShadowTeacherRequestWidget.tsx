@@ -1141,6 +1141,11 @@ export function ShadowTeacherRequestWidget() {
   const [schoolName, setSchoolName] = useState("");
   const [schoolLat, setSchoolLat] = useState<number | null>(null);
   const [schoolLng, setSchoolLng] = useState<number | null>(null);
+  // Desired start date — writes to childDesiredStartDate, previously never
+  // captured anywhere (see scoreStartDate in shadowTeacherScoring.ts and the
+  // choose-engagement fallback in shadowTeacher.ts, both of which read this
+  // column but had nothing real to read until now).
+  const [desiredStartDate, setDesiredStartDate] = useState("");
 
   function selectSalaryPreset(preset: typeof MONTHLY_SALARY_PRESETS[number]) {
     const toggling = preset.key === salaryPresetKey;
@@ -1217,6 +1222,7 @@ export function ShadowTeacherRequestWidget() {
           // selected a SchoolAutocomplete suggestion — never derived from
           // free-typed text.
           ...(schoolLat != null && schoolLng != null && { schoolLat, schoolLng }),
+          ...(desiredStartDate && { childDesiredStartDate: desiredStartDate }),
         }),
       });
       const data = await res.json() as {
@@ -1802,6 +1808,20 @@ export function ShadowTeacherRequestWidget() {
                 value={schoolName}
                 onManualChange={(name) => { setSchoolName(name); setSchoolLat(null); setSchoolLng(null); }}
                 onSelect={(result) => { setSchoolName(result.displayText); setSchoolLat(result.lat); setSchoolLng(result.lng); }}
+              />
+            </div>
+
+            <div>
+              <Label className="text-sm mb-1.5 block">Desired start date <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Helps us prioritize teachers who are actually available around when you need them.
+              </p>
+              <input
+                type="date"
+                min={new Date().toISOString().slice(0, 10)}
+                value={desiredStartDate}
+                onChange={(e) => setDesiredStartDate(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2EC4A5]"
               />
             </div>
 

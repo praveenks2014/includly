@@ -335,6 +335,10 @@ const NewRequestBody = z.object({
   schoolName: z.string().max(300).optional(),
   schoolLat: z.number().optional(),
   schoolLng: z.number().optional(),
+  // Compatibility-scoring signal (see scoreStartDate in
+  // shadowTeacherScoring.ts) and the choose-engagement fallback in this
+  // file — both already read this column; this is the first write path.
+  childDesiredStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 }).refine((b) => (b.schoolLat == null) === (b.schoolLng == null), {
   message: "schoolLat and schoolLng must both be present or both absent",
 });
@@ -346,7 +350,7 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
     return;
   }
 
-  const { childId, extraNotes, budgetMinInr, budgetMaxInr, schoolName, schoolLat, schoolLng } = parsed.data;
+  const { childId, extraNotes, budgetMinInr, budgetMaxInr, schoolName, schoolLat, schoolLng, childDesiredStartDate } = parsed.data;
 
   // Load child (must belong to this parent)
   const [child] = await db
@@ -433,6 +437,7 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
         schoolName:          schoolName ?? null,
         schoolLat:           schoolLat ?? null,
         schoolLng:           schoolLng ?? null,
+        childDesiredStartDate: childDesiredStartDate ?? null,
       })
       .returning();
     await surfaceCandidatesForMatch(waivedMatch);
@@ -472,6 +477,7 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
       schoolName: schoolName ?? null,
       schoolLat: schoolLat ?? null,
       schoolLng: schoolLng ?? null,
+      childDesiredStartDate: childDesiredStartDate ?? null,
       providerOrderId: order.id as string,
     })
     .returning();
