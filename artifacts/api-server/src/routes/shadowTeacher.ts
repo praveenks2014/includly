@@ -680,6 +680,10 @@ router.get("/shadow-teacher/my-request", requireAuth, requireRole("parent"), asy
   let pendingEngagement: {
     id: number; recurringSchedule: unknown; monthlyFeeInr: number;
     activationFeeInr: number | null; teacherTermsAcknowledgedAt: Date | null; startDate: string;
+    absenceRetainerPct: number | null; absenceFreeDaysPerMonth: number | null;
+    summerRetainerPct: number | null; summerRetainerMonths: number | null;
+    childSickLeaveFreeDaysPerMonth: number | null; childSickLeaveRetainerPct: number | null;
+    availableDuringBreaks: boolean | null; leaveTermsNotes: string | null;
   } | null = null;
   if (match.status === "committed") {
     const [eng] = await db
@@ -691,6 +695,14 @@ router.get("/shadow-teacher/my-request", requireAuth, requireRole("parent"), asy
         activationFeeInr: shadowTeacherEngagementsTable.activationFeeInr,
         teacherTermsAcknowledgedAt: shadowTeacherEngagementsTable.teacherTermsAcknowledgedAt,
         startDate: shadowTeacherEngagementsTable.startDate,
+        absenceRetainerPct: shadowTeacherEngagementsTable.absenceRetainerPct,
+        absenceFreeDaysPerMonth: shadowTeacherEngagementsTable.absenceFreeDaysPerMonth,
+        summerRetainerPct: shadowTeacherEngagementsTable.summerRetainerPct,
+        summerRetainerMonths: shadowTeacherEngagementsTable.summerRetainerMonths,
+        childSickLeaveFreeDaysPerMonth: shadowTeacherEngagementsTable.childSickLeaveFreeDaysPerMonth,
+        childSickLeaveRetainerPct: shadowTeacherEngagementsTable.childSickLeaveRetainerPct,
+        availableDuringBreaks: shadowTeacherEngagementsTable.availableDuringBreaks,
+        leaveTermsNotes: shadowTeacherEngagementsTable.leaveTermsNotes,
       })
       .from(shadowTeacherEngagementsTable)
       .where(eq(shadowTeacherEngagementsTable.matchRequestId, match.id))
@@ -1085,11 +1097,18 @@ router.get("/shadow-teacher/:matchId/candidates/:candidateId/offers", requireAut
 // ── POST /shadow-teacher/:matchId/candidates/:candidateId/offers ──────────────
 const OfferBody = z.object({
   amountInr: z.number().int().positive(),
-  absenceRetainerPct: z.number().int().min(0).max(100).default(50),
-  absenceFreeDaysPerMonth: z.number().int().min(0).max(30).default(4),
+  // #12 retainer-defaults update: absenceFreeDaysPerMonth 4->2, absenceRetainerPct 50->0.
+  absenceRetainerPct: z.number().int().min(0).max(100).default(0),
+  absenceFreeDaysPerMonth: z.number().int().min(0).max(30).default(2),
   summerRetainerPct: z.number().int().min(0).max(100).default(0),
   summerRetainerMonths: z.number().int().min(0).max(12).default(0),
   leaveTermsNotes: z.string().max(1000).nullable().default(null),
+  // #12 — child's own sick-leave (distinct from the teacher's own absence above).
+  childSickLeaveFreeDaysPerMonth: z.number().int().min(0).max(31).default(7),
+  childSickLeaveRetainerPct: z.number().int().min(0).max(100).default(50),
+  // #12 — gates the break retainer (summerRetainerPct); enforced at the form
+  // level, see schema comment.
+  availableDuringBreaks: z.boolean().default(false),
 });
 
 router.post("/shadow-teacher/:matchId/candidates/:candidateId/offers", requireAuth, async (req: Request, res: Response): Promise<void> => {
@@ -1137,6 +1156,9 @@ router.post("/shadow-teacher/:matchId/candidates/:candidateId/offers", requireAu
       summerRetainerPct: parsed.data.summerRetainerPct,
       summerRetainerMonths: parsed.data.summerRetainerMonths,
       leaveTermsNotes: parsed.data.leaveTermsNotes,
+      childSickLeaveFreeDaysPerMonth: parsed.data.childSickLeaveFreeDaysPerMonth,
+      childSickLeaveRetainerPct: parsed.data.childSickLeaveRetainerPct,
+      availableDuringBreaks: parsed.data.availableDuringBreaks,
       status: "pending",
     }).returning();
   });
@@ -1805,6 +1827,7 @@ router.post("/shadow-teacher/:matchId/candidates/:candidateId/choose-engagement"
   const {
     teacher, monthlyFeeInr,
     absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
+    childSickLeaveFreeDaysPerMonth, childSickLeaveRetainerPct, availableDuringBreaks,
   } = teacherRow;
 
   const settings = await getSettings();
@@ -1879,6 +1902,7 @@ router.post("/shadow-teacher/:matchId/candidates/:candidateId/choose-engagement"
       recurringScheduleJson: recurringSchedule,
       teacherTermsAcknowledgedAt: new Date(),
       absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
+      childSickLeaveFreeDaysPerMonth, childSickLeaveRetainerPct, availableDuringBreaks,
     })
     .returning();
 
@@ -1929,6 +1953,10 @@ type CommitContextResult =
       summerRetainerPct: number | null;
       summerRetainerMonths: number | null;
       leaveTermsNotes: string | null;
+      // #12
+      childSickLeaveFreeDaysPerMonth: number | null;
+      childSickLeaveRetainerPct: number | null;
+      availableDuringBreaks: boolean | null;
     };
 
 async function loadCommitContext(
@@ -2007,6 +2035,9 @@ async function loadCommitContext(
       summerRetainerPct: negotiationOffersTable.summerRetainerPct,
       summerRetainerMonths: negotiationOffersTable.summerRetainerMonths,
       leaveTermsNotes: negotiationOffersTable.leaveTermsNotes,
+      childSickLeaveFreeDaysPerMonth: negotiationOffersTable.childSickLeaveFreeDaysPerMonth,
+      childSickLeaveRetainerPct: negotiationOffersTable.childSickLeaveRetainerPct,
+      availableDuringBreaks: negotiationOffersTable.availableDuringBreaks,
     })
     .from(negotiationOffersTable)
     .where(
@@ -2028,6 +2059,9 @@ async function loadCommitContext(
     summerRetainerPct: acceptedOffer?.summerRetainerPct ?? null,
     summerRetainerMonths: acceptedOffer?.summerRetainerMonths ?? null,
     leaveTermsNotes: acceptedOffer?.leaveTermsNotes ?? null,
+    childSickLeaveFreeDaysPerMonth: acceptedOffer?.childSickLeaveFreeDaysPerMonth ?? null,
+    childSickLeaveRetainerPct: acceptedOffer?.childSickLeaveRetainerPct ?? null,
+    availableDuringBreaks: acceptedOffer?.availableDuringBreaks ?? null,
   } as const;
 }
 
@@ -2047,11 +2081,15 @@ async function finalizeCommit(params: {
   summerRetainerPct: number | null;
   summerRetainerMonths: number | null;
   leaveTermsNotes: string | null;
+  childSickLeaveFreeDaysPerMonth: number | null;
+  childSickLeaveRetainerPct: number | null;
+  availableDuringBreaks: boolean | null;
   parentTermsAcknowledgedAt: Date;
 }) {
   const {
     match, teacher, selectedProfessionalId, monthlyFeeInr, placementFeeInr, placementFeePaymentId,
     absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
+    childSickLeaveFreeDaysPerMonth, childSickLeaveRetainerPct, availableDuringBreaks,
     parentTermsAcknowledgedAt,
   } = params;
   const settings = await getSettings();
@@ -2102,6 +2140,9 @@ async function finalizeCommit(params: {
       summerRetainerPct,
       summerRetainerMonths,
       leaveTermsNotes,
+      childSickLeaveFreeDaysPerMonth,
+      childSickLeaveRetainerPct,
+      availableDuringBreaks,
       parentTermsAcknowledgedAt,
     })
     .returning();
@@ -2176,6 +2217,7 @@ router.post("/shadow-teacher/:matchId/commit/order", requireAuth, requireRole("p
   const {
     match, teacher, monthlyFeeInr,
     absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
+    childSickLeaveFreeDaysPerMonth, childSickLeaveRetainerPct, availableDuringBreaks,
   } = ctx;
 
   const settings = await getSettings();
@@ -2188,6 +2230,7 @@ router.post("/shadow-teacher/:matchId/commit/order", requireAuth, requireRole("p
       placementFeeInr: 0,
       placementFeePaymentId: null,
       absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
+      childSickLeaveFreeDaysPerMonth, childSickLeaveRetainerPct, availableDuringBreaks,
       parentTermsAcknowledgedAt: new Date(),
     });
     res.json({ engagementId: engagement.id, teacherFullName: teacher.fullName, phone: teacher.phone, email: teacher.email, waived: true });
@@ -2332,6 +2375,7 @@ router.post("/shadow-teacher/:matchId/commit/verify", requireAuth, requireRole("
   const {
     match: freshMatch, teacher, monthlyFeeInr,
     absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
+    childSickLeaveFreeDaysPerMonth, childSickLeaveRetainerPct, availableDuringBreaks,
   } = ctx;
 
   const engagement = await finalizeCommit({
@@ -2343,6 +2387,7 @@ router.post("/shadow-teacher/:matchId/commit/verify", requireAuth, requireRole("
     placementFeeInr,
     placementFeePaymentId: paymentRow!.id,
     absenceRetainerPct, absenceFreeDaysPerMonth, summerRetainerPct, summerRetainerMonths, leaveTermsNotes,
+    childSickLeaveFreeDaysPerMonth, childSickLeaveRetainerPct, availableDuringBreaks,
     parentTermsAcknowledgedAt: new Date(),
   });
 

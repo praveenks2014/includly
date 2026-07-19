@@ -14,6 +14,7 @@ export function TermsAcknowledgment({
   monthlyFeeLabel,
   startDate,
   noticePeriodDays,
+  retainerTerms,
   checked,
   onCheckedChange,
 }: {
@@ -22,6 +23,17 @@ export function TermsAcknowledgment({
   monthlyFeeLabel: string;
   startDate: string;
   noticePeriodDays?: number;
+  /** Negotiated leave/retainer terms, when a negotiation offer was involved (no-trial commit/accept flow). Omitted where no negotiation exists yet. */
+  retainerTerms?: {
+    absenceRetainerPct: number;
+    absenceFreeDaysPerMonth: number;
+    summerRetainerPct: number;
+    summerRetainerMonths: number;
+    childSickLeaveFreeDaysPerMonth: number;
+    childSickLeaveRetainerPct: number;
+    availableDuringBreaks: boolean;
+    leaveTermsNotes?: string | null;
+  } | null;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
 }) {
@@ -42,6 +54,24 @@ export function TermsAcknowledgment({
         )}
         <p><span className="font-semibold">Monthly fee:</span> {monthlyFeeLabel}</p>
         <p><span className="font-semibold">Start date:</span> {formattedStart}</p>
+        {retainerTerms && (
+          <>
+            <p>
+              <span className="font-semibold">Teacher absence:</span> {retainerTerms.absenceRetainerPct}% pay beyond {retainerTerms.absenceFreeDaysPerMonth} free days/mo
+            </p>
+            <p>
+              <span className="font-semibold">Child sick-leave:</span> full pay up to {retainerTerms.childSickLeaveFreeDaysPerMonth}d/mo, {retainerTerms.childSickLeaveRetainerPct}% beyond
+            </p>
+            <p>
+              <span className="font-semibold">Term/school-holiday breaks:</span> {retainerTerms.availableDuringBreaks
+                ? `retainer ${retainerTerms.summerRetainerPct}% × ${retainerTerms.summerRetainerMonths}mo (teacher available for occasional online/at-home sessions)`
+                : "no retainer — teacher not available for sessions during breaks"}
+            </p>
+            {retainerTerms.leaveTermsNotes && retainerTerms.leaveTermsNotes.trim() && (
+              <p className="italic text-gray-600">Notes: {retainerTerms.leaveTermsNotes}</p>
+            )}
+          </>
+        )}
       </div>
       <p className="text-[11px] text-gray-600">
         <span className="font-semibold">Ending this engagement:</span> Either of you can end this with {notice} days' notice, or by mutual early-exit agreement (buyout) — not by simply stopping without notice. Raise this through the app's "End Engagement" option so it's handled properly for both of you.

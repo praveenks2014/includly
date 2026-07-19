@@ -117,6 +117,14 @@ interface MatchWithCandidates {
     activationFeeInr: number | null;
     teacherTermsAcknowledgedAt: string | null;
     startDate: string;
+    absenceRetainerPct: number | null;
+    absenceFreeDaysPerMonth: number | null;
+    summerRetainerPct: number | null;
+    summerRetainerMonths: number | null;
+    childSickLeaveFreeDaysPerMonth: number | null;
+    childSickLeaveRetainerPct: number | null;
+    availableDuringBreaks: boolean | null;
+    leaveTermsNotes: string | null;
   } | null;
 }
 
@@ -190,6 +198,11 @@ interface NegotiationOffer {
   summerRetainerPct: number;
   summerRetainerMonths: number;
   leaveTermsNotes: string | null;
+  // #12 — child's own sick-leave (distinct from the teacher's own absence
+  // above), and the gate for the break retainer (summerRetainerPct).
+  childSickLeaveFreeDaysPerMonth: number;
+  childSickLeaveRetainerPct: number;
+  availableDuringBreaks: boolean;
   status: string;
   createdAt: string;
 }
@@ -233,10 +246,14 @@ const MONTHLY_SALARY_PRESETS = [
   { key: "flexible",    label: "Flexible",           min: null,  max: null  },
 ];
 
-const DEFAULT_ABSENCE_RETAINER_PCT = 50;
-const DEFAULT_ABSENCE_FREE_DAYS_PER_MONTH = 4;
+// #12 retainer-defaults update: absenceFreeDaysPerMonth 4->2, absenceRetainerPct 50->0.
+const DEFAULT_ABSENCE_RETAINER_PCT = 0;
+const DEFAULT_ABSENCE_FREE_DAYS_PER_MONTH = 2;
 const DEFAULT_SUMMER_RETAINER_PCT = 0;
 const DEFAULT_SUMMER_RETAINER_MONTHS = 0;
+const DEFAULT_CHILD_SICK_LEAVE_FREE_DAYS_PER_MONTH = 7;
+const DEFAULT_CHILD_SICK_LEAVE_RETAINER_PCT = 50;
+const DEFAULT_AVAILABLE_DURING_BREAKS = false;
 
 function termsSummary(o: NegotiationOffer): string {
   const parts: string[] = [];
@@ -244,10 +261,14 @@ function termsSummary(o: NegotiationOffer): string {
     || o.absenceFreeDaysPerMonth !== DEFAULT_ABSENCE_FREE_DAYS_PER_MONTH;
   const summerCustom = o.summerRetainerPct !== DEFAULT_SUMMER_RETAINER_PCT
     || o.summerRetainerMonths !== DEFAULT_SUMMER_RETAINER_MONTHS;
+  const sickLeaveCustom = o.childSickLeaveFreeDaysPerMonth !== DEFAULT_CHILD_SICK_LEAVE_FREE_DAYS_PER_MONTH
+    || o.childSickLeaveRetainerPct !== DEFAULT_CHILD_SICK_LEAVE_RETAINER_PCT;
   const hasNotes = !!(o.leaveTermsNotes && o.leaveTermsNotes.trim());
 
   if (absenceCustom) parts.push(`retainer ${o.absenceRetainerPct}% (${o.absenceFreeDaysPerMonth} free days)`);
+  if (sickLeaveCustom) parts.push(`child sick-leave ${o.childSickLeaveRetainerPct}% beyond ${o.childSickLeaveFreeDaysPerMonth}d`);
   if (summerCustom) parts.push(`summer ${o.summerRetainerPct}% × ${o.summerRetainerMonths}mo`);
+  if (o.availableDuringBreaks) parts.push("available during breaks");
   if (hasNotes) parts.push("has notes");
   return parts.length === 0 ? "standard terms" : parts.join(" · ");
 }
@@ -288,6 +309,9 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
   const [summerRetainerPct, setSummerRetainerPct] = useState(DEFAULT_SUMMER_RETAINER_PCT);
   const [summerRetainerMonths, setSummerRetainerMonths] = useState(DEFAULT_SUMMER_RETAINER_MONTHS);
   const [leaveTermsNotes, setLeaveTermsNotes] = useState("");
+  const [childSickLeaveFreeDaysPerMonth, setChildSickLeaveFreeDaysPerMonth] = useState(DEFAULT_CHILD_SICK_LEAVE_FREE_DAYS_PER_MONTH);
+  const [childSickLeaveRetainerPct, setChildSickLeaveRetainerPct] = useState(DEFAULT_CHILD_SICK_LEAVE_RETAINER_PCT);
+  const [availableDuringBreaks, setAvailableDuringBreaks] = useState(DEFAULT_AVAILABLE_DURING_BREAKS);
   const [expandTerms, setExpandTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
@@ -299,6 +323,15 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
     enabled: myUserId > 0 && ["shortlisted", "trial_done"].includes(matchStatus),
     refetchInterval: 15_000,
   });
+
+  // #12 — toggling "available during breaks" drives the break retainer's
+  // default (50% when agreed, 0% when not) without preventing further manual
+  // adjustment — the checkbox sets a sensible default, summerRetainerPct
+  // stays the single source of truth for the actual %.
+  function toggleAvailableDuringBreaks(next: boolean) {
+    setAvailableDuringBreaks(next);
+    setSummerRetainerPct(next ? 50 : 0);
+  }
 
   // Prefill: seed the form from the current "reference offer" — the other
   // party's pending counter if one exists, else the most recent offer of
@@ -317,6 +350,9 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
     setSummerRetainerPct(referenceOffer.summerRetainerPct ?? DEFAULT_SUMMER_RETAINER_PCT);
     setSummerRetainerMonths(referenceOffer.summerRetainerMonths ?? DEFAULT_SUMMER_RETAINER_MONTHS);
     setLeaveTermsNotes(referenceOffer.leaveTermsNotes ?? "");
+    setChildSickLeaveFreeDaysPerMonth(referenceOffer.childSickLeaveFreeDaysPerMonth ?? DEFAULT_CHILD_SICK_LEAVE_FREE_DAYS_PER_MONTH);
+    setChildSickLeaveRetainerPct(referenceOffer.childSickLeaveRetainerPct ?? DEFAULT_CHILD_SICK_LEAVE_RETAINER_PCT);
+    setAvailableDuringBreaks(referenceOffer.availableDuringBreaks ?? DEFAULT_AVAILABLE_DURING_BREAKS);
     if (termsSummary(referenceOffer) !== "standard terms") setExpandTerms(true);
     prefilledOfferIdRef.current = referenceOffer.id;
   }, [offers, myUserId]);
@@ -342,6 +378,9 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
           summerRetainerPct,
           summerRetainerMonths,
           leaveTermsNotes: leaveTermsNotes.trim() || null,
+          childSickLeaveFreeDaysPerMonth,
+          childSickLeaveRetainerPct,
+          availableDuringBreaks,
         }),
       });
       if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Failed to send offer", variant: "destructive" }); return; }
@@ -399,7 +438,30 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
             className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5]"
             data-testid="input-summer-retainer-months" />
         </label>
+        <label className="text-[10px] text-gray-600">
+          <RetainerFieldLabel label="Child sick-leave: full pay up to (days/mo)" tip="If the child is sick/absent (not the teacher), full pay applies up to this many days per month." />
+          <input type="number" min={0} max={31} value={childSickLeaveFreeDaysPerMonth}
+            onChange={e => setChildSickLeaveFreeDaysPerMonth(Math.max(0, Math.min(31, parseInt(e.target.value || "0", 10))))}
+            className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5]"
+            data-testid="input-child-sick-leave-free-days" />
+        </label>
+        <label className="text-[10px] text-gray-600">
+          <RetainerFieldLabel label="Child sick-leave retainer beyond that (%)" tip="% of the daily rate still paid once the child's sick-leave free days above are used up." />
+          <input type="number" min={0} max={100} value={childSickLeaveRetainerPct}
+            onChange={e => setChildSickLeaveRetainerPct(Math.max(0, Math.min(100, parseInt(e.target.value || "0", 10))))}
+            className="mt-0.5 w-full text-xs border border-gray-200 rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-[#2EC4A5]"
+            data-testid="input-child-sick-leave-retainer-pct" />
+        </label>
       </div>
+      <label className="flex items-start gap-2 text-[10px] text-gray-600 cursor-pointer">
+        <input type="checkbox" className="mt-0.5 h-3.5 w-3.5 rounded border-gray-300 accent-[#2EC4A5] cursor-pointer"
+          checked={availableDuringBreaks}
+          onChange={e => toggleAvailableDuringBreaks(e.target.checked)}
+          data-testid="input-available-during-breaks" />
+        <span>
+          <RetainerFieldLabel label="Teacher agrees to remain available for occasional online/at-home sessions during term/school-holiday breaks" tip="Unlocks the summer/break retainer above (defaults to 50% when checked). If unchecked, the break retainer defaults to 0% — the teacher isn't obligated to be reachable during breaks." />
+        </span>
+      </label>
       <label className="text-[10px] text-gray-600 block">
         <RetainerFieldLabel label="Additional leave / retainer terms (optional)" tip="Anything else you've agreed on leave, absences, or retainer pay that isn't captured by the fields above." />
         <textarea rows={2} maxLength={1000} value={leaveTermsNotes}
@@ -447,6 +509,10 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
               ? ` · Summer retainer ${acceptedOffer.summerRetainerPct}% × ${acceptedOffer.summerRetainerMonths}mo`
               : ""}
           </p>
+          <p className="text-[10px] text-green-700">
+            Child sick-leave: full pay up to {acceptedOffer.childSickLeaveFreeDaysPerMonth}d/mo, {acceptedOffer.childSickLeaveRetainerPct}% beyond
+            {" · "}{acceptedOffer.availableDuringBreaks ? "Available during breaks" : "Not available during breaks"}
+          </p>
           {acceptedOffer.leaveTermsNotes && acceptedOffer.leaveTermsNotes.trim() && (
             <p className="text-[10px] text-green-700 italic">Notes: {acceptedOffer.leaveTermsNotes}</p>
           )}
@@ -466,6 +532,10 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
               {(theirPendingOffer.summerRetainerPct > 0 || theirPendingOffer.summerRetainerMonths > 0)
                 ? ` · Summer retainer ${theirPendingOffer.summerRetainerPct}% × ${theirPendingOffer.summerRetainerMonths}mo`
                 : ""}
+            </p>
+            <p className="text-[10px] text-amber-800">
+              Child sick-leave: full pay up to {theirPendingOffer.childSickLeaveFreeDaysPerMonth}d/mo, {theirPendingOffer.childSickLeaveRetainerPct}% beyond
+              {" · "}{theirPendingOffer.availableDuringBreaks ? "Available during breaks" : "Not available during breaks"}
             </p>
             {theirPendingOffer.leaveTermsNotes && theirPendingOffer.leaveTermsNotes.trim() && (
               <p className="text-[10px] text-amber-800 italic">Notes: {theirPendingOffer.leaveTermsNotes}</p>
@@ -1869,6 +1939,15 @@ export function ShadowTeacherRequestWidget() {
 
   // ── Commit date-picker dialog (rendered in trial_done and shortlisted returns) ──
   const commitCandidate = match?.candidates.find((c) => c.professionalId === commitProfId) ?? null;
+  // Same query key as OfferSection/CandidateCard's cardOffers — React Query
+  // dedupes, no extra request — just read here for the accepted offer's
+  // retainer terms so TermsAcknowledgment can show them at commit time too.
+  const { data: commitOffers = [] } = useQuery<NegotiationOffer[]>({
+    queryKey: ["offers", match?.id, commitCandidate?.id],
+    queryFn: () => fetchWithAuth(`/api/shadow-teacher/${match!.id}/candidates/${commitCandidate!.id}/offers`).then(r => r.json() as Promise<NegotiationOffer[]>),
+    enabled: !!match?.id && !!commitCandidate?.id,
+  });
+  const commitAcceptedOffer = commitOffers.find((o) => o.status === "accepted") ?? null;
   const commitFeeLabel = commitCandidate == null || (commitCandidate.expectedSalaryMin == null && commitCandidate.expectedSalaryMax == null)
     ? "To be confirmed"
     : `₹${(commitCandidate.expectedSalaryMin ?? 0).toLocaleString("en-IN")}${
@@ -1918,6 +1997,7 @@ export function ShadowTeacherRequestWidget() {
             monthlyFeeLabel={commitFeeLabel}
             startDate={commitStartDate}
             noticePeriodDays={pricing?.noticePeriodDays}
+            retainerTerms={commitAcceptedOffer}
             checked={commitTermsChecked}
             onCheckedChange={setCommitTermsChecked}
           />
@@ -2163,6 +2243,21 @@ export function ShadowTeacherRequestWidget() {
   if (status === "committed" && match?.pendingEngagement) {
     const pe = match.pendingEngagement;
     const scheduleSummary = formatRecurringScheduleSummary(pe.recurringSchedule);
+    const peRetainerTerms = pe.absenceRetainerPct != null && pe.absenceFreeDaysPerMonth != null
+      && pe.summerRetainerPct != null && pe.summerRetainerMonths != null
+      && pe.childSickLeaveFreeDaysPerMonth != null && pe.childSickLeaveRetainerPct != null
+      && pe.availableDuringBreaks != null
+      ? {
+          absenceRetainerPct: pe.absenceRetainerPct,
+          absenceFreeDaysPerMonth: pe.absenceFreeDaysPerMonth,
+          summerRetainerPct: pe.summerRetainerPct,
+          summerRetainerMonths: pe.summerRetainerMonths,
+          childSickLeaveFreeDaysPerMonth: pe.childSickLeaveFreeDaysPerMonth,
+          childSickLeaveRetainerPct: pe.childSickLeaveRetainerPct,
+          availableDuringBreaks: pe.availableDuringBreaks,
+          leaveTermsNotes: pe.leaveTermsNotes,
+        }
+      : null;
     return (
       <div className="bg-white border-2 border-[#2EC4A5] rounded-2xl p-5 space-y-3">
         <div className="flex items-center gap-2">
@@ -2175,6 +2270,7 @@ export function ShadowTeacherRequestWidget() {
               scheduleSummary={scheduleSummary}
               monthlyFeeLabel={`₹${pe.monthlyFeeInr.toLocaleString("en-IN")}`}
               startDate={pe.startDate}
+              retainerTerms={peRetainerTerms}
               checked={confirmTermsChecked}
               onCheckedChange={setConfirmTermsChecked}
             />

@@ -78,6 +78,10 @@ export const shadowTeacherEngagementsTable = pgTable("shadow_teacher_engagements
   summerRetainerPct: integer("summer_retainer_pct"),
   summerRetainerMonths: integer("summer_retainer_months"),
   leaveTermsNotes: text("leave_terms_notes"),
+  // #12 — same snapshot-at-accept-time convention as the fields above.
+  childSickLeaveFreeDaysPerMonth: integer("child_sick_leave_free_days_per_month"),
+  childSickLeaveRetainerPct: integer("child_sick_leave_retainer_pct"),
+  availableDuringBreaks: boolean("available_during_breaks"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

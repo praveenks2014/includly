@@ -165,6 +165,14 @@ router.get("/engagements", requireAuth, async (req, res): Promise<void> => {
       platformSalaryEnabled: shadowTeacherEngagementsTable.platformSalaryEnabled,
       placementFeeInr:  shadowTeacherEngagementsTable.placementFeeInr,
       activationFeeInr: shadowTeacherEngagementsTable.activationFeeInr,
+      absenceRetainerPct: shadowTeacherEngagementsTable.absenceRetainerPct,
+      absenceFreeDaysPerMonth: shadowTeacherEngagementsTable.absenceFreeDaysPerMonth,
+      summerRetainerPct: shadowTeacherEngagementsTable.summerRetainerPct,
+      summerRetainerMonths: shadowTeacherEngagementsTable.summerRetainerMonths,
+      childSickLeaveFreeDaysPerMonth: shadowTeacherEngagementsTable.childSickLeaveFreeDaysPerMonth,
+      childSickLeaveRetainerPct: shadowTeacherEngagementsTable.childSickLeaveRetainerPct,
+      availableDuringBreaks: shadowTeacherEngagementsTable.availableDuringBreaks,
+      leaveTermsNotes: shadowTeacherEngagementsTable.leaveTermsNotes,
     })
     .from(shadowTeacherEngagementsTable)
     .leftJoin(usersTable, eq(shadowTeacherEngagementsTable.parentId, usersTable.id))
