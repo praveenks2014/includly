@@ -28,6 +28,7 @@ import { creditWallet } from "../lib/ledger";
 import { resolveStuckShadowTeacherMatch } from "../lib/stuckEngagementResolver";
 import { getSettings, parseTiers, filterBySchoolHours, computeEffectiveAvailableFrom } from "../lib/shadowTeacherMatching";
 import { JITSI_CONFIG_SUFFIX } from "../lib/jitsi";
+import { haversineKm } from "../lib/geo";
 
 const router: IRouter = Router();
 
@@ -327,6 +328,15 @@ const NewRequestBody = z.object({
   // range-overlap comparison against the professional's monthly pricing).
   budgetMinInr: z.number().int().min(0).optional(),
   budgetMaxInr: z.number().int().min(0).optional(),
+  // #18 — school location, request-time only. schoolLat/schoolLng must be
+  // sent together (or not at all) — they're only ever populated client-side
+  // from an explicit SchoolAutocomplete suggestion selection, never from
+  // free-typed text, so a distance is never computed from a wrong guess.
+  schoolName: z.string().max(300).optional(),
+  schoolLat: z.number().optional(),
+  schoolLng: z.number().optional(),
+}).refine((b) => (b.schoolLat == null) === (b.schoolLng == null), {
+  message: "schoolLat and schoolLng must both be present or both absent",
 });
 
 router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
@@ -336,7 +346,7 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
     return;
   }
 
-  const { childId, extraNotes, budgetMinInr, budgetMaxInr } = parsed.data;
+  const { childId, extraNotes, budgetMinInr, budgetMaxInr, schoolName, schoolLat, schoolLng } = parsed.data;
 
   // Load child (must belong to this parent)
   const [child] = await db
@@ -420,6 +430,9 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
         childGoalsAreas:     child.goalsAreas ?? null,
         childPreferredModes: child.preferredModes ?? null,
         extraNotes:          extraNotes ?? null,
+        schoolName:          schoolName ?? null,
+        schoolLat:           schoolLat ?? null,
+        schoolLng:           schoolLng ?? null,
       })
       .returning();
     await surfaceCandidatesForMatch(waivedMatch);
@@ -456,6 +469,9 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
       childGoalsAreas: child.goalsAreas ?? null,
       childPreferredModes: child.preferredModes ?? null,
       extraNotes: extraNotes ?? null,
+      schoolName: schoolName ?? null,
+      schoolLat: schoolLat ?? null,
+      schoolLng: schoolLng ?? null,
       providerOrderId: order.id as string,
     })
     .returning();
@@ -670,6 +686,13 @@ router.get("/shadow-teacher/my-request", requireAuth, requireRole("parent"), asy
       trialDaysAccepted: c.trialDaysAccepted,
       // For the upcoming candidate-card display — never used to exclude.
       effectiveAvailableFrom: availabilityMap.get(pro.id) ?? pro.earliestStartDate,
+      // #18 — display-only distance from the parent-confirmed school
+      // location to this teacher, never computed unless both points are
+      // known precisely (schoolLat/Lng only set via an explicit
+      // SchoolAutocomplete selection — see the schema comment).
+      schoolDistanceKm: match.schoolLat != null && match.schoolLng != null && pro.latitude != null && pro.longitude != null
+        ? Math.round(haversineKm(match.schoolLat, match.schoolLng, pro.latitude, pro.longitude) * 10) / 10
+        : null,
     };
   }).filter(Boolean);
 
@@ -720,7 +743,7 @@ router.get("/shadow-teacher/my-request", requireAuth, requireRole("parent"), asy
 // ── GET /shadow-teacher/my-candidacies — teacher sees matches they've been shortlisted for ─
 router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const [pro] = await db
-    .select({ id: professionalProfilesTable.id })
+    .select({ id: professionalProfilesTable.id, latitude: professionalProfilesTable.latitude, longitude: professionalProfilesTable.longitude })
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.userId, req.userId!));
 
@@ -737,6 +760,9 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       childConditions:        shadowTeacherMatchesTable.childConditions,
       childPreferredModes:    shadowTeacherMatchesTable.childPreferredModes,
       childGoalsAreas:        shadowTeacherMatchesTable.childGoalsAreas,
+      schoolName:             shadowTeacherMatchesTable.schoolName,
+      schoolLat:              shadowTeacherMatchesTable.schoolLat,
+      schoolLng:              shadowTeacherMatchesTable.schoolLng,
       preMeetingRequested:    shadowTeacherMatchesTable.preMeetingRequested,
       preMeetingNote:         shadowTeacherMatchesTable.preMeetingNote,
       trialLocation:          shadowTeacherMatchesTable.trialLocation,
@@ -783,6 +809,9 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
         childConditions:        shadowTeacherMatchesTable.childConditions,
         childPreferredModes:    shadowTeacherMatchesTable.childPreferredModes,
         childGoalsAreas:        shadowTeacherMatchesTable.childGoalsAreas,
+        schoolName:             shadowTeacherMatchesTable.schoolName,
+        schoolLat:              shadowTeacherMatchesTable.schoolLat,
+        schoolLng:              shadowTeacherMatchesTable.schoolLng,
         preMeetingRequested:    shadowTeacherMatchesTable.preMeetingRequested,
         preMeetingNote:         shadowTeacherMatchesTable.preMeetingNote,
         trialLocation:          shadowTeacherMatchesTable.trialLocation,
@@ -857,6 +886,12 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       // shadowTeacherScoring.ts) and must never reach the teacher's client.
       childPreferredModes: c.childPreferredModes ?? [],
       childGoalsAreas:        c.childGoalsAreas       ?? null,
+      schoolName:             c.schoolName            ?? null,
+      // #18 — same display-only distance as the parent's my-request view,
+      // never computed unless both points are known precisely.
+      schoolDistanceKm: c.schoolLat != null && c.schoolLng != null && pro.latitude != null && pro.longitude != null
+        ? Math.round(haversineKm(c.schoolLat, c.schoolLng, pro.latitude, pro.longitude) * 10) / 10
+        : null,
       preMeetingRequested:    c.preMeetingRequested   ?? false,
       preMeetingNote:         c.preMeetingNote        ?? null,
       trialLocation:          c.trialLocation         ?? null,

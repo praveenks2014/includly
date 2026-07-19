@@ -3653,6 +3653,12 @@ interface Candidacy {
   childConditions:     string[];
   childPreferredModes: string[];
   childGoalsAreas:     string | null;
+  // #18 — request-time school location (see shadow-teacher schema comment
+  // for the schoolLat/Lng precision guarantee). schoolDistanceKm is
+  // display-only, never computed unless both the parent's confirmed school
+  // point and this teacher's own lat/lng are known precisely.
+  schoolName:          string | null;
+  schoolDistanceKm:    number | null;
   preMeetingRequested: boolean;
   preMeetingNote:      string | null;
   trialLocation:       string | null;
@@ -4033,6 +4039,7 @@ function RespondRequestBlock({ candidacy: c, onUpdated }: { candidacy: Candidacy
       <p className="text-sm font-bold text-blue-900">Shadowing Request</p>
       <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-blue-800">
         {c.childCity && <span>📍 {c.childCity}</span>}
+        {c.schoolDistanceKm != null && <span>🏫 {c.schoolDistanceKm} km from school</span>}
         {c.childPreferredModes.length > 0 && <span>🎓 {c.childPreferredModes.join(", ")}</span>}
         {c.childConditions.length > 0 && <span className="col-span-2">🏥 {c.childConditions.join(", ")}</span>}
       </div>
@@ -4395,6 +4402,7 @@ function CandidacyCard({ candidacy: c, onOpen, myUserId, onUpdated }: { candidac
 
       <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-gray-500 mb-4">
         {c.childCity && <span>📍 {c.childCity}</span>}
+        {c.schoolDistanceKm != null && <span>🏫 {c.schoolDistanceKm} km from school</span>}
         {c.childPreferredModes.length > 0 && (
           <span>🎓 {c.childPreferredModes.join(", ")}</span>
         )}

@@ -28,6 +28,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShadowMatchChatDrawer } from "./ShadowMatchChatDrawer";
 import { UpiPayQRDialog } from "./UpiPayQRDialog";
 import { TermsAcknowledgment } from "./TermsAcknowledgment";
+import { SchoolAutocomplete } from "./SchoolAutocomplete";
 import { ProfessionalAvatar } from "./ProfessionalAvatar";
 import { useGetMe } from "@workspace/api-client-react";
 
@@ -87,6 +88,11 @@ interface Candidate {
   interviewDoneAt: string | null;
   trialDaysRequested: number | null;
   trialDaysAccepted: number | null;
+  // #18 — display-only distance from the parent-confirmed school location to
+  // this teacher. Null whenever the parent didn't select a disambiguated
+  // school suggestion (no precise point to measure from) — never an
+  // approximate/guessed figure.
+  schoolDistanceKm: number | null;
 }
 
 interface MatchWithCandidates {
@@ -104,6 +110,9 @@ interface MatchWithCandidates {
   childConditions: string[] | null;
   childBudgetMinInr: number | null;
   childBudgetMaxInr: number | null;
+  // #18 — request-time school location (see schema comment for the
+  // schoolLat/Lng precision guarantee).
+  schoolName: string | null;
   trialStartOtp: string | null;
   trialEndOtp: string | null;
   trialLocation: string | null;
@@ -928,6 +937,11 @@ function CandidateCard({
               <MapPin size={10} />{p.displayArea ?? p.city}
             </span>
           )}
+          {candidate.schoolDistanceKm != null && (
+            <span className="text-[11px] text-gray-400 flex items-center gap-1">
+              🏫 {candidate.schoolDistanceKm} km from school
+            </span>
+          )}
           {p.averageRating && (
             <span className="text-[11px] text-gray-400 flex items-center gap-1">
               <Star size={10} className="fill-[#FFB830] text-[#FFB830]" />{p.averageRating.toFixed(1)}
@@ -1121,6 +1135,12 @@ export function ShadowTeacherRequestWidget() {
   const [salaryBudgetMinInr, setSalaryBudgetMinInr] = useState<number | null>(null);
   const [salaryBudgetMaxInr, setSalaryBudgetMaxInr] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // #18 — school location, request-time only. schoolLat/Lng are only ever
+  // set via an explicit SchoolAutocomplete suggestion selection — never from
+  // free-typed text — so a distance is never shown from a wrong guess.
+  const [schoolName, setSchoolName] = useState("");
+  const [schoolLat, setSchoolLat] = useState<number | null>(null);
+  const [schoolLng, setSchoolLng] = useState<number | null>(null);
 
   function selectSalaryPreset(preset: typeof MONTHLY_SALARY_PRESETS[number]) {
     const toggling = preset.key === salaryPresetKey;
@@ -1192,6 +1212,11 @@ export function ShadowTeacherRequestWidget() {
           extraNotes: extraNotes.trim() || undefined,
           ...(salaryBudgetMinInr != null && { budgetMinInr: salaryBudgetMinInr }),
           ...(salaryBudgetMaxInr != null && { budgetMaxInr: salaryBudgetMaxInr }),
+          ...(schoolName.trim() && { schoolName: schoolName.trim() }),
+          // Only ever sent together, and only when the parent explicitly
+          // selected a SchoolAutocomplete suggestion — never derived from
+          // free-typed text.
+          ...(schoolLat != null && schoolLng != null && { schoolLat, schoolLng }),
         }),
       });
       const data = await res.json() as {
@@ -1767,6 +1792,18 @@ export function ShadowTeacherRequestWidget() {
                 </div>
               </div>
             )}
+
+            <div>
+              <Label className="text-sm mb-1.5 block">Child's school <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Search for the exact school and pick it from the list so we can show distance from school to both you and the teacher. If you just type a name without selecting a match, we'll save it but won't show a distance.
+              </p>
+              <SchoolAutocomplete
+                value={schoolName}
+                onManualChange={(name) => { setSchoolName(name); setSchoolLat(null); setSchoolLng(null); }}
+                onSelect={(result) => { setSchoolName(result.displayText); setSchoolLat(result.lat); setSchoolLng(result.lng); }}
+              />
+            </div>
 
             <div>
               <Label className="text-sm mb-1.5 block">Anything else to tell us? <span className="text-muted-foreground font-normal">(optional)</span></Label>

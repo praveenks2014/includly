@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, pgEnum, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, pgEnum, boolean, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -43,6 +43,16 @@ export const shadowTeacherMatchesTable = pgTable("shadow_teacher_matches", {
   childBudgetMaxInr: integer("child_budget_max_inr"),
   childGoalsAreas: text("child_goals_areas").array(),
   childPreferredModes: text("child_preferred_modes").array(),
+  // #18 — school location, captured at REQUEST time (not child onboarding,
+  // which only has a home city/lat/lng). schoolName is always saved as
+  // free text regardless of geocoding outcome. schoolLat/schoolLng are only
+  // ever set when the parent explicitly selected one specific disambiguated
+  // Photon suggestion — never from a raw top-hit — so a distance computed
+  // from these is never silently wrong. Null pair means no distance is ever
+  // shown, by design (see haversineKm call sites).
+  schoolName: text("school_name"),
+  schoolLat: real("school_lat"),
+  schoolLng: real("school_lng"),
   // Compatibility signal only (see scoreStartDate in shadowTeacherScoring.ts)
   // — never excludes a candidate, only ranks them relative to how well their
   // effective availability lines up with this date.
