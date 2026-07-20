@@ -116,10 +116,12 @@ router.get("/engagements", requireAuth, async (req, res): Promise<void> => {
         activationFeeInr: shadowTeacherEngagementsTable.activationFeeInr,
         professionalName: professionalProfilesTable.fullName,
         professionalSpecialty: professionalProfilesTable.specialty,
+        professionalAvatarUrl: usersTable.avatarUrl,
         childName: childrenTable.name,
       })
       .from(shadowTeacherEngagementsTable)
       .leftJoin(professionalProfilesTable, eq(shadowTeacherEngagementsTable.professionalId, professionalProfilesTable.id))
+      .leftJoin(usersTable, eq(professionalProfilesTable.userId, usersTable.id))
       .leftJoin(childrenTable, eq(shadowTeacherEngagementsTable.childId, childrenTable.id))
       .where(eq(shadowTeacherEngagementsTable.parentId, req.userId!))
       .orderBy(desc(shadowTeacherEngagementsTable.createdAt));

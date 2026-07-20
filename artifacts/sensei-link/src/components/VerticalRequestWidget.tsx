@@ -806,6 +806,7 @@ export function VerticalRequestWidget({ vertical }: { vertical: Vertical }) {
   const [mode, setMode] = useState<string[]>([]);
   // tutor-only
   const [subjects, setSubjects] = useState<string[]>([]);
+  const [otherSubject, setOtherSubject] = useState("");
   const [board, setBoard] = useState("");
   // therapist-only
   const [primaryConcern, setPrimaryConcern] = useState("");
@@ -857,7 +858,8 @@ export function VerticalRequestWidget({ vertical }: { vertical: Vertical }) {
         extraNotes: undefined,
       };
       if (cfg.vertical === "tutor") {
-        body["subjects"] = subjects.length ? subjects : undefined;
+        const allSubjects = otherSubject.trim() ? [...subjects, otherSubject.trim()] : subjects;
+        body["subjects"] = allSubjects.length ? allSubjects : undefined;
         body["board"] = board || undefined;
         body["mode"] = mode.length ? mode : undefined;
       } else {
@@ -1154,6 +1156,17 @@ export function VerticalRequestWidget({ vertical }: { vertical: Vertical }) {
                       </button>
                     ))}
                   </div>
+                  {/* Fallback for subjects not in the curated list above —
+                      the list is short and parents shouldn't be blocked by
+                      an incomplete checklist. */}
+                  <input
+                    type="text"
+                    value={otherSubject}
+                    onChange={(e) => setOtherSubject(e.target.value)}
+                    placeholder="Other subject, please specify (optional)"
+                    maxLength={100}
+                    className="mt-2 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2EC4A5]"
+                  />
                 </div>
                 <div>
                   <label className="text-sm mb-1 block font-medium text-foreground">Board</label>

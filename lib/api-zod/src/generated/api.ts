@@ -495,6 +495,7 @@ export const GetProfessionalResponse = zod.object({
   paymentActivated: zod.boolean(),
   createdAt: zod.coerce.date(),
   rciVerified: zod.boolean().optional(),
+  avatarUrl: zod.string().nullish(),
 });
 
 /**

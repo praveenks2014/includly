@@ -253,6 +253,8 @@ export interface ProfessionalDetail {
   paymentActivated: boolean;
   createdAt: string;
   rciVerified?: boolean;
+  /** @nullable */
+  avatarUrl?: string | null;
 }
 
 export interface ProfessionalSearchResult {

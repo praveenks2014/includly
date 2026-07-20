@@ -24,13 +24,14 @@ import { ComingSoon } from "@/components/ComingSoon";
 import { EngagementProgress } from "@/components/EngagementProgress";
 import { UpiPayQRDialog } from "@/components/UpiPayQRDialog";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
+import { ProfessionalAvatar } from "@/components/ProfessionalAvatar";
 import { fetchWithAuth } from "@/lib/api";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import { useToast } from "@/hooks/use-toast";
 import {
   Home, Search, CalendarCheck, Bell, BookOpen, Settings,
   Star, MapPin, Loader2, ChevronDown, CheckCircle2,
-  Clock, Video, Navigation, ArrowRight, HelpCircle,
+  Clock, Video, Navigation, ArrowRight,
   Phone, Mail, MessageSquarePlus, Check, X, Wallet,
   TrendingUp, Gift, Copy, Sparkles, Menu, MessageCircle,
   User, IndianRupee, ArrowLeft, Building2, AlertTriangle,
@@ -82,6 +83,7 @@ const SPECIALTIES = [
   { value: "sensory_integration", label: "Sensory Integration" },
   { value: "special_educator", label: "Special Educator" },
   { value: "child_psychologist", label: "Child Psychologist" },
+  { value: "coaching", label: "Parent Coaching" },
 ];
 
 function greeting() {
@@ -1208,6 +1210,7 @@ function ShadowTeacherTab() {
     status: string;
     notes: string | null;
     professionalName: string | null;
+    professionalAvatarUrl?: string | null;
     childName: string | null;
     startOtp?: string | null;
     endDate?: string | null;
@@ -1621,14 +1624,26 @@ function ShadowTeacherTab() {
   }
 
   if (!active || active.status === "ended") {
-    return <ShadowTeacherRequestWidget key={selectedChildId ?? "no-child"} />;
+    return (
+      <div className="space-y-5 pb-4">
+        {/* Back to Services — same pattern as the active-engagement view below,
+            previously missing on this no-active-request branch. */}
+        <Link href="/services">
+          <button className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-teal-600 transition-colors -mb-1">
+            <ArrowLeft size={13} />
+            <span>Back to Services</span>
+          </button>
+        </Link>
+        <ShadowTeacherRequestWidget key={selectedChildId ?? "no-child"} />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-5 pb-4">
       {/* Back to Services */}
       <Link href="/services">
-        <button className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-teal-600 transition-colors -mb-1">
+        <button className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-teal-600 transition-colors">
           <ArrowLeft size={13} />
           <span>Back to Services</span>
         </button>
@@ -1645,9 +1660,7 @@ function ShadowTeacherTab() {
             {active.childName && <p className="text-sm opacity-75 mt-0.5">Supporting {active.childName}</p>}
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
-            <div className="w-10 h-10 rounded-2xl bg-white/20 border border-white/20 flex items-center justify-center text-white font-bold text-sm">
-              {initials(active.professionalName)}
-            </div>
+            <ProfessionalAvatar avatarUrl={active.professionalAvatarUrl} fullName={active.professionalName} size="sm" />
             <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/20 border border-white/15 uppercase tracking-wide whitespace-nowrap">
               {active.status.replace(/_/g, " ")}
             </span>
@@ -1892,9 +1905,8 @@ function ShadowTeacherTab() {
                 Pay the teacher directly, then mark the month as paid here so they can confirm receipt.
               </p>
               <div>
-                <p className="text-xs text-gray-500 mb-1">Month (YYYY-MM)</p>
-                <input value={payingMonth} onChange={(e) => setPayingMonth(e.target.value)}
-                  placeholder="2026-06"
+                <p className="text-xs text-gray-500 mb-1">Month</p>
+                <input type="month" value={payingMonth} onChange={(e) => setPayingMonth(e.target.value)}
                   className="w-full max-w-xs rounded-lg border border-gray-200 p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]" />
               </div>
               <Button onClick={handleMarkSalaryPaidDirect} disabled={payingInProgress || !payingMonth.trim()}
@@ -1907,9 +1919,8 @@ function ShadowTeacherTab() {
             <div className="bg-white rounded-xl p-5 shadow-[0_2px_12px_rgba(26,35,64,0.06)] space-y-3">
               <p className="text-sm font-bold text-[#1A2340]">Pay Salary</p>
               <div>
-                <p className="text-xs text-gray-500 mb-1">Month (YYYY-MM)</p>
-                <input value={payingMonth} onChange={(e) => setPayingMonth(e.target.value)}
-                  placeholder="2026-06"
+                <p className="text-xs text-gray-500 mb-1">Month</p>
+                <input type="month" value={payingMonth} onChange={(e) => setPayingMonth(e.target.value)}
                   className="w-full max-w-xs rounded-lg border border-gray-200 p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5]" />
               </div>
               <Button onClick={handlePaySalary} disabled={payingInProgress || !payingMonth.trim()}
@@ -2209,13 +2220,33 @@ function ShadowTeacherTab() {
 // NOT replicating ShadowTeacherTab's full engagement-management UI (daily
 // logs, salary payments, lifecycle/buyout) — that's out of B6's scope.
 // ═══════════════════════════════════════════════════════════════════════════════
+// Back to Services — same pattern as ShadowTeacherTab, previously missing
+// here entirely (TutorTab/TherapistTab never had it).
+const backToServicesLink = (
+  <Link href="/services">
+    <button className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-teal-600 transition-colors -mb-1">
+      <ArrowLeft size={13} />
+      <span>Back to Services</span>
+    </button>
+  </Link>
+);
 function TutorTab() {
   const { selectedChildId } = useSelectedChild();
-  return <TutorRequestWidget key={selectedChildId ?? "no-child"} />;
+  return (
+    <div className="space-y-5 pb-4">
+      {backToServicesLink}
+      <TutorRequestWidget key={selectedChildId ?? "no-child"} />
+    </div>
+  );
 }
 function TherapistTab() {
   const { selectedChildId } = useSelectedChild();
-  return <TherapistRequestWidget key={selectedChildId ?? "no-child"} />;
+  return (
+    <div className="space-y-5 pb-4">
+      {backToServicesLink}
+      <TherapistRequestWidget key={selectedChildId ?? "no-child"} />
+    </div>
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2269,17 +2300,20 @@ function ServicesTab() {
     );
   }
 
-  const services: { icon: typeof Search; title: string; desc: string; accent: string; onClick: () => void }[] = [
+  const services: { icon: typeof Search; title: string; desc: string; accent: string; onClick: () => void; comingSoon?: boolean }[] = [
     { icon: Sparkles, title: "Shadow Teacher", desc: "Get matched with a verified shadow teacher for your child", accent: "bg-teal-50 text-teal-600", onClick: () => setLocation("/shadow-teacher") },
-    { icon: Search, title: "Therapists & Specialists", desc: "OT, speech, psychology, paediatrics & more", accent: "bg-blue-50 text-blue-600", onClick: () => setView("find") },
-    { icon: HelpCircle, title: "Parent Coaching", desc: "1:1 guidance from experienced coaches", accent: "bg-violet-50 text-violet-600", onClick: () => setView("find") },
-    { icon: Building2, title: "Therapy Centres", desc: "Centre-based programmes near you", accent: "bg-amber-50 text-amber-600", onClick: () => setView("centre") },
+    // Consolidated from two separate rows ("Therapists & Specialists" and
+    // "Parent Coaching") that both opened the identical unfiltered FindTab —
+    // one entry point, description covers both.
+    { icon: Search, title: "Therapists & Specialists", desc: "OT, speech, psychology, coaching, paediatrics & more", accent: "bg-blue-50 text-blue-600", onClick: () => setView("find") },
+    { icon: Building2, title: "Therapy Centres", desc: "Centre-based programmes near you", accent: "bg-amber-50 text-amber-600", onClick: () => setView("centre"), comingSoon: true },
     {
       icon: BookOpen,
       title: "Home Tutors",
       desc: "Academic support tailored for your child",
       accent: "bg-rose-50 text-rose-600",
       onClick: () => (SHOW_TUTOR_SEARCH ? setLocation("/tutor-search") : setView("tutor")),
+      comingSoon: !SHOW_TUTOR_SEARCH,
     },
     ...(SHOW_THERAPIST_SEARCH
       ? [{ icon: Search, title: "Therapist / Special Educator Match", desc: "Get matched with a verified, RCI-registered therapist", accent: "bg-violet-50 text-violet-600", onClick: () => setLocation("/therapist-search") }]
@@ -2305,7 +2339,14 @@ function ServicesTab() {
                 <Icon size={20} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-[#1A2340] text-sm">{s.title}</p>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="font-bold text-[#1A2340] text-sm">{s.title}</p>
+                  {s.comingSoon && (
+                    <span className="text-[9px] font-bold uppercase tracking-wide text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
+                      Coming soon
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-gray-400 mt-0.5">{s.desc}</p>
               </div>
               <ArrowRight size={16} className="text-gray-300 shrink-0" />
