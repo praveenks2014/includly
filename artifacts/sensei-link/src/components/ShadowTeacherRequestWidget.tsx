@@ -22,7 +22,7 @@ import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import {
   UserCheck, Loader2, CheckCircle2, Clock, IndianRupee,
   AlertCircle, RefreshCw, MessageSquare, Star, MapPin, Languages,
-  ChevronRight, BadgeCheck, Send, Video, XCircle, CalendarClock, Info,
+  ChevronRight, BadgeCheck, Send, Video, Info,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShadowMatchChatDrawer } from "./ShadowMatchChatDrawer";
@@ -60,12 +60,6 @@ interface CandidateProfile {
   phone?: string | null;
   email?: string | null;
   avatarUrl?: string | null;
-}
-
-interface InterviewSlot {
-  date: string;
-  time: string;
-  label?: string;
 }
 
 interface Candidate {
@@ -636,64 +630,114 @@ function SendRequestBlock({ matchId, candidate }: { matchId: number; candidate: 
   return null;
 }
 
-// ── InterviewSection — Task 3b: schedule → confirm → mark done ────────────
-function InterviewSection({ matchId, candidate }: { matchId: number; candidate: Candidate }) {
+interface InterviewTimeOffer {
+  id: number;
+  raisedByUserId: number;
+  raisedByRole: string;
+  proposedDate: string;
+  proposedTime: string;
+  status: string;
+}
+
+// Furthest a proposal can be scheduled — mirrors the server's validation
+// (also enforced server-side; this is just so the date input doesn't let
+// the parent pick something that will always be rejected).
+const MAX_INTERVIEW_PROPOSAL_DAYS_OUT = 3;
+
+// ── InterviewSection — Task 3b: bidirectional propose/counter/accept, then
+// mark done. Replaces the old parent-proposes/teacher-confirms flow — same
+// state-machine shape as OfferSection's salary negotiation (propose = POST,
+// counter = POST again, accept = PATCH, withdraw = DELETE), just for
+// date/time instead of price. See interviewTimeOffers.ts's schema comment
+// for why this is its own table rather than negotiationOffersTable rows. ──
+function InterviewSection({ matchId, candidate, myUserId }: { matchId: number; candidate: Candidate; myUserId: number }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [slots, setSlots] = useState<InterviewSlot[]>([{ date: "", time: "", label: "" }]);
-  const [proposing, setProposing] = useState(false);
+  const [proposedDate, setProposedDate] = useState("");
+  const [proposedTime, setProposedTime] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [markingDone, setMarkingDone] = useState(false);
+
+  const { data: offers = [] } = useQuery<InterviewTimeOffer[]>({
+    queryKey: ["interview-time-offers", matchId, candidate.id],
+    queryFn: () => fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/interview-time-offers`).then(r => r.json() as Promise<InterviewTimeOffer[]>),
+    enabled: myUserId > 0 && candidate.requestStatus === "accepted" && !candidate.interviewConfirmedSlot,
+    refetchInterval: 15_000,
+  });
 
   if (candidate.requestStatus !== "accepted") return null;
 
-  function updateSlot(i: number, field: keyof InterviewSlot, value: string) {
-    setSlots((prev) => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s));
-  }
-  function addSlot() {
-    setSlots((prev) => prev.length < 3 ? [...prev, { date: "", time: "", label: "" }] : prev);
-  }
-  function removeSlot(i: number) {
-    setSlots((prev) => prev.filter((_, idx) => idx !== i));
-  }
+  const myPendingOffer = offers.find(o => o.status === "pending" && o.raisedByUserId === myUserId);
+  const theirPendingOffer = offers.find(o => o.status === "pending" && o.raisedByUserId !== myUserId);
 
-  async function proposeInterview() {
-    const validSlots = slots.filter((s) => s.date && s.time);
-    if (validSlots.length === 0) { toast({ title: "Add at least one date and time", variant: "destructive" }); return; }
-    setProposing(true);
+  async function proposeOrCounter() {
+    if (!proposedDate || !proposedTime) { toast({ title: "Pick a date and time", variant: "destructive" }); return; }
+    setSubmitting(true);
     try {
-      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/propose-interview`, {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/interview-time-offers`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slots: validSlots.map((s) => ({ date: s.date, time: s.time, label: s.label || undefined })) }),
+        body: JSON.stringify({ proposedDate, proposedTime }),
       });
-      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not propose slots", variant: "destructive" }); return; }
-      setDialogOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
-    } finally { setProposing(false); }
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not propose this time", variant: "destructive" }); return; }
+      setProposedDate(""); setProposedTime("");
+      queryClient.invalidateQueries({ queryKey: ["interview-time-offers", matchId, candidate.id] });
+    } finally { setSubmitting(false); }
   }
 
-  async function markDone() {
-    setMarkingDone(true);
+  async function acceptOffer(offerId: number) {
+    setSubmitting(true);
     try {
-      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/mark-interview-done`, { method: "POST" });
-      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not mark interview done", variant: "destructive" }); return; }
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/interview-time-offers/${offerId}/accept`, { method: "PATCH" });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not accept this time", variant: "destructive" }); return; }
+      queryClient.invalidateQueries({ queryKey: ["interview-time-offers", matchId, candidate.id] });
       queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
-    } finally { setMarkingDone(false); }
+    } finally { setSubmitting(false); }
   }
 
-  let proposedSlots: InterviewSlot[] = [];
-  if (candidate.interviewSlotsJson) {
-    try { proposedSlots = JSON.parse(candidate.interviewSlotsJson) as InterviewSlot[]; } catch { /* ignore malformed */ }
+  async function withdrawOffer(offerId: number) {
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/interview-time-offers/${offerId}`, { method: "DELETE" });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not withdraw", variant: "destructive" }); return; }
+      queryClient.invalidateQueries({ queryKey: ["interview-time-offers", matchId, candidate.id] });
+    } finally { setSubmitting(false); }
   }
+
+  const maxDate = new Date(Date.now() + MAX_INTERVIEW_PROPOSAL_DAYS_OUT * 86_400_000).toISOString().slice(0, 10);
+  const minDate = new Date().toISOString().slice(0, 10);
+
+  const proposeForm = (
+    <div className="flex items-center gap-1.5">
+      <input type="date" min={minDate} max={maxDate} value={proposedDate} onChange={(e) => setProposedDate(e.target.value)}
+        className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-[#2EC4A5]" />
+      <input type="time" value={proposedTime} onChange={(e) => setProposedTime(e.target.value)}
+        className="w-24 border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-[#2EC4A5]" />
+      <button
+        onClick={() => void proposeOrCounter()}
+        disabled={submitting || !proposedDate || !proposedTime}
+        className="shrink-0 text-xs bg-[#2EC4A5] text-white rounded-lg px-2.5 py-1.5 font-semibold disabled:opacity-50"
+        data-testid="button-propose-interview-time"
+      >
+        {submitting ? <Loader2 size={13} className="animate-spin" /> : (theirPendingOffer ? "Counter" : "Propose")}
+      </button>
+    </div>
+  );
 
   return (
     <div className="border-t border-gray-100 pt-3 space-y-2">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Interview</p>
 
       {candidate.interviewDoneAt ? (
-        <div className="w-full text-center text-xs font-semibold px-2.5 py-2 rounded-xl bg-green-50 text-green-700 border border-green-200">
-          Interview Complete ✓
+        <div className="space-y-1.5">
+          <div className="w-full text-center text-xs font-semibold px-2.5 py-2 rounded-xl bg-green-50 text-green-700 border border-green-200">
+            Interview Complete ✓
+          </div>
+          <DeclinePostInterviewAction
+            matchId={matchId}
+            candidateId={candidate.id}
+            onDeclined={() => queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] })}
+          />
         </div>
       ) : candidate.interviewConfirmedSlot ? (
         <div className="space-y-2">
@@ -712,7 +756,14 @@ function InterviewSection({ matchId, candidate }: { matchId: number; candidate: 
             )}
           </div>
           <button
-            onClick={() => void markDone()}
+            onClick={() => void (async () => {
+              setMarkingDone(true);
+              try {
+                const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/mark-interview-done`, { method: "POST" });
+                if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not mark interview done", variant: "destructive" }); return; }
+                queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+              } finally { setMarkingDone(false); }
+            })()}
             disabled={markingDone}
             className="w-full flex items-center justify-center gap-1.5 text-xs bg-[#1A2340] text-white rounded-xl py-2 font-semibold hover:bg-[#2a3660] disabled:opacity-50"
           >
@@ -720,67 +771,134 @@ function InterviewSection({ matchId, candidate }: { matchId: number; candidate: 
             Mark Interview Done
           </button>
         </div>
-      ) : candidate.interviewSlotsJson ? (
+      ) : theirPendingOffer ? (
         <div className="space-y-1.5">
           <div className="w-full text-center text-xs font-semibold px-2.5 py-2 rounded-xl bg-amber-50 text-amber-700 border border-amber-200">
-            Awaiting teacher's confirmation…
+            Teacher proposed {theirPendingOffer.proposedDate} at {theirPendingOffer.proposedTime}
           </div>
           <button
-            onClick={() => { setSlots(proposedSlots.length > 0 ? proposedSlots : [{ date: "", time: "", label: "" }]); setDialogOpen(true); }}
-            className="w-full text-[11px] text-gray-500 hover:text-[#2EC4A5] underline underline-offset-2"
+            onClick={() => void acceptOffer(theirPendingOffer.id)}
+            disabled={submitting}
+            className="w-full flex items-center justify-center gap-1.5 text-xs bg-[#2EC4A5] text-white rounded-xl py-2 font-semibold hover:bg-[#26a88d] disabled:opacity-50"
+            data-testid="button-accept-interview-time"
           >
-            Propose different slots
+            <CheckCircle2 size={13} />
+            Accept this time
+          </button>
+          <p className="text-[10px] text-gray-400 text-center">or propose a different time instead:</p>
+          {proposeForm}
+        </div>
+      ) : myPendingOffer ? (
+        <div className="space-y-1.5">
+          <div className="w-full text-center text-xs font-semibold px-2.5 py-2 rounded-xl bg-amber-50 text-amber-700 border border-amber-200">
+            You proposed {myPendingOffer.proposedDate} at {myPendingOffer.proposedTime} — awaiting response…
+          </div>
+          <button
+            onClick={() => void withdrawOffer(myPendingOffer.id)}
+            disabled={submitting}
+            className="w-full text-[11px] text-red-500 hover:underline disabled:opacity-50"
+          >
+            Withdraw
           </button>
         </div>
       ) : (
-        <button
-          onClick={() => setDialogOpen(true)}
-          className="w-full flex items-center justify-center gap-1.5 text-xs bg-[#2EC4A5] text-white rounded-xl py-2 font-semibold hover:bg-[#26a88d]"
-          data-testid="button-schedule-interview"
-        >
-          <CalendarClock size={13} />
-          Schedule Interview
-        </button>
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-gray-500">Propose a date/time (within the next {MAX_INTERVIEW_PROPOSAL_DAYS_OUT} days) — the teacher can accept or counter.</p>
+          {proposeForm}
+        </div>
       )}
+    </div>
+  );
+}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+const POST_INTERVIEW_DECLINE_REASON_OPTIONS: { value: string; label: string }[] = [
+  { value: "schedule_mismatch", label: "Schedule doesn't work out" },
+  { value: "salary_mismatch", label: "Salary/rate doesn't match expectations" },
+  { value: "found_other_option", label: "Found another option" },
+  { value: "location_infeasible", label: "Location/commute isn't feasible" },
+  { value: "fit_not_right", label: "Not the right fit" },
+  { value: "other", label: "Other" },
+];
+
+// ── DeclinePostInterviewAction — the gap between interviewDoneAt and
+// trial_done (negotiation + trial-day discussion + the trial itself).
+// Rendered from 3 spots in this file (shortlisted-view InterviewSection,
+// trial_pending page view, trial_started page view) since the window spans
+// all three UI states — same component, not reimplemented per spot.
+function DeclinePostInterviewAction({ matchId, candidateId, onDeclined }: { matchId: number; candidateId: number; onDeclined: () => void }) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit() {
+    if (!reason) { toast({ title: "Select a reason", variant: "destructive" }); return; }
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/decline-post-interview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ declineReason: reason, declineReasonNote: reason === "other" ? (note.trim() || undefined) : undefined }),
+      });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not decline", variant: "destructive" }); return; }
+      setOpen(false);
+      onDeclined();
+    } finally { setSubmitting(false); }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full text-[11px] text-red-500 hover:text-red-600 underline underline-offset-2"
+        data-testid="button-decline-post-interview"
+      >
+        Not working out — decline
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-[#1A2340]">Propose Interview Slots</DialogTitle>
+            <DialogTitle className="text-base font-bold text-[#1A2340]">Decline this candidate?</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <p className="text-xs text-gray-500">Suggest up to 3 date/time options. The teacher will confirm one.</p>
-            {slots.map((slot, i) => (
-              <div key={i} className="flex items-center gap-1.5">
-                <input type="date" value={slot.date} onChange={(e) => updateSlot(i, "date", e.target.value)}
-                  className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-[#2EC4A5]" />
-                <input type="time" value={slot.time} onChange={(e) => updateSlot(i, "time", e.target.value)}
-                  className="w-24 border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-[#2EC4A5]" />
-                {slots.length > 1 && (
-                  <button onClick={() => removeSlot(i)} className="text-gray-300 hover:text-red-500 shrink-0">
-                    <XCircle size={16} />
-                  </button>
-                )}
-              </div>
-            ))}
-            {slots.length < 3 && (
-              <button onClick={addSlot} className="text-[11px] text-[#2EC4A5] hover:underline">+ Add another slot</button>
+            <p className="text-xs text-gray-500">This ends the negotiation/trial with this candidate. They&apos;ll be notified with your reason.</p>
+            <select
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-300 bg-white"
+              data-testid="select-decline-reason"
+            >
+              <option value="">Select a reason…</option>
+              {POST_INTERVIEW_DECLINE_REASON_OPTIONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+            {reason === "other" && (
+              <Textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Optional — tell us more"
+                rows={2}
+                className="resize-none text-sm"
+              />
             )}
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" className="rounded-xl" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" className="rounded-xl" onClick={() => setOpen(false)}>Cancel</Button>
             <Button
-              className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl"
-              disabled={proposing}
-              onClick={() => void proposeInterview()}
+              className="bg-red-600 hover:bg-red-700 text-white rounded-xl disabled:opacity-60"
+              disabled={submitting || !reason}
+              onClick={() => void submit()}
             >
-              {proposing ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
-              Propose Slots
+              {submitting ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+              Decline
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }
 
@@ -996,7 +1114,7 @@ function CandidateCard({
         )}
 
         {!committed && !trialMode && (
-          <InterviewSection matchId={matchId} candidate={candidate} />
+          <InterviewSection matchId={matchId} candidate={candidate} myUserId={myUserId} />
         )}
 
         {p.bio && <p className="text-xs text-gray-500 line-clamp-2">{p.bio}</p>}
@@ -1923,6 +2041,13 @@ export function ShadowTeacherRequestWidget() {
             {markingTrialDone ? <Loader2 size={14} className="animate-spin" /> : null}
             {markingTrialDone ? "Marking…" : "Mark trial done manually (fallback)"}
           </Button>
+          {trialCandidate && (
+            <DeclinePostInterviewAction
+              matchId={match.id}
+              candidateId={trialCandidate.id}
+              onDeclined={() => { queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] }); void refetch(); }}
+            />
+          )}
         </div>
         {trialCandidate && (
           <CandidateCard
@@ -1977,6 +2102,13 @@ export function ShadowTeacherRequestWidget() {
             {markingTrialDone ? <Loader2 size={14} className="animate-spin" /> : null}
             {markingTrialDone ? "Marking…" : "Mark trial done manually (fallback)"}
           </Button>
+          {trialCandidate && (
+            <DeclinePostInterviewAction
+              matchId={match.id}
+              candidateId={trialCandidate.id}
+              onDeclined={() => { queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] }); void refetch(); }}
+            />
+          )}
         </div>
         {trialCandidate && (
           <CandidateCard

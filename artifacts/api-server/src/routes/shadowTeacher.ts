@@ -14,6 +14,7 @@ import {
   professionalOfferingsTable,
   childrenTable,
   negotiationOffersTable,
+  interviewTimeOffersTable,
   professionalAvailabilityTable,
   connectThreadsTable,
   paymentsTable,
@@ -1605,6 +1606,197 @@ router.post("/shadow-teacher/:matchId/candidates/:candidateId/confirm-interview"
   res.status(200).json(updated);
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ── Bidirectional interview-time propose/counter/accept ───────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// Replaces propose-interview/confirm-interview above in the live path (kept,
+// unused, for later cleanup — nothing else reads interviewSlotsJson except
+// candidateRefresh.ts's hasInteractionStarted(), updated separately to also
+// check interviewTimeOffersTable). Either party proposes or counters via the
+// same POST; only the OTHER party's accept can ever finalize — the accept
+// endpoint rejects same-raiser confirmation, so a proposer can never confirm
+// their own offer. Copy-adapted from the negotiation-offers state machine
+// (same supersede-then-insert / supersede-others-then-accept / mark-
+// withdrawn-and-restore-predecessor transactions, same advisory lock for the
+// "at most one pending offer" invariant under concurrent counters) — not the
+// same table, see interviewTimeOffers.ts's schema comment for why.
+function validateInterviewProposedDateTime(date: string, time: string): string | null {
+  const proposed = new Date(`${date}T${time}:00`);
+  if (isNaN(proposed.getTime())) return "Invalid proposed date/time";
+  const now = new Date();
+  if (proposed <= now) return "Proposed time must be in the future";
+  const maxAllowed = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+  if (proposed > maxAllowed) return "Proposed time must be within 3 days from now";
+  return null;
+}
+
+// ── GET /shadow-teacher/:matchId/candidates/:candidateId/interview-time-offers ─
+router.get("/shadow-teacher/:matchId/candidates/:candidateId/interview-time-offers", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  const offers = await db.select().from(interviewTimeOffersTable)
+    .where(and(eq(interviewTimeOffersTable.matchId, matchId), eq(interviewTimeOffersTable.candidateId, candidateId)))
+    .orderBy(interviewTimeOffersTable.createdAt);
+  res.json(offers);
+});
+
+// ── POST /shadow-teacher/:matchId/candidates/:candidateId/interview-time-offers ─
+const InterviewTimeOfferBody = z.object({
+  proposedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  proposedTime: z.string().regex(/^\d{2}:\d{2}$/),
+});
+router.post("/shadow-teacher/:matchId/candidates/:candidateId/interview-time-offers", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const parsed = InterviewTimeOfferBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const validationError = validateInterviewProposedDateTime(parsed.data.proposedDate, parsed.data.proposedTime);
+  if (validationError) { res.status(400).json({ error: validationError }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  if (ctx.candidate.interviewConfirmedSlot) { res.status(409).json({ error: "Interview has already been confirmed" }); return; }
+
+  // Same supersede-then-insert transaction + advisory lock as POST /offers —
+  // see that endpoint's comment for why the lock is required, not optional.
+  const [offer] = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${matchId}, ${candidateId})`);
+    await tx.update(interviewTimeOffersTable)
+      .set({ status: "superseded", updatedAt: new Date() })
+      .where(and(
+        eq(interviewTimeOffersTable.matchId, matchId),
+        eq(interviewTimeOffersTable.candidateId, candidateId),
+        eq(interviewTimeOffersTable.status, "pending"),
+      ));
+    return tx.insert(interviewTimeOffersTable).values({
+      matchId,
+      candidateId,
+      raisedByUserId: req.userId!,
+      raisedByRole: ctx.myRole,
+      proposedDate: parsed.data.proposedDate,
+      proposedTime: parsed.data.proposedTime,
+      status: "pending",
+    }).returning();
+  });
+
+  try {
+    if (ctx.myRole === "parent") {
+      const [pro] = await db.select({ userId: professionalProfilesTable.userId })
+        .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, ctx.candidate.professionalId)).limit(1);
+      if (pro) await createInAppNotification(pro.userId, {
+        type: "interview_time_proposed",
+        title: "Parent proposed an interview time",
+        body: `Proposed ${parsed.data.proposedDate} at ${parsed.data.proposedTime}. Log in to accept or counter.`,
+        relatedType: "match", relatedId: matchId,
+      });
+    } else {
+      await createInAppNotification(ctx.match.parentId, {
+        type: "interview_time_proposed",
+        title: "Teacher proposed an interview time",
+        body: `Proposed ${parsed.data.proposedDate} at ${parsed.data.proposedTime}. Log in to accept or counter.`,
+        relatedType: "match", relatedId: matchId,
+      });
+    }
+  } catch { /* non-blocking */ }
+
+  res.status(201).json(offer);
+});
+
+// ── PATCH /shadow-teacher/:matchId/candidates/:candidateId/interview-time-offers/:offerId/accept ─
+router.patch("/shadow-teacher/:matchId/candidates/:candidateId/interview-time-offers/:offerId/accept", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  const offerId = parseInt(req.params["offerId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId) || isNaN(offerId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  const [offer] = await db.select().from(interviewTimeOffersTable)
+    .where(and(eq(interviewTimeOffersTable.id, offerId), eq(interviewTimeOffersTable.matchId, matchId), eq(interviewTimeOffersTable.candidateId, candidateId), eq(interviewTimeOffersTable.status, "pending")))
+    .limit(1);
+  if (!offer) { res.status(404).json({ error: "Pending offer not found" }); return; }
+  if (offer.raisedByRole === ctx.myRole) { res.status(403).json({ error: "You cannot accept your own offer" }); return; }
+  const revalidation = validateInterviewProposedDateTime(offer.proposedDate, offer.proposedTime);
+  if (revalidation) { res.status(409).json({ error: `This proposed time is no longer valid: ${revalidation}` }); return; }
+
+  await db.update(interviewTimeOffersTable)
+    .set({ status: "superseded", updatedAt: new Date() })
+    .where(and(eq(interviewTimeOffersTable.matchId, matchId), eq(interviewTimeOffersTable.candidateId, candidateId), eq(interviewTimeOffersTable.status, "pending")));
+  const [accepted] = await db.update(interviewTimeOffersTable)
+    .set({ status: "accepted", updatedAt: new Date() })
+    .where(eq(interviewTimeOffersTable.id, offerId))
+    .returning();
+
+  // Snapshot onto shadowMatchCandidatesTable exactly like confirm-interview
+  // did — mark-interview-done and every existing "confirmed" rendering
+  // (parent + teacher) read these same two columns unchanged.
+  const confirmedSlot = `${offer.proposedDate}T${offer.proposedTime}`;
+  const meetLink = `https://meet.jit.si/includly-${matchId}-${candidateId}${JITSI_CONFIG_SUFFIX}`;
+  await db.update(shadowMatchCandidatesTable)
+    .set({ interviewConfirmedSlot: confirmedSlot, meetLink })
+    .where(eq(shadowMatchCandidatesTable.id, candidateId));
+
+  try {
+    if (offer.raisedByUserId) {
+      await createInAppNotification(offer.raisedByUserId, {
+        type: "interview_time_accepted",
+        title: "Interview time accepted!",
+        body: `Your proposed time (${offer.proposedDate} at ${offer.proposedTime}) was accepted. Join link: ${meetLink}`,
+        relatedType: "match", relatedId: matchId,
+      });
+    }
+  } catch { /* non-blocking */ }
+
+  res.json({ ...accepted, confirmedSlot, meetLink });
+});
+
+// ── DELETE /shadow-teacher/:matchId/candidates/:candidateId/interview-time-offers/:offerId ─
+router.delete("/shadow-teacher/:matchId/candidates/:candidateId/interview-time-offers/:offerId", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  const offerId = parseInt(req.params["offerId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId) || isNaN(offerId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  const [offer] = await db.select().from(interviewTimeOffersTable)
+    .where(and(eq(interviewTimeOffersTable.id, offerId), eq(interviewTimeOffersTable.matchId, matchId), eq(interviewTimeOffersTable.candidateId, candidateId)))
+    .limit(1);
+  if (!offer) { res.status(404).json({ error: "Offer not found" }); return; }
+  if (offer.raisedByUserId !== req.userId) { res.status(403).json({ error: "You can only withdraw your own offer" }); return; }
+  if (offer.status !== "pending") { res.status(409).json({ error: "Only pending offers can be withdrawn" }); return; }
+
+  // Same advisory lock + restore-predecessor logic as DELETE /offers/:offerId.
+  const { withdrawn, restored } = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${matchId}, ${candidateId})`);
+    const [withdrawnRow] = await tx.update(interviewTimeOffersTable)
+      .set({ status: "withdrawn", updatedAt: new Date() })
+      .where(eq(interviewTimeOffersTable.id, offerId))
+      .returning();
+
+    const [previous] = await tx.select().from(interviewTimeOffersTable)
+      .where(and(
+        eq(interviewTimeOffersTable.matchId, matchId),
+        eq(interviewTimeOffersTable.candidateId, candidateId),
+        eq(interviewTimeOffersTable.status, "superseded"),
+        lt(interviewTimeOffersTable.createdAt, offer.createdAt),
+      ))
+      .orderBy(desc(interviewTimeOffersTable.createdAt))
+      .limit(1);
+
+    if (!previous) return { withdrawn: withdrawnRow, restored: null as typeof withdrawnRow | null };
+
+    const [restoredRow] = await tx.update(interviewTimeOffersTable)
+      .set({ status: "pending", updatedAt: new Date() })
+      .where(eq(interviewTimeOffersTable.id, previous.id))
+      .returning();
+    return { withdrawn: withdrawnRow, restored: restoredRow };
+  });
+
+  res.json({ withdrawn, restored });
+});
+
 // ── POST /shadow-teacher/:matchId/candidates/:candidateId/mark-interview-done ─
 router.post("/shadow-teacher/:matchId/candidates/:candidateId/mark-interview-done", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
   const matchId = parseInt(req.params["matchId"] as string, 10);
@@ -1641,6 +1833,112 @@ router.post("/shadow-teacher/:matchId/candidates/:candidateId/mark-interview-don
     }).catch(() => {});
   }
   res.status(200).json(updated);
+});
+
+// ── POST /shadow-teacher/:matchId/candidates/:candidateId/decline-post-interview ─
+// Fills the gap between interviewDoneAt and trial_done: neither party had any
+// formal exit during salary negotiation or trial-day negotiation before this.
+// choose-engagement's decline (and no-commit) stay correctness-gated to
+// trial_done for the #14/#15 reorder's reasons and are deliberately NOT reused
+// here — this is its own endpoint, its own window. Either party can decline;
+// soft-removes the candidate with a required reason (same shape as
+// choose-engagement's decline), resetting the match back to shortlisted only
+// if this candidate was the actively-selected one for an in-progress trial
+// (mirrors mark-not-interested's soft-remove otherwise, since during pure
+// negotiation there's nothing on the match row to unwind).
+const POST_INTERVIEW_DECLINE_REASONS = [
+  "schedule_mismatch",
+  "salary_mismatch",
+  "found_other_option",
+  "location_infeasible",
+  "fit_not_right",
+  "other",
+] as const;
+
+const POST_INTERVIEW_DECLINE_REASON_LABELS: Record<string, string> = {
+  schedule_mismatch: "Schedule doesn't work out",
+  salary_mismatch: "Salary/rate doesn't match expectations",
+  found_other_option: "Found another option",
+  location_infeasible: "Location/commute isn't feasible",
+  fit_not_right: "Not the right fit",
+  other: "Other",
+};
+
+const DeclinePostInterviewBody = z.object({
+  declineReason: z.enum(POST_INTERVIEW_DECLINE_REASONS),
+  declineReasonNote: z.string().max(300).optional(),
+});
+
+router.post("/shadow-teacher/:matchId/candidates/:candidateId/decline-post-interview", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const parsed = DeclinePostInterviewBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { declineReason, declineReasonNote } = parsed.data;
+
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  if (!ctx.candidate.interviewDoneAt) {
+    res.status(409).json({ error: "Interview must be marked done before declining here" }); return;
+  }
+  if (!["shortlisted", "trial_pending", "trial_started"].includes(ctx.match.status)) {
+    res.status(409).json({ error: "This action is only available between interview completion and the end of the trial" }); return;
+  }
+
+  const removedReason = ctx.myRole === "professional" ? "teacher_declined_post_interview" : "parent_declined_post_interview";
+
+  await db
+    .update(shadowMatchCandidatesTable)
+    .set({
+      removedAt: new Date(),
+      removedByUserId: req.userId!,
+      removedReason,
+      declineReasonDetail: declineReason,
+      declineReasonNote: declineReason === "other" ? (declineReasonNote ?? null) : null,
+    })
+    .where(eq(shadowMatchCandidatesTable.id, candidateId));
+
+  // Only unwind the match's "chosen" state if this candidate was the
+  // actively-selected one (a trial is/was running with them). While still
+  // just "shortlisted" (negotiation/trial-day-discussion, before any trial
+  // payment), selectedProfessionalId is never set yet — nothing to reset.
+  if (ctx.match.selectedProfessionalId === ctx.candidate.professionalId) {
+    await db
+      .update(shadowTeacherMatchesTable)
+      .set({
+        status: "shortlisted",
+        selectedProfessionalId: null,
+        matchedAt: null,
+        matchedProfessionalId: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(shadowTeacherMatchesTable.id, matchId));
+  }
+
+  const reasonLabel = POST_INTERVIEW_DECLINE_REASON_LABELS[declineReason] ?? declineReason;
+  try {
+    if (ctx.myRole === "professional") {
+      await createInAppNotification(ctx.match.parentId, {
+        type: "candidate_declined_post_interview",
+        title: "A candidate declined to continue",
+        body: `Your shadow teacher declined to continue. Reason: ${reasonLabel}${declineReasonNote ? ` — "${declineReasonNote}"` : ""}. You can choose another candidate from your shortlist.`,
+        relatedType: "match", relatedId: matchId,
+      });
+    } else {
+      const teacherUserId = await getTeacherUserIdForProfessional(ctx.candidate.professionalId);
+      if (teacherUserId) {
+        await createInAppNotification(teacherUserId, {
+          type: "parent_declined_post_interview",
+          title: "Parent declined to continue",
+          body: `The parent decided not to continue with this engagement. Reason: ${reasonLabel}${declineReasonNote ? ` — "${declineReasonNote}"` : ""}.`,
+          relatedType: "match", relatedId: matchId,
+        });
+      }
+    }
+  } catch { /* non-blocking */ }
+
+  res.json({ status: "declined" });
 });
 
 // ── POST /shadow-teacher/:matchId/candidates/:candidateId/request-trial ─

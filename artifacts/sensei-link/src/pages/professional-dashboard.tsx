@@ -3682,12 +3682,6 @@ interface Candidacy {
   onPlatformIncentiveInr: number | null;
 }
 
-interface CandidacyInterviewSlot {
-  date: string;
-  time: string;
-  label?: string;
-}
-
 const MATCH_STATUS_LABEL: Record<string, string> = {
   shortlisted:     "Shortlisted",
   committed:       "Committed",
@@ -4100,32 +4094,103 @@ function RespondRequestBlock({ candidacy: c, onUpdated }: { candidacy: Candidacy
   );
 }
 
-// ── TeacherInterviewSection — Task 3e: view proposed slots, confirm one, join ──
-function TeacherInterviewSection({ candidacy: c, onUpdated }: { candidacy: Candidacy; onUpdated: () => void }) {
+interface InterviewTimeOffer {
+  id: number;
+  raisedByUserId: number;
+  raisedByRole: string;
+  proposedDate: string;
+  proposedTime: string;
+  status: string;
+}
+
+const MAX_INTERVIEW_PROPOSAL_DAYS_OUT = 3;
+
+// ── TeacherInterviewSection — bidirectional propose/counter/accept, mirrors
+// ShadowTeacherRequestWidget.tsx's InterviewSection exactly (separately
+// maintained per this file's established duplication convention). Replaces
+// the old propose-interview/confirm-interview flow. ──
+function TeacherInterviewSection({ candidacy: c, myUserId, onUpdated }: { candidacy: Candidacy; myUserId: number; onUpdated: () => void }) {
   const { toast } = useToast();
-  const [confirming, setConfirming] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [proposedDate, setProposedDate] = useState("");
+  const [proposedTime, setProposedTime] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [markingDone, setMarkingDone] = useState(false);
+
+  const { data: offers = [] } = useQuery<InterviewTimeOffer[]>({
+    queryKey: ["interview-time-offers", c.matchId, c.candidateId],
+    queryFn: () => fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/interview-time-offers`).then(r => r.json() as Promise<InterviewTimeOffer[]>),
+    enabled: myUserId > 0 && c.requestStatus === "accepted" && !c.interviewConfirmedSlot,
+    refetchInterval: 15_000,
+  });
 
   if (c.requestStatus !== "accepted") return null;
 
-  let proposedSlots: CandidacyInterviewSlot[] = [];
-  if (c.interviewSlotsJson) {
-    try { proposedSlots = JSON.parse(c.interviewSlotsJson) as CandidacyInterviewSlot[]; } catch { /* ignore malformed */ }
-  }
+  const myPendingOffer = offers.find(o => o.status === "pending" && o.raisedByUserId === myUserId);
+  const theirPendingOffer = offers.find(o => o.status === "pending" && o.raisedByUserId !== myUserId);
 
-  async function confirmSlot() {
-    if (!selectedSlot) return;
-    setConfirming(true);
+  async function proposeOrCounter() {
+    if (!proposedDate || !proposedTime) { toast({ title: "Pick a date and time", variant: "destructive" }); return; }
+    setSubmitting(true);
     try {
-      const res = await fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/confirm-interview`, {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/interview-time-offers`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmedSlot: selectedSlot }),
+        body: JSON.stringify({ proposedDate, proposedTime }),
       });
-      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not confirm interview", variant: "destructive" }); return; }
-      onUpdated();
-    } finally { setConfirming(false); }
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not propose this time", variant: "destructive" }); return; }
+      setProposedDate(""); setProposedTime("");
+      queryClient.invalidateQueries({ queryKey: ["interview-time-offers", c.matchId, c.candidateId] });
+    } finally { setSubmitting(false); }
   }
+
+  async function acceptOffer(offerId: number) {
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/interview-time-offers/${offerId}/accept`, { method: "PATCH" });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not accept this time", variant: "destructive" }); return; }
+      queryClient.invalidateQueries({ queryKey: ["interview-time-offers", c.matchId, c.candidateId] });
+      onUpdated();
+    } finally { setSubmitting(false); }
+  }
+
+  async function withdrawOffer(offerId: number) {
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/interview-time-offers/${offerId}`, { method: "DELETE" });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not withdraw", variant: "destructive" }); return; }
+      queryClient.invalidateQueries({ queryKey: ["interview-time-offers", c.matchId, c.candidateId] });
+    } finally { setSubmitting(false); }
+  }
+
+  async function markDone() {
+    setMarkingDone(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/mark-interview-done`, { method: "POST" });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not mark interview done", variant: "destructive" }); return; }
+      onUpdated();
+    } finally { setMarkingDone(false); }
+  }
+
+  const maxDate = new Date(Date.now() + MAX_INTERVIEW_PROPOSAL_DAYS_OUT * 86_400_000).toISOString().slice(0, 10);
+  const minDate = new Date().toISOString().slice(0, 10);
+
+  const proposeForm = (
+    <div className="flex items-center gap-1.5">
+      <input type="date" min={minDate} max={maxDate} value={proposedDate} onChange={(e) => setProposedDate(e.target.value)}
+        className="flex-1 min-w-0 border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-purple-400" />
+      <input type="time" value={proposedTime} onChange={(e) => setProposedTime(e.target.value)}
+        className="w-24 border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-purple-400" />
+      <button
+        onClick={() => void proposeOrCounter()}
+        disabled={submitting || !proposedDate || !proposedTime}
+        className="shrink-0 text-xs bg-purple-600 text-white rounded-lg px-2.5 py-1.5 font-semibold disabled:opacity-50"
+        data-testid="button-propose-interview-time"
+      >
+        {submitting ? <Loader2 size={13} className="animate-spin" /> : (theirPendingOffer ? "Counter" : "Propose")}
+      </button>
+    </div>
+  );
 
   if (c.interviewConfirmedSlot) {
     return (
@@ -4142,45 +4207,58 @@ function TeacherInterviewSection({ candidacy: c, onUpdated }: { candidacy: Candi
             Join Interview
           </a>
         )}
+        <Button
+          size="sm"
+          onClick={() => void markDone()}
+          disabled={markingDone}
+          className="w-full bg-[#1A2340] hover:bg-[#2a3660] text-white text-xs h-8 rounded-xl"
+        >
+          {markingDone ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
+          Mark Interview Done
+        </Button>
       </div>
     );
   }
 
-  if (proposedSlots.length === 0) {
+  if (theirPendingOffer) {
     return (
-      <div className="mb-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-        <p className="text-xs font-semibold text-amber-800">Waiting for parent to propose interview times</p>
+      <div className="mb-3 p-4 bg-purple-50 border border-purple-200 rounded-xl space-y-2">
+        <p className="text-sm font-bold text-purple-900">Parent proposed {theirPendingOffer.proposedDate} at {theirPendingOffer.proposedTime}</p>
+        <Button
+          size="sm"
+          onClick={() => void acceptOffer(theirPendingOffer.id)}
+          disabled={submitting}
+          className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs h-8 rounded-xl"
+          data-testid="button-accept-interview-time"
+        >
+          {submitting ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
+          Accept this time
+        </Button>
+        <p className="text-[10px] text-purple-700 text-center">or propose a different time instead:</p>
+        {proposeForm}
+      </div>
+    );
+  }
+
+  if (myPendingOffer) {
+    return (
+      <div className="mb-3 p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
+        <p className="text-xs font-semibold text-amber-800">You proposed {myPendingOffer.proposedDate} at {myPendingOffer.proposedTime} — awaiting parent's response…</p>
+        <button
+          onClick={() => void withdrawOffer(myPendingOffer.id)}
+          disabled={submitting}
+          className="w-full text-[11px] text-red-500 hover:underline disabled:opacity-50"
+        >
+          Withdraw
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="mb-3 p-4 bg-purple-50 border border-purple-200 rounded-xl space-y-2">
-      <p className="text-sm font-bold text-purple-900">Choose an interview slot</p>
-      <div className="space-y-1.5">
-        {proposedSlots.map((s, i) => {
-          const key = `${s.date}T${s.time}`;
-          const isChosen = selectedSlot === key;
-          return (
-            <button
-              key={i}
-              onClick={() => setSelectedSlot(key)}
-              className={`w-full text-left text-xs px-3 py-2 rounded-lg border ${isChosen ? "bg-purple-600 text-white border-purple-600" : "bg-white text-purple-800 border-purple-200"}`}
-            >
-              {s.label ? `${s.label} — ` : ""}{s.date} at {s.time}
-            </button>
-          );
-        })}
-      </div>
-      <Button
-        size="sm"
-        onClick={() => void confirmSlot()}
-        disabled={!selectedSlot || confirming}
-        className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs h-8 rounded-xl"
-      >
-        {confirming ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
-        Confirm Slot
-      </Button>
+    <div className="mb-3 p-4 bg-purple-50 border border-purple-200 rounded-xl space-y-1.5">
+      <p className="text-xs text-purple-800">Propose a date/time (within the next {MAX_INTERVIEW_PROPOSAL_DAYS_OUT} days) — the parent can accept or counter.</p>
+      {proposeForm}
     </div>
   );
 }
@@ -4231,6 +4309,96 @@ function TeacherTrialAcceptSection({ candidacy: c, onUpdated }: { candidacy: Can
         </Button>
       </div>
     </div>
+  );
+}
+
+const POST_INTERVIEW_DECLINE_REASON_OPTIONS: { value: string; label: string }[] = [
+  { value: "schedule_mismatch", label: "Schedule doesn't work out" },
+  { value: "salary_mismatch", label: "Salary/rate doesn't match expectations" },
+  { value: "found_other_option", label: "Found another option" },
+  { value: "location_infeasible", label: "Location/commute isn't feasible" },
+  { value: "fit_not_right", label: "Not the right fit" },
+  { value: "other", label: "Other" },
+];
+
+// ── DeclinePostInterviewAction — the gap between interviewDoneAt and
+// trial_done (negotiation + trial-day discussion + the trial itself).
+// Mirrors ShadowTeacherRequestWidget.tsx's parent-side component exactly —
+// separately maintained per this file's established duplication convention.
+function DeclinePostInterviewAction({ matchId, candidateId, onUpdated }: { matchId: number; candidateId: number; onUpdated: () => void }) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit() {
+    if (!reason) { toast({ title: "Select a reason", variant: "destructive" }); return; }
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/decline-post-interview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ declineReason: reason, declineReasonNote: reason === "other" ? (note.trim() || undefined) : undefined }),
+      });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not decline", variant: "destructive" }); return; }
+      setOpen(false);
+      onUpdated();
+    } finally { setSubmitting(false); }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full text-[11px] text-red-500 hover:text-red-600 underline underline-offset-2"
+        data-testid="button-decline-post-interview"
+      >
+        Not working out — decline
+      </button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#1A2340]">Decline this candidacy?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-xs text-gray-500">This ends the negotiation/trial for this match. The parent will be notified with your reason.</p>
+            <select
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-red-300 bg-white"
+              data-testid="select-decline-reason"
+            >
+              <option value="">Select a reason…</option>
+              {POST_INTERVIEW_DECLINE_REASON_OPTIONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+            {reason === "other" && (
+              <Textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Optional — tell us more"
+                rows={2}
+                className="resize-none text-sm"
+              />
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="rounded-xl" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white rounded-xl disabled:opacity-60"
+              disabled={submitting || !reason}
+              onClick={() => void submit()}
+            >
+              {submitting ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+              Decline
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -4412,7 +4580,7 @@ function CandidacyCard({ candidacy: c, onOpen, myUserId, onUpdated }: { candidac
       </div>
 
       <RespondRequestBlock candidacy={c} onUpdated={onUpdated} />
-      <TeacherInterviewSection candidacy={c} onUpdated={onUpdated} />
+      <TeacherInterviewSection candidacy={c} myUserId={myUserId} onUpdated={onUpdated} />
       <TeacherTrialAcceptSection candidacy={c} onUpdated={onUpdated} />
 
       {c.matchStatus === "trial_pending" && c.isSelected && c.trialLocation && (
@@ -4449,6 +4617,15 @@ function CandidacyCard({ candidacy: c, onOpen, myUserId, onUpdated }: { candidac
           marked done, matching the parent-side gate. */}
       {["shortlisted", "trial_done"].includes(c.matchStatus) && c.candidateId !== null && c.interviewDoneAt != null && (
         <CandidacyOfferSection matchId={c.matchId} candidateId={c.candidateId!} myUserId={myUserId} />
+      )}
+
+      {/* Fills the gap between interviewDoneAt and trial_done — negotiation,
+          trial-day discussion, and the trial itself. trial_done already has
+          its own decline via ChooseEngagementSection above, so excluded here. */}
+      {["shortlisted", "trial_pending", "trial_started"].includes(c.matchStatus) && c.candidateId !== null && c.interviewDoneAt != null && (
+        <div className="mb-2">
+          <DeclinePostInterviewAction matchId={c.matchId} candidateId={c.candidateId!} onUpdated={onUpdated} />
+        </div>
       )}
 
       <div className="flex items-center justify-between pt-3 border-t border-gray-50">

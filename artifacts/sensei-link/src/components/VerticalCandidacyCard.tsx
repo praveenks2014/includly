@@ -41,9 +41,12 @@ export interface VerticalCandidacy {
   budgetMaxInr: number | null;
   requestStatus: string;
   rejectionNote: string | null;
-  interviewSlotsJson: string | null;
-  interviewConfirmedSlot: string | null;
-  meetLink: string | null;
+  interviewSlotsJson?: string | null; // therapist only — tutor moved to booking-based scheduling below
+  interviewConfirmedSlot?: string | null; // therapist only
+  meetLink?: string | null; // therapist only
+  interviewBookedDate?: string | null; // tutor only
+  interviewBookedStartTime?: string | null; // tutor only
+  interviewMeetLink?: string | null; // tutor only, derived deterministically server-side
   interviewDoneAt: string | null;
   trialDaysRequested: number | null;
   trialDaysAccepted: number | null;
@@ -154,10 +157,53 @@ function RespondRequestBlock({ vertical, candidacy: c, onUpdated }: { vertical: 
   );
 }
 
+// ── TutorInterviewStatus — teacher-facing counterpart of
+// TutorInterviewBookingSection (VerticalRequestWidget.tsx): the parent books
+// directly against the professional's own declared availability, so there's
+// nothing for the teacher to confirm — just a status display + join link. ──
+function TutorInterviewStatus({ candidacy: c }: { candidacy: VerticalCandidacy }) {
+  if (c.requestStatus !== "accepted") return null;
+
+  if (c.interviewDoneAt) {
+    return (
+      <div className="mb-3 p-4 bg-green-50 border border-green-200 rounded-xl">
+        <p className="text-xs font-semibold text-green-800">Interview Complete ✓</p>
+      </div>
+    );
+  }
+
+  if (c.interviewBookedDate && c.interviewBookedStartTime) {
+    return (
+      <div className="mb-3 p-4 bg-teal-50 border border-teal-200 rounded-xl space-y-2">
+        <p className="text-sm font-bold text-teal-900">Interview scheduled for {c.interviewBookedDate} at {c.interviewBookedStartTime}</p>
+        {c.interviewMeetLink && (
+          <a
+            href={c.interviewMeetLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 w-full h-9 rounded-lg bg-[#2EC4A5] hover:bg-[#26a88d] text-white font-semibold text-xs no-underline"
+          >
+            <Video size={13} />
+            Join Interview
+          </a>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+      <p className="text-xs font-semibold text-amber-800">Waiting for the parent to book a slot from your availability</p>
+    </div>
+  );
+}
+
 function InterviewSection({ vertical, candidacy: c, onUpdated }: { vertical: Vertical; candidacy: VerticalCandidacy; onUpdated: () => void }) {
   const { toast } = useToast();
   const [confirming, setConfirming] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+
+  if (vertical === "tutor") return <TutorInterviewStatus candidacy={c} />;
 
   if (c.requestStatus !== "accepted") return null;
 

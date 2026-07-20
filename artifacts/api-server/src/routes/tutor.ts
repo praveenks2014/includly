@@ -18,6 +18,8 @@ import {
   tutorEngagementPlatformPaymentsTable,
   paymentsTable,
   connectThreadsTable,
+  sessionBookingsTable,
+  professionalAvailabilityTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { z } from "zod/v4";
@@ -384,10 +386,23 @@ router.get("/tutor/my-request", requireAuth, requireRole("parent"), async (req: 
   const avatarRows = userIds.length ? await db.select({ id: usersTable.id, avatarUrl: usersTable.avatarUrl }).from(usersTable).where(inArray(usersTable.id, userIds)) : [];
   const avatarByUserId = new Map(avatarRows.map((r) => [r.id, r.avatarUrl]));
 
+  // Booking-based interview scheduling — batch-fetch the booked date/time
+  // for every candidate that has one, and derive meetLink deterministically
+  // (never stored, see book-interview's comment).
+  const interviewBookingIds = candidateRows
+    .map((c: TutorCandidateRow) => c.interviewBookingId)
+    .filter((id): id is number => id != null);
+  const interviewBookings = interviewBookingIds.length
+    ? await db.select({ id: sessionBookingsTable.id, bookedDate: sessionBookingsTable.bookedDate, startTime: sessionBookingsTable.startTime })
+        .from(sessionBookingsTable).where(inArray(sessionBookingsTable.id, interviewBookingIds))
+    : [];
+  const interviewBookingById = new Map(interviewBookings.map((b) => [b.id, b]));
+
   const candidates = candidateRows
     .map((c: TutorCandidateRow) => {
       const p = profById.get(c.professionalId);
       if (!p) return null;
+      const booking = c.interviewBookingId != null ? interviewBookingById.get(c.interviewBookingId) : undefined;
       return {
         id: c.id,
         professionalId: c.professionalId,
@@ -395,9 +410,9 @@ router.get("/tutor/my-request", requireAuth, requireRole("parent"), async (req: 
         score: c.score,
         requestStatus: c.requestStatus,
         rejectionNote: c.rejectionNote,
-        interviewSlotsJson: c.interviewSlotsJson,
-        interviewConfirmedSlot: c.interviewConfirmedSlot,
-        meetLink: c.meetLink,
+        interviewBookedDate: booking?.bookedDate ?? null,
+        interviewBookedStartTime: booking?.startTime ?? null,
+        interviewMeetLink: c.interviewBookingId != null ? `https://meet.jit.si/includly-tutor-interview-${c.interviewBookingId}${JITSI_CONFIG_SUFFIX}` : null,
         interviewDoneAt: c.interviewDoneAt,
         trialDaysRequested: c.trialDaysRequested,
         trialDaysAccepted: c.trialDaysAccepted,
@@ -445,9 +460,7 @@ router.get("/tutor/my-candidacies", requireAuth, requireRole("professional"), as
       locationArea: tutorMatchesTable.locationArea,
       requestStatus: tutorMatchCandidatesTable.requestStatus,
       rejectionNote: tutorMatchCandidatesTable.rejectionNote,
-      interviewSlotsJson: tutorMatchCandidatesTable.interviewSlotsJson,
-      interviewConfirmedSlot: tutorMatchCandidatesTable.interviewConfirmedSlot,
-      meetLink: tutorMatchCandidatesTable.meetLink,
+      interviewBookingId: tutorMatchCandidatesTable.interviewBookingId,
       interviewDoneAt: tutorMatchCandidatesTable.interviewDoneAt,
       trialDaysRequested: tutorMatchCandidatesTable.trialDaysRequested,
       trialDaysAccepted: tutorMatchCandidatesTable.trialDaysAccepted,
@@ -458,7 +471,23 @@ router.get("/tutor/my-candidacies", requireAuth, requireRole("professional"), as
     .where(and(eq(tutorMatchCandidatesTable.professionalId, pro.id), isNull(tutorMatchCandidatesTable.removedAt)))
     .orderBy(desc(tutorMatchCandidatesTable.createdAt));
 
-  res.json(candidates);
+  // Same batch-fetch + deterministic-meetLink derivation as GET /tutor/my-request.
+  const interviewBookingIds = candidates.map((c) => c.interviewBookingId).filter((id): id is number => id != null);
+  const interviewBookings = interviewBookingIds.length
+    ? await db.select({ id: sessionBookingsTable.id, bookedDate: sessionBookingsTable.bookedDate, startTime: sessionBookingsTable.startTime })
+        .from(sessionBookingsTable).where(inArray(sessionBookingsTable.id, interviewBookingIds))
+    : [];
+  const interviewBookingById = new Map(interviewBookings.map((b) => [b.id, b]));
+
+  res.json(candidates.map((c) => {
+    const booking = c.interviewBookingId != null ? interviewBookingById.get(c.interviewBookingId) : undefined;
+    return {
+      ...c,
+      interviewBookedDate: booking?.bookedDate ?? null,
+      interviewBookedStartTime: booking?.startTime ?? null,
+      interviewMeetLink: c.interviewBookingId != null ? `https://meet.jit.si/includly-tutor-interview-${c.interviewBookingId}${JITSI_CONFIG_SUFFIX}` : null,
+    };
+  }));
 });
 
 // ── POST /tutor/:matchId/candidates/:candidateId/send-request ────────────
@@ -633,6 +662,118 @@ router.post("/tutor/:matchId/candidates/:candidateId/confirm-interview", require
   res.status(200).json(updated);
 });
 
+// ── POST /tutor/:matchId/candidates/:candidateId/book-interview ──────────
+// Replaces propose-interview/confirm-interview above in the live path (kept,
+// unused, for later cleanup) — tutor interview scheduling is booking-based,
+// not negotiation-based: the professional has already declared their open
+// windows via professional_availability, so the parent just picks a slot
+// the same way any paid session booking works, reusing
+// GET /professionals/:id/bookable-slots unchanged for slot listing. This
+// inserts directly as a $0 "interview" session_bookings row — no payment —
+// so it's excluded from bookable-slots for anyone else exactly like a real
+// paid confirmed booking (same WHERE professionalId+bookedDate+status,
+// no amount/type distinction in that query).
+function timeToMinutesLocal(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h! * 60 + m!;
+}
+function addMinutesLocal(time: string, minutes: number): string {
+  const total = timeToMinutesLocal(time) + minutes;
+  const h = Math.floor(total / 60) % 24;
+  const m = total % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+const BookInterviewBody = z.object({
+  bookedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
+router.post("/tutor/:matchId/candidates/:candidateId/book-interview", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const parsed = BookInterviewBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { bookedDate, startTime } = parsed.data;
+  const ctx = await resolveAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  if (ctx.myRole !== "parent") { res.status(403).json({ error: "Only the parent can book an interview slot" }); return; }
+  if (ctx.candidate.requestStatus !== "accepted") { res.status(409).json({ error: "The professional has not accepted your request yet" }); return; }
+  if (ctx.candidate.interviewBookingId) { res.status(409).json({ error: "Interview has already been booked" }); return; }
+
+  const professionalId = ctx.candidate.professionalId;
+  const dayOfWeek = new Date(bookedDate + "T00:00:00Z").getUTCDay();
+
+  // Recompute the exact same bookable-slots set the parent's UI showed
+  // (never trust the client's chosen time without re-deriving it server-
+  // side) — same availability + already-booked-exclusion logic as
+  // GET /professionals/:id/bookable-slots.
+  const availSlots = await db
+    .select()
+    .from(professionalAvailabilityTable)
+    .where(and(
+      eq(professionalAvailabilityTable.professionalId, professionalId),
+      eq(professionalAvailabilityTable.dayOfWeek, dayOfWeek),
+      eq(professionalAvailabilityTable.isActive, true),
+    ));
+  const existingBookings = await db
+    .select({ startTime: sessionBookingsTable.startTime })
+    .from(sessionBookingsTable)
+    .where(and(
+      eq(sessionBookingsTable.professionalId, professionalId),
+      eq(sessionBookingsTable.bookedDate, bookedDate),
+      eq(sessionBookingsTable.status, "confirmed"),
+    ));
+  const bookedTimes = new Set(existingBookings.map((b) => b.startTime));
+
+  let matchedSlot: { startTime: string; endTime: string; durationMinutes: number } | null = null;
+  for (const avail of availSlots) {
+    let slotStart = avail.startTime;
+    while (timeToMinutesLocal(addMinutesLocal(slotStart, avail.slotDurationMinutes)) <= timeToMinutesLocal(avail.endTime)) {
+      const slotEnd = addMinutesLocal(slotStart, avail.slotDurationMinutes);
+      if (slotStart === startTime && !bookedTimes.has(slotStart)) {
+        matchedSlot = { startTime: slotStart, endTime: slotEnd, durationMinutes: avail.slotDurationMinutes };
+        break;
+      }
+      slotStart = slotEnd;
+    }
+    if (matchedSlot) break;
+  }
+  if (!matchedSlot) { res.status(409).json({ error: "This slot is no longer available" }); return; }
+
+  const [booking] = await db
+    .insert(sessionBookingsTable)
+    .values({
+      professionalId,
+      parentId: req.userId!,
+      bookedDate,
+      startTime: matchedSlot.startTime,
+      endTime: matchedSlot.endTime,
+      durationMinutes: matchedSlot.durationMinutes,
+      amountInr: 0,
+      commissionInr: 0,
+      status: "confirmed",
+      bookingType: "interview",
+    })
+    .returning();
+
+  await db.update(tutorMatchCandidatesTable).set({ interviewBookingId: booking!.id }).where(eq(tutorMatchCandidatesTable.id, candidateId));
+
+  const meetLink = `https://meet.jit.si/includly-tutor-interview-${booking!.id}${JITSI_CONFIG_SUFFIX}`;
+  const proUserId = await getProfessionalUserId(professionalId);
+  if (proUserId) {
+    void createInAppNotification(proUserId, {
+      type: "interview_booked",
+      title: "Parent booked an interview slot",
+      body: `Interview booked for ${bookedDate} at ${matchedSlot.startTime}. Join link: ${meetLink}`,
+      relatedType: "match",
+      relatedId: matchId,
+    }).catch(() => {});
+  }
+  res.status(201).json({ bookingId: booking!.id, bookedDate, startTime: matchedSlot.startTime, endTime: matchedSlot.endTime, meetLink });
+});
+
 // ── POST /tutor/:matchId/candidates/:candidateId/mark-interview-done ─────
 router.post("/tutor/:matchId/candidates/:candidateId/mark-interview-done", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
   const matchId = parseInt(req.params["matchId"] as string, 10);
@@ -641,7 +782,7 @@ router.post("/tutor/:matchId/candidates/:candidateId/mark-interview-done", requi
   const ctx = await resolveAccess(matchId, candidateId, req.userId!, req.userRole!);
   if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
   if (ctx.myRole !== "parent") { res.status(403).json({ error: "Only the parent can mark the interview as done" }); return; }
-  if (!ctx.candidate.meetLink) { res.status(409).json({ error: "No confirmed interview to mark as done" }); return; }
+  if (!ctx.candidate.interviewBookingId) { res.status(409).json({ error: "No booked interview to mark as done" }); return; }
   if (ctx.candidate.interviewDoneAt) { res.status(409).json({ error: "Interview is already marked as done" }); return; }
 
   const [updated] = await db.update(tutorMatchCandidatesTable).set({ interviewDoneAt: new Date() }).where(eq(tutorMatchCandidatesTable.id, candidateId)).returning();

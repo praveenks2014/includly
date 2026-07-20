@@ -26,6 +26,7 @@ import {
   professionalOfferingsTable,
   identityVerificationsTable,
   negotiationOffersTable,
+  interviewTimeOffersTable,
   shadowMatchMessagesTable,
   shadowMatchThreadsTable,
   childrenTable,
@@ -69,6 +70,19 @@ async function hasInteractionStarted(matchId: number): Promise<boolean> {
     .where(eq(shadowMatchCandidatesTable.matchId, matchId))
     .limit(1);
   if (negotiation) return true;
+
+  // Interview-time offers replaced interviewSlotsJson above as the signal
+  // for "an interview time has been proposed" — a pending (not yet
+  // accepted) proposal wouldn't otherwise be caught by any of the checks
+  // above, since interviewConfirmedSlot/interviewDoneAt only get set once
+  // one side accepts.
+  const [interviewTimeOffer] = await db
+    .select({ id: interviewTimeOffersTable.id })
+    .from(interviewTimeOffersTable)
+    .innerJoin(shadowMatchCandidatesTable, eq(shadowMatchCandidatesTable.id, interviewTimeOffersTable.candidateId))
+    .where(eq(shadowMatchCandidatesTable.matchId, matchId))
+    .limit(1);
+  if (interviewTimeOffer) return true;
 
   const [message] = await db
     .select({ id: shadowMatchMessagesTable.id })

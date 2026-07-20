@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 import { tutorMatchesTable } from "./tutorMatches";
 import { professionalProfilesTable } from "./professionals";
 import { usersTable } from "./users";
+import { sessionBookingsTable } from "./sessions";
 
 // Mirrors shadow_match_candidates exactly (Path A — separate table, same shape).
 export const tutorMatchCandidatesTable = pgTable(
@@ -25,9 +26,19 @@ export const tutorMatchCandidatesTable = pgTable(
     }),
     requestStatus: text("request_status").notNull().default("not_sent"),
     rejectionNote: text("rejection_note"),
+    // Superseded by booking-based interview scheduling (reuses
+    // professional_availability/bookable-slots + session_bookings, see
+    // interviewBookingId below) — kept populated by nothing going forward,
+    // left as dead columns rather than dropped outright.
     interviewSlotsJson: text("interview_slots_json"),
     interviewConfirmedSlot: text("interview_confirmed_slot"),
     meetLink: text("meet_link"),
+    // Booking-based interview scheduling — points at the session_bookings
+    // row created by POST /tutor/.../book-interview (bookingType:
+    // "interview", amountInr: 0, status: "confirmed" directly, no payment).
+    // meetLink is derived deterministically from this row's id at read
+    // time, not stored (see JITSI_CONFIG_SUFFIX usage in tutor.ts).
+    interviewBookingId: integer("interview_booking_id").references(() => sessionBookingsTable.id, { onDelete: "set null" }),
     interviewDoneAt: timestamp("interview_done_at", { withTimezone: true }),
     trialDaysRequested: integer("trial_days_requested"),
     trialDaysAccepted: integer("trial_days_accepted"),

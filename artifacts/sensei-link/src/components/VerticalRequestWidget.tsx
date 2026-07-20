@@ -101,9 +101,12 @@ interface Candidate {
   score: number | null;
   requestStatus: string;
   rejectionNote: string | null;
-  interviewSlotsJson: string | null;
-  interviewConfirmedSlot: string | null;
-  meetLink: string | null;
+  interviewSlotsJson?: string | null; // therapist only — tutor moved to booking-based scheduling below
+  interviewConfirmedSlot?: string | null; // therapist only
+  meetLink?: string | null; // therapist only
+  interviewBookedDate?: string | null; // tutor only
+  interviewBookedStartTime?: string | null; // tutor only
+  interviewMeetLink?: string | null; // tutor only, derived deterministically server-side
   interviewDoneAt: string | null;
   trialDaysRequested: number | null;
   trialDaysAccepted: number | null;
@@ -228,7 +231,134 @@ function SendRequestBlock({ cfg, matchId, candidate }: { cfg: VerticalConfig; ma
   return null;
 }
 
-// ── InterviewSection ────────────────────────────────────────────────────────
+interface BookableSlot {
+  date: string;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  priceInr: number;
+}
+
+// ── TutorInterviewBookingSection — booking-based, not negotiation-based: the
+// tutor already declared their open windows via professional_availability,
+// so the parent just picks a slot the same way any paid session booking
+// works (GET /professionals/:id/bookable-slots, reused unchanged). Books
+// directly as a $0 "interview" session_bookings row via
+// POST .../book-interview — no payment, no propose/counter. ──
+function TutorInterviewBookingSection({ cfg, matchId, candidate }: { cfg: VerticalConfig; matchId: number; candidate: Candidate }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [booking, setBooking] = useState(false);
+  const [markingDone, setMarkingDone] = useState(false);
+
+  if (candidate.requestStatus !== "accepted") return null;
+
+  const alreadyBooked = !!candidate.interviewBookedDate && !!candidate.interviewBookedStartTime;
+
+  const { data: slots = [], isLoading: slotsLoading } = useQuery<BookableSlot[]>({
+    queryKey: [`/professionals/${candidate.professionalId}/bookable-slots`, selectedDate],
+    queryFn: async () => {
+      const res = await fetchWithAuth(`${getApiBase()}/professionals/${candidate.professionalId}/bookable-slots?date=${selectedDate}`);
+      if (!res.ok) return [];
+      return res.json() as Promise<BookableSlot[]>;
+    },
+    enabled: !alreadyBooked && !candidate.interviewDoneAt && !!selectedDate,
+  });
+
+  async function bookSlot(slot: BookableSlot) {
+    setBooking(true);
+    try {
+      const res = await fetchWithAuth(`${cfg.apiBase}/${matchId}/candidates/${candidate.id}/book-interview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookedDate: slot.date, startTime: slot.startTime }),
+      });
+      if (!res.ok) {
+        const e = (await res.json()) as { error?: string };
+        toast({ title: e.error ?? "Could not book this slot", variant: "destructive" });
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: [`${cfg.vertical}-my-request`] });
+    } finally {
+      setBooking(false);
+    }
+  }
+
+  async function markDone() {
+    setMarkingDone(true);
+    try {
+      const res = await fetchWithAuth(`${cfg.apiBase}/${matchId}/candidates/${candidate.id}/mark-interview-done`, { method: "POST" });
+      if (!res.ok) {
+        const e = (await res.json()) as { error?: string };
+        toast({ title: e.error ?? "Could not mark interview done", variant: "destructive" });
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: [`${cfg.vertical}-my-request`] });
+    } finally {
+      setMarkingDone(false);
+    }
+  }
+
+  return (
+    <div className="border-t border-gray-100 pt-3 space-y-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Interview</p>
+      {candidate.interviewDoneAt ? (
+        <div className="w-full text-center text-xs font-semibold px-2.5 py-2 rounded-xl bg-green-50 text-green-700 border border-green-200">Interview Complete ✓</div>
+      ) : alreadyBooked ? (
+        <div className="space-y-2">
+          <div className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-teal-800 space-y-1">
+            <p className="font-semibold">Confirmed: {candidate.interviewBookedDate} at {candidate.interviewBookedStartTime}</p>
+            {candidate.interviewMeetLink && (
+              <a href={candidate.interviewMeetLink} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 w-full h-9 rounded-lg bg-[#2EC4A5] hover:bg-[#26a88d] text-white font-semibold text-xs no-underline mt-1">
+                <Video size={13} />
+                Join Interview
+              </a>
+            )}
+          </div>
+          <button onClick={() => void markDone()} disabled={markingDone} className="w-full flex items-center justify-center gap-1.5 text-xs bg-[#1A2340] text-white rounded-xl py-2 font-semibold hover:bg-[#2a3660] disabled:opacity-50">
+            {markingDone ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+            Mark Interview Done
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-gray-500">Pick a time from {cfg.professionalLabel}&apos;s open slots:</p>
+          <input
+            type="date"
+            value={selectedDate}
+            min={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-[#2EC4A5]"
+          />
+          {slotsLoading ? (
+            <div className="flex justify-center py-2"><Loader2 size={16} className="animate-spin text-[#2EC4A5]" /></div>
+          ) : slots.length === 0 ? (
+            <p className="text-[11px] text-gray-400 text-center py-2">No open slots on this date</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-1.5">
+              {slots.map((s) => (
+                <button
+                  key={s.startTime}
+                  onClick={() => void bookSlot(s)}
+                  disabled={booking}
+                  className="text-xs py-1.5 px-1 rounded-lg border border-gray-200 text-gray-600 hover:border-[#2EC4A5] disabled:opacity-50"
+                  data-testid={`button-book-interview-slot-${s.startTime}`}
+                >
+                  {s.startTime}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── InterviewSection — therapist keeps the propose/confirm flow below; tutor
+// moved to booking-based scheduling (TutorInterviewBookingSection above),
+// same cfg.vertical branching pattern already used elsewhere in this file. ──
 function InterviewSection({ cfg, matchId, candidate }: { cfg: VerticalConfig; matchId: number; candidate: Candidate }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -236,6 +366,8 @@ function InterviewSection({ cfg, matchId, candidate }: { cfg: VerticalConfig; ma
   const [slots, setSlots] = useState<InterviewSlot[]>([{ date: "", time: "", label: "" }]);
   const [proposing, setProposing] = useState(false);
   const [markingDone, setMarkingDone] = useState(false);
+
+  if (cfg.vertical === "tutor") return <TutorInterviewBookingSection cfg={cfg} matchId={matchId} candidate={candidate} />;
 
   if (candidate.requestStatus !== "accepted") return null;
 
