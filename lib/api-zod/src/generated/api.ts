@@ -334,6 +334,23 @@ export const UpdateProfessionalProfileBody = zod.object({
       "UPI ID for receiving session payments (never exposed to parents\/clients)",
     ),
   avatarUrl: zod.string().nullish(),
+  rciCrrNumber: zod
+    .string()
+    .optional()
+    .describe(
+      "RCI Central Rehabilitation Register number — required for RCI-regulated therapist disciplines",
+    ),
+  verticalDetails: zod
+    .record(zod.string(), zod.unknown())
+    .optional()
+    .describe(
+      "Vertical-specific structured details (e.g. therapist discipline/licensing info) — deep-merged server-side, not overwritten",
+    ),
+  specializationTags: zod
+    .array(zod.string())
+    .max(5)
+    .optional()
+    .describe("Up to 5 free-form specialization tags"),
 });
 
 export const UpdateProfessionalProfileResponse = zod.object({

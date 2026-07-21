@@ -2137,6 +2137,19 @@ components:
         upiId:
           type: string
           description: UPI ID for receiving session payments (never exposed to parents/clients)
+        rciCrrNumber:
+          type: string
+          description: RCI Central Rehabilitation Register number — required for RCI-regulated therapist disciplines
+        verticalDetails:
+          type: object
+          additionalProperties: true
+          description: Vertical-specific structured details (e.g. therapist discipline/licensing info) — deep-merged server-side, not overwritten
+        specializationTags:
+          type: array
+          items:
+            type: string
+          maxItems: 5
+          description: Up to 5 free-form specialization tags
 
     Rating:
       type: object

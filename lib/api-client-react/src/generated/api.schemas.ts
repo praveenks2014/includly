@@ -417,6 +417,12 @@ export interface UpdateProfessionalProfileBody {
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
   upiId?: string;
   avatarUrl?: string | null;
+  /** RCI Central Rehabilitation Register number — required for RCI-regulated therapist disciplines */
+  rciCrrNumber?: string;
+  /** Vertical-specific structured details (e.g. therapist discipline/licensing info) — deep-merged server-side, not overwritten */
+  verticalDetails?: { [key: string]: unknown };
+  /** Up to 5 free-form specialization tags */
+  specializationTags?: string[];
 }
 
 export interface Rating {
