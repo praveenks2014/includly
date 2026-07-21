@@ -2328,9 +2328,13 @@ function EngagementTab() {
   const [engTab, setEngTab] = useState<"overview" | "child" | "log" | "trends" | "lifecycle">("overview");
   const [chatOpen, setChatOpen] = useState(false);
 
+  // Cross-user: the parent pausing/resuming/consenting happens on their own
+  // device — same 30s/20s polling as the engagement-lifecycle query above.
   const { data: engagements = [], isLoading } = useQuery<STEngagement[]>({
     queryKey: ["pro-engagements"],
     queryFn: () => fetchWithAuth("/api/engagements").then(r => r.json()),
+    staleTime: 20_000,
+    refetchInterval: 30_000,
   });
 
   const activeList = engagements.filter(e => ["pending_teacher_acceptance", "pending_activation_fee", "pending_start", "active", "notice_period", "paused"].includes(e.status));
@@ -2358,10 +2362,15 @@ function EngagementTab() {
   });
 
   // ── Lifecycle requests ─────────────────────────────────────────────────────
+  // Cross-user: the parent can raise/consent to a pause or resume request on
+  // their own device, no shared cache to invalidate — same 30s/20s cadence
+  // used elsewhere for this class of gap (EnquiriesTab, VerticalRequestsSection).
   const { data: lifecycleRequests = [] } = useQuery<LifecycleRequest[]>({
     queryKey: ["engagement-lifecycle", active?.id],
     queryFn: () => fetchWithAuth(`/api/engagements/${active!.id}/lifecycle`).then(r => { if (!r.ok) throw new Error(r.statusText); return r.json() as Promise<LifecycleRequest[]>; }),
     enabled: !!active,
+    staleTime: 20_000,
+    refetchInterval: 30_000,
   });
 
   const pendingPR = lifecycleRequests.find(r => ["pause", "resume"].includes(r.type) && r.status === "pending") ?? null;
@@ -2558,6 +2567,10 @@ function EngagementTab() {
   const [lifecycleType, setLifecycleType] = useState<"stop" | "pause" | "">("");
   const [lifecycleNotes, setLifecycleNotes] = useState("");
   const [postingLifecycle, setPostingLifecycle] = useState(false);
+  // Parity with the parent-side Pause Engagement reason capture
+  // (parent-dashboard.tsx) — was missing here entirely, even though the
+  // backend already persists and displays it to the other party either way.
+  const [pauseReason, setPauseReason] = useState("");
 
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -2656,10 +2669,11 @@ function EngagementTab() {
       const resp = await fetchWithAuth(`/api/engagements/${active.id}/lifecycle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "pause" }),
+        body: JSON.stringify({ type: "pause", reason: pauseReason.trim() || undefined }),
       });
       if (!resp.ok) { const e = await resp.json() as { error?: string }; throw new Error(e.error ?? "Failed to submit"); }
       queryClient.invalidateQueries({ queryKey: ["engagement-lifecycle", active.id] });
+      setPauseReason("");
       toast({ title: "Pause request sent — waiting for parent to respond" });
     } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
     finally { setPostingLifecycle(false); }
@@ -3380,6 +3394,9 @@ function EngagementTab() {
               <p className="text-xs text-gray-500">
                 Temporarily pauses this engagement with the parent's agreement. Both parties must consent. Billing stops during the pause. Either party can request to resume.
               </p>
+              <textarea value={pauseReason} onChange={(e) => setPauseReason(e.target.value)} rows={2}
+                placeholder="Reason for pausing (optional)…"
+                className="w-full rounded-xl border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none" />
               <Button size="sm" onClick={() => void handleProRequestPause()} disabled={postingLifecycle}
                 className="bg-amber-500 hover:bg-amber-600 text-white text-xs">
                 {postingLifecycle ? <Loader2 size={12} className="animate-spin mr-1" /> : null}Request Pause

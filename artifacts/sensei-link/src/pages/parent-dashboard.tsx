@@ -404,9 +404,14 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
     professionalName: string | null;
     status: string;
   }
+  // Cross-user: status (e.g. paused, teacher-accepted) can change from the
+  // teacher's own device — same 30s/20s polling as the dedicated engagement
+  // tab below, so this summary doesn't show stale status either.
   const { data: engagements = [] } = useQuery<HomeEngagement[]>({
     queryKey: ["parent-engagements"],
     queryFn: () => fetchWithAuth("/api/engagements").then((r) => r.json()),
+    staleTime: 20_000,
+    refetchInterval: 30_000,
   });
   const activeEngagement = engagements.find(
     (e) =>
@@ -1252,9 +1257,14 @@ function ShadowTeacherTab() {
     reason: string | null;
   }
 
+  // Cross-user: the teacher accepting a request, pausing/resuming, etc. all
+  // happen on their own device — same 30s/20s polling as the shared
+  // engagement-lifecycle query above.
   const { data: engagements = [], isLoading } = useQuery<STEngagement[]>({
     queryKey: ["parent-engagements"],
     queryFn: () => fetchWithAuth("/api/engagements").then(r => r.json()),
+    staleTime: 20_000,
+    refetchInterval: 30_000,
   });
 
   const active = engagements.find(e =>
@@ -1295,6 +1305,10 @@ function ShadowTeacherTab() {
     enabled: !!active && active?.platformSalaryEnabled === false,
   });
 
+  // Cross-user: the teacher can raise/consent to a pause or resume request
+  // on their own device, no shared cache to invalidate — same 30s/20s
+  // cadence used elsewhere for this class of gap (EnquiriesTab,
+  // VerticalRequestsSection, useMyMatch).
   const { data: lifecycleRequests = [] } = useQuery<LifecycleRequest[]>({
     queryKey: ["engagement-lifecycle", active?.id],
     queryFn: async () => {
@@ -1304,6 +1318,8 @@ function ShadowTeacherTab() {
       return Array.isArray(data) ? data : [];
     },
     enabled: !!active,
+    staleTime: 20_000,
+    refetchInterval: 30_000,
   });
 
   const pendingPR = lifecycleRequests.find(r => ["pause", "resume"].includes(r.type) && r.status === "pending") ?? null;
@@ -2372,9 +2388,13 @@ function ProgressTab() {
     childName: string | null;
     status: string;
   }
+  // Cross-user: same 30s/20s polling as the shadow-teacher tab's identical
+  // query key, so this progress summary doesn't show stale status either.
   const { data: engagements = [], isLoading } = useQuery<PEngagement[]>({
     queryKey: ["parent-engagements"],
     queryFn: () => fetchWithAuth("/api/engagements").then((r) => r.json()),
+    staleTime: 20_000,
+    refetchInterval: 30_000,
   });
 
   const active = engagements.find(e =>
