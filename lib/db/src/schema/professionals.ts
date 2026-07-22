@@ -39,6 +39,19 @@ export const verificationStatusEnum = pgEnum("verification_status", [
   "rejected",
 ]);
 
+// Independent of verificationStatusEnum above on purpose: a held-pending
+// clinicAddress change must never affect search/matching/listing (those all
+// gate on verificationStatus/isVerified only) — this tracks ONLY whether a
+// queued address change is awaiting/has passed its own separate admin
+// review. null = no change queued, or queued but not yet reviewable
+// (no proof_of_address doc yet); "pending" = proof exists, awaiting admin;
+// "rejected" = last review was rejected (cleared back toward null the next
+// time a new address is queued).
+export const addressReviewStatusEnum = pgEnum("address_review_status", [
+  "pending",
+  "rejected",
+]);
+
 // Therapist-only — the professional chooses this at offering setup. Nullable:
 // meaningless for shadow_teacher/home_tutor offerings, and unset until a
 // therapist explicitly picks one.
@@ -81,6 +94,23 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   specializationTags: text("specialization_tags").array().notNull().default([]),
   displayArea: text("display_area"),
   clinicAddress: text("clinic_address"),
+  // Held-pending address change (Step 2, professional-verification-integrity
+  // batch): once a verified, in-person-visiting professional (see
+  // offersHomeVisits below — the best available proxy today for "has a
+  // walk-in/visited location"; if a dedicated walk-in-clinic flag is ever
+  // added, it should take over this role) submits a clinicAddress change,
+  // it's written HERE, not to clinicAddress itself, until a fresh
+  // proof_of_address document is uploaded and a SEPARATE admin address
+  // review approves it (see addressReviewStatus) — the live clinicAddress
+  // (shown to parents post-booking) must never reflect an unverified claim.
+  // Applied to clinicAddress (and cleared) on address-approve; cleared on
+  // address-reject. Deliberately does NOT gate verificationStatus/listing —
+  // the professional stays fully searchable/bookable throughout, since
+  // clinicAddress itself is never used for search, matching, or distance
+  // calculations, only shown as a display string after a booking is
+  // already confirmed.
+  pendingClinicAddress: text("pending_clinic_address"),
+  addressReviewStatus: addressReviewStatusEnum("address_review_status"),
   offersHomeVisits: boolean("offers_home_visits").notNull().default(false),
   coachingSubType: coachingSubTypeEnum("coaching_sub_type"),
   inclusiveExperience: boolean("inclusive_experience").notNull().default(false),

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
   db,
   professionalProfilesTable,
@@ -17,6 +17,14 @@ import { resolveOffering } from "./offeringResolver";
  * only used to prove *something* claiming to be the RCI cert was submitted.
  */
 export const RCI_CERTIFICATE_DOC_TYPE = "rci_certificate";
+
+/**
+ * Same string-tag convention as RCI_CERTIFICATE_DOC_TYPE above, used to mark
+ * a certification upload as proof of the professional's clinic/practice
+ * address — required before a held-pending clinicAddress change (see
+ * pendingClinicAddress on professionalProfilesTable) becomes reviewable.
+ */
+export const PROOF_OF_ADDRESS_DOC_TYPE = "proof_of_address";
 
 export type VerificationVertical = "shadow_teacher" | "home_tutor" | "therapist";
 
@@ -196,6 +204,47 @@ export async function recomputeSubmissionStatus(professionalId: number): Promise
       .set({ verificationStatus: "pending" })
       .where(eq(professionalProfilesTable.id, professionalId));
   }
+}
+
+/**
+ * Companion to recomputeSubmissionStatus, scoped to the held-pending
+ * clinicAddress flow (Step 2, professional-verification-integrity batch):
+ * a verified profile with a pendingClinicAddress set doesn't become
+ * reviewable until a proof_of_address certification actually exists — an
+ * address change alone, with no proof yet, must not surface to admin.
+ * Called after every certification upload (same call site as
+ * recomputeSubmissionStatus), a no-op unless both conditions are met.
+ *
+ * Deliberately sets addressReviewStatus, NEVER verificationStatus — an
+ * address review must never affect search/matching/listing (all of which
+ * gate on verificationStatus/isVerified only). The professional stays
+ * fully listed and bookable for the entire duration of an address review.
+ */
+export async function recomputeAddressChangeReviewable(professionalId: number): Promise<void> {
+  const [profile] = await db
+    .select({
+      verificationStatus: professionalProfilesTable.verificationStatus,
+      pendingClinicAddress: professionalProfilesTable.pendingClinicAddress,
+    })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, professionalId));
+
+  if (!profile || !profile.pendingClinicAddress || profile.verificationStatus !== "verified") return;
+
+  const [proofDoc] = await db
+    .select({ id: professionalCertificationsTable.id })
+    .from(professionalCertificationsTable)
+    .where(and(
+      eq(professionalCertificationsTable.professionalId, professionalId),
+      eq(professionalCertificationsTable.documentType, PROOF_OF_ADDRESS_DOC_TYPE),
+    ));
+
+  if (!proofDoc) return;
+
+  await db
+    .update(professionalProfilesTable)
+    .set({ addressReviewStatus: "pending" })
+    .where(eq(professionalProfilesTable.id, professionalId));
 }
 
 // ─── Multi-vertical offerings ──────────────────────────────────────────────

@@ -13,6 +13,7 @@ import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage"
 import {
   recomputeSubmissionStatus,
   recomputeSubmissionStatusForOffering,
+  recomputeAddressChangeReviewable,
   type VerificationVertical,
 } from "../lib/verificationRequirements";
 
@@ -288,6 +289,11 @@ router.post(
     // last missing requirement — recheck whether the profile is now
     // reviewable.
     await recomputeForRequestedVertical(profile.id, req.body);
+
+    // Separately: a proof_of_address upload can be what makes a held-pending
+    // clinicAddress change (Step 2) reviewable — independent of the vertical
+    // requirements check above, a no-op unless both conditions are met.
+    await recomputeAddressChangeReviewable(profile.id);
 
     res.status(201).json({
       id: record.id,

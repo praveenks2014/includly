@@ -243,6 +243,80 @@ router.patch("/admin/professionals/:id/reject", ...adminGuard, async (req, res):
   res.json(profile);
 });
 
+// A held-pending clinicAddress change (Step 2, professional-verification-
+// integrity batch) is reviewed through its OWN approve/reject actions,
+// deliberately separate from the credential approve/reject routes above —
+// an address review must never touch verificationStatus/isVerified (the
+// fields every listing/matching query gates on). The professional stays
+// fully listed and bookable for the entire duration of an address review.
+router.patch("/admin/professionals/:id/address/approve", ...adminGuard, async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const [existing] = await db
+    .select({
+      pendingClinicAddress: professionalProfilesTable.pendingClinicAddress,
+      addressReviewStatus: professionalProfilesTable.addressReviewStatus,
+    })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, id));
+
+  if (!existing) {
+    res.status(404).json({ error: "Professional not found" });
+    return;
+  }
+
+  if (!existing.pendingClinicAddress) {
+    res.status(400).json({ error: "no_pending_address_change", message: "This professional has no address change awaiting review." });
+    return;
+  }
+
+  // Defense-in-depth, same principle as the credential-approve gate above:
+  // an admin click alone must not be sufficient — the proof_of_address
+  // document must have actually been uploaded (which is what flips this to
+  // "pending" via recomputeAddressChangeReviewable) before it can be approved.
+  if (existing.addressReviewStatus !== "pending") {
+    res.status(400).json({ error: "address_not_reviewable", message: "No proof-of-address document has been submitted for this change yet." });
+    return;
+  }
+
+  const [profile] = await db
+    .update(professionalProfilesTable)
+    .set({
+      clinicAddress: existing.pendingClinicAddress,
+      pendingClinicAddress: null,
+      addressReviewStatus: null,
+    })
+    .where(eq(professionalProfilesTable.id, id))
+    .returning();
+
+  res.json(profile);
+});
+
+router.patch("/admin/professionals/:id/address/reject", ...adminGuard, async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+
+  const [profile] = await db
+    .update(professionalProfilesTable)
+    .set({ pendingClinicAddress: null, addressReviewStatus: "rejected" })
+    .where(eq(professionalProfilesTable.id, id))
+    .returning();
+
+  if (!profile) {
+    res.status(404).json({ error: "Professional not found" });
+    return;
+  }
+
+  res.json(profile);
+});
+
 /** GET /admin/professionals/:id/offerings — primary + additional offerings, each with its own gate status. */
 router.get("/admin/professionals/:id/offerings", ...adminGuard, async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);

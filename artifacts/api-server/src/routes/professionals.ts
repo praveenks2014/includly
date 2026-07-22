@@ -173,8 +173,14 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
   const [existing] = await db
     .select({
       specialty: professionalProfilesTable.specialty,
+      vertical: professionalProfilesTable.vertical,
+      qualifications: professionalProfilesTable.qualifications,
+      rciCrrNumber: professionalProfilesTable.rciCrrNumber,
+      specializationTags: professionalProfilesTable.specializationTags,
+      clinicAddress: professionalProfilesTable.clinicAddress,
       offersHomeVisits: professionalProfilesTable.offersHomeVisits,
       verticalDetails: professionalProfilesTable.verticalDetails,
+      verificationStatus: professionalProfilesTable.verificationStatus,
     })
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.userId, req.userId!));
@@ -188,7 +194,7 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
   }
 
   const { avatarUrl, verticalDetails: incomingVd, email: _clientEmail, ...profileData } = parsed.data;
-  const updateData: typeof profileData & { offersHomeVisits?: boolean; verticalDetails?: unknown; email?: string } = { ...profileData };
+  const updateData: typeof profileData & { offersHomeVisits?: boolean; verticalDetails?: unknown; email?: string; verificationStatus?: "pending"; clinicAddress?: string | null; pendingClinicAddress?: string | null; addressReviewStatus?: null } = { ...profileData };
 
   // Ignore any client-submitted email — always resync to the Clerk login email.
   const clerkEmail = await getClerkPrimaryEmail(req.clerkId!);
@@ -211,6 +217,67 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
     const existingVd = (existing?.verticalDetails ?? {}) as Record<string, unknown>;
     updateData.verticalDetails = { ...existingVd, ...(incomingVd as Record<string, unknown>) };
   }
+
+  // Core-credential re-verification gate: once a profile is verified, a
+  // change to any field the original review actually depended on
+  // (specialty/vertical/qualifications/rciCrrNumber/verticalDetails/
+  // specializationTags) re-enters the admin review queue. A resubmission
+  // of the SAME value (e.g. a form re-save) must not trigger this — only
+  // an actual value change does, hence the equality checks below rather
+  // than "was this key present in the request".
+  const jsonDiffers = (a: unknown, b: unknown): boolean => JSON.stringify(a) !== JSON.stringify(b);
+  const coreCredentialChanged =
+    (parsed.data.specialty !== undefined && parsed.data.specialty !== existing?.specialty) ||
+    (parsed.data.vertical !== undefined && parsed.data.vertical !== existing?.vertical) ||
+    (parsed.data.qualifications !== undefined && parsed.data.qualifications !== existing?.qualifications) ||
+    (parsed.data.rciCrrNumber !== undefined && parsed.data.rciCrrNumber !== existing?.rciCrrNumber) ||
+    (updateData.verticalDetails !== undefined && jsonDiffers(updateData.verticalDetails, existing?.verticalDetails ?? null)) ||
+    (parsed.data.specializationTags !== undefined &&
+      jsonDiffers([...parsed.data.specializationTags].sort(), [...(existing?.specializationTags ?? [])].sort()));
+
+  if (coreCredentialChanged && existing?.verificationStatus === "verified") {
+    updateData.verificationStatus = "pending";
+  }
+
+  // Held-pending address change — scoped to professionals who actually meet
+  // a parent in person. offersHomeVisits is the best signal available today
+  // for "has a walk-in/visited location" (there is no dedicated flag for
+  // that); if one is ever added, it should take over this role instead.
+  // clinicAddress itself is never used for search, matching, or distance
+  // calculations (those use latitude/longitude) — only shown as a display
+  // string once a booking is already confirmed — so an online-only
+  // professional's address change is harmless and applies immediately.
+  const effectiveOffersHomeVisits = updateData.offersHomeVisits ?? existing?.offersHomeVisits ?? false;
+
+  if (existing?.verificationStatus === "verified" && effectiveOffersHomeVisits === true) {
+    if (
+      parsed.data.clinicAddress !== undefined &&
+      parsed.data.clinicAddress !== existing?.clinicAddress
+    ) {
+      // A fresh claim supersedes whatever review state an earlier queued
+      // address was in — reset to null (not yet reviewable) until a new
+      // proof_of_address document is uploaded for THIS address.
+      updateData.pendingClinicAddress = parsed.data.clinicAddress;
+      updateData.addressReviewStatus = null;
+      delete updateData.clinicAddress;
+    } else if (
+      parsed.data.offersHomeVisits === true &&
+      existing?.offersHomeVisits === false &&
+      parsed.data.clinicAddress === undefined &&
+      existing?.clinicAddress
+    ) {
+      // Turning on in-person visits for the first time: whatever address is
+      // already on file was set while it applied freely (offersHomeVisits
+      // was false) and was never reviewed — the toggle itself is what makes
+      // it newly safety-relevant, so treat it exactly like a fresh change.
+      updateData.pendingClinicAddress = existing.clinicAddress;
+      updateData.clinicAddress = null;
+      updateData.addressReviewStatus = null;
+    }
+  }
+  // else: either still online-only (clinicAddress applies directly, no
+  // gating — profileData already carries it through untouched) or
+  // pre-verification (normal onboarding review covers it).
 
   const [profile] = await db
     .update(professionalProfilesTable)
