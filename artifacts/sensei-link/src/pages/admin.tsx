@@ -38,7 +38,7 @@ import {
 } from "recharts";
 import {
   Loader2, Users, BarChart3, Settings, CheckCircle, XCircle, Clock,
-  ShieldAlert, UserCheck, FileText, Eye, ExternalLink, Bell,
+  ShieldAlert, ShieldCheck, UserCheck, FileText, Eye, ExternalLink, Bell,
   IndianRupee, CreditCard, Menu, X, UserX, Shield, ChevronRight, Flag,
   Building2, Plus, Check, Edit2, Trash2, Package, AlertTriangle,
 } from "lucide-react";
@@ -46,7 +46,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 
-type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "users" | "payments" | "settings" | "commissions" | "moderation" | "bookings" | "shadow-teacher" | "engagements" | "centres" | "rci-queue";
+type SidebarTab = "overview" | "professionals" | "verifications" | "parents" | "users" | "payments" | "settings" | "commissions" | "moderation" | "bookings" | "shadow-teacher" | "engagements" | "centres";
 
 // ── Booking row shape from /admin/bookings ────────────────────────────────────
 interface AdminBookingRow {
@@ -447,7 +447,6 @@ export default function AdminPage() {
     { id: "engagements", label: "Engagements", icon: <IndianRupee size={18} /> },
     { id: "centres", label: "Therapy Centres", icon: <Building2 size={18} /> },
     { id: "moderation", label: "Moderation", icon: <Flag size={18} /> },
-    { id: "rci-queue", label: "RCI Queue", icon: <Shield size={18} /> },
     { id: "settings", label: "Settings", icon: <Settings size={18} /> },
     { id: "commissions", label: "Commission Rates", icon: <IndianRupee size={18} /> },
   ];
@@ -536,117 +535,8 @@ export default function AdminPage() {
           {activeTab === "moderation" && <ModerationTab />}
           {activeTab === "settings" && <SettingsTab />}
           {activeTab === "commissions" && <CommissionRatesTab />}
-          {activeTab === "rci-queue" && <RciQueueTab />}
         </div>
       </div>
-    </div>
-  );
-}
-
-function RciQueueTab() {
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
-  const [verifying, setVerifying] = useState<number | null>(null);
-  const [items, setItems] = useState<Array<{
-    id: number;
-    fullName: string | null;
-    city: string | null;
-    country: string | null;
-    rciCrrNumber: string | null;
-    userEmail: string | null;
-    createdAt: string;
-  }>>([]);
-
-  async function load() {
-    setLoading(true);
-    try {
-      const res = await fetchWithAuth("/api/admin/professionals/pending-rci");
-      const data = await res.json() as { professionals: typeof items };
-      setItems(data.professionals ?? []);
-    } catch {
-      toast({ title: "Failed to load RCI queue", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { void load(); }, []);
-
-  async function markVerified(id: number) {
-    setVerifying(id);
-    try {
-      const res = await fetchWithAuth(`/api/admin/professionals/${id}/verify-rci`, { method: "PATCH" });
-      if (!res.ok) throw new Error("Failed");
-      toast({ title: "RCI verified ✓" });
-      setItems((prev) => prev.filter((p) => p.id !== id));
-    } catch {
-      toast({ title: "Could not mark verified", variant: "destructive" });
-    } finally {
-      setVerifying(null);
-    }
-  }
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-bold text-[#1A2340]">Therapist RCI Verification Queue</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Therapists who have submitted a CRR number and are awaiting manual verification.{" "}
-          Before marking verified, look up the CRR number at{" "}
-          <a
-            href="https://www.rci.gov.in/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-teal-600 underline"
-          >
-            rci.gov.in
-          </a>.
-        </p>
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 size={24} className="animate-spin text-gray-400" />
-        </div>
-      ) : items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center text-gray-400 border border-dashed rounded-xl">
-          <CheckCircle size={32} className="mb-3 text-green-400" />
-          <p className="font-medium text-gray-600">Queue is clear</p>
-          <p className="text-sm mt-1">No therapists awaiting RCI verification right now.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {items.map((item) => (
-            <div key={item.id} className="bg-white border rounded-xl p-4 flex items-start gap-4 shadow-sm">
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-[#1A2340] truncate">{item.fullName ?? "—"}</p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {item.userEmail ?? "—"} · {[item.city, item.country].filter(Boolean).join(", ") || "—"}
-                </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded">CRR #</span>
-                  <span className="text-sm font-mono font-bold tracking-wide text-[#1A2340]">
-                    {item.rciCrrNumber}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-400 mt-1">
-                  Submitted {new Date(item.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                </p>
-              </div>
-              <button
-                onClick={() => void markVerified(item.id)}
-                disabled={verifying === item.id}
-                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors"
-              >
-                {verifying === item.id
-                  ? <Loader2 size={12} className="animate-spin" />
-                  : <Check size={12} />}
-                Mark Verified
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -737,6 +627,13 @@ function OverviewTab() {
   );
 }
 
+const CREDENTIAL_KIND_LABELS: Record<string, string> = {
+  rci: "RCI CRR Number",
+  ot: "AIOTA Membership Number",
+  medical: "Medical Council Registration",
+  aba: "ABA Credential",
+};
+
 function ProfessionalsTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -748,6 +645,7 @@ function ProfessionalsTab() {
   const [rejectReason, setRejectReason] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+  const [verifyingRci, setVerifyingRci] = useState<number | null>(null);
 
   const resolvedStatus = (statusFilter || undefined) as "pending" | "verified" | "rejected" | "unsubmitted" | undefined;
   const { data, isLoading } = useAdminListProfessionals(
@@ -803,6 +701,22 @@ function ProfessionalsTab() {
     } catch {
       toast({ title: "Error", description: "Failed to reject.", variant: "destructive" });
     } finally { setIsRejecting(false); }
+  }
+
+  // rciVerified is a manual government-registry cross-check, tracked
+  // separately from verificationStatus — available here regardless of the
+  // profile's current verificationStatus.
+  async function handleMarkRciVerified(id: number) {
+    setVerifyingRci(id);
+    try {
+      const res = await fetchWithAuth(`/api/admin/professionals/${id}/verify-rci`, { method: "PATCH" });
+      if (!res.ok) throw new Error("Failed");
+      setReviewProf((prev) => (prev && prev.id === id ? { ...prev, rciVerified: true } : prev));
+      invalidate();
+      toast({ title: "RCI verified ✓" });
+    } catch {
+      toast({ title: "Error", description: "Could not mark RCI verified.", variant: "destructive" });
+    } finally { setVerifyingRci(null); }
   }
 
   const STATUSES = [
@@ -973,6 +887,52 @@ function ProfessionalsTab() {
                   Professional ID: <span className="font-mono text-gray-600">{reviewProf.id}</span>
                 </p>
               </div>
+              {reviewProf.credentialKind && reviewProf.credentialKind !== "ancillary" && (
+                <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    {CREDENTIAL_KIND_LABELS[reviewProf.credentialKind]}
+                  </p>
+                  {reviewProf.credentialNumber ? (
+                    <p className="text-sm font-mono font-bold tracking-wide text-[#1A2340]">{reviewProf.credentialNumber}</p>
+                  ) : (
+                    <p className="text-sm text-red-600 italic">Not provided</p>
+                  )}
+                  {reviewProf.credentialKind === "rci" && reviewProf.credentialNumber && (
+                    <div className="flex items-center gap-2 pt-1">
+                      {reviewProf.rciVerified ? (
+                        <Badge className="bg-violet-600 text-white border-violet-600 gap-1 text-[11px] px-2.5 py-1">
+                          <ShieldCheck size={12} />
+                          RCI Verified
+                        </Badge>
+                      ) : (
+                        <>
+                          <a
+                            href="https://www.rci.gov.in/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-teal-600 underline"
+                          >
+                            Verify at rci.gov.in →
+                          </a>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-7 ml-auto"
+                            onClick={() => void handleMarkRciVerified(reviewProf.id)}
+                            disabled={verifyingRci === reviewProf.id}
+                            aria-label="Mark RCI Verified"
+                          >
+                            {verifyingRci === reviewProf.id
+                              ? <Loader2 size={12} className="animate-spin" />
+                              : <Check size={12} />}
+                            Mark RCI Verified
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
               {reviewProf.verificationStatus !== "verified" && !reviewProf.requirementsMet && (
                 <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 space-y-1">
                   <div className="flex items-center gap-2 text-red-700 font-semibold text-sm">

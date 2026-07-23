@@ -701,6 +701,15 @@ export interface AdminProfessionalRow {
   userEmail?: string | null;
   /** @nullable */
   userName?: string | null;
+  vertical: string;
+  /** @nullable */
+  rciCrrNumber?: string | null;
+  /** Discipline-derived credential kind (RCI/AIOTA/medical council/ABA) computed from verticalDetails.discipline — null for non-therapist verticals, which have no credential-number concept. @nullable */
+  credentialKind?: "rci" | "ot" | "medical" | "aba" | "ancillary" | null;
+  /** The actual credential number/value to cross-check against uploaded documents, whichever field applies per credentialKind. @nullable */
+  credentialNumber?: string | null;
+  /** Separate from verificationStatus: whether an admin has manually cross-checked the RCI CRR number against the government registry. Only meaningful when credentialKind is "rci". */
+  rciVerified: boolean;
   hasIdentityDoc: boolean;
   hasRciCertificate: boolean;
   /** True only when the professional's vertical-specific mandatory verification requirements (government ID for all verticals; RCI CRR number + RCI certificate for therapists) have been submitted. The admin approve endpoint hard-rejects approval while this is false. */

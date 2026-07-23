@@ -32,8 +32,10 @@ import {
   getVerificationRequirementsForProfessional,
   getVerificationRequirementsForOffering,
   computeVerificationRequirements,
+  disciplineCredentialKind,
   RCI_CERTIFICATE_DOC_TYPE,
   type VerificationVertical,
+  type TherapistDisciplineCredentialKind,
 } from "../lib/verificationRequirements";
 import { resolveOffering } from "../lib/offeringResolver";
 import { onProfessionalBecameEligible } from "../lib/candidateRefresh";
@@ -44,6 +46,52 @@ const clerkClient = createClerkClient({ secretKey: process.env["CLERK_SECRET_KEY
 const router: IRouter = Router();
 
 const adminGuard = [requireAuth, requireRole("admin")] as const;
+
+/**
+ * Step 3 (professional-verification-integrity batch): the credential number
+ * an admin needs to see alongside a professional's uploaded documents in the
+ * Review Application modal — which field this is depends on discipline, via
+ * the SAME disciplineCredentialKind mapping computeVerificationRequirements
+ * already uses to gate approval, so the modal's display can never disagree
+ * with what actually blocks/allows approval. Only therapist offerings have a
+ * credential-number concept at all; shadow_teacher/home_tutor return null
+ * for both (Uploaded Documents alone covers those verticals).
+ */
+function computeCredentialDisplay(
+  vertical: VerificationVertical,
+  verticalDetails: unknown,
+  rciCrrNumber: string | null,
+): { credentialKind: TherapistDisciplineCredentialKind | null; credentialNumber: string | null } {
+  if (vertical !== "therapist") return { credentialKind: null, credentialNumber: null };
+
+  const vd = (verticalDetails ?? {}) as Record<string, unknown>;
+  const discipline = typeof vd["discipline"] === "string" ? (vd["discipline"] as string) : "";
+  const kind = disciplineCredentialKind(discipline);
+
+  switch (kind) {
+    case "rci":
+      return { credentialKind: kind, credentialNumber: rciCrrNumber ?? null };
+    case "ot": {
+      const aiota = vd["aiotaMembershipNumber"];
+      return { credentialKind: kind, credentialNumber: typeof aiota === "string" && aiota.trim() ? aiota : null };
+    }
+    case "medical": {
+      const nmc = vd["medicalCouncilRegistrationNumber"];
+      return { credentialKind: kind, credentialNumber: typeof nmc === "string" && nmc.trim() ? nmc : null };
+    }
+    case "aba": {
+      const credType = vd["abaCredentialType"];
+      const credNumber = vd["abaCredentialNumber"];
+      const both = typeof credType === "string" && credType.trim() && typeof credNumber === "string" && credNumber.trim();
+      return { credentialKind: kind, credentialNumber: both ? `${credType}: ${credNumber}` : null };
+    }
+    default:
+      // "ancillary" disciplines (Physiotherapy, Developmental Therapy,
+      // Psychotherapy/Counselling, Other) have no mandatory credential
+      // number — identity document alone gates them.
+      return { credentialKind: kind, credentialNumber: null };
+  }
+}
 
 router.get("/admin/professionals", ...adminGuard, async (req, res): Promise<void> => {
   const parsed = AdminListProfessionalsQueryParams.safeParse(req.query);
@@ -73,6 +121,8 @@ router.get("/admin/professionals", ...adminGuard, async (req, res): Promise<void
       userName: usersTable.fullName,
       rciCrrNumber: professionalProfilesTable.rciCrrNumber,
       vertical: professionalProfilesTable.vertical,
+      verticalDetails: professionalProfilesTable.verticalDetails,
+      rciVerified: professionalProfilesTable.rciVerified,
     })
     .from(professionalProfilesTable)
     .leftJoin(usersTable, eq(professionalProfilesTable.userId, usersTable.id))
@@ -117,15 +167,24 @@ router.get("/admin/professionals", ...adminGuard, async (req, res): Promise<void
   }
 
   const professionals = rows.map((row) => {
-    const { rciCrrNumber, vertical, ...rest } = row;
+    const { verticalDetails, ...rest } = row;
     const certDocumentTypes = certsByProfessional.get(row.id) ?? [];
     const requirements = computeVerificationRequirements(
-      { vertical, rciCrrNumber },
+      { vertical: row.vertical, rciCrrNumber: row.rciCrrNumber, verticalDetails },
       identityDocIds.has(row.id),
       certDocumentTypes,
     );
+    // The credential NUMBER the admin needs to cross-check against the
+    // uploaded documents — which field this is depends on discipline
+    // (RCI CRR number, AIOTA membership, medical council registration, or
+    // ABA credential), computed via the SAME disciplineCredentialKind used
+    // to gate verification requirements, so the two never disagree.
+    // Non-therapist verticals have no credential-number concept at all.
+    const { credentialKind, credentialNumber } = computeCredentialDisplay(row.vertical, verticalDetails, row.rciCrrNumber);
     return {
       ...rest,
+      credentialKind,
+      credentialNumber,
       hasIdentityDoc: identityDocIds.has(row.id),
       hasRciCertificate: certDocumentTypes.includes(RCI_CERTIFICATE_DOC_TYPE),
       requirementsMet: requirements.met,

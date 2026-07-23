@@ -2678,6 +2678,28 @@ components:
           type: ["string", "null"]
         userName:
           type: ["string", "null"]
+        vertical:
+          type: string
+        rciCrrNumber:
+          type: ["string", "null"]
+        credentialKind:
+          type: ["string", "null"]
+          enum: [rci, ot, medical, aba, ancillary, null]
+          description: >-
+            Discipline-derived credential kind (RCI/AIOTA/medical
+            council/ABA) computed from verticalDetails.discipline — null for
+            non-therapist verticals, which have no credential-number concept.
+        credentialNumber:
+          type: ["string", "null"]
+          description: >-
+            The actual credential number/value to cross-check against
+            uploaded documents, whichever field applies per credentialKind.
+        rciVerified:
+          type: boolean
+          description: >-
+            Separate from verificationStatus: whether an admin has manually
+            cross-checked the RCI CRR number against the government
+            registry. Only meaningful when credentialKind is "rci".
         hasIdentityDoc:
           type: boolean
         hasRciCertificate:

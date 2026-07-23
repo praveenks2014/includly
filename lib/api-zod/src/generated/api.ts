@@ -1298,6 +1298,25 @@ export const AdminListProfessionalsResponse = zod.object({
       createdAt: zod.coerce.date(),
       userEmail: zod.string().nullish(),
       userName: zod.string().nullish(),
+      vertical: zod.string(),
+      rciCrrNumber: zod.string().nullish(),
+      credentialKind: zod
+        .enum(["rci", "ot", "medical", "aba", "ancillary"])
+        .nullish()
+        .describe(
+          "Discipline-derived credential kind (RCI/AIOTA/medical council/ABA) computed from verticalDetails.discipline — null for non-therapist verticals, which have no credential-number concept.",
+        ),
+      credentialNumber: zod
+        .string()
+        .nullish()
+        .describe(
+          "The actual credential number/value to cross-check against uploaded documents, whichever field applies per credentialKind.",
+        ),
+      rciVerified: zod
+        .boolean()
+        .describe(
+          "Separate from verificationStatus: whether an admin has manually cross-checked the RCI CRR number against the government registry. Only meaningful when credentialKind is \"rci\".",
+        ),
       hasIdentityDoc: zod.boolean(),
       hasRciCertificate: zod.boolean(),
       requirementsMet: zod
