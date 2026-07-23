@@ -1297,6 +1297,19 @@ export function ShadowTeacherRequestWidget() {
   const [commitStartDate, setCommitStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [commitAcknowledged, setCommitAcknowledged] = useState(false);
   const [commitTermsChecked, setCommitTermsChecked] = useState(false);
+  const commitCandidate = match?.candidates.find((c) => c.professionalId === commitProfId) ?? null;
+  // Same query key as OfferSection/CandidateCard's cardOffers — React Query
+  // dedupes, no extra request — just read here for the accepted offer's
+  // retainer terms so TermsAcknowledgment can show them at commit time too.
+  // Must be called unconditionally (before any early return below) — this
+  // previously lived after the trial_started early return, which violated
+  // the Rules of Hooks (fewer hooks called whenever that branch returned
+  // early) and threw "Rendered more hooks than during the previous render."
+  const { data: commitOffers = [] } = useQuery<NegotiationOffer[]>({
+    queryKey: ["offers", match?.id, commitCandidate?.id],
+    queryFn: () => fetchWithAuth(`/api/shadow-teacher/${match!.id}/candidates/${commitCandidate!.id}/offers`).then(r => r.json() as Promise<NegotiationOffer[]>),
+    enabled: !!match?.id && !!commitCandidate?.id,
+  });
 
   // Trial booking modal state
   const [trialModalOpen, setTrialModalOpen] = useState(false);
@@ -2127,15 +2140,6 @@ export function ShadowTeacherRequestWidget() {
   }
 
   // ── Commit date-picker dialog (rendered in trial_done and shortlisted returns) ──
-  const commitCandidate = match?.candidates.find((c) => c.professionalId === commitProfId) ?? null;
-  // Same query key as OfferSection/CandidateCard's cardOffers — React Query
-  // dedupes, no extra request — just read here for the accepted offer's
-  // retainer terms so TermsAcknowledgment can show them at commit time too.
-  const { data: commitOffers = [] } = useQuery<NegotiationOffer[]>({
-    queryKey: ["offers", match?.id, commitCandidate?.id],
-    queryFn: () => fetchWithAuth(`/api/shadow-teacher/${match!.id}/candidates/${commitCandidate!.id}/offers`).then(r => r.json() as Promise<NegotiationOffer[]>),
-    enabled: !!match?.id && !!commitCandidate?.id,
-  });
   const commitAcceptedOffer = commitOffers.find((o) => o.status === "accepted") ?? null;
   const commitFeeLabel = commitCandidate == null || (commitCandidate.expectedSalaryMin == null && commitCandidate.expectedSalaryMax == null)
     ? "To be confirmed"
