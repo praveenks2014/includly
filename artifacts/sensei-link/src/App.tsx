@@ -251,9 +251,6 @@ function Router() {
         <Route path="/dashboard">
           <RequireAuth><LegacyDashboardRedirect /></RequireAuth>
         </Route>
-        <Route path="/choose-role">
-          <StaticRedirect to="/onboarding" />
-        </Route>
         <Route path="/onboard">
           <StaticRedirect to="/onboarding/pro" />
         </Route>
@@ -355,6 +352,14 @@ function Router() {
           </RequireAuth>
         </Route>
         <Route path="/onboarding">
+          <RequireAuth><ChooseRolePage /></RequireAuth>
+        </Route>
+        {/* Renders ChooseRolePage directly rather than redirecting to
+            /onboarding — sign-up.tsx's <SignUp fallbackRedirectUrl> still
+            points here (a pre-navigation-shell-refactor path that was never
+            updated), so this must be a real destination, not a redirect
+            stub, or the picker never actually renders for that flow. */}
+        <Route path="/choose-role">
           <RequireAuth><ChooseRolePage /></RequireAuth>
         </Route>
 
