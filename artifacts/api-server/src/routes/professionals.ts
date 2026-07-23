@@ -249,30 +249,37 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
   // professional's address change is harmless and applies immediately.
   const effectiveOffersHomeVisits = updateData.offersHomeVisits ?? existing?.offersHomeVisits ?? false;
 
+  const togglingHomeVisitsOn = parsed.data.offersHomeVisits === true && existing?.offersHomeVisits === false;
+
   if (existing?.verificationStatus === "verified" && effectiveOffersHomeVisits === true) {
-    if (
+    if (togglingHomeVisitsOn) {
+      // Turning on in-person visits in THIS request — regardless of whether
+      // clinicAddress is also being changed in the same request — means
+      // whatever address ends up queued was never reviewed as a real,
+      // visited location: it either predates this toggle (captured while
+      // offersHomeVisits was false, when no admin had reason to scrutinize
+      // it as a visit address) or is being submitted for the first time
+      // right now. Either way the CURRENT live clinicAddress must not
+      // remain visible during this review — unlike the branch below, there
+      // is no already-vetted value to safely leave in place.
+      const newAddressClaim = parsed.data.clinicAddress !== undefined ? parsed.data.clinicAddress : existing?.clinicAddress;
+      if (newAddressClaim) {
+        updateData.pendingClinicAddress = newAddressClaim;
+        updateData.addressReviewStatus = null;
+      }
+      updateData.clinicAddress = null;
+    } else if (
       parsed.data.clinicAddress !== undefined &&
       parsed.data.clinicAddress !== existing?.clinicAddress
     ) {
-      // A fresh claim supersedes whatever review state an earlier queued
-      // address was in — reset to null (not yet reviewable) until a new
-      // proof_of_address document is uploaded for THIS address.
+      // Already an in-person-visiting, verified professional: the CURRENT
+      // live clinicAddress was already vetted (either at initial
+      // verification or via a prior address-approve), so it's safe to leave
+      // live while the NEW claim is reviewed — a fresh claim just
+      // supersedes whatever review state an earlier queued address was in.
       updateData.pendingClinicAddress = parsed.data.clinicAddress;
       updateData.addressReviewStatus = null;
       delete updateData.clinicAddress;
-    } else if (
-      parsed.data.offersHomeVisits === true &&
-      existing?.offersHomeVisits === false &&
-      parsed.data.clinicAddress === undefined &&
-      existing?.clinicAddress
-    ) {
-      // Turning on in-person visits for the first time: whatever address is
-      // already on file was set while it applied freely (offersHomeVisits
-      // was false) and was never reviewed — the toggle itself is what makes
-      // it newly safety-relevant, so treat it exactly like a fresh change.
-      updateData.pendingClinicAddress = existing.clinicAddress;
-      updateData.clinicAddress = null;
-      updateData.addressReviewStatus = null;
     }
   }
   // else: either still online-only (clinicAddress applies directly, no
