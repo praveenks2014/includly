@@ -123,6 +123,7 @@ router.get("/admin/professionals", ...adminGuard, async (req, res): Promise<void
       vertical: professionalProfilesTable.vertical,
       verticalDetails: professionalProfilesTable.verticalDetails,
       rciVerified: professionalProfilesTable.rciVerified,
+      upiVerifiedAt: professionalProfilesTable.upiVerifiedAt,
     })
     .from(professionalProfilesTable)
     .leftJoin(usersTable, eq(professionalProfilesTable.userId, usersTable.id))
@@ -167,10 +168,10 @@ router.get("/admin/professionals", ...adminGuard, async (req, res): Promise<void
   }
 
   const professionals = rows.map((row) => {
-    const { verticalDetails, ...rest } = row;
+    const { verticalDetails, upiVerifiedAt, ...rest } = row;
     const certDocumentTypes = certsByProfessional.get(row.id) ?? [];
     const requirements = computeVerificationRequirements(
-      { vertical: row.vertical, rciCrrNumber: row.rciCrrNumber, verticalDetails },
+      { vertical: row.vertical, rciCrrNumber: row.rciCrrNumber, verticalDetails, upiVerifiedAt },
       identityDocIds.has(row.id),
       certDocumentTypes,
     );
