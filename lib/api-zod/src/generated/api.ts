@@ -446,6 +446,11 @@ export const CreateUpiVerificationOrderResponse = zod.object({
   amount: zod.number().describe("Amount in paise (always 100 = ₹1)"),
   currency: zod.string(),
   keyId: zod.string(),
+  testMode: zod
+    .boolean()
+    .describe(
+      "True only when RAZORPAY_KEY_ID is a rzp_test_ key, computed server-side. Lets the client enable a test-only Checkout config (UPI collect flow, for success@razorpay/failure@razorpay) — never trust a client-supplied flag for this.",
+    ),
 });
 
 /**

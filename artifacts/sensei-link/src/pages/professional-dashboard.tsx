@@ -33,7 +33,7 @@ import { StarRating } from "@/components/StarRating";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import { fetchWithAuth, getApiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { loadRazorpayScript } from "@/lib/razorpay";
+import { loadRazorpayScript, buildUpiTestCheckoutConfig } from "@/lib/razorpay";
 import {
   Home, User, CalendarClock, CalendarCheck, IndianRupee, Award,
   ShieldCheck, Bell, Settings, Loader2, CheckCircle2, XCircle,
@@ -1578,6 +1578,11 @@ function EarningsTab() {
         description: "UPI verification (₹1, auto-refunded)",
         order_id: order.orderId,
         method: { upi: true, card: false, netbanking: false, wallet: false, emi: false, paylater: false },
+        // Test-mode-only, server-confirmed (see order.testMode) — surfaces
+        // the UPI "Collect" tab so success@razorpay/failure@razorpay can be
+        // used without a real UPI app. Live-key orders get testMode: false
+        // and this Checkout call is unchanged from before.
+        ...(order.testMode ? { config: buildUpiTestCheckoutConfig() } : {}),
         handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
           try {
             const result = await confirmUpi({

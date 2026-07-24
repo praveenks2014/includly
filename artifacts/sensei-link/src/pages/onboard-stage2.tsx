@@ -6,7 +6,10 @@ import {
   getGetMyProfessionalProfileQueryKey,
   useGetMyIdentityVerification,
   useGetMyCertifications,
+  useCreateUpiVerificationOrder,
+  useConfirmUpiVerification,
 } from "@workspace/api-client-react";
+import { loadRazorpayScript, buildUpiTestCheckoutConfig } from "@/lib/razorpay";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1126,6 +1129,67 @@ export default function OnboardStage2Page() {
     alreadySubmitted: rciCertAlreadySubmitted,
   };
 
+  // Hard gate for all professional verticals (payee roles) — the platform
+  // pays out to this UPI ID, so onboarding cannot complete without a
+  // server-verified one. Mirrors identityValid()'s "alreadySubmitted"
+  // pattern exactly: profile.upiVerifiedAt already reflects the persisted
+  // state on every load, so leaving mid-verification and coming back just
+  // re-reads it — no separate draft/resume logic needed.
+  const { mutateAsync: createUpiOrder } = useCreateUpiVerificationOrder();
+  const { mutateAsync: confirmUpi } = useConfirmUpiVerification();
+  const [verifyingUpi, setVerifyingUpi] = useState(false);
+  const upiVerified = !!profile?.upiVerifiedAt;
+
+  function upiValid() {
+    return upiVerified;
+  }
+
+  async function handleVerifyUpi() {
+    setVerifyingUpi(true);
+    try {
+      const order = await createUpiOrder();
+      const loaded = await loadRazorpayScript();
+      if (!loaded) {
+        toast({ title: "Could not load payment gateway", description: "Please check your connection and try again.", variant: "destructive" });
+        setVerifyingUpi(false);
+        return;
+      }
+      const rzp = new window.Razorpay({
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency,
+        name: "Includly",
+        description: "UPI verification (₹1, auto-refunded)",
+        order_id: order.orderId,
+        method: { upi: true, card: false, netbanking: false, wallet: false, emi: false, paylater: false },
+        ...(order.testMode ? { config: buildUpiTestCheckoutConfig() } : {}),
+        handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+          try {
+            await confirmUpi({
+              data: {
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpayOrderId: response.razorpay_order_id,
+                razorpaySignature: response.razorpay_signature,
+              },
+            });
+            await queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
+            toast({ title: "UPI verified", description: "Your ₹1 will be refunded automatically." });
+          } catch (err: unknown) {
+            toast({ title: "Verification failed", description: err instanceof Error ? err.message : "Please try again.", variant: "destructive" });
+          } finally {
+            setVerifyingUpi(false);
+          }
+        },
+        modal: { ondismiss: () => setVerifyingUpi(false) },
+        theme: { color: "#2EC4A5" },
+      });
+      rzp.open();
+    } catch (err: unknown) {
+      toast({ title: "Could not start verification", description: err instanceof Error ? err.message : "Please try again.", variant: "destructive" });
+      setVerifyingUpi(false);
+    }
+  }
+
   useEffect(() => {
     if (!isLoading && !profile) {
       setLocation("/onboarding/pro", { replace: true });
@@ -1187,6 +1251,12 @@ export default function OnboardStage2Page() {
 
   function isValid() {
     if (!identityValid()) return false;
+    // Unconditional, top-level — same placement as identityValid() above,
+    // checked before any per-vertical branch so it can never inherit a
+    // discipline-specific bypass (e.g. isTherapistValid()'s RCI-not-yet-
+    // registered "save as draft" exception applies only to the RCI
+    // credential number, never to this).
+    if (!upiValid()) return false;
     if (isShadow) return isShadowValid();
     if (isTutor) return isTutorValid();
     if (isTherapist) return isTherapistValid();
@@ -1471,6 +1541,49 @@ export default function OnboardStage2Page() {
               {vertical === "therapist" &&
                 " Therapist profiles require the credentials your discipline calls for to appear in search."}
             </p>
+          </div>
+
+          {/* UPI verification — hard gate, account-level (not vertical-specific),
+              deliberately rendered as its own prominent card rather than a
+              field inside the form below, so it can't be missed or skimmed
+              past like a regular row. */}
+          <div
+            className={`rounded-2xl p-5 mb-5 border-2 ${
+              upiVerified ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-300"
+            }`}
+          >
+            {upiVerified ? (
+              <div className="flex items-center gap-3">
+                <CheckCircle2 size={22} className="text-green-600 shrink-0" />
+                <div>
+                  <p className="font-semibold text-green-800 text-sm">UPI ID verified</p>
+                  <p className="text-xs text-green-700">You're all set to receive payouts.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle size={22} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-amber-900 text-sm">Verify your UPI ID to receive payouts</p>
+                    <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+                      Required to complete your profile — the platform pays out to this UPI ID, so we confirm
+                      ownership with a ₹1 payment via Razorpay (automatically refunded within a few days).
+                      Your profile cannot be submitted for review until this is verified.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => void handleVerifyUpi()}
+                  disabled={verifyingUpi}
+                  className="w-full gap-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl"
+                >
+                  {verifyingUpi ? <Loader2 size={15} className="animate-spin" /> : null}
+                  {verifyingUpi ? "Verifying…" : "Verify UPI ID (₹1, refunded)"}
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Form card */}

@@ -17,6 +17,18 @@ export interface RazorpayOrderOptions {
     emi?: boolean;
     paylater?: boolean;
   };
+  // Test-mode-only: forces the UPI "Collect" (enter VPA) sub-flow to be
+  // shown alongside QR/Intent, so success@razorpay/failure@razorpay can be
+  // used without a real UPI app. Only ever spread in when the server has
+  // confirmed rzp_test_ keys are in use (see UpiVerificationOrder.testMode)
+  // — never constructed unconditionally by the client.
+  config?: {
+    display: {
+      blocks: Record<string, { name: string; instruments: { method: string; flows: string[] }[] }>;
+      sequence: string[];
+      preferences: { show_default_blocks: boolean };
+    };
+  };
 }
 
 export interface RazorpaySubscriptionOptions {
@@ -52,6 +64,26 @@ declare global {
   interface Window {
     Razorpay: new (options: RazorpayOptions) => RazorpayInstance;
   }
+}
+
+/**
+ * Test-mode-only Checkout config for a UPI-only payment: explicitly lists
+ * "collect" (enter VPA) alongside "qr"/"intent" so success@razorpay /
+ * failure@razorpay can be used in Test Mode without a real UPI app or QR
+ * scanner. Callers must only spread this in when the server has confirmed
+ * test-mode keys are active (e.g. a UpiVerificationOrder's `testMode`
+ * field) — never construct it unconditionally.
+ */
+export function buildUpiTestCheckoutConfig(): NonNullable<RazorpayOrderOptions["config"]> {
+  return {
+    display: {
+      blocks: {
+        upi: { name: "Pay via UPI", instruments: [{ method: "upi", flows: ["collect", "qr", "intent"] }] },
+      },
+      sequence: ["block.upi"],
+      preferences: { show_default_blocks: false },
+    },
+  };
 }
 
 export function loadRazorpayScript(): Promise<boolean> {

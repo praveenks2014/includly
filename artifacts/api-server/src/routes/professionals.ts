@@ -29,6 +29,16 @@ function getRazorpay(): Razorpay | null {
   return new Razorpay({ key_id: keyId, key_secret: keySecret });
 }
 
+// Sole authority for whether a test-mode-only Checkout config (letting UPI
+// verification be completed with success@razorpay/failure@razorpay instead
+// of a real QR scan) is allowed to activate. Server-side and keyed off the
+// actual configured key, never NODE_ENV or a client-supplied flag — a
+// misconfigured environment must never accidentally expose the test bypass
+// against live keys.
+function isRazorpayTestMode(): boolean {
+  return (process.env["RAZORPAY_KEY_ID"] ?? "").startsWith("rzp_test_");
+}
+
 type SpecialtyValue = (typeof specialtyEnum.enumValues)[number];
 type CoachingSubTypeValue = (typeof coachingSubTypeEnum.enumValues)[number];
 
@@ -356,6 +366,7 @@ router.post("/professionals/me/upi-verification/order", requireAuth, requireRole
       amount: 100,
       currency: "INR",
       keyId: process.env["RAZORPAY_KEY_ID"]!,
+      testMode: isRazorpayTestMode(),
     }),
   );
 });

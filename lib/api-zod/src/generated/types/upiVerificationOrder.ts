@@ -12,4 +12,6 @@ export interface UpiVerificationOrder {
   amount: number;
   currency: string;
   keyId: string;
+  /** True only when RAZORPAY_KEY_ID is a rzp_test_ key, computed server-side. Lets the client enable a test-only Checkout config (UPI collect flow, for success@razorpay/failure@razorpay) — never trust a client-supplied flag for this. */
+  testMode: boolean;
 }

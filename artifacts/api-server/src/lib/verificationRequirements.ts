@@ -32,6 +32,12 @@ export interface ProfileForRequirements {
   vertical: VerificationVertical;
   rciCrrNumber?: string | null;
   verticalDetails?: unknown;
+  // Person-level, not per-offering (there is one payout destination per
+  // professional, not one per vertical) — every caller of
+  // computeVerificationRequirements must resolve this from
+  // professionalProfilesTable regardless of whether the rest of the profile
+  // data came from the primary row or an additional offering.
+  upiVerifiedAt?: Date | null;
 }
 
 // ─── Therapist discipline → credential-kind mapping ────────────────────────
@@ -87,6 +93,16 @@ export function computeVerificationRequirements(
 
   // ALL VERTICALS: at least one government ID document is mandatory.
   if (!hasIdentityDoc) missing.push("identity_document");
+
+  // ALL PROFESSIONAL VERTICALS (payee roles): a server-verified UPI ID is
+  // mandatory — the platform pays out to this destination, so an unverified
+  // one means no functioning payout for that side of the marketplace.
+  // Deliberately unconditional and placed here, before any vertical-specific
+  // branch below — NOT nested inside a discipline check, so it can never
+  // inherit a discipline-specific bypass (e.g. the RCI-not-yet-registered
+  // "save as draft" exception a few lines down applies only to the RCI
+  // credential number, never to this).
+  if (!profile.upiVerifiedAt) missing.push("upi_verification");
 
   if (profile.vertical === "therapist") {
     const vd = (profile.verticalDetails ?? {}) as Record<string, unknown>;
@@ -155,6 +171,7 @@ export async function getVerificationRequirementsForProfessional(
       vertical: professionalProfilesTable.vertical,
       rciCrrNumber: professionalProfilesTable.rciCrrNumber,
       verticalDetails: professionalProfilesTable.verticalDetails,
+      upiVerifiedAt: professionalProfilesTable.upiVerifiedAt,
     })
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.id, professionalId));
@@ -282,8 +299,22 @@ export async function getVerificationRequirementsForOffering(
     .from(professionalCertificationsTable)
     .where(eq(professionalCertificationsTable.professionalId, professionalId));
 
+  // upiVerifiedAt is person-level, not per-offering — resolveOffering()
+  // above only returns per-vertical fields, so it's fetched separately here
+  // regardless of whether this offering is the primary vertical or an
+  // additional one.
+  const [profile] = await db
+    .select({ upiVerifiedAt: professionalProfilesTable.upiVerifiedAt })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, professionalId));
+
   return computeVerificationRequirements(
-    { vertical: offering.vertical, rciCrrNumber: offering.rciCrrNumber, verticalDetails: offering.verticalDetails },
+    {
+      vertical: offering.vertical,
+      rciCrrNumber: offering.rciCrrNumber,
+      verticalDetails: offering.verticalDetails,
+      upiVerifiedAt: profile?.upiVerifiedAt,
+    },
     !!identityDoc,
     certs.map((c) => c.documentType),
   );
