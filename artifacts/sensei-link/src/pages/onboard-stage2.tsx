@@ -1251,12 +1251,19 @@ export default function OnboardStage2Page() {
 
   function isValid() {
     if (!identityValid()) return false;
-    // Unconditional, top-level — same placement as identityValid() above,
-    // checked before any per-vertical branch so it can never inherit a
-    // discipline-specific bypass (e.g. isTherapistValid()'s RCI-not-yet-
-    // registered "save as draft" exception applies only to the RCI
-    // credential number, never to this).
-    if (!upiValid()) return false;
+    // TEMP: UPI verification made non-blocking for onboarding submission,
+    // pending a final decision on whether it should be mandatory here —
+    // Razorpay Test Mode currently makes the ₹1 verification hard/impossible
+    // to complete in a test environment (Collect/VPA-entry tab not
+    // reliably available, only QR). The panel, "already verified ✓" state,
+    // and resume behavior below are all still fully built and usable — a
+    // professional can still verify from this screen if they want to, it
+    // just no longer blocks submission. Backend enforcement in
+    // computeVerificationRequirements() is UNCHANGED and still
+    // independently blocks the admin-review queue and admin approval
+    // (and therefore listability) regardless of this. To restore the hard
+    // gate here, uncomment the line below.
+    // if (!upiValid()) return false;
     if (isShadow) return isShadowValid();
     if (isTutor) return isTutorValid();
     if (isTherapist) return isTherapistValid();
