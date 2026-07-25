@@ -17,6 +17,7 @@ export function TermsAcknowledgment({
   retainerTerms,
   checked,
   onCheckedChange,
+  audience = "parent",
 }: {
   scheduleSummary?: string | null;
   /** Pre-formatted, e.g. "₹18,000" (teacher's final figure) or "₹15,000–₹20,000 (expected)" (parent's pre-commit range). */
@@ -36,6 +37,13 @@ export function TermsAcknowledgment({
   } | null;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
+  /** Which side is viewing this — the "if abandoned" consequences below are
+   * NOT symmetric: only professionals have a public, ratable profile
+   * (ReviewModal is parent→professional only, no reverse mechanism exists)
+   * and a verified/searchable status that can be revoked. Parents get only
+   * the identity-on-file point, which is the one that's actually true for
+   * them. Defaults to "parent" — explicit at every call site regardless. */
+  audience?: "parent" | "professional";
 }) {
   const formattedStart = new Date(startDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
   const notice = noticePeriodDays ?? 30;
@@ -80,8 +88,12 @@ export function TermsAcknowledgment({
         <p className="font-semibold text-gray-700">If this engagement is abandoned without notice:</p>
         <ul className="list-disc list-inside space-y-0.5 pl-1">
           <li>Your identity is verified and on file — this isn't an anonymous arrangement.</li>
-          <li>The other party can leave a public rating and review on your Includly profile, visible to future families/professionals.</li>
-          <li>Includly may review the account and, where warranted, revoke verified status — which removes you from search and matching platform-wide.</li>
+          {audience === "professional" && (
+            <>
+              <li>The parent can leave a public rating and review on your Includly profile, visible to future families.</li>
+              <li>Includly may review the account and, where warranted, revoke your verified status — which removes you from search and matching platform-wide.</li>
+            </>
+          )}
         </ul>
       </div>
       <label className="flex items-start gap-2 pt-1 cursor-pointer">

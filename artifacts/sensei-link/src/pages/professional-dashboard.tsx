@@ -2907,6 +2907,7 @@ function EngagementTab() {
                     : null}
                   checked={acceptanceTermsChecked}
                   onCheckedChange={setAcceptanceTermsChecked}
+                  audience="professional"
                 />
                 {needsUpiVerification && (
                   <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
@@ -4507,6 +4508,7 @@ function ChooseEngagementSection({ candidacy: c, onUpdated }: { candidacy: Candi
             retainerTerms={acceptedNegotiationOffer}
             checked={termsChecked}
             onCheckedChange={setTermsChecked}
+            audience="professional"
           />
           <div className="flex gap-2">
             <Button

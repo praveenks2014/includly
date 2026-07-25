@@ -2199,6 +2199,7 @@ export function ShadowTeacherRequestWidget() {
             retainerTerms={commitAcceptedOffer}
             checked={commitTermsChecked}
             onCheckedChange={setCommitTermsChecked}
+            audience="parent"
           />
         </div>
         <DialogFooter className="gap-2">
@@ -2472,6 +2473,7 @@ export function ShadowTeacherRequestWidget() {
               retainerTerms={peRetainerTerms}
               checked={confirmTermsChecked}
               onCheckedChange={setConfirmTermsChecked}
+              audience="parent"
             />
             <div className="flex gap-3">
               <Button
