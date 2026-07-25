@@ -21,6 +21,7 @@ import { ShadowTeacherRequestWidget } from "@/components/ShadowTeacherRequestWid
 import { TutorRequestWidget, TherapistRequestWidget } from "@/components/VerticalRequestWidget";
 import { SHOW_TUTOR_SEARCH, SHOW_THERAPIST_SEARCH } from "@/features";
 import { ComingSoon } from "@/components/ComingSoon";
+import { FindSpecialistTiles } from "@/components/FindSpecialistTiles";
 import { EngagementProgress } from "@/components/EngagementProgress";
 import { UpiPayQRDialog } from "@/components/UpiPayQRDialog";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
@@ -2457,6 +2458,7 @@ function ServicesTab() {
         <h1 className="text-[1.35rem] font-bold text-[#1A2340] leading-tight">Services</h1>
         <p className="text-xs text-gray-400 mt-0.5">Find the right support for your child</p>
       </div>
+      <FindSpecialistTiles />
       <div className="space-y-3">
         {services.map((s) => {
           const Icon = s.icon;
