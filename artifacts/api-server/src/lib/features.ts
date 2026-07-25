@@ -8,3 +8,13 @@
 // nothing is reachable even if a URL is guessed while the frontend is hidden.
 export const SHOW_TUTOR_SEARCH = false;
 export const SHOW_THERAPIST_SEARCH = false;
+
+// SHOW_CONSULTATION_TILES / SHOW_COACH_TILE — unlike the two flags above,
+// these have no dedicated route to 404-gate: the consultation/coach tiles
+// route entirely through already-live, generic endpoints (search,
+// bookable-slots, sessions/book) shared with other, already-launched
+// specialties. These flags are consumed frontend-only (features.ts), to
+// decide whether the tile itself renders — there is no backend
+// enforcement surface for them the way the tutor/therapist flags have.
+export const SHOW_CONSULTATION_TILES = false;
+export const SHOW_COACH_TILE = false;

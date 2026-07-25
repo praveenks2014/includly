@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc, arrayOverlaps, notInArray, isNotNull, inArray, type SQL } from "drizzle-orm";
+import { eq, and, gte, ilike, or, gt, lte, sql, desc, asc, arrayOverlaps, notInArray, isNotNull, inArray, count, type SQL } from "drizzle-orm";
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import { db, usersTable, professionalProfilesTable, adminSettingsTable, specialtyEnum, coachingSubTypeEnum, professionalSubscriptionsTable, professionalCertificationsTable, identityVerificationsTable, contactUnlocksTable, shadowTeacherEngagementsTable, shadowTeacherMatchesTable } from "@workspace/db";
@@ -715,6 +715,31 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
       limit: limitNum,
     }),
   );
+});
+
+// GET /professionals/specialty-availability
+//
+// Public, parent-facing counts of VERIFIED professionals per specialty —
+// backs the Find-a-Specialist tile grid's visibility gating (a tile only
+// shows as live once its feature flag is on AND at least one verified
+// professional actually exists under that specialty). Same GROUP BY
+// specialty, COUNT(*) shape as admin.ts's platform-stats endpoint, just
+// scoped to verificationStatus='verified' and with no admin auth gate.
+// Registered before the /:id route below so "specialty-availability"
+// can never be shadowed by that route's :id param matching.
+router.get("/professionals/specialty-availability", optionalAuth, async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({ specialty: professionalProfilesTable.specialty, cnt: count() })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.verificationStatus, "verified"))
+    .groupBy(professionalProfilesTable.specialty);
+
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    counts[row.specialty] = Number(row.cnt);
+  }
+
+  res.json({ counts });
 });
 
 router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> => {

@@ -286,6 +286,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /professionals/specialty-availability:
+    get:
+      operationId: getSpecialtyAvailability
+      tags: [search]
+      summary: Counts of verified professionals per specialty — backs Find-a-Specialist tile gating
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpecialtyAvailabilityResponse"
+
   /professionals/search:
     get:
       operationId: searchProfessionals
@@ -1995,6 +2008,16 @@ components:
         - emailBlurred
         - isUnlocked
         - paymentActivated
+
+    SpecialtyAvailabilityResponse:
+      type: object
+      required: [counts]
+      properties:
+        counts:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Verified-professional count keyed by specialty enum value.
 
     SearchProfessionalsResponse:
       type: object
