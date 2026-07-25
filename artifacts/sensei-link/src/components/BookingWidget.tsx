@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   useGetBookableSlots,
@@ -19,6 +19,8 @@ import { Loader2, CalendarCheck, Clock, IndianRupee, ChevronRight, Ticket, Messa
 import { useToast } from "@/hooks/use-toast";
 import { loadRazorpayScript } from "@/lib/razorpay";
 import type { RazorpayPaymentResponse } from "@/lib/razorpay";
+import { FileUploadField } from "@/components/FileUploadField";
+import { readPendingConsultationNotes, clearPendingConsultationNotes } from "@/lib/consultationNotes";
 
 function HomeVisitLocationPrompt() {
   const { data: meData } = useGetMe();
@@ -59,11 +61,25 @@ export function BookingWidget({
   const [date, setDate] = useState<string>(todayIsoDate());
   const [selectedSlot, setSelectedSlot] = useState<BookableSlot | null>(null);
   const [notes, setNotes] = useState("");
+  const [assessmentDocumentKey, setAssessmentDocumentKey] = useState<string | undefined>(undefined);
   const [booking, setBooking] = useState(false);
   const [booked, setBooked] = useState(false);
   const [bookedSessionId, setBookedSessionId] = useState<number | null>(null);
 
   const isCreditSpecialty = specialty ? CREDIT_SPECIALTIES.includes(specialty) : false;
+
+  // Pre-fill from the consultation mini-form (Psychiatrist/Developmental
+  // Pediatrician/Neurologist category tiles), if the parent came from there —
+  // relayed via sessionStorage since there's no shared component state across
+  // that navigation chain. The parent can still edit/add to it here.
+  useEffect(() => {
+    if (!specialty) return;
+    const pending = readPendingConsultationNotes(specialty);
+    if (pending) {
+      setNotes(pending.notes);
+      setAssessmentDocumentKey(pending.assessmentDocumentKey);
+    }
+  }, [specialty]);
 
   const { data: slots, isLoading: slotsLoading } = useGetBookableSlots(professionalId, { date });
   const { data: sessionCreditsData, refetch: refetchCredits } = useGetSessionCredits({
@@ -94,6 +110,7 @@ export function BookingWidget({
           durationMinutes: selectedSlot.durationMinutes,
           amountInr: selectedSlot.priceInr,
           notes: notes.trim() || undefined,
+          assessmentDocumentKey,
         },
       });
 
@@ -103,6 +120,7 @@ export function BookingWidget({
         refetchCredits();
         setBookedSessionId(result.sessionId as number);
         setBooked(true);
+        clearPendingConsultationNotes();
         return;
       }
 
@@ -134,6 +152,7 @@ export function BookingWidget({
               toast({ title: "Session booked!", description: "Your session is confirmed." });
               setBookedSessionId(result.sessionId as number);
               setBooked(true);
+              clearPendingConsultationNotes();
               resolve();
             } catch {
               toast({ title: "Payment verification failed", variant: "destructive" });
@@ -287,6 +306,16 @@ export function BookingWidget({
                   onChange={(e) => setNotes(e.target.value)}
                   className="text-sm resize-none"
                   rows={2}
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">
+                  Existing assessment or diagnosis report (optional)
+                </Label>
+                <FileUploadField
+                  label={assessmentDocumentKey ? "Replace document" : "Upload document"}
+                  uploadedPath={assessmentDocumentKey}
+                  onUploaded={setAssessmentDocumentKey}
                 />
               </div>
               <Button

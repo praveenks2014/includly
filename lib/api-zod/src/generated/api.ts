@@ -1801,6 +1801,7 @@ export const BookSessionBody = zod.object({
   durationMinutes: zod.number(),
   amountInr: zod.number(),
   notes: zod.string().optional(),
+  assessmentDocumentKey: zod.string().optional(),
 });
 
 export const BookSessionResponse = zod.object({

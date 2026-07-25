@@ -15,4 +15,6 @@ export interface BookSessionBody {
   durationMinutes: number;
   amountInr: number;
   notes?: string;
+  /** Object-storage key for an optional existing assessment/diagnosis document the parent attaches (from POST /storage/uploads/request-url). */
+  assessmentDocumentKey?: string;
 }

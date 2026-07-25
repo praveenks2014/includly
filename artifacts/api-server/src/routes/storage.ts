@@ -15,6 +15,7 @@ import {
   pendingUploadsTable,
   engagementDailyLogsTable,
   shadowTeacherEngagementsTable,
+  sessionBookingsTable,
   usersTable,
 } from "@workspace/db";
 
@@ -195,6 +196,26 @@ router.get("/storage/objects/*path", requireAuth, async (req: Request, res: Resp
         if (logEng) {
           if (logEng.parentId === userId) isOwner = true;
           else if (profile && logEng.professionalId === profile.id) isOwner = true;
+        }
+      }
+
+      if (!isOwner) {
+        // Check session-booking assessment-document ownership: the user
+        // must be the booking's parent, or the professional it was booked
+        // with — same two-sided-access pattern as the daily-log-photo check
+        // above, just against sessionBookingsTable.assessmentDocumentKey.
+        const [docBooking] = await db
+          .select({
+            parentId: sessionBookingsTable.parentId,
+            professionalId: sessionBookingsTable.professionalId,
+          })
+          .from(sessionBookingsTable)
+          .where(eq(sessionBookingsTable.assessmentDocumentKey, objectPath))
+          .limit(1);
+
+        if (docBooking) {
+          if (docBooking.parentId === userId) isOwner = true;
+          else if (profile && docBooking.professionalId === profile.id) isOwner = true;
         }
       }
 

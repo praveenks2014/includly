@@ -53,6 +53,13 @@ export const sessionBookingsTable = pgTable("session_bookings", {
   providerPaymentId: text("provider_payment_id"),
   childId: integer("child_id").references(() => childrenTable.id, { onDelete: "set null" }),
   notes: text("notes"),
+  // Optional existing assessment/diagnosis document a parent attaches when
+  // booking a consultation (psychiatrist/developmental pediatrician/
+  // neurologist) — an object-storage key, same private-object convention as
+  // professional_certifications.fileKey/identity_verifications.fileKey.
+  // Access-controlled in GET /storage/objects/* by matching this column
+  // against the requesting user's parentId/professionalId on this booking.
+  assessmentDocumentKey: text("assessment_document_key"),
   bookingType: text("booking_type").notNull().default("session"),
   assessmentOfferingId: integer("assessment_offering_id"),
   reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
