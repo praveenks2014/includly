@@ -458,6 +458,7 @@ router.get("/tutor/my-candidacies", requireAuth, requireRole("professional"), as
       budgetMinInr: tutorMatchesTable.budgetMinInr,
       budgetMaxInr: tutorMatchesTable.budgetMaxInr,
       locationArea: tutorMatchesTable.locationArea,
+      extraNotes: tutorMatchesTable.extraNotes,
       requestStatus: tutorMatchCandidatesTable.requestStatus,
       rejectionNote: tutorMatchCandidatesTable.rejectionNote,
       interviewBookingId: tutorMatchCandidatesTable.interviewBookingId,

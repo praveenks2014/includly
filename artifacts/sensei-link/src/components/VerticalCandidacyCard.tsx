@@ -56,6 +56,8 @@ export interface VerticalCandidacy {
   board?: string | null;
   mode?: string[] | null;
   locationArea?: string | null;
+  // shared — parent's freeform notes at request time, same field both verticals
+  extraNotes?: string | null;
   // therapist-only
   diagnosedConditions?: string[] | null;
   disciplineNeeded?: string | null;
@@ -64,6 +66,32 @@ export interface VerticalCandidacy {
   assessmentCompleted?: boolean | null;
   assessmentDoneAt?: string | null;
   assessmentFeePaymentId?: string | null;
+}
+
+// Always-visible request context — previously lived inside RespondRequestBlock
+// and vanished once requestStatus moved past "sent" (i.e. right after the
+// professional accepted), unlike shadow-teacher's CandidacyCard where this
+// same context (location/distance/mode/notes) persists for the life of the
+// candidacy. Split out so accepting a request doesn't erase the context that
+// led to it.
+function RequestContextGrid({ vertical, candidacy: c }: { vertical: Vertical; candidacy: VerticalCandidacy }) {
+  const hasAny = c.locationArea || c.budgetMinInr || c.budgetMaxInr
+    || (c.mode && c.mode.length > 0) || (c.sessionModePreference && c.sessionModePreference.length > 0)
+    || (c.diagnosedConditions && c.diagnosedConditions.length > 0) || (c.extraNotes && c.extraNotes.trim());
+  if (!hasAny) return null;
+
+  return (
+    <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-gray-500 mb-4">
+      {c.locationArea && <span>📍 {c.locationArea}</span>}
+      {(c.budgetMinInr || c.budgetMaxInr) && (
+        <span>💰 ₹{c.budgetMinInr?.toLocaleString("en-IN") ?? "?"} – ₹{c.budgetMaxInr?.toLocaleString("en-IN") ?? "?"}/mo</span>
+      )}
+      {c.mode && c.mode.length > 0 && <span>🎓 {c.mode.join(", ")}</span>}
+      {c.sessionModePreference && c.sessionModePreference.length > 0 && <span>🎓 {c.sessionModePreference.join(", ")}</span>}
+      {c.diagnosedConditions && c.diagnosedConditions.length > 0 && <span className="col-span-2">🏥 {c.diagnosedConditions.join(", ")}</span>}
+      {c.extraNotes && c.extraNotes.trim() && <span className="col-span-2 line-clamp-2">🎯 {c.extraNotes}</span>}
+    </div>
+  );
 }
 
 function RespondRequestBlock({ vertical, candidacy: c, onUpdated }: { vertical: Vertical; candidacy: VerticalCandidacy; onUpdated: () => void }) {
@@ -91,15 +119,6 @@ function RespondRequestBlock({ vertical, candidacy: c, onUpdated }: { vertical: 
   return (
     <div className="mb-3 p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3">
       <p className="text-sm font-bold text-blue-900">Request</p>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-blue-800">
-        {c.locationArea && <span>📍 {c.locationArea}</span>}
-        {(c.budgetMinInr || c.budgetMaxInr) && (
-          <span>💰 ₹{c.budgetMinInr?.toLocaleString("en-IN") ?? "?"} – ₹{c.budgetMaxInr?.toLocaleString("en-IN") ?? "?"}/mo</span>
-        )}
-        {c.mode && c.mode.length > 0 && <span>🎓 {c.mode.join(", ")}</span>}
-        {c.sessionModePreference && c.sessionModePreference.length > 0 && <span>🎓 {c.sessionModePreference.join(", ")}</span>}
-        {c.diagnosedConditions && c.diagnosedConditions.length > 0 && <span className="col-span-2">🏥 {c.diagnosedConditions.join(", ")}</span>}
-      </div>
       <div className="flex gap-2">
         <Button
           size="sm"
@@ -412,6 +431,18 @@ const MATCH_STATUS_LABEL: Record<string, string> = {
   trial_done: "Trial complete",
 };
 
+// Mirrors professional-dashboard.tsx's shadow-teacher MATCH_STATUS_COLOR —
+// previously missing here entirely, so every status showed as flat gray
+// regardless of where the candidacy actually stood.
+const MATCH_STATUS_COLOR: Record<string, string> = {
+  shortlisted:         "bg-teal-50 text-teal-700 border-teal-200",
+  pending_commitment:  "bg-yellow-50 text-yellow-700 border-yellow-200",
+  committed:           "bg-green-50 text-green-700 border-green-200",
+  trial_pending:       "bg-orange-50 text-orange-700 border-orange-200",
+  trial_started:       "bg-indigo-50 text-indigo-700 border-indigo-200",
+  trial_done:          "bg-purple-50 text-purple-700 border-purple-200",
+};
+
 export function VerticalCandidacyCard({ vertical, candidacy: c, onUpdated }: { vertical: Vertical; candidacy: VerticalCandidacy; onUpdated: () => void }) {
   const isSelected = c.selectedProfessionalId !== null;
 
@@ -426,11 +457,12 @@ export function VerticalCandidacyCard({ vertical, candidacy: c, onUpdated }: { v
             <span className="text-xs bg-[#2EC4A5]/10 text-[#2EC4A5] px-2 py-0.5 rounded-full font-medium">{c.disciplineNeeded.replace(/_/g, " ")}</span>
           )}
         </div>
-        <span className="shrink-0 text-[10px] font-semibold px-2.5 py-0.5 rounded-full border bg-gray-50 text-gray-500 border-gray-200">
+        <span className={`shrink-0 text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${isSelected ? MATCH_STATUS_COLOR.committed : (MATCH_STATUS_COLOR[c.matchStatus] ?? "bg-gray-50 text-gray-500 border-gray-200")}`}>
           {isSelected ? "✓ You were selected" : (MATCH_STATUS_LABEL[c.matchStatus] ?? c.matchStatus)}
         </span>
       </div>
 
+      <RequestContextGrid vertical={vertical} candidacy={c} />
       <RespondRequestBlock vertical={vertical} candidacy={c} onUpdated={onUpdated} />
       <InterviewSection vertical={vertical} candidacy={c} onUpdated={onUpdated} />
       {vertical === "therapist" && isSelected && <AssessmentSection vertical={vertical} candidacy={c} onUpdated={onUpdated} />}

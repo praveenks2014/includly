@@ -465,6 +465,7 @@ router.get("/therapist/my-candidacies", requireAuth, requireRole("professional")
       budgetMaxInr: therapistMatchesTable.budgetMaxInr,
       wantsAssessmentFirst: therapistMatchesTable.wantsAssessmentFirst,
       assessmentFeePaymentId: therapistMatchesTable.assessmentFeePaymentId,
+      extraNotes: therapistMatchesTable.extraNotes,
       requestStatus: therapistMatchCandidatesTable.requestStatus,
       rejectionNote: therapistMatchCandidatesTable.rejectionNote,
       interviewSlotsJson: therapistMatchCandidatesTable.interviewSlotsJson,

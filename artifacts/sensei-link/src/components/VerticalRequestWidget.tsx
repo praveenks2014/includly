@@ -811,6 +811,7 @@ export function VerticalRequestWidget({ vertical }: { vertical: Vertical }) {
   // in the B6 spec) ───────────────────────────────────────────────────────
   const [childAge, setChildAge] = useState("");
   const [locationArea, setLocationArea] = useState("");
+  const [extraNotes, setExtraNotes] = useState("");
   const [mode, setMode] = useState<string[]>([]);
   // tutor-only
   const [subjects, setSubjects] = useState<string[]>([]);
@@ -863,7 +864,7 @@ export function VerticalRequestWidget({ vertical }: { vertical: Vertical }) {
         childId: effectiveChildId,
         childAge: childAge ? parseInt(childAge, 10) : undefined,
         locationArea: locationArea || undefined,
-        extraNotes: undefined,
+        extraNotes: extraNotes.trim() || undefined,
       };
       if (cfg.vertical === "tutor") {
         const allSubjects = otherSubject.trim() ? [...subjects, otherSubject.trim()] : subjects;
@@ -1220,6 +1221,20 @@ export function VerticalRequestWidget({ vertical }: { vertical: Vertical }) {
             <div>
               <label className="text-sm mb-1 block font-medium text-foreground">Area / locality</label>
               <input type="text" value={locationArea} onChange={(e) => setLocationArea(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2EC4A5]" placeholder="e.g. Koramangala, Bengaluru" />
+            </div>
+
+            <div>
+              <label className="text-sm mb-1 block font-medium text-foreground">
+                Anything else the {cfg.professionalLabel} should know? <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <textarea
+                value={extraNotes}
+                onChange={(e) => setExtraNotes(e.target.value)}
+                maxLength={1000}
+                rows={3}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none"
+                placeholder="e.g. goals for this term, preferred pace, anything that'll help them prepare"
+              />
             </div>
           </div>
         )}
