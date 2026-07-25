@@ -18,8 +18,6 @@ export interface SessionBookingWithDetails {
   amountInr: number;
   status: SessionBookingWithDetailsStatus;
   notes?: string;
-  /** Object-storage key for an optional existing assessment/diagnosis document the parent attached at booking time. */
-  assessmentDocumentKey?: string;
   createdAt?: Date;
   professionalName?: string;
   professionalSpecialty?: string;

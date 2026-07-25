@@ -985,8 +985,6 @@ export interface BookSessionBody {
   durationMinutes: number;
   amountInr: number;
   notes?: string;
-  /** Object-storage key for an optional existing assessment/diagnosis document the parent attaches (from POST /storage/uploads/request-url). */
-  assessmentDocumentKey?: string;
 }
 
 export interface SessionBookingOrderResponse {
@@ -1054,8 +1052,6 @@ export interface SessionBookingWithDetails {
   amountInr: number;
   status: SessionBookingWithDetailsStatus;
   notes?: string;
-  /** Object-storage key for an optional existing assessment/diagnosis document the parent attached at booking time. */
-  assessmentDocumentKey?: string;
   createdAt?: string;
   professionalName?: string;
   professionalSpecialty?: string;

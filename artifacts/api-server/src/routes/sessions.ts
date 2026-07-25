@@ -193,7 +193,7 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
     return;
   }
 
-  const { professionalId, bookedDate, startTime, endTime, durationMinutes, amountInr, notes, assessmentDocumentKey, childId } = { childId: undefined as number | undefined, ...parsed.data };
+  const { professionalId, bookedDate, startTime, endTime, durationMinutes, amountInr, notes, childId } = { childId: undefined as number | undefined, ...parsed.data };
 
   const [existing] = await db
     .select({ id: sessionBookingsTable.id })
@@ -254,7 +254,6 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
             amountInr: 0,
             commissionInr: 0,
             notes: notes ?? null,
-            assessmentDocumentKey: assessmentDocumentKey ?? null,
             childId: childId ?? null,
             status: "confirmed",
             startOtp: generateOtp(),
@@ -306,7 +305,6 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
       amountInr,
       commissionInr,
       notes: notes ?? null,
-      assessmentDocumentKey: assessmentDocumentKey ?? null,
       childId: childId ?? null,
       providerOrderId: order.id as string,
     })
@@ -438,7 +436,6 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         amountInr: sessionBookingsTable.amountInr,
         status: sessionBookingsTable.status,
         notes: sessionBookingsTable.notes,
-        assessmentDocumentKey: sessionBookingsTable.assessmentDocumentKey,
         createdAt: sessionBookingsTable.createdAt,
         startedAt: sessionBookingsTable.startedAt,
         parentName: usersTable.fullName,
@@ -476,7 +473,6 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         amountInr: sessionBookingsTable.amountInr,
         status: sessionBookingsTable.status,
         notes: sessionBookingsTable.notes,
-        assessmentDocumentKey: sessionBookingsTable.assessmentDocumentKey,
         createdAt: sessionBookingsTable.createdAt,
         startOtp: sessionBookingsTable.startOtp,
         endOtp: sessionBookingsTable.endOtp,

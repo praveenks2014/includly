@@ -3228,9 +3228,6 @@ components:
           type: integer
         notes:
           type: string
-        assessmentDocumentKey:
-          type: string
-          description: "Object-storage key for an optional existing assessment/diagnosis document the parent attaches (from POST /storage/uploads/request-url)."
 
     SessionBookingOrderResponse:
       type: object
@@ -3315,9 +3312,6 @@ components:
           enum: [pending_payment, confirmed, cancelled_by_parent, cancelled_by_professional, completed, no_show]
         notes:
           type: string
-        assessmentDocumentKey:
-          type: string
-          description: "Object-storage key for an optional existing assessment/diagnosis document the parent attached at booking time."
         createdAt:
           type: string
           format: date-time

@@ -19,7 +19,6 @@ import { Loader2, CalendarCheck, Clock, IndianRupee, ChevronRight, Ticket, Messa
 import { useToast } from "@/hooks/use-toast";
 import { loadRazorpayScript } from "@/lib/razorpay";
 import type { RazorpayPaymentResponse } from "@/lib/razorpay";
-import { FileUploadField } from "@/components/FileUploadField";
 import { readPendingConsultationNotes, clearPendingConsultationNotes } from "@/lib/consultationNotes";
 
 function HomeVisitLocationPrompt() {
@@ -43,12 +42,6 @@ function todayIsoDate() {
 
 const CREDIT_SPECIALTIES = ["occupational_therapy", "speech_therapy", "psychiatrist"];
 
-// TEMP — disabled pending an explicit data-protection sign-off (access
-// control + retention policy) on uploaded assessment/diagnosis documents.
-// See the comment at the FileUploadField usage below for details. Do not
-// flip this to true without that sign-off happening first.
-const ASSESSMENT_UPLOAD_ENABLED = false;
-
 export function BookingWidget({
   professionalId,
   professionalName,
@@ -67,7 +60,6 @@ export function BookingWidget({
   const [date, setDate] = useState<string>(todayIsoDate());
   const [selectedSlot, setSelectedSlot] = useState<BookableSlot | null>(null);
   const [notes, setNotes] = useState("");
-  const [assessmentDocumentKey, setAssessmentDocumentKey] = useState<string | undefined>(undefined);
   const [booking, setBooking] = useState(false);
   const [booked, setBooked] = useState(false);
   const [bookedSessionId, setBookedSessionId] = useState<number | null>(null);
@@ -83,7 +75,6 @@ export function BookingWidget({
     const pending = readPendingConsultationNotes(specialty);
     if (pending) {
       setNotes(pending.notes);
-      setAssessmentDocumentKey(pending.assessmentDocumentKey);
     }
   }, [specialty]);
 
@@ -116,7 +107,6 @@ export function BookingWidget({
           durationMinutes: selectedSlot.durationMinutes,
           amountInr: selectedSlot.priceInr,
           notes: notes.trim() || undefined,
-          assessmentDocumentKey,
         },
       });
 
@@ -314,27 +304,6 @@ export function BookingWidget({
                   rows={2}
                 />
               </div>
-              {/* TEMP — assessment-document upload UI disabled pending an explicit
-                  data-protection sign-off (access control + retention policy).
-                  Backend/schema (assessmentDocumentKey column, storage.ts
-                  ownership check, POST /sessions/book field) intentionally
-                  left in place, not deleted — this is the only change needed
-                  to make the feature unreachable by anyone, real or test,
-                  while that decision is pending. Same interim-disable pattern
-                  as the earlier UPI-verification non-blocking change. To
-                  restore: un-comment this block once the sign-off lands. */}
-              {ASSESSMENT_UPLOAD_ENABLED && (
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1 block">
-                    Existing assessment or diagnosis report (optional)
-                  </Label>
-                  <FileUploadField
-                    label={assessmentDocumentKey ? "Replace document" : "Upload document"}
-                    uploadedPath={assessmentDocumentKey}
-                    onUploaded={setAssessmentDocumentKey}
-                  />
-                </div>
-              )}
               <Button
                 className="w-full gap-2"
                 onClick={handleBook}

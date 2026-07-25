@@ -900,7 +900,21 @@ router.patch("/admin/bookings/:id/release", ...adminGuard, async (req, res): Pro
 
   const { note } = req.body as { note?: string };
 
-  const [booking] = await db.select().from(sessionBookingsTable).where(eq(sessionBookingsTable.id, id));
+  const [booking] = await db
+    .select({
+      id: sessionBookingsTable.id,
+      status: sessionBookingsTable.status,
+      professionalId: sessionBookingsTable.professionalId,
+      parentId: sessionBookingsTable.parentId,
+      bookedDate: sessionBookingsTable.bookedDate,
+      startTime: sessionBookingsTable.startTime,
+      amountInr: sessionBookingsTable.amountInr,
+      proAmountInr: sessionBookingsTable.proAmountInr,
+      markupInr: sessionBookingsTable.markupInr,
+      gstInr: sessionBookingsTable.gstInr,
+    })
+    .from(sessionBookingsTable)
+    .where(eq(sessionBookingsTable.id, id));
   if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
   if (booking.status !== "releasable") { res.status(400).json({ error: `Can only release bookings in RELEASABLE status, currently: ${booking.status}` }); return; }
 
@@ -933,7 +947,27 @@ router.patch("/admin/bookings/:id/release", ...adminGuard, async (req, res): Pro
     });
   });
 
-  const [updated] = await db.select().from(sessionBookingsTable).where(eq(sessionBookingsTable.id, id));
+  // Explicit column projection, not a bare select — this response goes
+  // straight to the admin client, and sessionBookingsTable also carries
+  // parent-provided notes and (historically) a document key that have no
+  // business being in a payout-release response.
+  const [updated] = await db
+    .select({
+      id: sessionBookingsTable.id,
+      status: sessionBookingsTable.status,
+      professionalId: sessionBookingsTable.professionalId,
+      parentId: sessionBookingsTable.parentId,
+      bookedDate: sessionBookingsTable.bookedDate,
+      startTime: sessionBookingsTable.startTime,
+      amountInr: sessionBookingsTable.amountInr,
+      proAmountInr: sessionBookingsTable.proAmountInr,
+      markupInr: sessionBookingsTable.markupInr,
+      gstInr: sessionBookingsTable.gstInr,
+      releasedAt: sessionBookingsTable.releasedAt,
+      releasedBy: sessionBookingsTable.releasedBy,
+    })
+    .from(sessionBookingsTable)
+    .where(eq(sessionBookingsTable.id, id));
   res.json(updated);
 });
 
@@ -994,7 +1028,15 @@ router.patch("/admin/bookings/:id/refund", ...adminGuard, async (req, res): Prom
 
   const { note } = req.body as { note?: string };
 
-  const [booking] = await db.select().from(sessionBookingsTable).where(eq(sessionBookingsTable.id, id));
+  const [booking] = await db
+    .select({
+      id: sessionBookingsTable.id,
+      status: sessionBookingsTable.status,
+      amountInr: sessionBookingsTable.amountInr,
+      providerPaymentId: sessionBookingsTable.providerPaymentId,
+    })
+    .from(sessionBookingsTable)
+    .where(eq(sessionBookingsTable.id, id));
   if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
 
   const refundable = ["disputed", "paid_held", "cancelled"];
@@ -1022,11 +1064,19 @@ router.patch("/admin/bookings/:id/refund", ...adminGuard, async (req, res): Prom
   }
 
   const now = new Date();
+  // Explicit column projection on .returning() too — same rationale as the
+  // release endpoint above, this response goes straight to the admin client.
   const [updated] = await db
     .update(sessionBookingsTable)
     .set({ status: "refunded", releasedAt: now, releasedBy: req.userId!, updatedAt: now })
     .where(eq(sessionBookingsTable.id, id))
-    .returning();
+    .returning({
+      id: sessionBookingsTable.id,
+      status: sessionBookingsTable.status,
+      amountInr: sessionBookingsTable.amountInr,
+      releasedAt: sessionBookingsTable.releasedAt,
+      releasedBy: sessionBookingsTable.releasedBy,
+    });
 
   res.json({ ...updated, razorpayRefundId });
 });
@@ -1041,17 +1091,26 @@ router.patch("/admin/bookings/:id/resolve-dispute", ...adminGuard, async (req, r
     res.status(400).json({ error: "resolution must be 'release' or 'refund'" }); return;
   }
 
-  const [booking] = await db.select().from(sessionBookingsTable).where(eq(sessionBookingsTable.id, id));
+  const [booking] = await db
+    .select({ id: sessionBookingsTable.id, status: sessionBookingsTable.status })
+    .from(sessionBookingsTable)
+    .where(eq(sessionBookingsTable.id, id));
   if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
   if (booking.status !== "disputed") { res.status(400).json({ error: "Booking is not in DISPUTED status" }); return; }
 
   const newStatus = resolution === "release" ? "releasable" : "refunded";
   const now = new Date();
+  // Explicit column projection on .returning() — same rationale as the
+  // release/refund endpoints above.
   const [updated] = await db
     .update(sessionBookingsTable)
     .set({ status: newStatus, releasedBy: req.userId!, updatedAt: now })
     .where(eq(sessionBookingsTable.id, id))
-    .returning();
+    .returning({
+      id: sessionBookingsTable.id,
+      status: sessionBookingsTable.status,
+      releasedBy: sessionBookingsTable.releasedBy,
+    });
 
   res.json(updated);
 });
