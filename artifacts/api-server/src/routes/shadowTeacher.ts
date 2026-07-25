@@ -1798,13 +1798,19 @@ router.delete("/shadow-teacher/:matchId/candidates/:candidateId/interview-time-o
 });
 
 // ── POST /shadow-teacher/:matchId/candidates/:candidateId/mark-interview-done ─
-router.post("/shadow-teacher/:matchId/candidates/:candidateId/mark-interview-done", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+// Either party who actually attended can mark it done — resolveNegotiationAccess
+// below is the real access gate (only the match's parent or the candidate's own
+// professional get a non-null ctx), so no additional per-role restriction is
+// needed once both are allowed. Previously parent-only; the professional-facing
+// "Mark Interview Done" button (TeacherInterviewSection) called this same route
+// and was rejected with insufficient-role, since it had never been given a
+// teacher-facing counterpart.
+router.post("/shadow-teacher/:matchId/candidates/:candidateId/mark-interview-done", requireAuth, requireRole("parent", "professional"), async (req: Request, res: Response): Promise<void> => {
   const matchId = parseInt(req.params["matchId"] as string, 10);
   const candidateId = parseInt(req.params["candidateId"] as string, 10);
   if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
   const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
   if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
-  if (ctx.myRole !== "parent") { res.status(403).json({ error: "Only the parent can mark the interview as done" }); return; }
   if (!ctx.candidate.meetLink) { res.status(409).json({ error: "No confirmed interview to mark as done" }); return; }
   if (ctx.candidate.interviewDoneAt) { res.status(409).json({ error: "Interview is already marked as done" }); return; }
 
