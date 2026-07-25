@@ -1,8 +1,27 @@
 import { useLocation, Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useGetMe, useGetMyProfessionalProfile, getGetMyProfessionalProfileQueryKey } from "@workspace/api-client-react";
 import { NAV, SHELL_ROOT, type Role, type NavItem } from "@/nav/config";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
+import { fetchWithAuth } from "@/lib/api";
 import { UserCircle2 } from "lucide-react";
+
+// Duplicated in BottomNav.tsx (and professional-dashboard.tsx has its own
+// copy) rather than shared — same per-file convention used elsewhere in
+// this app for small local data hooks.
+function useMyOfferings(enabled: boolean) {
+  return useQuery<{ vertical: string }[]>({
+    queryKey: ["my-offerings"],
+    queryFn: async () => {
+      const res = await fetchWithAuth("/api/professionals/me/offerings");
+      if (!res.ok) throw new Error("Failed to fetch offerings");
+      const data = await res.json();
+      return data.offerings as { vertical: string }[];
+    },
+    staleTime: 30_000,
+    enabled,
+  });
+}
 
 export function SideNav() {
   const [loc] = useLocation();
@@ -12,12 +31,21 @@ export function SideNav() {
   const { data: proProfile } = useGetMyProfessionalProfile({
     query: { queryKey: getGetMyProfessionalProfileQueryKey(), enabled: role === "professional" },
   });
+  // A specialtyFilter tab (e.g. Enquiries/Engagement, "shadow_teacher") must
+  // stay reachable even after a professional changes their PRIMARY vertical
+  // away from it, as long as they still hold it as an offering — otherwise
+  // switching primary vertical silently hides navigation to real existing
+  // engagement/enquiry data (nothing is actually deleted, just unreachable).
+  const { data: offerings = [] } = useMyOfferings(role === "professional");
 
   const { selectedChildId } = useSelectedChild();
 
   if (!role || role === "admin") return null;
   const allTabs = NAV[role].filter(
-    (item) => !item.specialtyFilter || proProfile?.specialty === item.specialtyFilter,
+    (item) =>
+      !item.specialtyFilter ||
+      proProfile?.specialty === item.specialtyFilter ||
+      offerings.some((o) => o.vertical === item.specialtyFilter),
   );
   const primaryTabs = allTabs.filter((item) => !item.mobileHidden);
   const secondaryTabs = allTabs.filter((item) => item.mobileHidden);
