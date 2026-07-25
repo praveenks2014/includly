@@ -54,7 +54,7 @@ const RCI_REQUIRED_DISCIPLINES = new Set([
   "Clinical Psychology",
   "Rehabilitation Counselling",
 ]);
-const MEDICAL_COUNCIL_DISCIPLINES = new Set(["Developmental Pediatrician", "Psychiatrist"]);
+const MEDICAL_COUNCIL_DISCIPLINES = new Set(["Developmental Pediatrician", "Psychiatrist", "Neurologist"]);
 const ABA_DISCIPLINES = new Set(["Applied Behavior Analysis (ABA)", "Behavioral Therapy"]);
 
 export function disciplineCredentialKind(discipline: string): TherapistDisciplineCredentialKind {

@@ -10,6 +10,7 @@ import {
   useConfirmUpiVerification,
 } from "@workspace/api-client-react";
 import { loadRazorpayScript, buildUpiTestCheckoutConfig } from "@/lib/razorpay";
+import type { CreateProfessionalProfileBodySpecialty } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -141,8 +142,26 @@ const THERAPIST_DISCIPLINES = [
   "Developmental Pediatrician",
   "Psychiatrist",
   "Rehabilitation Counselling",
+  "Neurologist",
   "Other",
 ];
+
+// Derives the top-level, searchable `specialty` field from the discipline
+// chosen above — only for disciplines that have a real specialty enum value
+// (see lib/db/src/schema/professionals.ts's specialtyEnum). Every other
+// discipline is intentionally left unmapped: specialty already carries
+// whatever onboard.tsx's Step 0 set it to ("speech_therapy" for the
+// therapist vertical today), and the real discipline stays correctly
+// modeled via vertical_details.discipline regardless — this mapping only
+// exists to fix the 3 disciplines that were previously unreachable at the
+// specialty level (Psychiatrist/Developmental Pediatrician/Neurologist).
+const SPECIALTY_FOR_DISCIPLINE: Partial<Record<string, CreateProfessionalProfileBodySpecialty>> = {
+  "Occupational Therapy (OT)": "occupational_therapy",
+  "Speech & Language Therapy (SLT)": "speech_therapy",
+  "Psychiatrist": "psychiatrist",
+  "Developmental Pediatrician": "developmental_pediatrician",
+  "Neurologist": "neurologist",
+};
 
 // Not every therapist discipline is RCI-regulated in India — mirrors the
 // backend's disciplineCredentialKind() in
@@ -157,7 +176,7 @@ const RCI_REQUIRED_DISCIPLINES = new Set([
   "Clinical Psychology",
   "Rehabilitation Counselling",
 ]);
-const MEDICAL_COUNCIL_DISCIPLINES = new Set(["Developmental Pediatrician", "Psychiatrist"]);
+const MEDICAL_COUNCIL_DISCIPLINES = new Set(["Developmental Pediatrician", "Psychiatrist", "Neurologist"]);
 const ABA_DISCIPLINES = new Set(["Applied Behavior Analysis (ABA)", "Behavioral Therapy"]);
 
 function disciplineCredentialKind(discipline: string): TherapistCredentialKind {
@@ -1361,6 +1380,10 @@ export default function OnboardStage2Page() {
         };
         if (credentialKind === "rci" && therapistForm.rciRegistered === true) {
           extraPatch.rciCrrNumber = therapistForm.rciCrrNumber.trim();
+        }
+        const derivedSpecialty = SPECIALTY_FOR_DISCIPLINE[therapistForm.discipline];
+        if (derivedSpecialty) {
+          extraPatch.specialty = derivedSpecialty;
         }
       }
 
