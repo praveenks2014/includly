@@ -2246,11 +2246,126 @@ const backToServicesLink = (
     </button>
   </Link>
 );
+interface TutorEngagementRow {
+  id: number;
+  professionalId: number;
+  childId: number | null;
+  startDate: string;
+  sessionsPerWeek: number;
+  perSessionFeeInr: number;
+  status: string;
+  endDate: string | null;
+  endedReason: string | null;
+  startOtp?: string | null;
+  professionalName: string | null;
+  childName: string | null;
+}
+
+const TUTOR_ENGAGEMENT_RELEVANT_STATUSES = [
+  "pending_teacher_acceptance", "pending_activation_fee", "pending_start", "active", "notice_period", "paused", "ended",
+];
+
+// Mirrors ShadowTeacherTab's start-OTP display pattern (this file, the
+// active.status === "pending_start" branch a few hundred lines up) for
+// tutor engagements — GET /tutor/engagements already computes the identical
+// startOtp gating (startDate <= today server-side), it just had no frontend
+// surface at all. Deliberately scoped to reaching/showing the start code,
+// not the full daily-log/salary/lifecycle-management suite ShadowTeacherTab
+// has — that stays out of scope per the B6 comment above.
+function TutorEngagementCard() {
+  const { selectedChildId } = useSelectedChild();
+
+  const { data: engagements = [], isLoading } = useQuery<TutorEngagementRow[]>({
+    queryKey: ["parent-tutor-engagements"],
+    queryFn: () => fetchWithAuth("/api/tutor/engagements").then(r => r.json()),
+    staleTime: 20_000,
+    refetchInterval: 30_000,
+  });
+
+  const active = engagements.find(e =>
+    TUTOR_ENGAGEMENT_RELEVANT_STATUSES.includes(e.status) && e.childId === selectedChildId
+  );
+
+  if (isLoading || !active) return null;
+
+  const fmtDateLong = (d: string) =>
+    new Date(d + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="font-serif font-bold text-[#1A2340]">Tutor Engagement</p>
+        <span className="text-[10px] px-2.5 py-1 rounded-full font-bold bg-gray-100 text-gray-500 border border-gray-200">
+          {active.status.replace(/_/g, " ")}
+        </span>
+      </div>
+
+      {active.status === "pending_teacher_acceptance" ? (
+        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex items-center gap-2.5">
+          <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+            <Clock size={14} className="text-amber-600" />
+          </div>
+          <p className="text-xs font-bold text-amber-900">Waiting for {active.professionalName ?? "your tutor"} to accept</p>
+        </div>
+      ) : active.status === "pending_activation_fee" ? (
+        <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 flex items-center gap-2.5">
+          <div className="w-8 h-8 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
+            <Clock size={14} className="text-orange-600" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-orange-900">Waiting for the tutor to pay the activation fee</p>
+            <p className="text-[11px] text-orange-600 mt-0.5">You'll be notified once the engagement is ready to start</p>
+          </div>
+        </div>
+      ) : active.status === "pending_start" ? (
+        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+              <Clock size={14} className="text-amber-600" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-amber-900">Waiting for tutor to confirm start</p>
+              <p className="text-[11px] text-amber-600 mt-0.5">
+                Share the code on <span className="font-semibold">{fmtDateLong(active.startDate)}</span>
+              </p>
+            </div>
+          </div>
+          {active.startOtp ? (
+            <div className="bg-white border border-amber-200 rounded-2xl p-5 text-center space-y-2 shadow-inner">
+              <p className="text-[10px] font-bold text-amber-500 uppercase tracking-[0.18em]">Start Code</p>
+              <p className="text-4xl font-mono font-bold tracking-[0.35em] text-[#1A2340] select-all py-1">{active.startOtp}</p>
+              <p className="text-[10px] text-amber-600 font-medium">Show this to your tutor — do not share publicly</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl px-4 py-3 border border-amber-100">
+              <p className="text-xs text-amber-700">
+                Your start code will appear here on <span className="font-semibold">{fmtDateLong(active.startDate)}</span>.
+              </p>
+            </div>
+          )}
+        </div>
+      ) : active.status === "ended" ? (
+        <p className="text-xs text-gray-500">
+          This engagement ended{active.endDate ? ` on ${fmtDateLong(active.endDate)}` : ""}{active.endedReason ? ` — ${active.endedReason}` : ""}.
+        </p>
+      ) : (
+        <div className="text-sm">
+          <p className="font-semibold text-[#1A2340]">{active.professionalName ?? "Your tutor"}</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {active.sessionsPerWeek}x/week · ₹{active.perSessionFeeInr.toLocaleString("en-IN")}/session
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TutorTab() {
   const { selectedChildId } = useSelectedChild();
   return (
     <div className="space-y-5 pb-4">
       {backToServicesLink}
+      <TutorEngagementCard key={`engagement-${selectedChildId ?? "no-child"}`} />
       <TutorRequestWidget key={selectedChildId ?? "no-child"} />
     </div>
   );
