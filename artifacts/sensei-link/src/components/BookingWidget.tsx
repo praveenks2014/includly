@@ -43,6 +43,12 @@ function todayIsoDate() {
 
 const CREDIT_SPECIALTIES = ["occupational_therapy", "speech_therapy", "psychiatrist"];
 
+// TEMP — disabled pending an explicit data-protection sign-off (access
+// control + retention policy) on uploaded assessment/diagnosis documents.
+// See the comment at the FileUploadField usage below for details. Do not
+// flip this to true without that sign-off happening first.
+const ASSESSMENT_UPLOAD_ENABLED = false;
+
 export function BookingWidget({
   professionalId,
   professionalName,
@@ -308,16 +314,27 @@ export function BookingWidget({
                   rows={2}
                 />
               </div>
-              <div>
-                <Label className="text-xs text-muted-foreground mb-1 block">
-                  Existing assessment or diagnosis report (optional)
-                </Label>
-                <FileUploadField
-                  label={assessmentDocumentKey ? "Replace document" : "Upload document"}
-                  uploadedPath={assessmentDocumentKey}
-                  onUploaded={setAssessmentDocumentKey}
-                />
-              </div>
+              {/* TEMP — assessment-document upload UI disabled pending an explicit
+                  data-protection sign-off (access control + retention policy).
+                  Backend/schema (assessmentDocumentKey column, storage.ts
+                  ownership check, POST /sessions/book field) intentionally
+                  left in place, not deleted — this is the only change needed
+                  to make the feature unreachable by anyone, real or test,
+                  while that decision is pending. Same interim-disable pattern
+                  as the earlier UPI-verification non-blocking change. To
+                  restore: un-comment this block once the sign-off lands. */}
+              {ASSESSMENT_UPLOAD_ENABLED && (
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-1 block">
+                    Existing assessment or diagnosis report (optional)
+                  </Label>
+                  <FileUploadField
+                    label={assessmentDocumentKey ? "Replace document" : "Upload document"}
+                    uploadedPath={assessmentDocumentKey}
+                    onUploaded={setAssessmentDocumentKey}
+                  />
+                </div>
+              )}
               <Button
                 className="w-full gap-2"
                 onClick={handleBook}
