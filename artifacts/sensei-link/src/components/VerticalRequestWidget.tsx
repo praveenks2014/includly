@@ -817,9 +817,11 @@ export function VerticalRequestWidget({ vertical }: { vertical: Vertical }) {
   const [subjects, setSubjects] = useState<string[]>([]);
   const [otherSubject, setOtherSubject] = useState("");
   const [board, setBoard] = useState("");
+  const [tutorType, setTutorType] = useState<"regular" | "special_education_certified">("regular");
   // therapist-only
   const [primaryConcern, setPrimaryConcern] = useState("");
   const [disciplineNeeded, setDisciplineNeeded] = useState("");
+  const [assessmentFindings, setAssessmentFindings] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const [choosingId, setChoosingId] = useState<number | null>(null);
@@ -860,11 +862,24 @@ export function VerticalRequestWidget({ vertical }: { vertical: Vertical }) {
     }
     setSubmitting(true);
     try {
+      // Tutor type and assessment findings don't have dedicated columns on
+      // tutor_matches/therapist_matches — folded into the existing extraNotes
+      // free-text field with a clear label prefix rather than adding a new
+      // migration for what's effectively one more line of context text.
+      const notesParts: string[] = [];
+      if (cfg.vertical === "tutor" && tutorType === "special_education_certified") {
+        notesParts.push("Tutor type requested: Special-Education Certified");
+      }
+      if (cfg.vertical === "therapist" && assessmentFindings.trim()) {
+        notesParts.push(`Existing diagnosis / assessment findings: ${assessmentFindings.trim()}`);
+      }
+      if (extraNotes.trim()) notesParts.push(extraNotes.trim());
+
       const body: Record<string, unknown> = {
         childId: effectiveChildId,
         childAge: childAge ? parseInt(childAge, 10) : undefined,
         locationArea: locationArea || undefined,
-        extraNotes: extraNotes.trim() || undefined,
+        extraNotes: notesParts.length ? notesParts.join("\n\n") : undefined,
       };
       if (cfg.vertical === "tutor") {
         const allSubjects = otherSubject.trim() ? [...subjects, otherSubject.trim()] : subjects;
@@ -1188,6 +1203,19 @@ export function VerticalRequestWidget({ vertical }: { vertical: Vertical }) {
                     <option value="Other">Other</option>
                   </select>
                 </div>
+                <div>
+                  <label className="text-sm mb-1 block font-medium text-foreground">Tutor type</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {([
+                      { value: "regular", label: "Regular" },
+                      { value: "special_education_certified", label: "Special-Education Certified" },
+                    ] as const).map((opt) => (
+                      <button key={opt.value} type="button" onClick={() => setTutorType(opt.value)} className={`text-xs px-2.5 py-1 rounded-full border ${tutorType === opt.value ? "bg-[#2EC4A5] text-white border-[#2EC4A5]" : "bg-white text-gray-600 border-gray-200"}`}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </>
             ) : (
               <>
@@ -1203,6 +1231,19 @@ export function VerticalRequestWidget({ vertical }: { vertical: Vertical }) {
                       <option key={d.value} value={d.value}>{d.label}</option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <label className="text-sm mb-1 block font-medium text-foreground">
+                    Existing diagnosis / assessment findings <span className="text-muted-foreground font-normal">(optional)</span>
+                  </label>
+                  <textarea
+                    value={assessmentFindings}
+                    onChange={(e) => setAssessmentFindings(e.target.value)}
+                    maxLength={1000}
+                    rows={3}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2EC4A5] resize-none"
+                    placeholder="e.g. a brief summary of a prior evaluation — full reports can be shared directly with the specialist after matching"
+                  />
                 </div>
               </>
             )}

@@ -234,6 +234,12 @@ type TutorForm = {
   boards: string[];
   gradeLevels: string[];
   specialNeedsExp: boolean | null;
+  // Distinct from specialNeedsExp above (self-reported experience) — this
+  // is a formal credential claim, matching the parent-facing "Tutor type"
+  // field on VerticalRequestWidget's tutor intake form, so both sides of
+  // the match can be filtered on the same signal. Additive, not a
+  // replacement for the experience question.
+  specialEducationCertified: boolean;
   teachingApproaches: string[];
   certKey: string;
 };
@@ -736,6 +742,21 @@ function HomeTutorForm({
         color="blue"
       />
 
+      <div className="flex items-start gap-2">
+        <Checkbox
+          id="special-education-certified"
+          checked={form.specialEducationCertified}
+          onCheckedChange={(v) => setForm((f) => ({ ...f, specialEducationCertified: v === true }))}
+          disabled={isSaving}
+        />
+        <Label htmlFor="special-education-certified" className="text-sm font-normal text-gray-700 leading-snug">
+          I hold a formal Special Education certification/qualification
+          <span className="block text-xs text-gray-400 font-normal mt-0.5">
+            Distinct from the experience question above — this is a credential claim, shown to parents specifically looking for a certified special educator.
+          </span>
+        </Label>
+      </div>
+
       <ChipsField
         label="Teaching approaches you use"
         hint="Optional — select all that apply"
@@ -1089,6 +1110,7 @@ export default function OnboardStage2Page() {
     gradeLevels: (existingVd.gradeLevels as string[]) ?? [],
     specialNeedsExp:
       existingVd.specialNeedsExp !== undefined ? (existingVd.specialNeedsExp as boolean) : null,
+    specialEducationCertified: (existingVd.specialEducationCertified as boolean) ?? false,
     teachingApproaches: (existingVd.teachingApproaches as string[]) ?? [],
     certKey: (existingVd.certKey as string) ?? "",
   });
@@ -1325,6 +1347,7 @@ export default function OnboardStage2Page() {
           boards: tutorForm.boards,
           gradeLevels: tutorForm.gradeLevels,
           specialNeedsExp: tutorForm.specialNeedsExp,
+          specialEducationCertified: tutorForm.specialEducationCertified,
           teachingApproaches: tutorForm.teachingApproaches,
           ...(tutorForm.certKey ? { certKey: tutorForm.certKey } : {}),
         };
