@@ -1170,7 +1170,13 @@ function CandidateCard({
             Chat
           </Button>
           {!committed && !trialMode && (
-            myPendingOffer ? (
+            candidate.interviewDoneAt == null ? (
+              // Same gate as OfferSection/TrialRequestSection above — commit
+              // must not be reachable before the interview is actually done.
+              <div className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-center text-[10px] font-medium text-gray-500 leading-tight">
+                Waiting for the interview to be completed before you can choose
+              </div>
+            ) : myPendingOffer ? (
               <div className="flex-1 rounded-xl border border-amber-200 bg-amber-50 px-2 py-2 text-center text-[10px] font-medium text-amber-800 leading-tight">
                 Waiting for {displayName} to accept your offer of ₹{myPendingOffer.amountInr.toLocaleString("en-IN")} before you can commit
               </div>

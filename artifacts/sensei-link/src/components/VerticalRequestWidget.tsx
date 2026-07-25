@@ -773,10 +773,18 @@ function TrustSignalCard({ cfg, candidate, matchId, committed, selected, onChoos
 
       {!committed && !trialMode && candidate.trialDaysAccepted == null && matchStatus === "shortlisted" && (
         <div className="flex gap-2 pt-1">
-          <Button size="sm" className="gap-1 text-xs flex-1 bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl" onClick={() => onChoose(candidate.professionalId)}>
-            <ChevronRight size={12} />
-            Choose
-          </Button>
+          {candidate.interviewDoneAt == null ? (
+            // Same gate as TrialRequestSection above — commit must not be
+            // reachable before the interview is actually done.
+            <div className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-2 py-2 text-center text-[10px] font-medium text-gray-500 leading-tight">
+              Waiting for the interview to be completed before you can choose
+            </div>
+          ) : (
+            <Button size="sm" className="gap-1 text-xs flex-1 bg-[#2EC4A5] hover:bg-[#26a88d] text-white rounded-xl" onClick={() => onChoose(candidate.professionalId)}>
+              <ChevronRight size={12} />
+              Choose
+            </Button>
+          )}
         </div>
       )}
     </div>
