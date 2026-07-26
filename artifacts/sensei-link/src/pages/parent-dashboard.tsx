@@ -1199,6 +1199,45 @@ function ReRequestSheet({
   );
 }
 
+const RECURRING_DAY_ABBREV = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function formatTime12h(t: string): string {
+  const [h, m] = t.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+// Computes the next occurrence (from now) of a teacher's accepted weekly
+// recurring schedule — no existing utility does this;
+// formatRecurringScheduleSummary (ShadowTeacherRequestWidget.tsx) only lists
+// every slot, it never picks out which one is next.
+function nextSessionFromSchedule(
+  slots: { dayOfWeek: number; startTime: string; endTime: string }[] | null | undefined,
+): string | null {
+  if (!slots || slots.length === 0) return null;
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const todayDow = now.getDay();
+
+  let best: { daysAhead: number; startTime: string } | null = null;
+  for (const slot of slots) {
+    const [sh, sm] = slot.startTime.split(":").map(Number);
+    const slotMinutes = sh * 60 + sm;
+    let daysAhead = (slot.dayOfWeek - todayDow + 7) % 7;
+    if (daysAhead === 0 && slotMinutes <= nowMinutes) daysAhead = 7; // today's slot already passed
+    if (!best || daysAhead < best.daysAhead || (daysAhead === best.daysAhead && slot.startTime < best.startTime)) {
+      best = { daysAhead, startTime: slot.startTime };
+    }
+  }
+  if (!best) return null;
+
+  if (best.daysAhead === 0) return `Today, ${formatTime12h(best.startTime)}`;
+  if (best.daysAhead === 1) return `Tomorrow, ${formatTime12h(best.startTime)}`;
+  const targetDow = (todayDow + best.daysAhead) % 7;
+  return `${RECURRING_DAY_ABBREV[targetDow]}, ${formatTime12h(best.startTime)}`;
+}
+
 function ShadowTeacherTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1222,6 +1261,7 @@ function ShadowTeacherTab() {
     endDate?: string | null;
     endedReason?: string | null;
     platformSalaryEnabled?: boolean;
+    recurringScheduleJson?: { dayOfWeek: number; startTime: string; endTime: string }[] | null;
   }
   interface DailyLog {
     id: number;
@@ -1703,6 +1743,34 @@ function ShadowTeacherTab() {
         </div>
       </div>
 
+      {/* Engagement summary strip — persistent across all tabs, not just
+          Overview. Total Logs/Payments Made reuse the same `logs`/`payments`
+          queries already fetched above in this component; Next Session is
+          newly derived from recurringScheduleJson (added to the parent-facing
+          GET /api/engagements select for this). Shown for the same statuses
+          the old Overview-only "Engagement Summary" block used to cover. */}
+      {active.status !== "ended" &&
+        active.status !== "pending_teacher_acceptance" &&
+        active.status !== "pending_activation_fee" &&
+        active.status !== "pending_start" && (
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-teal-50/60 border border-teal-100 rounded-2xl p-3">
+              <p className="text-[9px] font-bold text-teal-600 uppercase tracking-[0.08em]">Next Session</p>
+              <p className="text-sm font-bold text-[#1A2340] mt-1">
+                {nextSessionFromSchedule(active.recurringScheduleJson) ?? "—"}
+              </p>
+            </div>
+            <div className="bg-violet-50/60 border border-violet-100 rounded-2xl p-3">
+              <p className="text-[9px] font-bold text-violet-600 uppercase tracking-[0.08em]">Total Logs</p>
+              <p className="text-sm font-bold text-[#1A2340] mt-1">{logs.length}</p>
+            </div>
+            <div className="bg-sky-50/60 border border-sky-100 rounded-2xl p-3">
+              <p className="text-[9px] font-bold text-sky-600 uppercase tracking-[0.08em]">Payments Made</p>
+              <p className="text-sm font-bold text-[#1A2340] mt-1">{payments.filter((p) => p.status === "paid").length}</p>
+            </div>
+          </div>
+        )}
+
       {/* Sub-tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-2xl p-1 overflow-x-auto">
         {(([["overview", "Overview"], ["logs", "Daily Logs"], ["goals", "Goals"], ["trends", "Trends"], ["payments", "Payments"], ["lifecycle", "Manage"]] as [string, string][])
@@ -1886,20 +1954,7 @@ function ShadowTeacherTab() {
               </div>
             </div>
           ) : (
-            <>
-              <p className="text-sm font-bold text-[#1A2340]">Engagement Summary</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-teal-50/60 border border-teal-100 rounded-2xl p-3.5">
-                  <p className="text-[10px] font-bold text-teal-600 uppercase tracking-[0.1em]">Total Logs</p>
-                  <p className="text-2xl font-bold text-[#1A2340] mt-1">{logs.length}</p>
-                </div>
-                <div className="bg-violet-50/60 border border-violet-100 rounded-2xl p-3.5">
-                  <p className="text-[10px] font-bold text-violet-600 uppercase tracking-[0.1em]">Payments Made</p>
-                  <p className="text-2xl font-bold text-[#1A2340] mt-1">{payments.filter(p => p.status === "paid").length}</p>
-                </div>
-              </div>
-              {active.notes && <p className="text-xs text-gray-500 bg-gray-50 rounded-xl p-3">{active.notes}</p>}
-            </>
+            active.notes && <p className="text-xs text-gray-500 bg-gray-50 rounded-xl p-3">{active.notes}</p>
           )}
         </div>
       )}

@@ -114,6 +114,10 @@ router.get("/engagements", requireAuth, async (req, res): Promise<void> => {
         platformSalaryEnabled: shadowTeacherEngagementsTable.platformSalaryEnabled,
         placementFeeInr: shadowTeacherEngagementsTable.placementFeeInr,
         activationFeeInr: shadowTeacherEngagementsTable.activationFeeInr,
+        // Needed for the parent-facing "Next Session" stat — the teacher's
+        // own accepted weekly slots (captured at accept-time), previously
+        // only ever selected on the professional-facing branch below.
+        recurringScheduleJson: shadowTeacherEngagementsTable.recurringScheduleJson,
         professionalName: professionalProfilesTable.fullName,
         professionalSpecialty: professionalProfilesTable.specialty,
         professionalAvatarUrl: usersTable.avatarUrl,
