@@ -25,6 +25,12 @@ export const usersTable = pgTable("users", {
   latitude: real("latitude"),
   longitude: real("longitude"),
   shareHomeLocation: boolean("share_home_location").notNull().default(false),
+  // Parent-facing Services page layout preference — "tiles" (the icon
+  // grid) or "list" (row-per-category). Default "tiles" preserves the
+  // current primary experience for anyone who's never touched the
+  // setting. Deliberately a plain text column, not a pgEnum — this is a
+  // low-stakes UI preference, not a value enforced elsewhere in the schema.
+  servicesViewMode: text("services_view_mode").notNull().default("tiles"),
   supportTypes: text("support_types").array().notNull().default([]),
   childCount: integer("child_count"),
   sessionCredits: integer("session_credits").notNull().default(0),

@@ -36,5 +36,7 @@ export interface UserProfile {
    */
   longitude?: number | null;
   shareHomeLocation?: boolean;
+  /** Parent-facing Services page layout preference. Defaults to 'tiles'. */
+  servicesViewMode?: "tiles" | "list";
   createdAt: Date;
 }

@@ -18,4 +18,5 @@ export interface UpdateUserBody {
   longitude?: number;
   shareHomeLocation?: boolean;
   avatarUrl?: string;
+  servicesViewMode?: "tiles" | "list";
 }

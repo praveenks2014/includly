@@ -43,6 +43,7 @@ export const GetMeResponse = zod.object({
     ),
   shareHomeLocation: zod.boolean().optional(),
   onboardingComplete: zod.boolean().optional(),
+  servicesViewMode: zod.enum(["tiles", "list"]).optional(),
   createdAt: zod.coerce.date(),
 });
 
@@ -65,6 +66,7 @@ export const UpdateMeBody = zod.object({
     .describe("Parent's home longitude — stored for home-visit matching"),
   shareHomeLocation: zod.boolean().optional(),
   avatarUrl: zod.string().optional(),
+  servicesViewMode: zod.enum(["tiles", "list"]).optional(),
 });
 
 export const UpdateMeResponse = zod.object({

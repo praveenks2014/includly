@@ -1706,6 +1706,10 @@ components:
           description: Parent's home longitude — stored only with consent for home-visit matching
         shareHomeLocation:
           type: boolean
+        servicesViewMode:
+          type: string
+          enum: [tiles, list]
+          description: "Parent-facing Services page layout preference. Defaults to 'tiles'."
         createdAt:
           type: string
           format: date-time
@@ -1738,6 +1742,9 @@ components:
           type: boolean
         avatarUrl:
           type: string
+        servicesViewMode:
+          type: string
+          enum: [tiles, list]
 
     SetRoleBody:
       type: object

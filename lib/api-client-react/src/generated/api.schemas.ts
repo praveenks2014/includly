@@ -66,6 +66,8 @@ export interface UserProfile {
   longitude?: number | null;
   shareHomeLocation?: boolean;
   onboardingComplete?: boolean;
+  /** Parent-facing Services page layout preference. Defaults to 'tiles'. */
+  servicesViewMode?: "tiles" | "list";
   createdAt: string;
 }
 
@@ -81,6 +83,7 @@ export interface UpdateUserBody {
   longitude?: number;
   shareHomeLocation?: boolean;
   avatarUrl?: string;
+  servicesViewMode?: "tiles" | "list";
 }
 
 export type SetRoleBodyRole =
