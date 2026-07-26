@@ -291,7 +291,11 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
     },
     coaching: {
       isLive: SHOW_COACH_TILE && (counts["coaching"] ?? 0) > 0,
-      navigate: () => goToSearch("coaching"),
+      // List View goes straight to /search?specialty=coaching, unchanged
+      // (a parent can still pick an activity manually in the Filters panel
+      // there). Icon Grid expands the activity-selection form inline first,
+      // pre-supplying coachingSubType on arrival at search.
+      navigate: () => (viewMode === "list" ? goToSearch("coaching") : setLocation("/services?open=coaching")),
       comingSoon: {
         icon: Trophy,
         title: "Inclusive Coach booking coming soon",

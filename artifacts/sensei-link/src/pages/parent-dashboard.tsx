@@ -24,6 +24,7 @@ import { ComingSoon } from "@/components/ComingSoon";
 import { FindSpecialistTiles } from "@/components/FindSpecialistTiles";
 import { ServiceCategoryList } from "@/components/ServiceCategoryList";
 import { ConsultationMiniForm } from "@/components/ConsultationMiniForm";
+import { CoachActivityForm } from "@/components/CoachActivityForm";
 import { EngagementProgress } from "@/components/EngagementProgress";
 import { UpiPayQRDialog } from "@/components/UpiPayQRDialog";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
@@ -2696,6 +2697,7 @@ function ServicesTab() {
   if (openKey === "psychiatrist") return <ConsultationMiniForm specialty="psychiatrist" />;
   if (openKey === "developmental_pediatrician") return <ConsultationMiniForm specialty="developmental_pediatrician" />;
   if (openKey === "neurologist") return <ConsultationMiniForm specialty="neurologist" />;
+  if (openKey === "coaching") return <CoachActivityForm />;
 
   return (
     <div className="space-y-5 pb-4">

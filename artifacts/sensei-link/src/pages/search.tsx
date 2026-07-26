@@ -82,7 +82,7 @@ export default function SearchPage() {
   const [geoLocating, setGeoLocating] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [coachingSubType, setCoachingSubType] = useState("");
+  const [coachingSubType, setCoachingSubType] = useState(params.get("coachingSubType") ?? "");
   const [inclusiveExperience, setInclusiveExperience] = useState(false);
 
   const searchParams = {
