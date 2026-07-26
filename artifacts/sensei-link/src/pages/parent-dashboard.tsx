@@ -22,6 +22,7 @@ import { TutorRequestWidget, TherapistRequestWidget } from "@/components/Vertica
 import { SHOW_TUTOR_SEARCH, SHOW_THERAPIST_SEARCH } from "@/features";
 import { ComingSoon } from "@/components/ComingSoon";
 import { FindSpecialistTiles } from "@/components/FindSpecialistTiles";
+import { ServiceCategoryList } from "@/components/ServiceCategoryList";
 import { EngagementProgress } from "@/components/EngagementProgress";
 import { UpiPayQRDialog } from "@/components/UpiPayQRDialog";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
@@ -2678,72 +2679,7 @@ function TherapistTab() {
 // SERVICES (hub chooser)
 // ═══════════════════════════════════════════════════════════════════════════════
 function ServicesTab() {
-  const [, setLocation] = useLocation();
-  const [view, setView] = useState<"menu" | "find" | "centre" | "tutor">("menu");
-
-  const backBtn = (
-    <button
-      onClick={() => setView("menu")}
-      className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-teal-600 transition-colors"
-    >
-      <ArrowLeft size={14} /> All services
-    </button>
-  );
-
-  if (view === "find") {
-    return (
-      <div className="space-y-4 pb-4">
-        {backBtn}
-        <FindTab />
-      </div>
-    );
-  }
-  if (view === "centre") {
-    return (
-      <div className="space-y-4 pb-4">
-        {backBtn}
-        <ComingSoon
-          icon={Building2}
-          accent="amber"
-          title="Therapy Centres coming soon"
-          description="Browse and book verified therapy centres near you — occupational, speech, behavioural and more. We're onboarding centres now."
-        />
-      </div>
-    );
-  }
-  if (view === "tutor") {
-    return (
-      <div className="space-y-4 pb-4">
-        {backBtn}
-        <ComingSoon
-          icon={BookOpen}
-          accent="violet"
-          title="Home Tutors coming soon"
-          description="Find patient, special-needs-aware tutors for academic support at home. This service is on the way."
-        />
-      </div>
-    );
-  }
-
-  const services: { icon: typeof Search; title: string; desc: string; accent: string; onClick: () => void; comingSoon?: boolean }[] = [
-    { icon: Sparkles, title: "Shadow Teacher", desc: "Get matched with a verified shadow teacher for your child", accent: "bg-teal-50 text-teal-600", onClick: () => setLocation("/shadow-teacher") },
-    // Consolidated from two separate rows ("Therapists & Specialists" and
-    // "Parent Coaching") that both opened the identical unfiltered FindTab —
-    // one entry point, description covers both.
-    { icon: Search, title: "Therapists & Specialists", desc: "OT, speech, psychology, coaching, paediatrics & more", accent: "bg-blue-50 text-blue-600", onClick: () => setView("find") },
-    { icon: Building2, title: "Therapy Centres", desc: "Centre-based programmes near you", accent: "bg-amber-50 text-amber-600", onClick: () => setView("centre"), comingSoon: true },
-    {
-      icon: BookOpen,
-      title: "Home Tutors",
-      desc: "Academic support tailored for your child",
-      accent: "bg-rose-50 text-rose-600",
-      onClick: () => (SHOW_TUTOR_SEARCH ? setLocation("/tutor-search") : setView("tutor")),
-      comingSoon: !SHOW_TUTOR_SEARCH,
-    },
-    ...(SHOW_THERAPIST_SEARCH
-      ? [{ icon: Search, title: "Therapist / Special Educator Match", desc: "Get matched with a verified, RCI-registered therapist", accent: "bg-violet-50 text-violet-600", onClick: () => setLocation("/therapist-search") }]
-      : []),
-  ];
+  const { data: me } = useGetMe();
 
   return (
     <div className="space-y-5 pb-4">
@@ -2751,35 +2687,10 @@ function ServicesTab() {
         <h1 className="text-[1.35rem] font-bold text-[#1A2340] leading-tight">Services</h1>
         <p className="text-xs text-gray-400 mt-0.5">Find the right support for your child</p>
       </div>
-      <FindSpecialistTiles />
-      <div className="space-y-3">
-        {services.map((s) => {
-          const Icon = s.icon;
-          return (
-            <button
-              key={s.title}
-              onClick={s.onClick}
-              className="w-full bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center gap-4 text-left hover:shadow-md transition-shadow"
-            >
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${s.accent}`}>
-                <Icon size={20} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <p className="font-bold text-[#1A2340] text-sm">{s.title}</p>
-                  {s.comingSoon && (
-                    <span className="text-[9px] font-bold uppercase tracking-wide text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
-                      Coming soon
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-400 mt-0.5">{s.desc}</p>
-              </div>
-              <ArrowRight size={16} className="text-gray-300 shrink-0" />
-            </button>
-          );
-        })}
-      </div>
+      {/* Exactly one of these renders, never both — the bug this fixes.
+          Preference set in account.tsx's "Services layout" toggle,
+          default "tiles" if unset. */}
+      {me?.servicesViewMode === "list" ? <ServiceCategoryList /> : <FindSpecialistTiles />}
     </div>
   );
 }

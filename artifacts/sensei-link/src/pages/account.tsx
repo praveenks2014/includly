@@ -32,7 +32,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, User, Bell, Trash2, ShieldAlert, CheckCircle2, Clock, XCircle, AlertCircle, Ticket, Crown, LocateFixed } from "lucide-react";
+import { Loader2, User, Bell, Trash2, ShieldAlert, CheckCircle2, Clock, XCircle, AlertCircle, Ticket, Crown, LocateFixed, LayoutGrid } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import {
@@ -471,6 +471,46 @@ export default function AccountPage() {
                 </Button>
               </>
             )}
+          </div>
+        )}
+
+        {/* Services layout (parent only) */}
+        {me?.role === "parent" && (
+          <div className="bg-card border border-border rounded-xl p-6 shadow-sm mb-6" data-testid="services-layout-section">
+            <div className="flex items-center gap-2 mb-4">
+              <LayoutGrid size={18} className="text-primary" />
+              <h2 className="font-semibold">Services layout</h2>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">How Services is shown</p>
+                <p className="text-xs text-muted-foreground">Choose the icon grid or a list view</p>
+              </div>
+              <div className="flex gap-1 bg-muted rounded-lg p-1">
+                <button
+                  type="button"
+                  onClick={() => updateMutation.mutate({ data: { servicesViewMode: "tiles" } })}
+                  disabled={updateMutation.isPending}
+                  data-testid="services-layout-tiles-btn"
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors ${
+                    (me?.servicesViewMode ?? "tiles") === "tiles" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  Icon Grid
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateMutation.mutate({ data: { servicesViewMode: "list" } })}
+                  disabled={updateMutation.isPending}
+                  data-testid="services-layout-list-btn"
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors ${
+                    me?.servicesViewMode === "list" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  List View
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
