@@ -137,6 +137,12 @@ function useSpecialtyAvailability() {
 
 export interface ResolvedServiceCategory extends ServiceCategoryMeta {
   dot: DotState;
+  // Whether this category is actually reachable right now (flag on AND, for
+  // consultation/coach categories, a verified professional exists). Purely
+  // informational — lets a component show an upfront "Coming soon" badge
+  // without needing to click first. Derived from the exact same condition
+  // onClick uses below, not a separate/duplicated check.
+  isLive: boolean;
   // Takes the CALLER's own local "show this ComingSoon panel" setter — the
   // decision of whether to navigate or show coming-soon lives here, once;
   // how a component displays coming-soon (inline replace, etc.) is the only
@@ -201,67 +207,93 @@ export function useServiceCategoryStatus(): ResolvedServiceCategory[] {
     coaching: "none",
   };
 
-  const onClicks: Record<string, (showComingSoon: (info: ComingSoonInfo) => void) => void> = {
-    shadow_teacher: () => setLocation("/shadow-teacher"),
-    home_tutor: (showComingSoon) =>
-      SHOW_TUTOR_SEARCH
-        ? setLocation("/tutor-search")
-        : showComingSoon({
-            icon: NotebookPen,
-            title: "Home Tutors coming soon",
-            description: "Find patient, special-needs-aware tutors for academic support at home. This service is on the way.",
-          }),
-    therapist: (showComingSoon) =>
-      SHOW_THERAPIST_SEARCH
-        ? setLocation("/therapist-search")
-        : showComingSoon({
-            icon: Stethoscope,
-            title: "Therapist matching coming soon",
-            description: "Get matched with a verified, RCI-registered therapist across OT, speech, ABA, and more.",
-          }),
-    psychiatrist: (showComingSoon) =>
-      SHOW_CONSULTATION_TILES && (counts["psychiatrist"] ?? 0) > 0
-        ? goToSearch("psychiatrist")
-        : showComingSoon({
-            icon: Brain,
-            title: "Psychiatrist consultations coming soon",
-            description: "Book a consultation with a verified psychiatrist. This category isn't open yet.",
-          }),
-    developmental_pediatrician: (showComingSoon) =>
-      SHOW_CONSULTATION_TILES && (counts["developmental_pediatrician"] ?? 0) > 0
-        ? goToSearch("developmental_pediatrician")
-        : showComingSoon({
-            icon: Baby,
-            title: "Developmental Pediatrician consultations coming soon",
-            description: "Book a consultation with a verified developmental pediatrician. This category isn't open yet.",
-          }),
-    neurologist: (showComingSoon) =>
-      SHOW_CONSULTATION_TILES && (counts["neurologist"] ?? 0) > 0
-        ? goToSearch("neurologist")
-        : showComingSoon({
-            icon: Activity,
-            title: "Neurologist consultations coming soon",
-            description: "Book a consultation with a verified neurologist. This category isn't open yet.",
-          }),
-    therapy_centre: (showComingSoon) =>
-      showComingSoon({
+  // Single source of truth per category: isLive decides BOTH whether a
+  // click navigates (vs. shows coming-soon) and whether a component wants
+  // to show an upfront "coming soon" indicator before the click even
+  // happens — computed once here, not as two conditions that could drift
+  // apart from each other.
+  type CategoryResolution = { isLive: boolean; navigate: () => void; comingSoon: ComingSoonInfo };
+  const resolutions: Record<string, CategoryResolution> = {
+    shadow_teacher: {
+      isLive: true,
+      navigate: () => setLocation("/shadow-teacher"),
+      comingSoon: { icon: GraduationCap, title: "", description: "" }, // never reached, isLive is always true
+    },
+    home_tutor: {
+      isLive: SHOW_TUTOR_SEARCH,
+      navigate: () => setLocation("/tutor-search"),
+      comingSoon: {
+        icon: NotebookPen,
+        title: "Home Tutors coming soon",
+        description: "Find patient, special-needs-aware tutors for academic support at home. This service is on the way.",
+      },
+    },
+    therapist: {
+      isLive: SHOW_THERAPIST_SEARCH,
+      navigate: () => setLocation("/therapist-search"),
+      comingSoon: {
+        icon: Stethoscope,
+        title: "Therapist matching coming soon",
+        description: "Get matched with a verified, RCI-registered therapist across OT, speech, ABA, and more.",
+      },
+    },
+    psychiatrist: {
+      isLive: SHOW_CONSULTATION_TILES && (counts["psychiatrist"] ?? 0) > 0,
+      navigate: () => goToSearch("psychiatrist"),
+      comingSoon: {
+        icon: Brain,
+        title: "Psychiatrist consultations coming soon",
+        description: "Book a consultation with a verified psychiatrist. This category isn't open yet.",
+      },
+    },
+    developmental_pediatrician: {
+      isLive: SHOW_CONSULTATION_TILES && (counts["developmental_pediatrician"] ?? 0) > 0,
+      navigate: () => goToSearch("developmental_pediatrician"),
+      comingSoon: {
+        icon: Baby,
+        title: "Developmental Pediatrician consultations coming soon",
+        description: "Book a consultation with a verified developmental pediatrician. This category isn't open yet.",
+      },
+    },
+    neurologist: {
+      isLive: SHOW_CONSULTATION_TILES && (counts["neurologist"] ?? 0) > 0,
+      navigate: () => goToSearch("neurologist"),
+      comingSoon: {
+        icon: Activity,
+        title: "Neurologist consultations coming soon",
+        description: "Book a consultation with a verified neurologist. This category isn't open yet.",
+      },
+    },
+    therapy_centre: {
+      isLive: false,
+      navigate: () => {},
+      comingSoon: {
         icon: Building2,
         title: "Therapy Centres coming soon",
         description: "Browse and book verified therapy centres near you — occupational, speech, behavioural and more. We're onboarding centres now.",
-      }),
-    coaching: (showComingSoon) =>
-      SHOW_COACH_TILE && (counts["coaching"] ?? 0) > 0
-        ? goToSearch("coaching")
-        : showComingSoon({
-            icon: Trophy,
-            title: "Inclusive Coach booking coming soon",
-            description: "Find a coach for swimming, dance, music, sports, and more. This category isn't open yet.",
-          }),
+      },
+    },
+    coaching: {
+      isLive: SHOW_COACH_TILE && (counts["coaching"] ?? 0) > 0,
+      navigate: () => goToSearch("coaching"),
+      comingSoon: {
+        icon: Trophy,
+        title: "Inclusive Coach booking coming soon",
+        description: "Find a coach for swimming, dance, music, sports, and more. This category isn't open yet.",
+      },
+    },
   };
 
-  return SERVICE_CATEGORIES.map((cat) => ({
-    ...cat,
-    dot: dots[cat.key] ?? "none",
-    onClick: onClicks[cat.key],
-  }));
+  return SERVICE_CATEGORIES.map((cat) => {
+    const r = resolutions[cat.key];
+    return {
+      ...cat,
+      dot: dots[cat.key] ?? "none",
+      isLive: r.isLive,
+      onClick: (showComingSoon: (info: ComingSoonInfo) => void) => {
+        if (r.isLive) r.navigate();
+        else showComingSoon(r.comingSoon);
+      },
+    };
+  });
 }
