@@ -2328,6 +2328,21 @@ const TUTOR_ENGAGEMENT_RELEVANT_STATUSES = [
 // surface at all. Deliberately scoped to reaching/showing the start code,
 // not the full daily-log/salary/lifecycle-management suite ShadowTeacherTab
 // has — that stays out of scope per the B6 comment above.
+interface TutorEngagementSession {
+  id: number;
+  sessionDate: string;
+  startTime: string | null;
+  status: string;
+}
+
+interface TutorPaymentConfirmation {
+  id: number;
+  month: string;
+  confirmedAt: string | null;
+}
+
+const TUTOR_STAT_STRIP_STATUSES = ["active", "notice_period", "paused"];
+
 function TutorEngagementCard() {
   const { selectedChildId } = useSelectedChild();
 
@@ -2341,6 +2356,28 @@ function TutorEngagementCard() {
   const active = engagements.find(e =>
     TUTOR_ENGAGEMENT_RELEVANT_STATUSES.includes(e.status) && e.childId === selectedChildId
   );
+
+  const showStatStrip = !!active && TUTOR_STAT_STRIP_STATUSES.includes(active.status);
+
+  // Endpoint returns desc(sessionDate) — re-sort ascending here to find the
+  // soonest scheduled session.
+  const { data: sessions = [] } = useQuery<TutorEngagementSession[]>({
+    queryKey: ["tutor-engagement-sessions", active?.id],
+    queryFn: () => fetchWithAuth(`/api/tutor/engagements/${active!.id}/sessions`).then(r => r.json()),
+    enabled: showStatStrip,
+    staleTime: 20_000,
+  });
+  const { data: confirmations = [] } = useQuery<TutorPaymentConfirmation[]>({
+    queryKey: ["tutor-engagement-payment-confirmations-parent", active?.id],
+    queryFn: () => fetchWithAuth(`/api/tutor/engagements/${active!.id}/payment-confirmations/parent`).then(r => r.json()),
+    enabled: showStatStrip,
+    staleTime: 20_000,
+  });
+
+  const nextSession = sessions
+    .filter((s) => s.status === "scheduled")
+    .sort((a, b) => a.sessionDate.localeCompare(b.sessionDate) || (a.startTime ?? "").localeCompare(b.startTime ?? ""))[0];
+  const sessionsCompleted = sessions.filter((s) => s.status === "completed").length;
 
   if (isLoading || !active) return null;
 
@@ -2405,11 +2442,32 @@ function TutorEngagementCard() {
           This engagement ended{active.endDate ? ` on ${fmtDateLong(active.endDate)}` : ""}{active.endedReason ? ` — ${active.endedReason}` : ""}.
         </p>
       ) : (
-        <div className="text-sm">
-          <p className="font-semibold text-[#1A2340]">{active.professionalName ?? "Your tutor"}</p>
-          <p className="text-xs text-gray-400 mt-0.5">
-            {active.sessionsPerWeek}x/week · ₹{active.perSessionFeeInr.toLocaleString("en-IN")}/session
-          </p>
+        <div className="space-y-3">
+          <div className="text-sm">
+            <p className="font-semibold text-[#1A2340]">{active.professionalName ?? "Your tutor"}</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {active.sessionsPerWeek}x/week · ₹{active.perSessionFeeInr.toLocaleString("en-IN")}/session
+            </p>
+          </div>
+          {/* No Total Logs / Payments Made cells here — that data doesn't
+              exist for tutor (no daily-logs table, no per-session paid
+              marker at all for this vertical, by design). */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-teal-50/60 border border-teal-100 rounded-2xl p-3">
+              <p className="text-[9px] font-bold text-teal-600 uppercase tracking-[0.08em]">Next Session</p>
+              <p className="text-sm font-bold text-[#1A2340] mt-1">
+                {nextSession ? fmtDateLong(nextSession.sessionDate) : "—"}
+              </p>
+            </div>
+            <div className="bg-violet-50/60 border border-violet-100 rounded-2xl p-3">
+              <p className="text-[9px] font-bold text-violet-600 uppercase tracking-[0.08em]">Sessions Completed</p>
+              <p className="text-sm font-bold text-[#1A2340] mt-1">{sessionsCompleted}</p>
+            </div>
+            <div className="bg-sky-50/60 border border-sky-100 rounded-2xl p-3 col-span-2">
+              <p className="text-[9px] font-bold text-sky-600 uppercase tracking-[0.08em]">Payments Confirmed</p>
+              <p className="text-sm font-bold text-[#1A2340] mt-1">{confirmations.length}</p>
+            </div>
+          </div>
         </div>
       )}
     </div>

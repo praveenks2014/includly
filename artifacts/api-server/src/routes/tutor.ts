@@ -2090,6 +2090,29 @@ router.get("/tutor/engagements/:id/payment-confirmations", requireAuth, requireR
   res.json(rows);
 });
 
+// ── GET /tutor/engagements/:id/payment-confirmations/parent — parent-only,
+// lists CONFIRMED direct-pay confirmations (confirmedAt IS NOT NULL) — the
+// parent's own confirmed payment history, opposite filter from the
+// professional-facing route above (which lists unconfirmed items awaiting
+// the professional's confirm-received action). Read-only, no writes. Same
+// access-check convention (getTutorEngagementWithAccess), gated to the
+// parent role instead of professional.
+router.get("/tutor/engagements/:id/payment-confirmations/parent", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { eng, role } = await getTutorEngagementWithAccess(id, req.userId!, req.userRole!);
+  if (!eng || role !== "parent") { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
+
+  const rows = await db
+    .select()
+    .from(tutorEngagementPaymentConfirmationsTable)
+    .where(and(eq(tutorEngagementPaymentConfirmationsTable.engagementId, id), isNotNull(tutorEngagementPaymentConfirmationsTable.confirmedAt)))
+    .orderBy(desc(tutorEngagementPaymentConfirmationsTable.month));
+
+  res.json(rows);
+});
+
 router.post("/tutor/engagements/:id/payment-confirmations/:confirmationId/confirm-received", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
   const id = parseInt(req.params["id"] as string, 10);
   const confirmationId = parseInt(req.params["confirmationId"] as string, 10);
