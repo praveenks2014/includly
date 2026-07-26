@@ -70,6 +70,41 @@ export function disciplineCredentialKind(discipline: string): TherapistDisciplin
   return "ancillary";
 }
 
+// ─── Therapist discipline → parent-facing "discipline needed" mapping ─────
+// Closes the deferral noted in lib/db/src/schema/therapistMatches.ts's
+// therapistDisciplineNeededEnum comment ("reconciling this against a
+// professional's free-text discipline... is a matching-algorithm concern
+// for Part B, not a schema one" — this IS that Part B). Used as a HARD
+// FILTER in surfaceCandidatesForTherapistMatch(), not a scoring dimension —
+// unlike budget/start-date, a discipline mismatch has no partial credit.
+//
+// 9 of the 13 THERAPIST_DISCIPLINES map cleanly, 1:1, by meaning. Four do
+// not, deliberately: Developmental Pediatrician, Psychiatrist, and
+// Rehabilitation Counselling are named disciplines with no enum
+// counterpart (Psychiatrist/Developmental Pediatrician are reached via
+// their own dedicated specialty-routed tiles instead, bypassing this
+// enum entirely — Rehabilitation Counselling has no such tile and remains
+// genuinely invisible to targeted requests, a known, separately-tracked
+// gap, not something fixed here); "Other" is a free-text professional
+// override that could be anything, permanently unmappable regardless of
+// how wide the enum ever gets.
+const DISCIPLINE_TO_NEEDED_ENUM: Record<string, string> = {
+  "Occupational Therapy (OT)": "occupational_therapy",
+  "Speech & Language Therapy (SLT)": "speech_therapy",
+  "Applied Behavior Analysis (ABA)": "aba",
+  "Behavioral Therapy": "behavioral_therapy",
+  "Physiotherapy": "physiotherapy",
+  "Developmental Therapy": "developmental_therapy",
+  "Special Education": "special_education",
+  "Psychotherapy / Counselling": "psychotherapy_counselling",
+  "Clinical Psychology": "clinical_psychology",
+};
+
+export function disciplineToNeededEnum(discipline: string | null | undefined): string | null {
+  if (!discipline) return null;
+  return DISCIPLINE_TO_NEEDED_ENUM[discipline] ?? null;
+}
+
 export interface VerificationRequirements {
   met: boolean;
   missing: string[];

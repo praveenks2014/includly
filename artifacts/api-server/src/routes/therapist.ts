@@ -24,7 +24,7 @@ import { z } from "zod/v4";
 import { rankCandidates, type MatchSnapshot } from "../lib/shadowTeacherScoring";
 import { createInAppNotification } from "../lib/notificationService";
 import { generateOtp } from "../lib/otp";
-import { isOfferingListable } from "../lib/verificationRequirements";
+import { isOfferingListable, disciplineToNeededEnum } from "../lib/verificationRequirements";
 import { creditWallet } from "../lib/ledger";
 import { resolveOffering } from "../lib/offeringResolver";
 import { SHOW_THERAPIST_SEARCH } from "../lib/features";
@@ -157,10 +157,23 @@ async function surfaceCandidatesForTherapistMatch(match: TherapistMatchRow): Pro
   const allProfessionals = rows.map(
     ({ profile, offering }: { profile: typeof professionalProfilesTable.$inferSelect; offering: typeof professionalOfferingsTable.$inferSelect | null }) => {
       const isPrimaryMatch = profile.vertical === "therapist" && profile.verificationStatus === "verified" && profile.pricingMinINR != null;
-      if (isPrimaryMatch || !offering) return profile;
-      return { ...profile, pricingMinINR: offering.pricingMinINR, pricingMaxINR: offering.pricingMaxINR, verificationStatus: offering.verificationStatus };
+      // Same primary-vs-offering source as pricing/verificationStatus above,
+      // just for the discipline this candidate actually practices.
+      const verticalDetails = (isPrimaryMatch || !offering ? profile.verticalDetails : offering.verticalDetails) as { discipline?: string } | null;
+      const discipline = verticalDetails?.discipline ?? null;
+      if (isPrimaryMatch || !offering) return { ...profile, discipline };
+      return { ...profile, pricingMinINR: offering.pricingMinINR, pricingMaxINR: offering.pricingMaxINR, verificationStatus: offering.verificationStatus, discipline };
     },
   );
+
+  // Hard filter, not a scoring dimension — a parent who asked for a specific
+  // discipline should never see a mismatched one, unlike budget or
+  // start-date (no partial credit for the wrong discipline). "not_sure"
+  // skips this entirely, surfacing every discipline — never filter to a
+  // literal (nonexistent) "not sure yet" discipline match.
+  const disciplineFilteredProfessionals = match.disciplineNeeded === "not_sure"
+    ? allProfessionals
+    : allProfessionals.filter((p) => disciplineToNeededEnum(p.discipline) === match.disciplineNeeded);
 
   // No city/lat-lng/languages captured in therapist intake — scorer treats
   // these as neutral (0 pts either way), not a bug, just no signal to score
@@ -175,7 +188,7 @@ async function surfaceCandidatesForTherapistMatch(match: TherapistMatchRow): Pro
     childPreferredModes: match.sessionModePreference ?? null,
   };
 
-  const ranked = rankCandidates(snap, allProfessionals, [], 3);
+  const ranked = rankCandidates(snap, disciplineFilteredProfessionals, [], 3);
   let candidateCount = 0;
 
   if (ranked.length > 0) {
@@ -184,7 +197,7 @@ async function surfaceCandidatesForTherapistMatch(match: TherapistMatchRow): Pro
     );
     candidateCount = ranked.length;
 
-    const shortlistedUserIds: number[] = allProfessionals
+    const shortlistedUserIds: number[] = disciplineFilteredProfessionals
       .filter((p: { id: number }) => ranked.some((r) => r.professionalId === p.id))
       .map((p: { userId: number }) => p.userId);
     void Promise.allSettled(

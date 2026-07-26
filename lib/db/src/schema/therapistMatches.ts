@@ -27,9 +27,13 @@ export const therapistMatchStatusEnum = pgEnum("therapist_match_status", [
 // Mirrors the professional's own discipline options (onboard-stage2.tsx's
 // THERAPIST_DISCIPLINES, slugified) plus clinical_psychology and a
 // deliberate "not_sure" escape hatch for parents who don't know which
-// discipline their child needs. Reconciling this against a professional's
-// free-text discipline/disciplineOther is a matching-algorithm concern for
-// Part B, not a schema one.
+// discipline their child needs. Reconciled against a professional's
+// free-text discipline/disciplineOther via disciplineToNeededEnum()
+// (artifacts/api-server/src/lib/verificationRequirements.ts), enforced as
+// a hard filter in surfaceCandidatesForTherapistMatch() (therapist.ts) —
+// resolved, not deferred. Developmental Pediatrician, Psychiatrist, and
+// Rehabilitation Counselling remain unmapped by design (see that
+// function's comment); "not_sure" skips the filter entirely.
 export const therapistDisciplineNeededEnum = pgEnum("therapist_discipline_needed", [
   "occupational_therapy",
   "speech_therapy",
