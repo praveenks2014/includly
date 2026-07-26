@@ -63,11 +63,12 @@ export function FindSpecialistTiles() {
           <span className="w-1.5 h-1.5 rounded-full bg-gray-300" /> No relationship yet
         </span>
       </div>
-      <div className="flex items-center gap-2.5 bg-gray-50 border border-gray-100 rounded-2xl px-3.5 py-2.5">
-        <div className="w-7 h-7 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center shrink-0">
-          <MousePointerClick size={13} />
+      <div className="flex flex-col items-center justify-center gap-2 bg-teal-50/60 border border-dashed border-teal-200 rounded-2xl py-7 px-6 text-center">
+        <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-teal-600">
+          <MousePointerClick size={18} />
         </div>
-        <span className="text-xs text-gray-400">Tap a category above to get started</span>
+        <p className="text-sm font-bold text-[#1A2340]">Tap a category above to get started</p>
+        <p className="text-xs text-gray-400">We'll match you with verified specialists for your child</p>
       </div>
     </div>
   );
