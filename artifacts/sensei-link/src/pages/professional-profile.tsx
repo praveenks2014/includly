@@ -579,6 +579,7 @@ export default function ProfessionalProfilePage() {
                     professionalId={professionalId}
                     professionalName={p.fullName}
                     offersHomeVisits={p.offersHomeVisits}
+                    specialty={p.specialty}
                   />
             )}
 

@@ -1,10 +1,13 @@
 // Relays a parent's reason-for-visit text from the consultation mini-form
 // (Psychiatrist/Developmental Pediatrician/Neurologist category tiles)
-// through to the actual booking step in BookingWidget.tsx, which is where
-// the real "notes" field on POST /sessions/book actually lives. There's no
+// through to the actual booking step in BookingWidgetV2.tsx, which is where
+// the real "notes" field on POST /sessions-v2/book actually lives (every
+// specialty except shadow_teacher renders BookingWidgetV2 on the profile
+// page — see professional-profile.tsx; the plain BookingWidget.tsx/
+// /sessions/book v1 pair is unrelated, only used in forum.tsx). There's no
 // shared component state across the mini-form -> search -> profile ->
-// BookingWidget navigation chain, so sessionStorage is the relay — cleared
-// once consumed or once stale, so it never silently bleeds into an
+// BookingWidgetV2 navigation chain, so sessionStorage is the relay —
+// cleared once consumed or once stale, so it never silently bleeds into an
 // unrelated later booking.
 //
 // Text only, deliberately — a file-upload variant of this (an

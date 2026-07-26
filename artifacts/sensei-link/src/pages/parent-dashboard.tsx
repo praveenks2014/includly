@@ -23,6 +23,7 @@ import { SHOW_TUTOR_SEARCH, SHOW_THERAPIST_SEARCH } from "@/features";
 import { ComingSoon } from "@/components/ComingSoon";
 import { FindSpecialistTiles } from "@/components/FindSpecialistTiles";
 import { ServiceCategoryList } from "@/components/ServiceCategoryList";
+import { ConsultationMiniForm } from "@/components/ConsultationMiniForm";
 import { EngagementProgress } from "@/components/EngagementProgress";
 import { UpiPayQRDialog } from "@/components/UpiPayQRDialog";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
@@ -2692,6 +2693,9 @@ function ServicesTab() {
   if (openKey === "shadow_teacher") return <ShadowTeacherTab />;
   if (openKey === "home_tutor") return <TutorTab />;
   if (openKey === "therapist") return <TherapistTab />;
+  if (openKey === "psychiatrist") return <ConsultationMiniForm specialty="psychiatrist" />;
+  if (openKey === "developmental_pediatrician") return <ConsultationMiniForm specialty="developmental_pediatrician" />;
+  if (openKey === "neurologist") return <ConsultationMiniForm specialty="neurologist" />;
 
   return (
     <div className="space-y-5 pb-4">

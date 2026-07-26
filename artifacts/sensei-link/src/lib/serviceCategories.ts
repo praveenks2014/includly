@@ -247,7 +247,11 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
     },
     psychiatrist: {
       isLive: SHOW_CONSULTATION_TILES && (counts["psychiatrist"] ?? 0) > 0,
-      navigate: () => goToSearch("psychiatrist"),
+      // List View goes straight to search results, unchanged; Icon Grid
+      // expands the consultation mini-form inline first (same /services?open=
+      // mechanism as shadow_teacher/home_tutor/therapist above).
+      navigate: () =>
+        viewMode === "list" ? goToSearch("psychiatrist") : setLocation("/services?open=psychiatrist"),
       comingSoon: {
         icon: Brain,
         title: "Psychiatrist consultations coming soon",
@@ -256,7 +260,10 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
     },
     developmental_pediatrician: {
       isLive: SHOW_CONSULTATION_TILES && (counts["developmental_pediatrician"] ?? 0) > 0,
-      navigate: () => goToSearch("developmental_pediatrician"),
+      navigate: () =>
+        viewMode === "list"
+          ? goToSearch("developmental_pediatrician")
+          : setLocation("/services?open=developmental_pediatrician"),
       comingSoon: {
         icon: Baby,
         title: "Developmental Pediatrician consultations coming soon",
@@ -265,7 +272,8 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
     },
     neurologist: {
       isLive: SHOW_CONSULTATION_TILES && (counts["neurologist"] ?? 0) > 0,
-      navigate: () => goToSearch("neurologist"),
+      navigate: () =>
+        viewMode === "list" ? goToSearch("neurologist") : setLocation("/services?open=neurologist"),
       comingSoon: {
         icon: Activity,
         title: "Neurologist consultations coming soon",

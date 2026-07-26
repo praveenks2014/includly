@@ -25,6 +25,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { fetchWithAuth } from "@/lib/api";
 import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
+import { readPendingConsultationNotes, clearPendingConsultationNotes } from "@/lib/consultationNotes";
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
@@ -45,16 +46,22 @@ export function BookingWidgetV2({
   professionalId,
   professionalName,
   offersHomeVisits,
+  specialty,
 }: {
   professionalId: number;
   professionalName?: string | null;
   offersHomeVisits?: boolean;
+  specialty?: string;
 }) {
   const { toast } = useToast();
   const { data: meData } = useGetMe();
   const [date, setDate] = useState(todayIsoDate());
   const [selectedSlot, setSelectedSlot] = useState<BookableSlot | null>(null);
-  const [notes, setNotes] = useState("");
+  // Pre-fills from the consultation mini-form (Psychiatrist/Developmental
+  // Pediatrician/Neurologist tiles) when the parent arrived via that flow —
+  // see consultationNotes.ts. Absent/expired/mismatched-specialty entries
+  // resolve to "", identical to today's default.
+  const [notes, setNotes] = useState(() => (specialty ? readPendingConsultationNotes(specialty)?.notes ?? "" : ""));
   const [loading, setLoading] = useState(false);
   const [booking, setBooking] = useState<BookingV2Result | null>(null);
   const [step, setStep] = useState<"select" | "requested" | "pay" | "paid">("select");
@@ -81,6 +88,7 @@ export function BookingWidgetV2({
       if (!res.ok) { toast({ title: data.error ?? "Booking failed", variant: "destructive" }); return; }
       setBooking(data as BookingV2Result);
       setStep("requested");
+      if (specialty) clearPendingConsultationNotes();
       toast({ title: "Request sent!", description: "Waiting for the specialist to confirm your slot." });
     } catch {
       toast({ title: "Network error", variant: "destructive" });
