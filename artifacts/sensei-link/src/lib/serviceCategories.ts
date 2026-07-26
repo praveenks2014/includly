@@ -216,12 +216,12 @@ export function useServiceCategoryStatus(): ResolvedServiceCategory[] {
   const resolutions: Record<string, CategoryResolution> = {
     shadow_teacher: {
       isLive: true,
-      navigate: () => setLocation("/shadow-teacher"),
+      navigate: () => setLocation("/services?open=shadow_teacher"),
       comingSoon: { icon: GraduationCap, title: "", description: "" }, // never reached, isLive is always true
     },
     home_tutor: {
       isLive: SHOW_TUTOR_SEARCH,
-      navigate: () => setLocation("/tutor-search"),
+      navigate: () => setLocation("/services?open=home_tutor"),
       comingSoon: {
         icon: NotebookPen,
         title: "Home Tutors coming soon",
@@ -230,7 +230,7 @@ export function useServiceCategoryStatus(): ResolvedServiceCategory[] {
     },
     therapist: {
       isLive: SHOW_THERAPIST_SEARCH,
-      navigate: () => setLocation("/therapist-search"),
+      navigate: () => setLocation("/services?open=therapist"),
       comingSoon: {
         icon: Stethoscope,
         title: "Therapist matching coming soon",
