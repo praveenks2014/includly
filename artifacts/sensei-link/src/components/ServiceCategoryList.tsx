@@ -9,7 +9,7 @@ import { useServiceCategoryStatus, type ComingSoonInfo } from "@/lib/serviceCate
 // any category state itself; that's the exact drift that caused this list
 // to fall out of sync with the tile grid in the first place.
 export function ServiceCategoryList() {
-  const categories = useServiceCategoryStatus();
+  const categories = useServiceCategoryStatus("list");
   const [comingSoon, setComingSoon] = useState<ComingSoonInfo | null>(null);
 
   if (comingSoon) {

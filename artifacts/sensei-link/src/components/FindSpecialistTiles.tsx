@@ -4,7 +4,7 @@ import { ComingSoon } from "@/components/ComingSoon";
 import { useServiceCategoryStatus, type ComingSoonInfo } from "@/lib/serviceCategories";
 
 export function FindSpecialistTiles() {
-  const categories = useServiceCategoryStatus();
+  const categories = useServiceCategoryStatus("tiles");
   const [comingSoon, setComingSoon] = useState<ComingSoonInfo | null>(null);
 
   if (comingSoon) {

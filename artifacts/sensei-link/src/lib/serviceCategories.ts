@@ -151,7 +151,9 @@ export interface ResolvedServiceCategory extends ServiceCategoryMeta {
   onClick: (showComingSoon: (info: ComingSoonInfo) => void) => void;
 }
 
-export function useServiceCategoryStatus(): ResolvedServiceCategory[] {
+export type ServiceCategoryViewMode = "tiles" | "list";
+
+export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): ResolvedServiceCategory[] {
   const [, setLocation] = useLocation();
   const { selectedChildId } = useSelectedChild();
 
@@ -216,12 +218,17 @@ export function useServiceCategoryStatus(): ResolvedServiceCategory[] {
   const resolutions: Record<string, CategoryResolution> = {
     shadow_teacher: {
       isLive: true,
-      navigate: () => setLocation("/services?open=shadow_teacher"),
+      // List View keeps the pre-existing page-navigation behavior;
+      // Icon Grid expands inline on /services. Same category, same
+      // isLive/dot/comingSoon — only the destination differs by mode.
+      navigate: () =>
+        setLocation(viewMode === "list" ? "/shadow-teacher" : "/services?open=shadow_teacher"),
       comingSoon: { icon: GraduationCap, title: "", description: "" }, // never reached, isLive is always true
     },
     home_tutor: {
       isLive: SHOW_TUTOR_SEARCH,
-      navigate: () => setLocation("/services?open=home_tutor"),
+      navigate: () =>
+        setLocation(viewMode === "list" ? "/tutor-search" : "/services?open=home_tutor"),
       comingSoon: {
         icon: NotebookPen,
         title: "Home Tutors coming soon",
@@ -230,7 +237,8 @@ export function useServiceCategoryStatus(): ResolvedServiceCategory[] {
     },
     therapist: {
       isLive: SHOW_THERAPIST_SEARCH,
-      navigate: () => setLocation("/services?open=therapist"),
+      navigate: () =>
+        setLocation(viewMode === "list" ? "/therapist-search" : "/services?open=therapist"),
       comingSoon: {
         icon: Stethoscope,
         title: "Therapist matching coming soon",
