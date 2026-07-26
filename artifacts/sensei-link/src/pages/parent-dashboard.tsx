@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useUser } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -2680,6 +2680,18 @@ function TherapistTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 function ServicesTab() {
   const { data: me } = useGetMe();
+  // Inline expansion for the 3 "live" categories that have a real
+  // engagement/request flow (Shadow Teacher/Home Tutor/Therapist) — set
+  // via useServiceCategoryStatus()'s resolutions in serviceCategories.ts,
+  // which is the only place that decides where a tile's onClick goes.
+  // Neither FindSpecialistTiles nor ServiceCategoryList need to know this
+  // exists; they keep calling onClick exactly as before.
+  const search = useSearch();
+  const openKey = new URLSearchParams(search).get("open");
+
+  if (openKey === "shadow_teacher") return <ShadowTeacherTab />;
+  if (openKey === "home_tutor") return <TutorTab />;
+  if (openKey === "therapist") return <TherapistTab />;
 
   return (
     <div className="space-y-5 pb-4">
