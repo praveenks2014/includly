@@ -2130,6 +2130,30 @@ router.get("/therapist/engagements/:id/payment-confirmations", requireAuth, requ
   res.json(rows);
 });
 
+// ── GET /therapist/engagements/:id/payment-confirmations/parent — parent-
+// only, lists CONFIRMED direct-pay confirmations (confirmedAt IS NOT NULL)
+// — the parent's own confirmed payment history, opposite filter from the
+// professional-facing route above. Read-only, no writes. Same
+// access-check convention (getTherapistEngagementWithAccess), gated to the
+// parent role instead of professional. Only meaningful when this
+// engagement's billingCadence is monthly (per_session engagements track
+// payment on the session rows themselves via paidAt, not this table).
+router.get("/therapist/engagements/:id/payment-confirmations/parent", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { eng, role } = await getTherapistEngagementWithAccess(id, req.userId!, req.userRole!);
+  if (!eng || role !== "parent") { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
+
+  const rows = await db
+    .select()
+    .from(therapistEngagementPaymentConfirmationsTable)
+    .where(and(eq(therapistEngagementPaymentConfirmationsTable.engagementId, id), isNotNull(therapistEngagementPaymentConfirmationsTable.confirmedAt)))
+    .orderBy(desc(therapistEngagementPaymentConfirmationsTable.month));
+
+  res.json(rows);
+});
+
 router.post("/therapist/engagements/:id/payment-confirmations/:confirmationId/confirm-received", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
   const id = parseInt(req.params["id"] as string, 10);
   const confirmationId = parseInt(req.params["confirmationId"] as string, 10);

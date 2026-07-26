@@ -2484,11 +2484,191 @@ function TutorTab() {
     </div>
   );
 }
+interface TherapistEngagementRow {
+  id: number;
+  professionalId: number;
+  childId: number | null;
+  startDate: string;
+  sessionsPerWeek: number;
+  perSessionFeeInr: number;
+  billingCadence: string;
+  status: string;
+  endDate: string | null;
+  endedReason: string | null;
+  startOtp?: string | null;
+  professionalName: string | null;
+  childName: string | null;
+}
+
+interface TherapistEngagementSession {
+  id: number;
+  sessionDate: string;
+  startTime: string | null;
+  status: string;
+  paidAt: string | null;
+}
+
+interface TherapistPaymentConfirmation {
+  id: number;
+  month: string;
+  confirmedAt: string | null;
+}
+
+const THERAPIST_ENGAGEMENT_RELEVANT_STATUSES = [
+  "pending_teacher_acceptance", "pending_activation_fee", "pending_start", "active", "notice_period", "paused", "ended",
+];
+const THERAPIST_STAT_STRIP_STATUSES = ["active", "notice_period", "paused"];
+
+// Mirrors TutorEngagementCard exactly (same narrow scope — status + basic
+// info + start-OTP, not the full daily-log/salary/lifecycle-management
+// suite ShadowTeacherTab has) — no parent-facing engagement card existed
+// for therapist at all before this.
+function TherapistEngagementCard() {
+  const { selectedChildId } = useSelectedChild();
+
+  const { data: engagements = [], isLoading } = useQuery<TherapistEngagementRow[]>({
+    queryKey: ["parent-therapist-engagements"],
+    queryFn: () => fetchWithAuth("/api/therapist/engagements").then(r => r.json()),
+    staleTime: 20_000,
+    refetchInterval: 30_000,
+  });
+
+  const active = engagements.find(e =>
+    THERAPIST_ENGAGEMENT_RELEVANT_STATUSES.includes(e.status) && e.childId === selectedChildId
+  );
+
+  const showStatStrip = !!active && THERAPIST_STAT_STRIP_STATUSES.includes(active.status);
+  const isPerSession = active?.billingCadence === "per_session";
+
+  // Endpoint returns desc(sessionDate) — re-sort ascending here to find the
+  // soonest scheduled session. Also carries paidAt (per-session payment
+  // marking), only meaningful when billingCadence === "per_session".
+  const { data: sessions = [] } = useQuery<TherapistEngagementSession[]>({
+    queryKey: ["therapist-engagement-sessions", active?.id],
+    queryFn: () => fetchWithAuth(`/api/therapist/engagements/${active!.id}/sessions`).then(r => r.json()),
+    enabled: showStatStrip,
+    staleTime: 20_000,
+  });
+  // Only fetched for monthly-cadence engagements — per-session engagements
+  // derive their payment stat from the sessions list's paidAt instead.
+  const { data: confirmations = [] } = useQuery<TherapistPaymentConfirmation[]>({
+    queryKey: ["therapist-engagement-payment-confirmations-parent", active?.id],
+    queryFn: () => fetchWithAuth(`/api/therapist/engagements/${active!.id}/payment-confirmations/parent`).then(r => r.json()),
+    enabled: showStatStrip && !isPerSession,
+    staleTime: 20_000,
+  });
+
+  const nextSession = sessions
+    .filter((s) => s.status === "scheduled")
+    .sort((a, b) => a.sessionDate.localeCompare(b.sessionDate) || (a.startTime ?? "").localeCompare(b.startTime ?? ""))[0];
+  const sessionsCompleted = sessions.filter((s) => s.status === "completed").length;
+  const sessionsPaid = sessions.filter((s) => s.paidAt != null).length;
+
+  if (isLoading || !active) return null;
+
+  const fmtDateLong = (d: string) =>
+    new Date(d + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="font-serif font-bold text-[#1A2340]">Therapist Engagement</p>
+        <span className="text-[10px] px-2.5 py-1 rounded-full font-bold bg-gray-100 text-gray-500 border border-gray-200">
+          {active.status.replace(/_/g, " ")}
+        </span>
+      </div>
+
+      {active.status === "pending_teacher_acceptance" ? (
+        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex items-center gap-2.5">
+          <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+            <Clock size={14} className="text-amber-600" />
+          </div>
+          <p className="text-xs font-bold text-amber-900">Waiting for {active.professionalName ?? "your therapist"} to accept</p>
+        </div>
+      ) : active.status === "pending_activation_fee" ? (
+        <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 flex items-center gap-2.5">
+          <div className="w-8 h-8 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
+            <Clock size={14} className="text-orange-600" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-orange-900">Waiting for the therapist to pay the activation fee</p>
+            <p className="text-[11px] text-orange-600 mt-0.5">You'll be notified once the engagement is ready to start</p>
+          </div>
+        </div>
+      ) : active.status === "pending_start" ? (
+        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+              <Clock size={14} className="text-amber-600" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-amber-900">Waiting for therapist to confirm start</p>
+              <p className="text-[11px] text-amber-600 mt-0.5">
+                Share the code on <span className="font-semibold">{fmtDateLong(active.startDate)}</span>
+              </p>
+            </div>
+          </div>
+          {active.startOtp ? (
+            <div className="bg-white border border-amber-200 rounded-2xl p-5 text-center space-y-2 shadow-inner">
+              <p className="text-[10px] font-bold text-amber-500 uppercase tracking-[0.18em]">Start Code</p>
+              <p className="text-4xl font-mono font-bold tracking-[0.35em] text-[#1A2340] select-all py-1">{active.startOtp}</p>
+              <p className="text-[10px] text-amber-600 font-medium">Show this to your therapist — do not share publicly</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl px-4 py-3 border border-amber-100">
+              <p className="text-xs text-amber-700">
+                Your start code will appear here on <span className="font-semibold">{fmtDateLong(active.startDate)}</span>.
+              </p>
+            </div>
+          )}
+        </div>
+      ) : active.status === "ended" ? (
+        <p className="text-xs text-gray-500">
+          This engagement ended{active.endDate ? ` on ${fmtDateLong(active.endDate)}` : ""}{active.endedReason ? ` — ${active.endedReason}` : ""}.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <div className="text-sm">
+            <p className="font-semibold text-[#1A2340]">{active.professionalName ?? "Your therapist"}</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {active.sessionsPerWeek}x/week · ₹{active.perSessionFeeInr.toLocaleString("en-IN")}/session
+            </p>
+          </div>
+          {/* No Total Logs cell — no daily-logs table for this vertical.
+              Payment cell branches on billingCadence: per-session
+              engagements have a real paidAt marker on each session row;
+              monthly engagements use the same confirmed-payments pattern
+              as tutor. */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-teal-50/60 border border-teal-100 rounded-2xl p-3">
+              <p className="text-[9px] font-bold text-teal-600 uppercase tracking-[0.08em]">Next Session</p>
+              <p className="text-sm font-bold text-[#1A2340] mt-1">
+                {nextSession ? fmtDateLong(nextSession.sessionDate) : "—"}
+              </p>
+            </div>
+            <div className="bg-violet-50/60 border border-violet-100 rounded-2xl p-3">
+              <p className="text-[9px] font-bold text-violet-600 uppercase tracking-[0.08em]">Sessions Completed</p>
+              <p className="text-sm font-bold text-[#1A2340] mt-1">{sessionsCompleted}</p>
+            </div>
+            <div className="bg-sky-50/60 border border-sky-100 rounded-2xl p-3 col-span-2">
+              <p className="text-[9px] font-bold text-sky-600 uppercase tracking-[0.08em]">
+                {isPerSession ? "Sessions Paid" : "Payments Confirmed"}
+              </p>
+              <p className="text-sm font-bold text-[#1A2340] mt-1">{isPerSession ? sessionsPaid : confirmations.length}</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TherapistTab() {
   const { selectedChildId } = useSelectedChild();
   return (
     <div className="space-y-5 pb-4">
       {backToServicesLink}
+      <TherapistEngagementCard key={`engagement-${selectedChildId ?? "no-child"}`} />
       <TherapistRequestWidget key={selectedChildId ?? "no-child"} />
     </div>
   );
