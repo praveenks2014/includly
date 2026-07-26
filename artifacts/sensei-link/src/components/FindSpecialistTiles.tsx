@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, MousePointerClick } from "lucide-react";
 import { ComingSoon } from "@/components/ComingSoon";
 import { useServiceCategoryStatus, type ComingSoonInfo } from "@/lib/serviceCategories";
 
@@ -62,6 +62,12 @@ export function FindSpecialistTiles() {
         <span className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-gray-300" /> No relationship yet
         </span>
+      </div>
+      <div className="flex items-center gap-2.5 bg-gray-50 border border-gray-100 rounded-2xl px-3.5 py-2.5">
+        <div className="w-7 h-7 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center shrink-0">
+          <MousePointerClick size={13} />
+        </div>
+        <span className="text-xs text-gray-400">Tap a category above to get started</span>
       </div>
     </div>
   );
