@@ -18,6 +18,7 @@ import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { sendPushNotification, createInAppNotification } from "../lib/notificationService";
 import { creditWallet } from "../lib/ledger";
 import { onProfessionalBecameEligible } from "../lib/candidateRefresh";
+import { checkRecurringScheduleConflict } from "../lib/recurringSchedule";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -665,6 +666,14 @@ router.patch("/engagements/:id/teacher-acceptance", requireAuth, async (req, res
   if (role !== "teacher") { res.status(403).json({ error: "Only the assigned teacher can accept or decline" }); return; }
   if (eng.status !== "pending_teacher_acceptance") {
     res.status(409).json({ error: "Engagement is not awaiting teacher acceptance" }); return;
+  }
+
+  if (action === "accept" && recurringSchedule) {
+    const conflict = await checkRecurringScheduleConflict(eng.professionalId, recurringSchedule, {
+      vertical: "shadow_teacher",
+      engagementId: id,
+    });
+    if (conflict) { res.status(409).json({ error: conflict }); return; }
   }
 
   if (action === "accept" && eng.platformSalaryEnabled === false) {

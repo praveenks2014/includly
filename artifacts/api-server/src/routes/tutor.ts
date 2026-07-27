@@ -28,7 +28,7 @@ import { createInAppNotification } from "../lib/notificationService";
 import { generateOtp } from "../lib/otp";
 import { isOfferingListable } from "../lib/verificationRequirements";
 import { creditWallet } from "../lib/ledger";
-import { RecurringScheduleSlot } from "../lib/recurringSchedule";
+import { RecurringScheduleSlot, checkRecurringScheduleConflict } from "../lib/recurringSchedule";
 import { resolveOffering } from "../lib/offeringResolver";
 import { SHOW_TUTOR_SEARCH } from "../lib/features";
 import { resolveOverdueTutorConfirmations } from "../lib/paymentConfirmationResolver";
@@ -1577,6 +1577,14 @@ router.patch("/tutor/engagements/:id/acceptance", requireAuth, async (req: Reque
   if (!eng || !role) { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
   if (role !== "professional") { res.status(403).json({ error: "Only the assigned tutor can accept or decline" }); return; }
   if (eng.status !== "pending_teacher_acceptance") { res.status(409).json({ error: "Engagement is not awaiting acceptance" }); return; }
+
+  if (action === "accept" && recurringSchedule) {
+    const conflict = await checkRecurringScheduleConflict(eng.professionalId, recurringSchedule, {
+      vertical: "tutor",
+      engagementId: id,
+    });
+    if (conflict) { res.status(409).json({ error: conflict }); return; }
+  }
 
   // Direct-pay gate — teacher-side, so the parent is never trapped. Same
   // shape as shadow-teacher's platformSalaryEnabled===false check in
