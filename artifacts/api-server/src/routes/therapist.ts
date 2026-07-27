@@ -26,6 +26,7 @@ import { createInAppNotification } from "../lib/notificationService";
 import { generateOtp } from "../lib/otp";
 import { isOfferingListable, disciplineToNeededEnum } from "../lib/verificationRequirements";
 import { creditWallet } from "../lib/ledger";
+import { RecurringScheduleSlot } from "../lib/recurringSchedule";
 import { resolveOffering } from "../lib/offeringResolver";
 import { SHOW_THERAPIST_SEARCH } from "../lib/features";
 import { resolveOverdueTherapistConfirmations } from "../lib/paymentConfirmationResolver";
@@ -1606,6 +1607,11 @@ router.get("/therapist/engagements", requireAuth, async (req: Request, res: Resp
   res.json(rows);
 });
 
+const TherapistAcceptanceBody = z.object({
+  action: z.enum(["accept", "decline"]),
+  recurringSchedule: z.array(RecurringScheduleSlot).min(1).optional(),
+});
+
 // ── PATCH /therapist/engagements/:id/acceptance — therapist accepts or declines ─
 // Mirrors lifecycleRequests.ts's PATCH /engagements/:id/teacher-acceptance
 // exactly, minus the negotiation-offer void (tutor/therapist have no
@@ -1614,8 +1620,13 @@ router.get("/therapist/engagements", requireAuth, async (req: Request, res: Resp
 router.patch("/therapist/engagements/:id/acceptance", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const id = parseInt(req.params["id"] as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const { action } = req.body ?? {};
-  if (!["accept", "decline"].includes(action as string)) { res.status(400).json({ error: "action must be accept or decline" }); return; }
+
+  const parsed = TherapistAcceptanceBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { action, recurringSchedule } = parsed.data;
+  if (action === "accept" && (!recurringSchedule || recurringSchedule.length === 0)) {
+    res.status(400).json({ error: "recurringSchedule is required to accept this engagement" }); return;
+  }
 
   const { eng, role } = await getTherapistEngagementWithAccess(id, req.userId!, req.userRole!);
   if (!eng || !role) { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
@@ -1660,7 +1671,12 @@ router.patch("/therapist/engagements/:id/acceptance", requireAuth, async (req: R
 
     await db
       .update(therapistEngagementsTable)
-      .set({ status: nextStatus, activationFeeInr: activationFeeInr > 0 ? activationFeeInr : null, updatedAt: new Date() })
+      .set({
+        status: nextStatus,
+        activationFeeInr: activationFeeInr > 0 ? activationFeeInr : null,
+        recurringScheduleJson: recurringSchedule,
+        updatedAt: new Date(),
+      })
       .where(eq(therapistEngagementsTable.id, id));
 
     void createInAppNotification(eng.parentId, {
