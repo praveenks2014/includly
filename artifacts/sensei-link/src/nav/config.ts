@@ -56,6 +56,7 @@ export const NAV: Record<Exclude<Role, "admin">, NavItem[]> = {
     tab("Home", Home, "/home"),
     tab("Services", Layers, "/services"),
     tab("Progress", LineChart, "/progress"),
+    tab("Bookings", CalendarCheck, "/bookings"),
     tab("Inbox", MessageSquare, "/inbox", "unreadMessages"),
     { ...tab("Community", Users, "/community"), mobileHidden: true },
     { ...tab("Resources", BookOpen, "/resources"), mobileHidden: true, comingSoon: true },

@@ -22,7 +22,7 @@ import {
   bookingPayoutsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
-import { sendPushNotification } from "../lib/notificationService";
+import { createInAppNotification } from "../lib/notificationService";
 import { z } from "zod/v4";
 
 const router: IRouter = Router();
@@ -119,7 +119,13 @@ router.post("/sessions-v2/book", requireAuth, requireRole("parent"), async (req:
 
   // Notify professional
   if (prof.userId) {
-    void sendPushNotification(prof.userId, "New booking request", "A parent has requested a session with you.").catch(() => {});
+    void createInAppNotification(prof.userId, {
+      type: "session_requested",
+      title: "New booking request",
+      body: "A parent has requested a session with you.",
+      relatedType: "session_booking",
+      relatedId: booking.id,
+    }).catch(() => {});
   }
 
   res.status(201).json({
@@ -155,7 +161,13 @@ router.patch("/sessions-v2/:id/confirm", requireAuth, requireRole("professional"
     .returning();
 
   // Notify parent: please pay
-  void sendPushNotification(booking.parentId, "Session confirmed — pay to secure your slot", "Your specialist confirmed your request. Complete payment now.").catch(() => {});
+  void createInAppNotification(booking.parentId, {
+    type: "session_confirmed_by_pro",
+    title: "Session confirmed — pay to secure your slot",
+    body: "Your specialist confirmed your request. Complete payment now.",
+    relatedType: "session_booking",
+    relatedId: id,
+  }).catch(() => {});
 
   res.json(updated);
 });
@@ -183,7 +195,13 @@ router.patch("/sessions-v2/:id/reject", requireAuth, requireRole("professional")
     .where(eq(sessionBookingsTable.id, id))
     .returning();
 
-  void sendPushNotification(booking.parentId, "Session request declined", "Your specialist was unable to take this slot. Try another time.").catch(() => {});
+  void createInAppNotification(booking.parentId, {
+    type: "session_declined",
+    title: "Session request declined",
+    body: "Your specialist was unable to take this slot. Try another time.",
+    relatedType: "session_booking",
+    relatedId: id,
+  }).catch(() => {});
 
   res.json(updated);
 });
@@ -281,7 +299,13 @@ router.post("/sessions-v2/:id/verify-payment", requireAuth, requireRole("parent"
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.id, booking.professionalId));
   if (prof?.userId) {
-    void sendPushNotification(prof.userId, "Payment received — session confirmed", "The parent has paid. Session is locked in.").catch(() => {});
+    void createInAppNotification(prof.userId, {
+      type: "session_paid",
+      title: "Payment received — session confirmed",
+      body: "The parent has paid. Session is locked in.",
+      relatedType: "session_booking",
+      relatedId: id,
+    }).catch(() => {});
   }
 
   res.json(updated);
@@ -337,7 +361,13 @@ router.post("/sessions-v2/:id/start-otp", requireAuth, requireRole("professional
         otpAttempts: newAttempts, otpLockedAt: now, updatedAt: now,
       }).where(eq(sessionBookingsTable.id, id));
       // Alert admin
-      void sendPushNotification(booking.parentId, "OTP locked — admin alerted", "Too many wrong OTP attempts. Admin has been notified.").catch(() => {});
+      void createInAppNotification(booking.parentId, {
+        type: "session_otp_locked",
+        title: "OTP locked — admin alerted",
+        body: "Too many wrong OTP attempts. Admin has been notified.",
+        relatedType: "session_booking",
+        relatedId: id,
+      }).catch(() => {});
       res.status(403).json({ error: "Too many failed attempts — OTP locked. Admin has been alerted." });
       return;
     }
@@ -398,7 +428,13 @@ router.post("/sessions-v2/:id/end-otp", requireAuth, requireRole("professional")
     .returning();
 
   // Notify admin that this booking is ready to release
-  void sendPushNotification(booking.parentId, "Session complete!", "Your session has been marked complete. Payment will be released to the professional shortly.").catch(() => {});
+  void createInAppNotification(booking.parentId, {
+    type: "session_completed",
+    title: "Session complete!",
+    body: "Your session has been marked complete. Payment will be released to the professional shortly.",
+    relatedType: "session_booking",
+    relatedId: id,
+  }).catch(() => {});
 
   res.json(updated);
 });
@@ -535,7 +571,13 @@ export async function runAutoCancelJob(): Promise<void> {
       await db.update(sessionBookingsTable)
         .set({ status: "cancelled", updatedAt: new Date() })
         .where(eq(sessionBookingsTable.id, b.id));
-      void sendPushNotification(b.parentId, "Session auto-cancelled", "Your session was cancelled because payment was not completed within the allowed window.").catch(() => {});
+      void createInAppNotification(b.parentId, {
+        type: "session_auto_cancelled",
+        title: "Session auto-cancelled",
+        body: "Your session was cancelled because payment was not completed within the allowed window.",
+        relatedType: "session_booking",
+        relatedId: b.id,
+      }).catch(() => {});
     }
     if (stale.length > 0) {
       console.log(`[AutoCancel] Cancelled ${stale.length} stale bookings`);

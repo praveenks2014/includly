@@ -392,6 +392,13 @@ function ChatModal({ professionalId, professionalName, threadId, childName, onCl
   );
 }
 
+// Shared with BookingsTab below — a one-off session booking counts as
+// "active" (upcoming/awaiting action) at any of these statuses, not just
+// once it's fully confirmed. Previously HomeTab's own copy only included
+// confirmed/pending_payment, so a booking still awaiting the professional's
+// confirmation never surfaced on the Home card pointing back to Bookings.
+const SESSION_ACTIVE_STATUSES = ["confirmed", "pending_payment", "requested", "confirmed_by_pro", "paid_held", "session_started"];
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: HOME
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -455,7 +462,7 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
 
   // Upcoming sessions → Bookings destination.
   const upcoming = (sessions ?? [])
-    .filter((s) => ["confirmed", "pending_payment"].includes(s.status) && new Date(s.bookedDate) >= new Date())
+    .filter((s) => SESSION_ACTIVE_STATUSES.includes(s.status) && new Date(s.bookedDate) >= new Date())
     .sort((a, b) => new Date(a.bookedDate).getTime() - new Date(b.bookedDate).getTime());
   const nextSession = upcoming[0];
 
@@ -803,9 +810,8 @@ function BookingsTab() {
   const [bookingTab, setBookingTab] = useState<"upcoming" | "past">("upcoming");
 
   const now = new Date();
-  const ACTIVE_STATUSES = ["confirmed", "pending_payment", "requested", "confirmed_by_pro", "paid_held", "session_started"];
   const upcoming = (sessions ?? [])
-    .filter((s) => ACTIVE_STATUSES.includes(s.status) && new Date(s.bookedDate) >= now)
+    .filter((s) => SESSION_ACTIVE_STATUSES.includes(s.status) && new Date(s.bookedDate) >= now)
     .sort((a, b) => new Date(a.bookedDate).getTime() - new Date(b.bookedDate).getTime());
   const past = (sessions ?? [])
     .filter((s) => !upcoming.find((u) => u.id === s.id))
