@@ -28,6 +28,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShadowMatchChatDrawer } from "./ShadowMatchChatDrawer";
 import { UpiPayQRDialog } from "./UpiPayQRDialog";
 import { TermsAcknowledgment } from "./TermsAcknowledgment";
+import { formatRecurringScheduleSummary } from "@/lib/recurringSchedule";
 import { SchoolAutocomplete } from "./SchoolAutocomplete";
 import { ProfessionalAvatar } from "./ProfessionalAvatar";
 import { useGetMe } from "@workspace/api-client-react";
@@ -208,25 +209,6 @@ interface NegotiationOffer {
   availableDuringBreaks: boolean;
   status: string;
   createdAt: string;
-}
-
-// #14/#15 reorder — read-only schedule display for the parent's Confirm
-// Engagement step (the teacher already set this at choose-engagement time;
-// the parent isn't editing it, just reviewing it). Local to this file rather
-// than shared with professional-dashboard.tsx's own formatScheduleSummary,
-// matching this codebase's established per-file duplication convention.
-const CONFIRM_DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-function formatRecurringScheduleSummary(slots: { dayOfWeek: number; startTime: string; endTime: string }[] | null): string | null {
-  if (!slots || slots.length === 0) return null;
-  function fmtTime(t: string) {
-    const [h, m] = t.split(":");
-    const hr = Number(h);
-    return `${hr % 12 || 12}:${m} ${hr < 12 ? "AM" : "PM"}`;
-  }
-  return [...slots]
-    .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startTime.localeCompare(b.startTime))
-    .map((s) => `${CONFIRM_DAYS_SHORT[s.dayOfWeek]} ${fmtTime(s.startTime)}–${fmtTime(s.endTime)}`)
-    .join(", ");
 }
 
 const PARENT_DECLINE_REASONS: { value: string; label: string }[] = [

@@ -25,6 +25,7 @@ import { FindSpecialistTiles } from "@/components/FindSpecialistTiles";
 import { ServiceCategoryList } from "@/components/ServiceCategoryList";
 import { ConsultationMiniForm } from "@/components/ConsultationMiniForm";
 import { CoachActivityForm } from "@/components/CoachActivityForm";
+import { type RecurringScheduleSlot, nextSessionFromSchedule } from "@/lib/recurringSchedule";
 import { EngagementProgress } from "@/components/EngagementProgress";
 import { UpiPayQRDialog } from "@/components/UpiPayQRDialog";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
@@ -1208,45 +1209,6 @@ function ReRequestSheet({
   );
 }
 
-const RECURRING_DAY_ABBREV = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function formatTime12h(t: string): string {
-  const [h, m] = t.split(":").map(Number);
-  const period = h >= 12 ? "PM" : "AM";
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
-}
-
-// Computes the next occurrence (from now) of a teacher's accepted weekly
-// recurring schedule — no existing utility does this;
-// formatRecurringScheduleSummary (ShadowTeacherRequestWidget.tsx) only lists
-// every slot, it never picks out which one is next.
-function nextSessionFromSchedule(
-  slots: { dayOfWeek: number; startTime: string; endTime: string }[] | null | undefined,
-): string | null {
-  if (!slots || slots.length === 0) return null;
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const todayDow = now.getDay();
-
-  let best: { daysAhead: number; startTime: string } | null = null;
-  for (const slot of slots) {
-    const [sh, sm] = slot.startTime.split(":").map(Number);
-    const slotMinutes = sh * 60 + sm;
-    let daysAhead = (slot.dayOfWeek - todayDow + 7) % 7;
-    if (daysAhead === 0 && slotMinutes <= nowMinutes) daysAhead = 7; // today's slot already passed
-    if (!best || daysAhead < best.daysAhead || (daysAhead === best.daysAhead && slot.startTime < best.startTime)) {
-      best = { daysAhead, startTime: slot.startTime };
-    }
-  }
-  if (!best) return null;
-
-  if (best.daysAhead === 0) return `Today, ${formatTime12h(best.startTime)}`;
-  if (best.daysAhead === 1) return `Tomorrow, ${formatTime12h(best.startTime)}`;
-  const targetDow = (todayDow + best.daysAhead) % 7;
-  return `${RECURRING_DAY_ABBREV[targetDow]}, ${formatTime12h(best.startTime)}`;
-}
-
 function ShadowTeacherTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1270,7 +1232,7 @@ function ShadowTeacherTab() {
     endDate?: string | null;
     endedReason?: string | null;
     platformSalaryEnabled?: boolean;
-    recurringScheduleJson?: { dayOfWeek: number; startTime: string; endTime: string }[] | null;
+    recurringScheduleJson?: RecurringScheduleSlot[] | null;
   }
   interface DailyLog {
     id: number;
