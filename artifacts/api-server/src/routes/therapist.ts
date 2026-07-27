@@ -1559,6 +1559,7 @@ router.get("/therapist/engagements", requireAuth, async (req: Request, res: Resp
         placementFeeInr: therapistEngagementsTable.placementFeeInr,
         activationFeeInr: therapistEngagementsTable.activationFeeInr,
         startOtp: therapistEngagementsTable.startOtp,
+        recurringScheduleJson: therapistEngagementsTable.recurringScheduleJson,
         professionalName: professionalProfilesTable.fullName,
         childName: childrenTable.name,
         createdAt: therapistEngagementsTable.createdAt,

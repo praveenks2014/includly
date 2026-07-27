@@ -25,7 +25,7 @@ import { FindSpecialistTiles } from "@/components/FindSpecialistTiles";
 import { ServiceCategoryList } from "@/components/ServiceCategoryList";
 import { ConsultationMiniForm } from "@/components/ConsultationMiniForm";
 import { CoachActivityForm } from "@/components/CoachActivityForm";
-import { type RecurringScheduleSlot, nextSessionFromSchedule } from "@/lib/recurringSchedule";
+import { type RecurringScheduleSlot, nextSessionFromSchedule, formatRecurringScheduleSummary } from "@/lib/recurringSchedule";
 import { EngagementProgress } from "@/components/EngagementProgress";
 import { UpiPayQRDialog } from "@/components/UpiPayQRDialog";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
@@ -2284,6 +2284,7 @@ interface TutorEngagementRow {
   endDate: string | null;
   endedReason: string | null;
   startOtp?: string | null;
+  recurringScheduleJson?: RecurringScheduleSlot[] | null;
   professionalName: string | null;
   childName: string | null;
 }
@@ -2419,10 +2420,18 @@ function TutorEngagementCard() {
             <p className="text-xs text-gray-400 mt-0.5">
               {active.sessionsPerWeek}x/week · ₹{active.perSessionFeeInr.toLocaleString("en-IN")}/session
             </p>
+            {formatRecurringScheduleSummary(active.recurringScheduleJson) && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                Weekly commitment: {formatRecurringScheduleSummary(active.recurringScheduleJson)}
+              </p>
+            )}
           </div>
           {/* No Total Logs / Payments Made cells here — that data doesn't
               exist for tutor (no daily-logs table, no per-session paid
-              marker at all for this vertical, by design). */}
+              marker at all for this vertical, by design). Next Session
+              stays derived from real scheduled sessions (more concrete
+              than the agreed pattern) — the commitment line above is
+              supplementary, not a replacement for that stat. */}
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-teal-50/60 border border-teal-100 rounded-2xl p-3">
               <p className="text-[9px] font-bold text-teal-600 uppercase tracking-[0.08em]">Next Session</p>
@@ -2467,6 +2476,7 @@ interface TherapistEngagementRow {
   endDate: string | null;
   endedReason: string | null;
   startOtp?: string | null;
+  recurringScheduleJson?: RecurringScheduleSlot[] | null;
   professionalName: string | null;
   childName: string | null;
 }
@@ -2604,12 +2614,19 @@ function TherapistEngagementCard() {
             <p className="text-xs text-gray-400 mt-0.5">
               {active.sessionsPerWeek}x/week · ₹{active.perSessionFeeInr.toLocaleString("en-IN")}/session
             </p>
+            {formatRecurringScheduleSummary(active.recurringScheduleJson) && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                Weekly commitment: {formatRecurringScheduleSummary(active.recurringScheduleJson)}
+              </p>
+            )}
           </div>
           {/* No Total Logs cell — no daily-logs table for this vertical.
               Payment cell branches on billingCadence: per-session
               engagements have a real paidAt marker on each session row;
               monthly engagements use the same confirmed-payments pattern
-              as tutor. */}
+              as tutor. Next Session stays derived from real scheduled
+              sessions (more concrete than the agreed pattern) — the
+              commitment line above is supplementary, not a replacement. */}
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-teal-50/60 border border-teal-100 rounded-2xl p-3">
               <p className="text-[9px] font-bold text-teal-600 uppercase tracking-[0.08em]">Next Session</p>

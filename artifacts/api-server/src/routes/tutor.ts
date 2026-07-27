@@ -1504,6 +1504,7 @@ router.get("/tutor/engagements", requireAuth, async (req: Request, res: Response
         placementFeeInr: tutorEngagementsTable.placementFeeInr,
         activationFeeInr: tutorEngagementsTable.activationFeeInr,
         startOtp: tutorEngagementsTable.startOtp,
+        recurringScheduleJson: tutorEngagementsTable.recurringScheduleJson,
         professionalName: professionalProfilesTable.fullName,
         childName: childrenTable.name,
         createdAt: tutorEngagementsTable.createdAt,
