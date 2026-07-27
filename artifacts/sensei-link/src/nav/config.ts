@@ -13,6 +13,7 @@ import {
   BookOpen,
   Sparkles,
   ClipboardList,
+  CalendarCheck,
 } from "lucide-react";
 import { SHOW_TUTOR_SEARCH, SHOW_THERAPIST_SEARCH } from "@/features";
 
@@ -63,6 +64,10 @@ export const NAV: Record<Exclude<Role, "admin">, NavItem[]> = {
   professional: [
     tab("Today", LayoutDashboard, "/pro/today", "pendingRequests"),
     tab("Calendar", CalendarDays, "/pro/calendar"),
+    // Confirm/reject one-off session bookings (assessments, tutor/therapist
+    // interview sessions, consultation/coach bookings) — BookingsTab already
+    // existed but had no route or nav entry pointing at it at all.
+    tab("Bookings", CalendarCheck, "/pro/bookings"),
     { ...tab("Clients", Users, "/pro/clients"), comingSoon: true },
     tab("Inbox", MessageSquare, "/pro/inbox", "unreadMessages"),
     tab("Earnings", Wallet, "/pro/earnings"),

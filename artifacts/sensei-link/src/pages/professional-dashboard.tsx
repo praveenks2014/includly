@@ -4953,6 +4953,7 @@ export default function ProfessionalDashboard() {
 
   const [activeTab, setActiveTab] = useState<ProTab>(() => {
     if (loc.startsWith("/pro/calendar"))    return "availability";
+    if (loc.startsWith("/pro/bookings"))    return "bookings";
     if (loc.startsWith("/pro/inbox"))       return "messages";
     if (loc.startsWith("/pro/earnings"))    return "earnings";
     if (loc.startsWith("/pro/enquiries"))   return "enquiries";
@@ -4962,6 +4963,7 @@ export default function ProfessionalDashboard() {
   });
   useEffect(() => {
     if (loc.startsWith("/pro/calendar"))             setActiveTab("availability");
+    else if (loc.startsWith("/pro/bookings"))        setActiveTab("bookings");
     else if (loc.startsWith("/pro/inbox"))           setActiveTab("messages");
     else if (loc.startsWith("/pro/earnings"))        setActiveTab("earnings");
     else if (loc.startsWith("/pro/enquiries"))       setActiveTab("enquiries");

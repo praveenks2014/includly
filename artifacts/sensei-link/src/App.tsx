@@ -506,6 +506,15 @@ function Router() {
             </RequireRole>
           </RequireAuth>
         </Route>
+        <Route path="/pro/bookings">
+          <RequireAuth>
+            <RequireRole allow={["professional"]}>
+              <AppShell>
+                <ProfessionalDashboard />
+              </AppShell>
+            </RequireRole>
+          </RequireAuth>
+        </Route>
         <Route path="/pro/clients/:childId?">
           <RequireAuth>
             <RequireRole allow={["professional"]}>
