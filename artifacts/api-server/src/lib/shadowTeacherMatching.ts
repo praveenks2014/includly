@@ -73,6 +73,36 @@ export async function filterBySchoolHours(
     }
   }
 
+  // Tutor/therapist's own agreed weekly commitment (recurringScheduleJson) —
+  // same exclusion as shadow-teacher's ownEngagements above, now that these
+  // two verticals also capture a recurring pattern (previously only their
+  // individually-scheduled sessions, checked below, were considered).
+  const [tutorRecurring, therapistRecurring] = await Promise.all([
+    db
+      .select({ professionalId: tutorEngagementsTable.professionalId, recurringScheduleJson: tutorEngagementsTable.recurringScheduleJson })
+      .from(tutorEngagementsTable)
+      .where(and(
+        inArray(tutorEngagementsTable.professionalId, proIds),
+        sql`${tutorEngagementsTable.status} != 'ended'`,
+      )),
+    db
+      .select({ professionalId: therapistEngagementsTable.professionalId, recurringScheduleJson: therapistEngagementsTable.recurringScheduleJson })
+      .from(therapistEngagementsTable)
+      .where(and(
+        inArray(therapistEngagementsTable.professionalId, proIds),
+        sql`${therapistEngagementsTable.status} != 'ended'`,
+      )),
+  ]);
+  for (const eng of [...tutorRecurring, ...therapistRecurring]) {
+    const slots = (eng.recurringScheduleJson as { dayOfWeek: number; startTime: string; endTime: string }[] | null) ?? [];
+    for (const s of slots) {
+      if (s.dayOfWeek >= 1 && s.dayOfWeek <= 5 && overlaps(s.startTime, s.endTime, schoolStart, schoolEnd)) {
+        overlapIds.add(eng.professionalId);
+        break;
+      }
+    }
+  }
+
   const [tutorSessions, therapistSessions, bookings] = await Promise.all([
     db
       .select({ professionalId: tutorEngagementsTable.professionalId, date: tutorEngagementSessionsTable.sessionDate, startTime: tutorEngagementSessionsTable.startTime, endTime: tutorEngagementSessionsTable.endTime })
