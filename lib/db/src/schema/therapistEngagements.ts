@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -46,6 +46,14 @@ export const therapistEngagementsTable = pgTable("therapist_engagements", {
   // compliance rationale). true = direct-pay (default); false = collected
   // via Razorpay instead of direct UPI.
   directPayEnabled: boolean("direct_pay_enabled").notNull().default(true),
+  // Block-only weekly commitment, captured from the THERAPIST at accept time
+  // — same shape and rationale as shadow_teacher_engagements.recurringScheduleJson.
+  // Individual sessions are still scheduled one at a time in
+  // therapist_engagement_sessions; this column is for the agreed commitment
+  // used in candidate-matching exclusion and parent-facing display, not for
+  // auto-generating session rows. Shape: { dayOfWeek: 0-6, startTime: "HH:MM",
+  // endTime: "HH:MM" }[]
+  recurringScheduleJson: jsonb("recurring_schedule_json"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
