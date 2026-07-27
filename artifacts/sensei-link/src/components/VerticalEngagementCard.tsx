@@ -25,6 +25,8 @@ import { loadRazorpayScript } from "@/lib/razorpay";
 import { AntiBypassNotice } from "./AntiBypassNotice";
 import { Loader2, IndianRupee, CheckCircle2, Video } from "lucide-react";
 import type { Vertical } from "./VerticalRequestWidget";
+import { RecurringScheduleEditor } from "./RecurringScheduleEditor";
+import { type RecurringScheduleSlot } from "@/lib/recurringSchedule";
 
 const API_BASE: Record<Vertical, string> = { tutor: "/api/tutor", therapist: "/api/therapist" };
 
@@ -84,6 +86,7 @@ function AcceptanceSection({ vertical, eng, onUpdated }: { vertical: Vertical; e
   const { toast } = useToast();
   const [checked, setChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [schedule, setSchedule] = useState<RecurringScheduleSlot[]>([]);
 
   if (eng.status !== "pending_teacher_acceptance") return null;
 
@@ -93,7 +96,7 @@ function AcceptanceSection({ vertical, eng, onUpdated }: { vertical: Vertical; e
       const res = await fetchWithAuth(`${API_BASE[vertical]}/engagements/${eng.id}/acceptance`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify(action === "accept" ? { action, recurringSchedule: schedule } : { action }),
       });
       if (!res.ok) {
         const e = await res.json() as { error?: string; message?: string };
@@ -112,6 +115,7 @@ function AcceptanceSection({ vertical, eng, onUpdated }: { vertical: Vertical; e
         {eng.parentName ?? "A parent"} has committed to an engagement with you
         {eng.childName ? ` for ${eng.childName}` : ""}, starting {eng.startDate}.
       </p>
+      <RecurringScheduleEditor slots={schedule} onChange={setSchedule} />
       <AntiBypassNotice
         professionalLabel={vertical}
         benefits={ANTI_BYPASS_BENEFITS[vertical]}
@@ -123,7 +127,7 @@ function AcceptanceSection({ vertical, eng, onUpdated }: { vertical: Vertical; e
         <Button
           size="sm"
           onClick={() => void respond("accept")}
-          disabled={submitting || !checked}
+          disabled={submitting || !checked || schedule.length === 0}
           className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs h-8 rounded-xl"
         >
           {submitting ? <Loader2 size={12} className="animate-spin" /> : null}
