@@ -10,6 +10,7 @@ import {
   professionalProfilesTable,
   usersTable,
   sessionNotesTable,
+  slotsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { generateOtp } from "../lib/otp";
@@ -37,19 +38,6 @@ function getSessionCommission(specialty: string): number {
   if (specialty === "therapy_centre") return 149;
   if (specialty === "psychiatrist" || specialty === "neurologist") return 99;
   return 49;
-}
-
-function addMinutes(time: string, minutes: number): string {
-  const [h, m] = time.split(":").map(Number);
-  const total = h * 60 + m + minutes;
-  const hh = Math.floor(total / 60) % 24;
-  const mm = total % 60;
-  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-}
-
-function timeToMinutes(time: string): number {
-  const [h, m] = time.split(":").map(Number);
-  return h * 60 + m;
 }
 
 router.get("/sessions/availability", requireAuth, requireRole("professional", "admin"), async (req: Request, res: Response): Promise<void> => {
@@ -134,17 +122,20 @@ router.get("/professionals/:id/bookable-slots", async (req: Request, res: Respon
     return;
   }
 
-  const date = new Date(dateStr + "T00:00:00Z");
-  const dayOfWeek = date.getUTCDay();
-
-  const availSlots = await db
+  // Base candidate set: materialized slots the generation job already
+  // confirmed, AT GENERATION TIME, didn't overlap a recurring commitment
+  // or individually-scheduled session (lib/slotGeneration.ts). Same
+  // response shape as before this migration — no change needed in any of
+  // the 3 frontend consumers (AssessmentBookingModal, VerticalRequestWidget,
+  // BookingWidgetV2).
+  const openSlots = await db
     .select()
-    .from(professionalAvailabilityTable)
+    .from(slotsTable)
     .where(
       and(
-        eq(professionalAvailabilityTable.professionalId, profId),
-        eq(professionalAvailabilityTable.dayOfWeek, dayOfWeek),
-        eq(professionalAvailabilityTable.isActive, true),
+        eq(slotsTable.professionalId, profId),
+        eq(slotsTable.date, dateStr),
+        eq(slotsTable.status, "open"),
       ),
     );
 
@@ -165,30 +156,32 @@ router.get("/professionals/:id/bookable-slots", async (req: Request, res: Respon
   const bookedTimes = new Set(existingBookings.map((b) => b.startTime));
 
   // Recurring commitments (all 3 verticals) + individually-scheduled
-  // tutor/therapist sessions — sources session_bookings above never
-  // covered, so a professional's committed Mon 4-5pm slot (from a
-  // recurring engagement, or a one-off already-scheduled session) still
-  // showed as bookable here before this.
+  // tutor/therapist sessions.
   const busyWindows = await getRecurringAndSessionBusyWindows(profId, dateStr);
 
-  const bookable: { date: string; startTime: string; endTime: string; durationMinutes: number; priceInr: number }[] = [];
-
-  for (const avail of availSlots) {
-    let slotStart = avail.startTime;
-    while (timeToMinutes(addMinutes(slotStart, avail.slotDurationMinutes)) <= timeToMinutes(avail.endTime)) {
-      const slotEnd = addMinutes(slotStart, avail.slotDurationMinutes);
-      if (!bookedTimes.has(slotStart) && !overlapsAnyWindow(busyWindows, slotStart, slotEnd)) {
-        bookable.push({
-          date: dateStr,
-          startTime: slotStart,
-          endTime: slotEnd,
-          durationMinutes: avail.slotDurationMinutes,
-          priceInr: avail.priceInr,
-        });
-      }
-      slotStart = slotEnd;
-    }
-  }
+  // IMPORTANT — these two checks are NOT redundant with the generation
+  // job's own exclusion above, even though they check the same sources.
+  // This is the read-side-only scope's deliberate design, not
+  // belt-and-braces to be cleaned up later: the write-path was NOT
+  // migrated (booking creation doesn't reference slotId, so nothing
+  // flips a slot's status to 'booked' when a booking happens), and the
+  // generation job only runs once daily. Without re-checking live here,
+  // a slot booked minutes ago would still show status='open' (stale in
+  // one direction), and a brand-new recurring commitment accepted since
+  // the last generation run wouldn't be excluded until the NEXT run, up
+  // to ~24h later (stale in the other direction). Only remove these live
+  // checks once the write-path migration lands and slots.status is
+  // actually maintained in real time by the booking endpoints — until
+  // then, this is the actual correctness guarantee, not a redundant one.
+  const bookable = openSlots
+    .filter((s) => !bookedTimes.has(s.startTime) && !overlapsAnyWindow(busyWindows, s.startTime, s.endTime))
+    .map((s) => ({
+      date: dateStr,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      durationMinutes: s.durationMins,
+      priceInr: s.priceInr,
+    }));
 
   bookable.sort((a, b) => a.startTime.localeCompare(b.startTime));
   res.json(bookable);
