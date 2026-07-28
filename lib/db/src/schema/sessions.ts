@@ -119,6 +119,11 @@ export const slotsTable = pgTable(
     startTime: text("start_time").notNull(),
     endTime: text("end_time").notNull(),
     durationMins: integer("duration_mins").notNull(),
+    // Snapshotted from the template at generation time, not joined live —
+    // same discipline as activationFeeInr/placementFeeInr elsewhere in this
+    // schema. A professional changing their template's price later must
+    // not retroactively alter slots already generated from the old price.
+    priceInr: integer("price_inr").notNull(),
     status: slotStatusEnum("status").notNull().default("open"),
     // Unused this pass — see file header comment above.
     bookingId: integer("booking_id").references(() => sessionBookingsTable.id, { onDelete: "set null" }),
