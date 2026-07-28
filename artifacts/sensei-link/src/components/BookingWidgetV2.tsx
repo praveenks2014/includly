@@ -26,6 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { fetchWithAuth } from "@/lib/api";
 import { loadRazorpayScript, type RazorpayPaymentResponse } from "@/lib/razorpay";
 import { readPendingConsultationNotes, clearPendingConsultationNotes } from "@/lib/consultationNotes";
+import { useSelectedChild } from "@/contexts/SelectedChildContext";
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
@@ -55,6 +56,7 @@ export function BookingWidgetV2({
 }) {
   const { toast } = useToast();
   const { data: meData } = useGetMe();
+  const { selectedChildId } = useSelectedChild();
   const [date, setDate] = useState(todayIsoDate());
   const [selectedSlot, setSelectedSlot] = useState<BookableSlot | null>(null);
   // Pre-fills from the consultation mini-form (Psychiatrist/Developmental
@@ -82,6 +84,7 @@ export function BookingWidgetV2({
           endTime: selectedSlot.endTime,
           durationMinutes: selectedSlot.durationMinutes,
           notes: notes.trim() || undefined,
+          childId: selectedChildId ?? undefined,
         }),
       });
       const data = await res.json();

@@ -808,13 +808,21 @@ function FindTab() {
 // ═══════════════════════════════════════════════════════════════════════════════
 function BookingsTab() {
   const { data: sessions, isLoading } = useGetMySessions();
+  const { selectedChildId } = useSelectedChild();
   const [bookingTab, setBookingTab] = useState<"upcoming" | "past">("upcoming");
 
+  // Same client-side-filter-on-selectedChildId pattern as
+  // TutorEngagementCard/TherapistEngagementCard/ShadowTeacherTab — fetch the
+  // full list once (no child in the query key), filter reactively here.
+  // Bookings made before childId was captured (or where the parent skipped
+  // selecting a child) have childId=null and won't match any specific
+  // child — same "no data for this child yet" behavior as the other tabs.
   const now = new Date();
-  const upcoming = (sessions ?? [])
+  const forChild = (sessions ?? []).filter((s) => s.childId === selectedChildId);
+  const upcoming = forChild
     .filter((s) => SESSION_ACTIVE_STATUSES.includes(s.status) && new Date(s.bookedDate) >= now)
     .sort((a, b) => new Date(a.bookedDate).getTime() - new Date(b.bookedDate).getTime());
-  const past = (sessions ?? [])
+  const past = forChild
     .filter((s) => !upcoming.find((u) => u.id === s.id))
     .sort((a, b) => new Date(b.bookedDate).getTime() - new Date(a.bookedDate).getTime());
 

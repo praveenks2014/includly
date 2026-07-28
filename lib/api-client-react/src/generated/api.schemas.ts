@@ -1048,6 +1048,8 @@ export interface SessionBookingWithDetails {
   id: number;
   professionalId: number;
   parentId: number;
+  /** @nullable */
+  childId?: number | null;
   bookedDate: string;
   startTime: string;
   endTime: string;

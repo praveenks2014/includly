@@ -466,6 +466,7 @@ router.get("/sessions", requireAuth, async (req: Request, res: Response): Promis
         id: sessionBookingsTable.id,
         professionalId: sessionBookingsTable.professionalId,
         parentId: sessionBookingsTable.parentId,
+        childId: sessionBookingsTable.childId,
         bookedDate: sessionBookingsTable.bookedDate,
         startTime: sessionBookingsTable.startTime,
         endTime: sessionBookingsTable.endTime,
