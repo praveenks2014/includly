@@ -4,6 +4,7 @@ import { db, usersTable, connectThreadsTable, shadowTeacherMatchesTable } from "
 import { eq, or, and, isNotNull, sql } from "drizzle-orm";
 import { initNudgeScheduler } from "./lib/nudgeScheduler";
 import { runAutoCancelJob } from "./routes/sessionsV2";
+import { runSlotGenerationJob } from "./lib/slotGeneration";
 
 const rawPort = process.env["PORT"];
 
@@ -149,4 +150,6 @@ app.listen(port, (err) => {
   backfillConnectThreads().catch((e) => logger.warn({ e }, "connect_threads backfill error"));
   // Auto-cancel unpaid confirmed bookings every 5 minutes
   setInterval(() => { runAutoCancelJob().catch((e) => logger.warn({ e }, "AutoCancel job error")); }, 5 * 60 * 1000);
+  // Keep materialized bookable slots filled through the rolling window, once daily
+  setInterval(() => { runSlotGenerationJob().catch((e) => logger.warn({ e }, "Slot generation job error")); }, 24 * 60 * 60 * 1000);
 });
