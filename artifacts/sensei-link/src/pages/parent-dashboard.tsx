@@ -461,9 +461,11 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
   const childSummary = homeSummary.filter((e) => e.childId === selectedChildId);
   const pendingLogs = childSummary.filter((e) => e.todayParentLogOwed);
 
-  // Upcoming sessions → Bookings destination.
+  // Upcoming sessions → Bookings destination. Filtered to the selected
+  // child, same as BookingsTab itself — otherwise this teaser's count
+  // wouldn't match what clicking through to Bookings actually shows.
   const upcoming = (sessions ?? [])
-    .filter((s) => SESSION_ACTIVE_STATUSES.includes(s.status) && new Date(s.bookedDate) >= new Date())
+    .filter((s) => s.childId === selectedChildId && SESSION_ACTIVE_STATUSES.includes(s.status) && new Date(s.bookedDate) >= new Date())
     .sort((a, b) => new Date(a.bookedDate).getTime() - new Date(b.bookedDate).getTime());
   const nextSession = upcoming[0];
 
