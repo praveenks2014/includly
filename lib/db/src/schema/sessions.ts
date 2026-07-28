@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, boolean, pgEnum, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, boolean, pgEnum, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { professionalProfilesTable } from "./professionals";
@@ -34,6 +34,18 @@ export const professionalAvailabilityTable = pgTable("professional_availability"
   slotDurationMinutes: integer("slot_duration_minutes").notNull().default(60),
   priceInr: integer("price_inr").notNull(),
   isActive: boolean("is_active").notNull().default(true),
+  // Calendar-build additions (read-side scope) — consumed by the slot
+  // generation job (lib/slotGeneration.ts), not by bookable-slots' existing
+  // on-the-fly computation, which this table's rows have always driven
+  // directly. bufferMins: gap enforced between generated slots on this
+  // template row (0 = back-to-back, matching existing behavior exactly
+  // when unset). effectiveFrom/effectiveTo: nullable date bounds (YYYY-MM-DD)
+  // so a template edit doesn't retroactively regenerate/invalidate past
+  // slots — null effectiveFrom means "always was in effect", null
+  // effectiveTo means "still in effect, no end date".
+  bufferMins: integer("buffer_mins").notNull().default(0),
+  effectiveFrom: text("effective_from"),
+  effectiveTo: text("effective_to"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
@@ -82,6 +94,45 @@ export const sessionBookingsTable = pgTable("session_bookings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
+export const slotStatusEnum = pgEnum("slot_status", ["open", "booked", "blocked", "cancelled"]);
+
+// Materialized bookable slot rows, generated from professional_availability
+// templates by the slot-generation job (lib/slotGeneration.ts). Read-side
+// scope only this pass: bookingId/'booked' are reserved for the future
+// write-path migration (booking creation moving to reference slotId with a
+// DB-level uniqueness guarantee) and are NOT set by any booking flow yet —
+// the calendar's "booked" layer instead comes from a live session_bookings
+// query (see getRecurringAndSessionBusyWindows's sibling query pattern in
+// recurringSchedule.ts), joined by professionalId + date/time, not by FK.
+// Date/time as text (YYYY-MM-DD / HH:MM), matching every other
+// scheduling-adjacent table in this schema (session_bookings,
+// tutor_engagement_sessions, professional_availability itself) rather than
+// a timestamp column — overlaps()/getRecurringAndSessionBusyWindows()
+// already operate on HH:MM strings, so this avoids conversion at every
+// call site.
+export const slotsTable = pgTable(
+  "slots",
+  {
+    id: serial("id").primaryKey(),
+    professionalId: integer("professional_id").notNull().references(() => professionalProfilesTable.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    startTime: text("start_time").notNull(),
+    endTime: text("end_time").notNull(),
+    durationMins: integer("duration_mins").notNull(),
+    status: slotStatusEnum("status").notNull().default("open"),
+    // Unused this pass — see file header comment above.
+    bookingId: integer("booking_id").references(() => sessionBookingsTable.id, { onDelete: "set null" }),
+    generatedFromTemplateId: integer("generated_from_template_id").references(() => professionalAvailabilityTable.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+  },
+  // What actually makes generation idempotent — re-running for an
+  // unchanged template must never duplicate slots. Enforced at the DB
+  // level (ON CONFLICT DO NOTHING in the generation job), not by the job
+  // pre-checking existence itself.
+  (t) => [uniqueIndex("slots_professional_date_start_unique").on(t.professionalId, t.date, t.startTime)],
+);
+
 export const bookingMessagesTable = pgTable(
   "booking_messages",
   {
@@ -112,3 +163,7 @@ export const insertSessionBookingSchema = createInsertSchema(sessionBookingsTabl
 });
 export type InsertSessionBooking = z.infer<typeof insertSessionBookingSchema>;
 export type SessionBooking = typeof sessionBookingsTable.$inferSelect;
+
+export const insertSlotSchema = createInsertSchema(slotsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertSlot = z.infer<typeof insertSlotSchema>;
+export type Slot = typeof slotsTable.$inferSelect;
