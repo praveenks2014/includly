@@ -23,6 +23,7 @@ import {
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { createInAppNotification } from "../lib/notificationService";
+import { getRecurringAndSessionBusyWindows, overlapsAnyWindow } from "../lib/recurringSchedule";
 import { z } from "zod/v4";
 
 const router: IRouter = Router();
@@ -86,6 +87,17 @@ router.post("/sessions-v2/book", requireAuth, requireRole("parent"), async (req:
       inArray(sessionBookingsTable.status, ["requested", "confirmed_by_pro", "paid_held", "session_started"]),
     ));
   if (existing) { res.status(400).json({ error: "This slot is already taken" }); return; }
+
+  // Recurring commitments (all 3 verticals) + individually-scheduled
+  // tutor/therapist sessions — the check above only catches other
+  // session_bookings; this closes the gap where a professional's
+  // committed recurring slot (or an already-scheduled engagement
+  // session) could still be booked as a one-off session.
+  const busyWindows = await getRecurringAndSessionBusyWindows(professionalId, bookedDate);
+  if (overlapsAnyWindow(busyWindows, startTime, endTime)) {
+    res.status(400).json({ error: "This professional already has a commitment during that time" });
+    return;
+  }
 
   const [prof] = await db
     .select({ pricingMinINR: professionalProfilesTable.pricingMinINR, userId: professionalProfilesTable.userId })

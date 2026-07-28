@@ -1,10 +1,12 @@
 import { z } from "zod/v4";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, ne, inArray, isNotNull, sql } from "drizzle-orm";
 import {
   db,
   shadowTeacherEngagementsTable,
   tutorEngagementsTable,
   therapistEngagementsTable,
+  tutorEngagementSessionsTable,
+  therapistEngagementSessionsTable,
 } from "@workspace/db";
 import { overlaps } from "./scheduleConflict";
 
@@ -110,4 +112,75 @@ export async function checkRecurringScheduleConflict(
     }
   }
   return null;
+}
+
+export interface BusyWindow {
+  startTime: string;
+  endTime: string;
+}
+
+// Busy windows for a specific date that bookable-slots/sessions-v2/
+// book-interview's EXISTING session_bookings exclusion does not cover:
+// the professional's own recurring commitments (all three verticals,
+// matched by day-of-week derived from the given date — recurringScheduleJson
+// is a weekly pattern, not concrete dates) and their individually-scheduled
+// tutor/therapist engagement sessions on that exact date. Does NOT
+// re-check session_bookings itself — callers already have their own
+// check for that; this is additive, not a replacement.
+export async function getRecurringAndSessionBusyWindows(
+  professionalId: number,
+  date: string,
+): Promise<BusyWindow[]> {
+  const dayOfWeek = new Date(date + "T00:00:00Z").getUTCDay();
+  const windows: BusyWindow[] = [];
+
+  const [shadowRows, tutorRows, therapistRows] = await Promise.all([
+    db.select({ recurringScheduleJson: shadowTeacherEngagementsTable.recurringScheduleJson })
+      .from(shadowTeacherEngagementsTable)
+      .where(and(eq(shadowTeacherEngagementsTable.professionalId, professionalId), sql`${shadowTeacherEngagementsTable.status} != 'ended'`)),
+    db.select({ recurringScheduleJson: tutorEngagementsTable.recurringScheduleJson })
+      .from(tutorEngagementsTable)
+      .where(and(eq(tutorEngagementsTable.professionalId, professionalId), sql`${tutorEngagementsTable.status} != 'ended'`)),
+    db.select({ recurringScheduleJson: therapistEngagementsTable.recurringScheduleJson })
+      .from(therapistEngagementsTable)
+      .where(and(eq(therapistEngagementsTable.professionalId, professionalId), sql`${therapistEngagementsTable.status} != 'ended'`)),
+  ]);
+  for (const row of [...shadowRows, ...tutorRows, ...therapistRows]) {
+    const slots = (row.recurringScheduleJson as { dayOfWeek: number; startTime: string; endTime: string }[] | null) ?? [];
+    for (const s of slots) {
+      if (s.dayOfWeek === dayOfWeek) windows.push({ startTime: s.startTime, endTime: s.endTime });
+    }
+  }
+
+  const [tutorSessions, therapistSessions] = await Promise.all([
+    db.select({ startTime: tutorEngagementSessionsTable.startTime, endTime: tutorEngagementSessionsTable.endTime })
+      .from(tutorEngagementSessionsTable)
+      .innerJoin(tutorEngagementsTable, eq(tutorEngagementSessionsTable.engagementId, tutorEngagementsTable.id))
+      .where(and(
+        eq(tutorEngagementsTable.professionalId, professionalId),
+        eq(tutorEngagementSessionsTable.sessionDate, date),
+        inArray(tutorEngagementSessionsTable.status, ["scheduled", "started"]),
+        isNotNull(tutorEngagementSessionsTable.startTime),
+        isNotNull(tutorEngagementSessionsTable.endTime),
+      )),
+    db.select({ startTime: therapistEngagementSessionsTable.startTime, endTime: therapistEngagementSessionsTable.endTime })
+      .from(therapistEngagementSessionsTable)
+      .innerJoin(therapistEngagementsTable, eq(therapistEngagementSessionsTable.engagementId, therapistEngagementsTable.id))
+      .where(and(
+        eq(therapistEngagementsTable.professionalId, professionalId),
+        eq(therapistEngagementSessionsTable.sessionDate, date),
+        inArray(therapistEngagementSessionsTable.status, ["scheduled", "started"]),
+        isNotNull(therapistEngagementSessionsTable.startTime),
+        isNotNull(therapistEngagementSessionsTable.endTime),
+      )),
+  ]);
+  for (const row of [...tutorSessions, ...therapistSessions]) {
+    if (row.startTime && row.endTime) windows.push({ startTime: row.startTime, endTime: row.endTime });
+  }
+
+  return windows;
+}
+
+export function overlapsAnyWindow(windows: BusyWindow[], startTime: string, endTime: string): boolean {
+  return windows.some((w) => overlaps(w.startTime, w.endTime, startTime, endTime));
 }

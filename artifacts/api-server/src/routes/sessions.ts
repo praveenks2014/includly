@@ -16,6 +16,7 @@ import { generateOtp } from "../lib/otp";
 import { sendPushNotification } from "../lib/notificationService";
 import { createLedgerHeld, releaseWithCommission, refundToWallet, findLedgerByBooking } from "../lib/ledger";
 import { convertReferralIfNeeded } from "./referrals";
+import { getRecurringAndSessionBusyWindows, overlapsAnyWindow } from "../lib/recurringSchedule";
 import {
   SetAvailabilityBody,
   BookSessionBody,
@@ -163,13 +164,20 @@ router.get("/professionals/:id/bookable-slots", async (req: Request, res: Respon
 
   const bookedTimes = new Set(existingBookings.map((b) => b.startTime));
 
+  // Recurring commitments (all 3 verticals) + individually-scheduled
+  // tutor/therapist sessions — sources session_bookings above never
+  // covered, so a professional's committed Mon 4-5pm slot (from a
+  // recurring engagement, or a one-off already-scheduled session) still
+  // showed as bookable here before this.
+  const busyWindows = await getRecurringAndSessionBusyWindows(profId, dateStr);
+
   const bookable: { date: string; startTime: string; endTime: string; durationMinutes: number; priceInr: number }[] = [];
 
   for (const avail of availSlots) {
     let slotStart = avail.startTime;
     while (timeToMinutes(addMinutes(slotStart, avail.slotDurationMinutes)) <= timeToMinutes(avail.endTime)) {
       const slotEnd = addMinutes(slotStart, avail.slotDurationMinutes);
-      if (!bookedTimes.has(slotStart)) {
+      if (!bookedTimes.has(slotStart) && !overlapsAnyWindow(busyWindows, slotStart, slotEnd)) {
         bookable.push({
           date: dateStr,
           startTime: slotStart,

@@ -28,7 +28,7 @@ import { createInAppNotification } from "../lib/notificationService";
 import { generateOtp } from "../lib/otp";
 import { isOfferingListable } from "../lib/verificationRequirements";
 import { creditWallet } from "../lib/ledger";
-import { RecurringScheduleSlot, checkRecurringScheduleConflict } from "../lib/recurringSchedule";
+import { RecurringScheduleSlot, checkRecurringScheduleConflict, getRecurringAndSessionBusyWindows, overlapsAnyWindow } from "../lib/recurringSchedule";
 import { resolveOffering } from "../lib/offeringResolver";
 import { SHOW_TUTOR_SEARCH } from "../lib/features";
 import { resolveOverdueTutorConfirmations } from "../lib/paymentConfirmationResolver";
@@ -729,12 +729,17 @@ router.post("/tutor/:matchId/candidates/:candidateId/book-interview", requireAut
     ));
   const bookedTimes = new Set(existingBookings.map((b) => b.startTime));
 
+  // Recurring commitments (all 3 verticals) + individually-scheduled
+  // tutor/therapist sessions — same gap as bookable-slots/sessions-v2:
+  // the existingBookings check above only covers other session_bookings.
+  const busyWindows = await getRecurringAndSessionBusyWindows(professionalId, bookedDate);
+
   let matchedSlot: { startTime: string; endTime: string; durationMinutes: number } | null = null;
   for (const avail of availSlots) {
     let slotStart = avail.startTime;
     while (timeToMinutesLocal(addMinutesLocal(slotStart, avail.slotDurationMinutes)) <= timeToMinutesLocal(avail.endTime)) {
       const slotEnd = addMinutesLocal(slotStart, avail.slotDurationMinutes);
-      if (slotStart === startTime && !bookedTimes.has(slotStart)) {
+      if (slotStart === startTime && !bookedTimes.has(slotStart) && !overlapsAnyWindow(busyWindows, slotStart, slotEnd)) {
         matchedSlot = { startTime: slotStart, endTime: slotEnd, durationMinutes: avail.slotDurationMinutes };
         break;
       }
