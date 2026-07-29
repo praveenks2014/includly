@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, gte, lte, inArray } from "drizzle-orm";
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import {
@@ -17,7 +17,7 @@ import { generateOtp } from "../lib/otp";
 import { sendPushNotification } from "../lib/notificationService";
 import { createLedgerHeld, releaseWithCommission, refundToWallet, findLedgerByBooking } from "../lib/ledger";
 import { convertReferralIfNeeded } from "./referrals";
-import { getRecurringAndSessionBusyWindows, overlapsAnyWindow } from "../lib/recurringSchedule";
+import { getRecurringAndSessionBusyWindows, overlapsAnyWindow, getCommittedEngagementBlocks } from "../lib/recurringSchedule";
 import {
   SetAvailabilityBody,
   BookSessionBody,
@@ -185,6 +185,73 @@ router.get("/professionals/:id/bookable-slots", async (req: Request, res: Respon
 
   bookable.sort((a, b) => a.startTime.localeCompare(b.startTime));
   res.json(bookable);
+});
+
+// GET /professionals/me/calendar — the professional's own calendar (B5),
+// three layers from three sources, per the agreed design: committed
+// recurring engagements expanded from recurringScheduleJson (all 3
+// verticals), open availability from materialized slots, booked sessions
+// from a live session_bookings query joined by professionalId + date/time
+// (not slots.status='booked' — the write-path migration that would keep
+// that in sync is explicitly deferred).
+const CALENDAR_BOOKED_STATUSES = ["confirmed", "requested", "confirmed_by_pro", "paid_held", "session_started"] as const;
+
+router.get("/professionals/me/calendar", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const startDate = req.query["startDate"] as string;
+  const endDate = req.query["endDate"] as string;
+
+  if (!startDate || !endDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    res.status(400).json({ error: "Invalid startDate or endDate (use YYYY-MM-DD)" });
+    return;
+  }
+
+  const [prof] = await db
+    .select({ id: professionalProfilesTable.id })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.userId, req.userId!));
+  if (!prof) {
+    res.status(404).json({ error: "Professional profile not found" });
+    return;
+  }
+
+  const [committed, openSlots, bookedSessions] = await Promise.all([
+    getCommittedEngagementBlocks(prof.id, startDate, endDate),
+    db.select().from(slotsTable).where(and(
+      eq(slotsTable.professionalId, prof.id),
+      gte(slotsTable.date, startDate),
+      lte(slotsTable.date, endDate),
+      eq(slotsTable.status, "open"),
+    )),
+    db.select({
+      id: sessionBookingsTable.id,
+      date: sessionBookingsTable.bookedDate,
+      startTime: sessionBookingsTable.startTime,
+      endTime: sessionBookingsTable.endTime,
+      status: sessionBookingsTable.status,
+      parentName: usersTable.fullName,
+    })
+      .from(sessionBookingsTable)
+      .leftJoin(usersTable, eq(sessionBookingsTable.parentId, usersTable.id))
+      .where(and(
+        eq(sessionBookingsTable.professionalId, prof.id),
+        gte(sessionBookingsTable.bookedDate, startDate),
+        lte(sessionBookingsTable.bookedDate, endDate),
+        inArray(sessionBookingsTable.status, CALENDAR_BOOKED_STATUSES),
+      )),
+  ]);
+
+  res.json({
+    committed,
+    open: openSlots.map((s) => ({
+      id: s.id,
+      date: s.date,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      durationMins: s.durationMins,
+      priceInr: s.priceInr,
+    })),
+    booked: bookedSessions,
+  });
 });
 
 router.post("/sessions/book", requireAuth, async (req: Request, res: Response): Promise<void> => {

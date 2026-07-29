@@ -26,7 +26,7 @@ export const RecurringScheduleSlot = z.object({
 
 export type RecurringScheduleSlotType = z.infer<typeof RecurringScheduleSlot>;
 
-type EngagementVertical = "shadow_teacher" | "tutor" | "therapist";
+export type EngagementVertical = "shadow_teacher" | "tutor" | "therapist";
 
 const VERTICAL_LABEL: Record<EngagementVertical, string> = {
   shadow_teacher: "Shadow Teacher",
@@ -183,4 +183,71 @@ export async function getRecurringAndSessionBusyWindows(
 
 export function overlapsAnyWindow(windows: BusyWindow[], startTime: string, endTime: string): boolean {
   return windows.some((w) => overlaps(w.startTime, w.endTime, startTime, endTime));
+}
+
+function addDaysIso(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export interface CommittedBlock {
+  vertical: EngagementVertical;
+  engagementId: number;
+  date: string;
+  startTime: string;
+  endTime: string;
+}
+
+// Expands a professional's own recurring commitments (all three verticals,
+// non-ended engagements) into concrete date instances across
+// [startDate, endDate] — for the professional's own calendar view (B5),
+// which needs every layer expressed as concrete date+time blocks, not a
+// mix of weekly patterns and date ranges. Unlike checkRecurringScheduleConflict
+// above, this does not exclude any engagement — it's showing the
+// professional their own full commitment picture, not checking a new one
+// against existing ones.
+export async function getCommittedEngagementBlocks(
+  professionalId: number,
+  startDate: string,
+  endDate: string,
+): Promise<CommittedBlock[]> {
+  const [shadowRows, tutorRows, therapistRows] = await Promise.all([
+    db.select({ id: shadowTeacherEngagementsTable.id, recurringScheduleJson: shadowTeacherEngagementsTable.recurringScheduleJson })
+      .from(shadowTeacherEngagementsTable)
+      .where(and(eq(shadowTeacherEngagementsTable.professionalId, professionalId), sql`${shadowTeacherEngagementsTable.status} != 'ended'`)),
+    db.select({ id: tutorEngagementsTable.id, recurringScheduleJson: tutorEngagementsTable.recurringScheduleJson })
+      .from(tutorEngagementsTable)
+      .where(and(eq(tutorEngagementsTable.professionalId, professionalId), sql`${tutorEngagementsTable.status} != 'ended'`)),
+    db.select({ id: therapistEngagementsTable.id, recurringScheduleJson: therapistEngagementsTable.recurringScheduleJson })
+      .from(therapistEngagementsTable)
+      .where(and(eq(therapistEngagementsTable.professionalId, professionalId), sql`${therapistEngagementsTable.status} != 'ended'`)),
+  ]);
+
+  const engagements: { vertical: EngagementVertical; id: number; slots: RecurringScheduleSlotType[] }[] = [];
+  for (const [vertical, rows] of [
+    ["shadow_teacher", shadowRows],
+    ["tutor", tutorRows],
+    ["therapist", therapistRows],
+  ] as const) {
+    for (const row of rows) {
+      const slots = (row.recurringScheduleJson as RecurringScheduleSlotType[] | null) ?? [];
+      engagements.push({ vertical, id: row.id, slots });
+    }
+  }
+
+  const blocks: CommittedBlock[] = [];
+  let cursor = startDate;
+  while (cursor <= endDate) {
+    const dayOfWeek = new Date(cursor + "T00:00:00Z").getUTCDay();
+    for (const eng of engagements) {
+      for (const slot of eng.slots) {
+        if (slot.dayOfWeek === dayOfWeek) {
+          blocks.push({ vertical: eng.vertical, engagementId: eng.id, date: cursor, startTime: slot.startTime, endTime: slot.endTime });
+        }
+      }
+    }
+    cursor = addDaysIso(cursor, 1);
+  }
+  return blocks;
 }
