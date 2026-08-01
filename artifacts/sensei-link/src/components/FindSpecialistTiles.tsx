@@ -24,27 +24,37 @@ export function FindSpecialistTiles() {
   return (
     <div className="space-y-3">
       {/* Single breakpoint at lg: 4-across (2 rows) below 1024px, 8-across
-          at 1024px+ — wraps, never horizontal-scrolls, at 1280/768/375. */}
-      <div className="grid grid-cols-4 lg:grid-cols-8 gap-2">
+          at 1024px+ — wraps, never horizontal-scrolls, at 1280/768/375.
+          gap-2.5 (not the 0.65rem the mockup used) — stays on Tailwind's
+          spacing scale, same visual result. */}
+      <div className="grid grid-cols-4 lg:grid-cols-8 gap-2.5">
         {categories.map((t) => {
           const Icon = t.icon;
+          // Badge background bumped one step deeper (-50 → -100) purely for
+          // icon-color contrast at the larger size — icon color and the
+          // shared iconClass in serviceCategories.ts (consumed by
+          // ServiceCategoryList too) stay untouched, so List View is
+          // unaffected. Every category's iconClass follows the same "-50"
+          // convention, so this is a safe, mechanical transform, not a
+          // hand-maintained parallel color map.
+          const badgeClass = t.iconClass.replace(/-50\b/, "-100");
           return (
             <button
               key={t.key}
               onClick={() => t.onClick(setComingSoon)}
-              className="relative bg-white border border-gray-100 rounded-2xl p-3 pt-3.5 flex flex-col items-center gap-1.5 text-center hover:shadow-md hover:border-gray-200 transition-all"
+              className="group relative bg-white border border-gray-100 rounded-2xl p-3.5 pt-4 flex flex-col items-center gap-2 text-center shadow-[0_1px_2px_rgba(26,35,64,0.04),0_1px_8px_rgba(26,35,64,0.03)] transition-[transform,box-shadow,border-color] duration-200 hover:[transform:perspective(600px)_rotateY(5deg)_translateY(-3px)] hover:shadow-[0_10px_24px_rgba(26,35,64,0.10),0_2px_6px_rgba(26,35,64,0.06)] hover:border-teal-200 focus-visible:[transform:perspective(600px)_rotateY(5deg)_translateY(-3px)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 active:[transform:scale(0.95)]"
             >
               {t.dot !== "none" && (
                 <span
-                  className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ring-2 ring-white ${
+                  className={`absolute top-2 right-2 w-2.5 h-2.5 rounded-full ring-2 ring-white ${
                     t.dot === "active" ? "bg-emerald-500" : "bg-amber-500"
                   }`}
                 />
               )}
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${t.iconClass}`}>
-                <Icon size={16} />
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-[1.06] ${badgeClass}`}>
+                <Icon size={24} />
               </div>
-              <span className="text-[10px] font-bold text-[#1A2340] leading-tight">
+              <span className="text-[11px] font-bold text-[#1A2340] leading-tight">
                 <span className="lg:hidden">{t.mobileLabel ?? t.label}</span>
                 <span className="hidden lg:inline">{t.label}</span>
               </span>
