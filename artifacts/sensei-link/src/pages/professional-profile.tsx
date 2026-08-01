@@ -17,6 +17,7 @@ import { getSpecialtyLabel, SPECIALTY_COLORS } from "@/lib/specialties";
 import { BookingWidget } from "@/components/BookingWidget";
 import { BookingWidgetV2 } from "@/components/BookingWidgetV2";
 import { ShadowTeacherRequestWidget } from "@/components/ShadowTeacherRequestWidget";
+import { VerticalRequestWidget } from "@/components/VerticalRequestWidget";
 import { AssessmentBookingModal } from "@/components/AssessmentBookingModal";
 import { avatarSrc } from "@/components/ProfessionalAvatar";
 import { useToast } from "@/hooks/use-toast";
@@ -82,6 +83,20 @@ function CopyButton({ text, label }: { text: string; label: string }) {
     </button>
   );
 }
+
+// Specialties that must never get the engagement widget regardless of
+// vertical. psychiatrist/developmental_pediatrician/neurologist are chosen
+// as DISCIPLINES within the "Therapist / Special Educator" vertical during
+// onboarding (see onboard-stage2.tsx's SPECIALTY_FOR_DISCIPLINE comment) —
+// there's no separate vertical for them, so they share vertical:
+// "therapist" with genuine ongoing-therapy specialties; ad-hoc
+// consultations only, no engagement flow. "coaching" is excluded
+// defensively rather than by traced vertical value — onboard.tsx states
+// coaching profiles are "managed separately from the new onboarding flow",
+// so its actual vertical value for existing profiles couldn't be traced
+// through code the way the other three could; nothing found anywhere
+// relates it to the tutor/therapist engagement system either way.
+const NON_ENGAGEMENT_SPECIALTIES = new Set(["psychiatrist", "developmental_pediatrician", "neurologist", "coaching"]);
 
 function ProfileSkeleton() {
   return (
@@ -571,16 +586,31 @@ export default function ProfessionalProfilePage() {
               )}
             </section>
 
-            {/* Booking widget — Flow A for shadow teachers, Flow B for all others */}
+            {/* Booking widget — keyed on the professional's real registered
+                vertical, not the specialty string or specialtyToVertical()'s
+                display-only heuristic (which buckets psychiatrist/
+                developmental_pediatrician/neurologist into "therapist" too).
+                vertical alone isn't quite enough either, though: those same
+                3 specialties are chosen as DISCIPLINES within the
+                "Therapist / Special Educator" vertical card during
+                onboarding (see onboard-stage2.tsx's SPECIALTY_FOR_DISCIPLINE
+                comment — there's no separate vertical for them), so they
+                share vertical: "therapist" with genuine ongoing-therapy
+                professionals (OT/speech/ABA/etc.) — see
+                NON_ENGAGEMENT_SPECIALTIES above. null/undefined vertical
+                (no registered engagement vertical at all) also falls
+                through to BookingWidgetV2 unchanged. */}
             {isSignedIn && (
-              p.specialty === "shadow_teacher"
-                ? <ShadowTeacherRequestWidget />
-                : <BookingWidgetV2
-                    professionalId={professionalId}
-                    professionalName={p.fullName}
-                    offersHomeVisits={p.offersHomeVisits}
-                    specialty={p.specialty}
-                  />
+              p.vertical === "shadow_teacher" ? <ShadowTeacherRequestWidget />
+              : p.vertical === "home_tutor" ? <VerticalRequestWidget vertical="tutor" />
+              : p.vertical === "therapist" && !NON_ENGAGEMENT_SPECIALTIES.has(p.specialty)
+                ? <VerticalRequestWidget vertical="therapist" />
+              : <BookingWidgetV2
+                  professionalId={professionalId}
+                  professionalName={p.fullName}
+                  offersHomeVisits={p.offersHomeVisits}
+                  specialty={p.specialty}
+                />
             )}
 
             {/* Assessment offerings */}

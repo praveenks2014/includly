@@ -520,6 +520,13 @@ export const GetProfessionalResponse = zod.object({
   createdAt: zod.coerce.date(),
   rciVerified: zod.boolean().optional(),
   avatarUrl: zod.string().nullish(),
+  // Was already being fetched and computed into the response object
+  // server-side, then silently stripped by this schema not declaring it —
+  // same fix shape as the other Zod-strips-a-real-field bugs found this
+  // session. This is the authoritative signal for which engagement flow a
+  // profile should show (professional-profile.tsx's widget-swap), not the
+  // specialty string or the specialtyToVertical() display heuristic.
+  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).nullish(),
 });
 
 /**

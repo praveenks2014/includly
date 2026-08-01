@@ -258,6 +258,13 @@ export interface ProfessionalDetail {
   rciVerified?: boolean;
   /** @nullable */
   avatarUrl?: string | null;
+  /**
+   * Authoritative engagement-vertical signal (distinct from specialty) —
+   * null/undefined for specialties with no engagement flow (e.g.
+   * psychiatrist/developmental_pediatrician/neurologist consultations).
+   * @nullable
+   */
+  vertical?: ProfessionalProfileVertical | null;
 }
 
 export interface ProfessionalSearchResult {
