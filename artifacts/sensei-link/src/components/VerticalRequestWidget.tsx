@@ -145,6 +145,7 @@ function useMyMatch(cfg: VerticalConfig, childId: number | null) {
     queryFn: async () => {
       const url = childId ? `${cfg.apiBase}/my-request?childId=${childId}` : `${cfg.apiBase}/my-request`;
       const res = await fetchWithAuth(url);
+      if (!res.ok) return null;
       const data = (await res.json()) as MatchWithCandidates | null;
       if (Array.isArray(data) && data.length === 0) return null;
       return (data as MatchWithCandidates) ?? null;

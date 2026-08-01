@@ -140,6 +140,7 @@ function useMyMatch(childId: number | null) {
         ? `/api/shadow-teacher/my-request?childId=${childId}`
         : "/api/shadow-teacher/my-request";
       const res = await fetchWithAuth(url);
+      if (!res.ok) return null;
       const data = await res.json() as MatchWithCandidates | null;
       if (Array.isArray(data) && data.length === 0) return null;
       return (data as MatchWithCandidates) ?? null;
@@ -304,7 +305,12 @@ function OfferSection({ matchId, candidateId, myUserId, matchStatus }: {
 
   const { data: offers = [] } = useQuery<NegotiationOffer[]>({
     queryKey: ["offers", matchId, candidateId],
-    queryFn: () => fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/offers`).then(r => r.json() as Promise<NegotiationOffer[]>),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/offers`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: myUserId > 0 && ["shortlisted", "trial_done"].includes(matchStatus),
     refetchInterval: 15_000,
   });
@@ -642,7 +648,12 @@ function InterviewSection({ matchId, candidate, myUserId }: { matchId: number; c
 
   const { data: offers = [] } = useQuery<InterviewTimeOffer[]>({
     queryKey: ["interview-time-offers", matchId, candidate.id],
-    queryFn: () => fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/interview-time-offers`).then(r => r.json() as Promise<InterviewTimeOffer[]>),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/interview-time-offers`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: myUserId > 0 && candidate.requestStatus === "accepted" && !candidate.interviewConfirmedSlot,
     refetchInterval: 15_000,
   });
@@ -1007,7 +1018,12 @@ function CandidateCard({
   // Share the same query key as OfferSection — React Query deduplicates, no extra request.
   const { data: cardOffers = [] } = useQuery<NegotiationOffer[]>({
     queryKey: ["offers", matchId, candidate.id],
-    queryFn: () => fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/offers`).then(r => r.json() as Promise<NegotiationOffer[]>),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/offers`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: myUserId > 0 && !committed && !trialMode && !!matchStatus && ["shortlisted", "trial_done"].includes(matchStatus ?? ""),
     refetchInterval: 15_000,
   });
@@ -1229,9 +1245,11 @@ export function ShadowTeacherRequestWidget() {
     previousMatch: { extraNotes: string | null; childGoalsAreas: string[] | null; childPreferredModes: string[] | null } | null;
   }>({
     queryKey: ["re-request-eligibility", effectiveChildIdForEligibility],
-    queryFn: () =>
-      fetchWithAuth(`/api/shadow-teacher/re-request-eligibility?childId=${effectiveChildIdForEligibility}`)
-        .then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/shadow-teacher/re-request-eligibility?childId=${effectiveChildIdForEligibility}`);
+      if (!r.ok) throw new Error("Failed to load re-request eligibility");
+      return r.json();
+    },
     enabled: !!effectiveChildIdForEligibility && !hasActiveMatch,
     staleTime: 30_000,
   });
@@ -1295,7 +1313,12 @@ export function ShadowTeacherRequestWidget() {
   // early) and threw "Rendered more hooks than during the previous render."
   const { data: commitOffers = [] } = useQuery<NegotiationOffer[]>({
     queryKey: ["offers", match?.id, commitCandidate?.id],
-    queryFn: () => fetchWithAuth(`/api/shadow-teacher/${match!.id}/candidates/${commitCandidate!.id}/offers`).then(r => r.json() as Promise<NegotiationOffer[]>),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/shadow-teacher/${match!.id}/candidates/${commitCandidate!.id}/offers`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: !!match?.id && !!commitCandidate?.id,
   });
 
