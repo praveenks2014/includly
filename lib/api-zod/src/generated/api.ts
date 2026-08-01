@@ -1732,6 +1732,11 @@ export const SetAvailabilityBody = zod.object({
       endTime: zod.string(),
       slotDurationMinutes: zod.number(),
       priceInr: zod.number(),
+      // Gap enforced between generated slots on this template row (see
+      // slotGeneration.ts's step calculation). Optional — omitted/undefined
+      // lets the DB default (0, back-to-back) apply rather than inserting
+      // an explicit value.
+      bufferMins: zod.number().int().min(0).optional(),
     }),
   ),
 });
@@ -1745,6 +1750,7 @@ export const SetAvailabilityResponseItem = zod.object({
   slotDurationMinutes: zod.number(),
   priceInr: zod.number(),
   isActive: zod.boolean(),
+  bufferMins: zod.number(),
 });
 export const SetAvailabilityResponse = zod.array(SetAvailabilityResponseItem);
 

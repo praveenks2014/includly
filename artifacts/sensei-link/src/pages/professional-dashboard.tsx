@@ -59,7 +59,7 @@ type ProTab = "home" | "profile" | "availability" | "bookings" | "earnings" | "c
 
 interface Notification { id: number; title: string; body: string; read: boolean; createdAt: string; }
 interface CertDoc { id: number; documentType: string; fileKey: string; uploadedAt: string; }
-type SlotDraft = { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number; priceInr: number; };
+type SlotDraft = { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number; priceInr: number; bufferMins: number; };
 
 // ─── Multi-vertical offerings ──────────────────────────────────────────────
 type OfferingVertical = "shadow_teacher" | "home_tutor" | "therapist";
@@ -992,6 +992,7 @@ function AvailabilityTab() {
           endTime: s.endTime,
           slotDurationMinutes: s.slotDurationMinutes,
           priceInr: s.priceInr,
+          bufferMins: s.bufferMins,
         }))
       );
       setLoaded(true);
@@ -1004,7 +1005,7 @@ function AvailabilityTab() {
       const lastEnd = daySlots.length > 0
         ? daySlots.reduce((max, s) => (s.endTime > max ? s.endTime : max), "00:00")
         : "09:00";
-      return [...prev, { dayOfWeek: day, startTime: lastEnd, endTime: calcEndTime(lastEnd, 60), slotDurationMinutes: 60, priceInr: 500 }];
+      return [...prev, { dayOfWeek: day, startTime: lastEnd, endTime: calcEndTime(lastEnd, 60), slotDurationMinutes: 60, priceInr: 500, bufferMins: 0 }];
     });
   }
   function removeSlot(idx: number) {
@@ -1096,6 +1097,15 @@ function AvailabilityTab() {
                           aria-label="Session duration"
                         >
                           {[30, 45, 60, 90, 120].map((d) => <option key={d} value={d}>{d} min</option>)}
+                        </select>
+                        <select
+                          value={slot.bufferMins}
+                          onChange={(e) => updateSlot(idx, "bufferMins", Number(e.target.value))}
+                          className="h-8 text-xs border border-gray-200 rounded-lg px-2 bg-white focus:ring-[#2EC4A5] focus:ring-1"
+                          aria-label="Rest time between slots"
+                          title="Rest time between slots"
+                        >
+                          {[0, 5, 10, 15, 30].map((b) => <option key={b} value={b}>{b === 0 ? "No gap" : `+${b} min gap`}</option>)}
                         </select>
                         <div className="relative">
                           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₹</span>

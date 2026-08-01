@@ -11,6 +11,11 @@ import {
   usersTable,
   sessionNotesTable,
   slotsTable,
+  childrenTable,
+  tutorEngagementsTable,
+  tutorEngagementSessionsTable,
+  therapistEngagementsTable,
+  therapistEngagementSessionsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { generateOtp } from "../lib/otp";
@@ -192,10 +197,34 @@ router.get("/professionals/:id/bookable-slots", async (req: Request, res: Respon
 // three layers from three sources, per the agreed design: committed
 // recurring engagements expanded from recurringScheduleJson (all 3
 // verticals), open availability from materialized slots, booked sessions
-// from a live session_bookings query joined by professionalId + date/time
-// (not slots.status='booked' — the write-path migration that would keep
-// that in sync is explicitly deferred).
+// merged from THREE underlying tables (not slots.status='booked' — the
+// write-path migration that would keep that in sync is explicitly
+// deferred):
+//   - session_bookings: ad-hoc/consultation-type bookings (Flow B).
+//   - tutor_engagement_sessions / therapist_engagement_sessions: individual
+//     dated instances of an ongoing recurring engagement, scheduled one at
+//     a time via POST .../engagements/:id/sessions (Item 2) — a genuinely
+//     different concept from "committed" above (which is the abstract
+//     weekly PATTERN from recurringScheduleJson, not a concrete scheduled
+//     instance with its own id/status/meetLink). Merged into "booked"
+//     rather than a 4th layer since, from the professional's point of view,
+//     both represent an actual scheduled session happening at a specific
+//     time — the "committed" layer already covers the recurring-pattern
+//     visualization.
 const CALENDAR_BOOKED_STATUSES = ["confirmed", "requested", "confirmed_by_pro", "paid_held", "session_started"] as const;
+const CALENDAR_ENGAGEMENT_SESSION_STATUSES = ["scheduled", "started", "completed", "no_show"] as const;
+
+interface CalendarBookedItem {
+  id: number;
+  date: string;
+  startTime: string | null;
+  endTime: string | null;
+  status: string;
+  parentName: string | null;
+  childName: string | null;
+  vertical: "session_booking" | "tutor" | "therapist";
+  meetLink: string | null;
+}
 
 router.get("/professionals/me/calendar", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
   const startDate = req.query["startDate"] as string;
@@ -215,7 +244,7 @@ router.get("/professionals/me/calendar", requireAuth, requireRole("professional"
     return;
   }
 
-  const [committed, openSlots, bookedSessions] = await Promise.all([
+  const [committed, openSlots, sessionBookings, tutorSessions, therapistSessions] = await Promise.all([
     getCommittedEngagementBlocks(prof.id, startDate, endDate),
     // Includes 'blocked' (not just 'open') so a professional can see — and
     // via the B7 endpoints below, undo — a slot they manually blocked.
@@ -232,16 +261,73 @@ router.get("/professionals/me/calendar", requireAuth, requireRole("professional"
       endTime: sessionBookingsTable.endTime,
       status: sessionBookingsTable.status,
       parentName: usersTable.fullName,
+      childName: childrenTable.name,
     })
       .from(sessionBookingsTable)
       .leftJoin(usersTable, eq(sessionBookingsTable.parentId, usersTable.id))
+      .leftJoin(childrenTable, eq(sessionBookingsTable.childId, childrenTable.id))
       .where(and(
         eq(sessionBookingsTable.professionalId, prof.id),
         gte(sessionBookingsTable.bookedDate, startDate),
         lte(sessionBookingsTable.bookedDate, endDate),
         inArray(sessionBookingsTable.status, CALENDAR_BOOKED_STATUSES),
       )),
+    db.select({
+      id: tutorEngagementSessionsTable.id,
+      date: tutorEngagementSessionsTable.sessionDate,
+      startTime: tutorEngagementSessionsTable.startTime,
+      endTime: tutorEngagementSessionsTable.endTime,
+      status: tutorEngagementSessionsTable.status,
+      meetLink: tutorEngagementSessionsTable.meetLink,
+      parentName: usersTable.fullName,
+      childName: childrenTable.name,
+    })
+      .from(tutorEngagementSessionsTable)
+      .innerJoin(tutorEngagementsTable, eq(tutorEngagementSessionsTable.engagementId, tutorEngagementsTable.id))
+      .leftJoin(usersTable, eq(tutorEngagementsTable.parentId, usersTable.id))
+      .leftJoin(childrenTable, eq(tutorEngagementsTable.childId, childrenTable.id))
+      .where(and(
+        eq(tutorEngagementsTable.professionalId, prof.id),
+        gte(tutorEngagementSessionsTable.sessionDate, startDate),
+        lte(tutorEngagementSessionsTable.sessionDate, endDate),
+        inArray(tutorEngagementSessionsTable.status, CALENDAR_ENGAGEMENT_SESSION_STATUSES),
+      )),
+    db.select({
+      id: therapistEngagementSessionsTable.id,
+      date: therapistEngagementSessionsTable.sessionDate,
+      startTime: therapistEngagementSessionsTable.startTime,
+      endTime: therapistEngagementSessionsTable.endTime,
+      status: therapistEngagementSessionsTable.status,
+      meetLink: therapistEngagementSessionsTable.meetLink,
+      parentName: usersTable.fullName,
+      childName: childrenTable.name,
+    })
+      .from(therapistEngagementSessionsTable)
+      .innerJoin(therapistEngagementsTable, eq(therapistEngagementSessionsTable.engagementId, therapistEngagementsTable.id))
+      .leftJoin(usersTable, eq(therapistEngagementsTable.parentId, usersTable.id))
+      .leftJoin(childrenTable, eq(therapistEngagementsTable.childId, childrenTable.id))
+      .where(and(
+        eq(therapistEngagementsTable.professionalId, prof.id),
+        gte(therapistEngagementSessionsTable.sessionDate, startDate),
+        lte(therapistEngagementSessionsTable.sessionDate, endDate),
+        inArray(therapistEngagementSessionsTable.status, CALENDAR_ENGAGEMENT_SESSION_STATUSES),
+      )),
   ]);
+
+  const booked: CalendarBookedItem[] = [
+    ...sessionBookings.map((s): CalendarBookedItem => ({
+      id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime, status: s.status,
+      parentName: s.parentName, childName: s.childName, vertical: "session_booking", meetLink: null,
+    })),
+    ...tutorSessions.map((s): CalendarBookedItem => ({
+      id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime, status: s.status,
+      parentName: s.parentName, childName: s.childName, vertical: "tutor", meetLink: s.meetLink,
+    })),
+    ...therapistSessions.map((s): CalendarBookedItem => ({
+      id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime, status: s.status,
+      parentName: s.parentName, childName: s.childName, vertical: "therapist", meetLink: s.meetLink,
+    })),
+  ];
 
   res.json({
     committed,
@@ -255,7 +341,7 @@ router.get("/professionals/me/calendar", requireAuth, requireRole("professional"
       status: s.status,
       generatedFromTemplateId: s.generatedFromTemplateId,
     })),
-    booked: bookedSessions,
+    booked,
   });
 });
 
@@ -390,6 +476,67 @@ router.delete("/professionals/me/calendar/slots/:id", requireAuth, requireRole("
 
   await db.delete(slotsTable).where(eq(slotsTable.id, id));
   res.json({ ok: true });
+});
+
+function addDaysIsoLocal(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// POST /professionals/me/calendar/quick-block-busy — bulk-blocks every OPEN
+// materialized slot that overlaps the professional's own busy windows
+// (recurring commitments across all 3 verticals + individually-scheduled
+// tutor/therapist sessions) across a date range. Reuses
+// getRecurringAndSessionBusyWindows/overlapsAnyWindow unchanged — not a new
+// definition of "busy", a bulk action over what's already computed (and,
+// since the calendar endpoint's booked-layer extension above, already
+// visible as the committed + booked layers) for every other exclusion
+// check in this codebase (generation job, manual-add guard, booking
+// endpoints).
+router.post("/professionals/me/calendar/quick-block-busy", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const { startDate, endDate } = req.body ?? {};
+  if (
+    typeof startDate !== "string" || typeof endDate !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) ||
+    startDate > endDate
+  ) {
+    res.status(400).json({ error: "Invalid startDate/endDate (use YYYY-MM-DD, startDate <= endDate)" });
+    return;
+  }
+
+  const profId = await getOwnProfessionalId(req.userId!);
+  if (!profId) { res.status(404).json({ error: "Professional profile not found" }); return; }
+
+  const openSlots = await db.select({ id: slotsTable.id, date: slotsTable.date, startTime: slotsTable.startTime, endTime: slotsTable.endTime })
+    .from(slotsTable)
+    .where(and(
+      eq(slotsTable.professionalId, profId),
+      gte(slotsTable.date, startDate),
+      lte(slotsTable.date, endDate),
+      eq(slotsTable.status, "open"),
+    ));
+
+  const idsToBlock: number[] = [];
+  let cursor = startDate;
+  while (cursor <= endDate) {
+    const daySlots = openSlots.filter((s) => s.date === cursor);
+    if (daySlots.length > 0) {
+      const busy = await getRecurringAndSessionBusyWindows(profId, cursor);
+      for (const s of daySlots) {
+        if (overlapsAnyWindow(busy, s.startTime, s.endTime)) idsToBlock.push(s.id);
+      }
+    }
+    cursor = addDaysIsoLocal(cursor, 1);
+  }
+
+  if (idsToBlock.length === 0) {
+    res.json({ blockedCount: 0 });
+    return;
+  }
+
+  await db.update(slotsTable).set({ status: "blocked" }).where(inArray(slotsTable.id, idsToBlock));
+  res.json({ blockedCount: idsToBlock.length });
 });
 
 router.post("/sessions/book", requireAuth, async (req: Request, res: Response): Promise<void> => {

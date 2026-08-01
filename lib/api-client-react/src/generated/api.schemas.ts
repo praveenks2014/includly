@@ -957,6 +957,8 @@ export interface AvailabilitySlot {
   slotDurationMinutes: number;
   priceInr: number;
   isActive: boolean;
+  /** Gap enforced between generated slots on this template row */
+  bufferMins: number;
 }
 
 export type SetAvailabilityBodySlotsItem = {
@@ -965,6 +967,8 @@ export type SetAvailabilityBodySlotsItem = {
   endTime: string;
   slotDurationMinutes: number;
   priceInr: number;
+  /** Gap enforced between generated slots on this template row — omit for 0 (back-to-back) */
+  bufferMins?: number;
 };
 
 export interface SetAvailabilityBody {
