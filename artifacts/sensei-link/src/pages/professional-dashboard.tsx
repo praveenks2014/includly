@@ -30,6 +30,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { FileUploadField } from "@/components/FileUploadField";
 import { StarRating } from "@/components/StarRating";
+import { ProfessionalCalendar } from "@/components/ProfessionalCalendar";
 import { getSpecialtyLabel } from "@/lib/specialties";
 import { fetchWithAuth, getApiBase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -1036,9 +1037,15 @@ function AvailabilityTab() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div>
+        <h1 className="text-xl font-serif font-semibold text-[#1A2340]">Calendar</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Your recurring commitments, open slots, and booked sessions this week.</p>
+      </div>
+      <ProfessionalCalendar />
+
+      <div className="flex items-center justify-between pt-2">
         <div>
-          <h1 className="text-xl font-serif font-semibold text-[#1A2340]">Availability</h1>
+          <h2 className="text-lg font-serif font-semibold text-[#1A2340]">Weekly availability template</h2>
           <p className="text-sm text-gray-500 mt-0.5">Set your weekly schedule. Parents can book within these slots.</p>
         </div>
         <Button onClick={handleSave} disabled={saving} className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white gap-2 focus-visible:ring-2 focus-visible:ring-[#2EC4A5]" aria-label="Save availability">

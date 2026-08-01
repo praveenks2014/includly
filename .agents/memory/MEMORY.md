@@ -30,3 +30,4 @@
 - [Testing Clerk-auth block persistence](testing-clerk-auth-block-persistence.md) — once runTest() hits a Clerk OAuth blockage, EVERY later runTest() call in the session reports the same cached block, even unrelated plans; notebook restart doesn't clear it
 - [Verification gate request-schema gap](verification-gate-request-schema-gap.md) — a field must be in Create/Update request body schemas, not just the response schema, or the client silently can't set it and the whole gate is unreachable
 - [Restart before proving a server gate](restart-before-proving-server-gate.md) — clean logs/typecheck aren't proof a query/gate change is live; restart the workflow and empirically re-test with a concrete before/after case
+- [Windows sandbox vite build blocked](windows-sandbox-vite-build.md) — missing win32 native optionals (rollup/esbuild/lightningcss/tailwindcss-oxide); install pinned win32 binaries locally via pnpm add -w -D, never commit them

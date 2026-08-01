@@ -18,6 +18,7 @@ import { sendPushNotification } from "../lib/notificationService";
 import { createLedgerHeld, releaseWithCommission, refundToWallet, findLedgerByBooking } from "../lib/ledger";
 import { convertReferralIfNeeded } from "./referrals";
 import { getRecurringAndSessionBusyWindows, overlapsAnyWindow, getCommittedEngagementBlocks } from "../lib/recurringSchedule";
+import { overlaps } from "../lib/scheduleConflict";
 import {
   SetAvailabilityBody,
   BookSessionBody,
@@ -216,11 +217,13 @@ router.get("/professionals/me/calendar", requireAuth, requireRole("professional"
 
   const [committed, openSlots, bookedSessions] = await Promise.all([
     getCommittedEngagementBlocks(prof.id, startDate, endDate),
+    // Includes 'blocked' (not just 'open') so a professional can see — and
+    // via the B7 endpoints below, undo — a slot they manually blocked.
     db.select().from(slotsTable).where(and(
       eq(slotsTable.professionalId, prof.id),
       gte(slotsTable.date, startDate),
       lte(slotsTable.date, endDate),
-      eq(slotsTable.status, "open"),
+      inArray(slotsTable.status, ["open", "blocked"]),
     )),
     db.select({
       id: sessionBookingsTable.id,
@@ -249,9 +252,144 @@ router.get("/professionals/me/calendar", requireAuth, requireRole("professional"
       endTime: s.endTime,
       durationMins: s.durationMins,
       priceInr: s.priceInr,
+      status: s.status,
+      generatedFromTemplateId: s.generatedFromTemplateId,
     })),
     booked: bookedSessions,
   });
+});
+
+// B7 — manual adjustment. Resolves the caller's own professional row; kept
+// as a tiny local helper (not a shared export) since every one of these
+// routes needs it and none of them share a call site with anything else in
+// this file.
+async function getOwnProfessionalId(userId: number): Promise<number | null> {
+  const [prof] = await db
+    .select({ id: professionalProfilesTable.id })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.userId, userId));
+  return prof?.id ?? null;
+}
+
+// POST /professionals/me/calendar/slots — add a one-off bookable slot
+// outside the weekly template. Guarded by the same busy-window check as
+// the generation job and the booking endpoints (Commit A) so a manually
+// added slot can't create a double-booking against the professional's own
+// recurring commitments, plus a same-table overlap check against slots
+// that check alone wouldn't catch (two slots with different start times
+// that still overlap).
+router.post("/professionals/me/calendar/slots", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const { date, startTime, endTime, priceInr } = req.body ?? {};
+  const timeRe = /^\d{2}:\d{2}$/;
+  if (
+    typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    typeof startTime !== "string" || !timeRe.test(startTime) ||
+    typeof endTime !== "string" || !timeRe.test(endTime) ||
+    startTime >= endTime ||
+    typeof priceInr !== "number" || !Number.isFinite(priceInr) || priceInr <= 0
+  ) {
+    res.status(400).json({ error: "Invalid date/startTime/endTime/priceInr" });
+    return;
+  }
+
+  const profId = await getOwnProfessionalId(req.userId!);
+  if (!profId) { res.status(404).json({ error: "Professional profile not found" }); return; }
+
+  const busyWindows = await getRecurringAndSessionBusyWindows(profId, date);
+  if (overlapsAnyWindow(busyWindows, startTime, endTime)) {
+    res.status(400).json({ error: "This overlaps one of your existing commitments" });
+    return;
+  }
+
+  const sameDaySlots = await db.select({ startTime: slotsTable.startTime, endTime: slotsTable.endTime })
+    .from(slotsTable)
+    .where(and(
+      eq(slotsTable.professionalId, profId),
+      eq(slotsTable.date, date),
+      inArray(slotsTable.status, ["open", "blocked", "booked"]),
+    ));
+  if (sameDaySlots.some((s) => overlaps(s.startTime, s.endTime, startTime, endTime))) {
+    res.status(400).json({ error: "This overlaps an existing slot on that date" });
+    return;
+  }
+
+  const [hh, mm] = startTime.split(":").map(Number);
+  const [eh, em] = endTime.split(":").map(Number);
+  const durationMins = (eh * 60 + em) - (hh * 60 + mm);
+
+  try {
+    const [created] = await db.insert(slotsTable).values({
+      professionalId: profId,
+      date,
+      startTime,
+      endTime,
+      durationMins,
+      priceInr,
+      status: "open",
+      generatedFromTemplateId: null,
+    }).returning();
+    res.status(201).json(created);
+  } catch (err) {
+    const pgErr = err as { code?: string };
+    if (pgErr.code === "23505") {
+      res.status(409).json({ error: "A slot already exists at that exact start time" });
+      return;
+    }
+    throw err;
+  }
+});
+
+// PATCH /professionals/me/calendar/slots/:id — block or unblock a slot.
+// Never touches a 'booked' slot (that's a live session_bookings row, not
+// this status field — see the file-header comment above slotsTable in
+// lib/db/src/schema/sessions.ts).
+router.patch("/professionals/me/calendar/slots/:id", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const id = Number(req.params.id);
+  const { status } = req.body ?? {};
+  if (!Number.isInteger(id) || (status !== "open" && status !== "blocked")) {
+    res.status(400).json({ error: "Invalid slot id or status (must be 'open' or 'blocked')" });
+    return;
+  }
+
+  const profId = await getOwnProfessionalId(req.userId!);
+  if (!profId) { res.status(404).json({ error: "Professional profile not found" }); return; }
+
+  const [slot] = await db.select().from(slotsTable).where(and(eq(slotsTable.id, id), eq(slotsTable.professionalId, profId)));
+  if (!slot) { res.status(404).json({ error: "Slot not found" }); return; }
+  if (slot.status !== "open" && slot.status !== "blocked") {
+    res.status(400).json({ error: `Cannot change a slot with status '${slot.status}'` });
+    return;
+  }
+
+  const [updated] = await db.update(slotsTable).set({ status }).where(eq(slotsTable.id, id)).returning();
+  res.json(updated);
+});
+
+// DELETE /professionals/me/calendar/slots/:id — only for slots the
+// professional added themselves (generatedFromTemplateId is null).
+// Deleting a template-generated slot would be a no-op in practice: the
+// daily generation job's idempotency depends on the row existing (see
+// slotGeneration.ts), so removing it just lets the same slot reappear on
+// the next run. Blocking (via the PATCH route above) is the durable way
+// to suppress a generated slot; delete is only meaningful as "undo" for a
+// one-off slot that no template will ever regenerate.
+router.delete("/professionals/me/calendar/slots/:id", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid slot id" }); return; }
+
+  const profId = await getOwnProfessionalId(req.userId!);
+  if (!profId) { res.status(404).json({ error: "Professional profile not found" }); return; }
+
+  const [slot] = await db.select().from(slotsTable).where(and(eq(slotsTable.id, id), eq(slotsTable.professionalId, profId)));
+  if (!slot) { res.status(404).json({ error: "Slot not found" }); return; }
+  if (slot.status === "booked") { res.status(400).json({ error: "Cannot delete a booked slot" }); return; }
+  if (slot.generatedFromTemplateId !== null) {
+    res.status(400).json({ error: "This slot comes from your weekly template — block it instead of deleting, or it will reappear" });
+    return;
+  }
+
+  await db.delete(slotsTable).where(eq(slotsTable.id, id));
+  res.json({ ok: true });
 });
 
 router.post("/sessions/book", requireAuth, async (req: Request, res: Response): Promise<void> => {

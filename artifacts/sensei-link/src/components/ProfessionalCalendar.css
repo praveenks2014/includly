@@ -1,0 +1,104 @@
+/* Themes FullCalendar (v6) to match the app's existing visual language:
+   teal accent (#2EC4A5), navy text (#1A2340), serif headings (Fraunces),
+   rounded-2xl soft-shadow card chrome — see AvailabilityTab in
+   professional-dashboard.tsx for the source of these tokens. Scoped under
+   .pro-calendar so it never leaks into other FullCalendar usage. */
+
+.pro-calendar {
+  --pc-teal: #2ec4a5;
+  --pc-teal-dark: #26a88d;
+  --pc-navy: #1a2340;
+}
+
+.pro-calendar .fc {
+  font-family: var(--app-font-sans);
+  font-size: 0.8125rem;
+}
+
+.pro-calendar .fc-toolbar-title {
+  font-family: var(--app-font-serif);
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--pc-navy);
+}
+
+.pro-calendar .fc-button {
+  background: white;
+  border: 1px solid #e5e7eb;
+  color: var(--pc-navy);
+  box-shadow: none;
+  text-transform: capitalize;
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.7rem;
+}
+
+.pro-calendar .fc-button:hover {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  color: var(--pc-navy);
+}
+
+.pro-calendar .fc-button-primary:not(:disabled).fc-button-active,
+.pro-calendar .fc-button-primary:not(:disabled):active {
+  background: var(--pc-teal);
+  border-color: var(--pc-teal);
+  color: white;
+}
+
+.pro-calendar .fc-button:focus-visible {
+  box-shadow: 0 0 0 2px var(--pc-teal);
+}
+
+.pro-calendar .fc-today-button {
+  font-weight: 500;
+}
+
+.pro-calendar .fc-theme-standard td,
+.pro-calendar .fc-theme-standard th,
+.pro-calendar .fc-theme-standard .fc-scrollgrid {
+  border-color: #f3f4f6;
+}
+
+.pro-calendar .fc-col-header-cell {
+  background: #fafafa;
+  padding: 0.4rem 0;
+}
+
+.pro-calendar .fc-col-header-cell-cushion {
+  color: var(--pc-navy);
+  font-weight: 600;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.4rem;
+}
+
+.pro-calendar .fc-timegrid-slot-label-cushion {
+  color: #9ca3af;
+  font-size: 0.7rem;
+}
+
+.pro-calendar .fc-timegrid-now-indicator-line {
+  border-color: var(--pc-teal-dark);
+}
+
+.pro-calendar .fc-timegrid-now-indicator-arrow {
+  border-color: var(--pc-teal-dark);
+  color: var(--pc-teal-dark);
+}
+
+.pro-calendar .fc-event {
+  border-radius: 0.4rem;
+  border-width: 1px;
+  padding: 1px 4px;
+  font-size: 0.7rem;
+  line-height: 1.2;
+}
+
+.pro-calendar .fc-timegrid-event .fc-event-main {
+  padding: 2px 4px;
+}
+
+.pro-calendar .fc-event-title {
+  font-weight: 500;
+}

@@ -77,6 +77,10 @@
   },
   "dependencies": {
     "@clerk/react": "^6.11.1",
+    "@fullcalendar/core": "6.1.21",
+    "@fullcalendar/daygrid": "6.1.21",
+    "@fullcalendar/react": "6.1.21",
+    "@fullcalendar/timegrid": "6.1.21",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "@stripe/stripe-js": "^9.0.1",
