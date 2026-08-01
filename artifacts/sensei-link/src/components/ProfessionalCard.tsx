@@ -38,9 +38,15 @@ interface Professional {
 interface ProfessionalCardProps {
   professional: Professional;
   distanceKm?: number;
+  // Only set by InlineSpecialistResults (the 4 consultation/coach
+  // categories' inline results) — adds a second "Book" CTA alongside the
+  // existing "View Profile" link, same dual-affordance shape as shadow-
+  // teacher/tutor/therapist's own candidate cards. /search's own usage
+  // never passes this, so its cards are unaffected.
+  onBook?: () => void;
 }
 
-export function ProfessionalCard({ professional: p, distanceKm }: ProfessionalCardProps) {
+export function ProfessionalCard({ professional: p, distanceKm, onBook }: ProfessionalCardProps) {
   const prefersReduced = useReducedMotion();
   const specialtyColor = SPECIALTY_COLORS[p.specialty] ?? "bg-gray-100 text-gray-800";
   const SpecialtyIcon = getSpecialtyIcon(p.specialty);
@@ -177,12 +183,17 @@ export function ProfessionalCard({ professional: p, distanceKm }: ProfessionalCa
           </div>
 
           {/* CTA */}
-          <div className="flex justify-end mt-3">
+          <div className="flex justify-end gap-2 mt-3">
             <Link href={`/professionals/${p.id}`}>
-              <Button size="sm" className="font-medium" data-testid={`view-profile-${p.id}`}>
+              <Button size="sm" variant={onBook ? "outline" : "default"} className="font-medium" data-testid={`view-profile-${p.id}`}>
                 View Profile
               </Button>
             </Link>
+            {onBook && (
+              <Button size="sm" onClick={onBook} className="font-medium bg-[#2EC4A5] hover:bg-[#26a88d] text-white" data-testid={`book-${p.id}`}>
+                Book
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

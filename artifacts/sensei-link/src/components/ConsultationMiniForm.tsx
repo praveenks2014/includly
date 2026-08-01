@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { useLocation } from "wouter";
 import { SERVICE_CATEGORIES } from "@/lib/serviceCategories";
 import { writePendingConsultationNotes } from "@/lib/consultationNotes";
+import { InlineSpecialistResults } from "@/components/InlineSpecialistResults";
 
 const MODE_OPTIONS = ["Online", "In-clinic"] as const;
 
@@ -22,6 +23,7 @@ export function ConsultationMiniForm({ specialty }: { specialty: ConsultationSpe
   const [mode, setMode] = useState<(typeof MODE_OPTIONS)[number]>("Online");
   const [assessmentFindings, setAssessmentFindings] = useState("");
   const [extraNotes, setExtraNotes] = useState("");
+  const [submitted, setSubmitted] = useState(false);
 
   function handleSubmit() {
     const notesParts: string[] = [];
@@ -37,7 +39,22 @@ export function ConsultationMiniForm({ specialty }: { specialty: ConsultationSpe
       notes: notesParts.join("\n\n"),
       mode,
     });
-    setLocation(`/search?specialty=${specialty}`);
+    setSubmitted(true);
+  }
+
+  if (submitted) {
+    return (
+      <div className="space-y-5 pb-4">
+        <button
+          onClick={() => setLocation("/services")}
+          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-teal-600 transition-colors"
+        >
+          <ArrowLeft size={13} /> Back to Services
+        </button>
+        <h2 className="font-serif font-bold text-[#1A2340] text-lg">{meta.label} specialists</h2>
+        <InlineSpecialistResults specialty={specialty} />
+      </div>
+    );
   }
 
   return (

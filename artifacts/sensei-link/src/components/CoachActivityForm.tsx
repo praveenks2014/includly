@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { useLocation } from "wouter";
 import { SERVICE_CATEGORIES } from "@/lib/serviceCategories";
 import { COACHING_SUB_TYPE_OPTIONS, getCoachingSubTypeIcon } from "@/lib/specialties";
+import { InlineSpecialistResults } from "@/components/InlineSpecialistResults";
 
 // Icon Grid's inline first step for Inclusive Coach — collects the
 // activity up front and pre-supplies it as coachingSubType on the URL,
@@ -14,10 +15,26 @@ export function CoachActivityForm() {
   const Icon = meta.icon;
 
   const [activity, setActivity] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
 
   function handleSubmit() {
     if (!activity) return;
-    setLocation(`/search?specialty=coaching&coachingSubType=${activity}`);
+    setSubmitted(true);
+  }
+
+  if (submitted && activity) {
+    return (
+      <div className="space-y-5 pb-4">
+        <button
+          onClick={() => setLocation("/services")}
+          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-teal-600 transition-colors"
+        >
+          <ArrowLeft size={13} /> Back to Services
+        </button>
+        <h2 className="font-serif font-bold text-[#1A2340] text-lg">Inclusive Coaches</h2>
+        <InlineSpecialistResults specialty="coaching" coachingSubType={activity} />
+      </div>
+    );
   }
 
   return (
