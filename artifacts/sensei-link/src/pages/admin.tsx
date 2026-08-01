@@ -2035,12 +2035,22 @@ function AdminEngagementsTab() {
 
   const { data: engagements = [], isLoading } = useQuery<AdminEngagement[]>({
     queryKey: ["admin-engagements"],
-    queryFn: () => fetchWithAuth("/api/admin/engagements").then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth("/api/admin/engagements");
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
   });
 
   const { data: salaryPayments = [] } = useQuery<AdminSalaryPayment[]>({
     queryKey: ["admin-salary-payments"],
-    queryFn: () => fetchWithAuth("/api/admin/salary-payments").then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth("/api/admin/salary-payments");
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
   });
 
   const [engAdminTab, setEngAdminTab] = useState<"engagements" | "salary">("engagements");
@@ -2097,8 +2107,10 @@ function AdminEngagementsTab() {
   async function loadLifecycle(id: number) {
     setSelectedEng(id); setLoadingLifecycle(true);
     try {
-      const data = await fetchWithAuth(`/api/engagements/${id}/lifecycle`).then(r => r.json());
-      setLifecycle(data);
+      const r = await fetchWithAuth(`/api/engagements/${id}/lifecycle`);
+      if (!r.ok) { setLifecycle([]); return; }
+      const data = await r.json();
+      setLifecycle(Array.isArray(data) ? data : []);
     } catch { setLifecycle([]); }
     finally { setLoadingLifecycle(false); }
   }
@@ -2364,6 +2376,7 @@ function AdminBookingsTab() {
     queryFn: async () => {
       const qs = statusFilter ? `?status=${statusFilter}` : "";
       const res = await fetchWithAuth(`/api/admin/bookings${qs}`);
+      if (!res.ok) return { bookings: [], total: 0 };
       return res.json();
     },
     staleTime: 30_000,
@@ -2658,7 +2671,9 @@ function AdminShadowTeacherTab() {
     queryKey: ["admin-shadow-teacher"],
     queryFn: async () => {
       const res = await fetchWithAuth("/api/shadow-teacher/requests");
-      return res.json();
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
     },
     staleTime: 30_000,
   });

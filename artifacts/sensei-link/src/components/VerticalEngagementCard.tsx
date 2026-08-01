@@ -433,7 +433,12 @@ function ActiveSessionsSection({ vertical, eng, onUpdated }: { vertical: Vertica
   // elsewhere for this class of gap (EnquiriesTab, VerticalRequestsSection).
   const { data: sessions = [], refetch } = useQuery<VerticalSession[]>({
     queryKey: [`${vertical}-engagement-sessions`, eng.id],
-    queryFn: () => fetchWithAuth(`${API_BASE[vertical]}/engagements/${eng.id}/sessions`).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`${API_BASE[vertical]}/engagements/${eng.id}/sessions`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: eng.status === "active",
     staleTime: 20_000,
     refetchInterval: 30_000,
@@ -496,7 +501,12 @@ function PaymentSection({ vertical, eng, onUpdated }: { vertical: Vertical; eng:
   // device — same polling cadence as the other cross-user queries above.
   const { data: pending = [] } = useQuery<PendingConfirmation[]>({
     queryKey: [`${vertical}-payment-confirmations`, eng.id],
-    queryFn: () => fetchWithAuth(`${API_BASE[vertical]}/engagements/${eng.id}/payment-confirmations`).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`${API_BASE[vertical]}/engagements/${eng.id}/payment-confirmations`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: eng.status === "active" && isMonthly && eng.directPayEnabled,
     staleTime: 20_000,
     refetchInterval: 30_000,

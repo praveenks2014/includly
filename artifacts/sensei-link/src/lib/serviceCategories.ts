@@ -162,7 +162,12 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
   // dedupes this instead of firing a second identical request.
   const { data: stEngagements = [] } = useQuery<EngagementRow[]>({
     queryKey: ["parent-engagements"],
-    queryFn: () => fetchWithAuth("/api/engagements").then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth("/api/engagements");
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     staleTime: 20_000,
   });
   const shadowDot = deriveDot(stEngagements, selectedChildId);
@@ -172,7 +177,12 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
   // there's nothing to fetch until then.
   const { data: tutorEngagements = [] } = useQuery<EngagementRow[]>({
     queryKey: ["parent-tutor-engagements"],
-    queryFn: () => fetchWithAuth("/api/tutor/engagements").then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth("/api/tutor/engagements");
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     staleTime: 20_000,
     enabled: SHOW_TUTOR_SEARCH,
   });
@@ -180,7 +190,12 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
 
   const { data: therapistEngagements = [] } = useQuery<EngagementRow[]>({
     queryKey: ["parent-therapist-engagements"],
-    queryFn: () => fetchWithAuth("/api/therapist/engagements").then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth("/api/therapist/engagements");
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     staleTime: 20_000,
     enabled: SHOW_THERAPIST_SEARCH,
   });

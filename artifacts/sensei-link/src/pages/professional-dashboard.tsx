@@ -2280,7 +2280,12 @@ function EngagementTab() {
   // device — same 30s/20s polling as the engagement-lifecycle query above.
   const { data: engagements = [], isLoading } = useQuery<STEngagement[]>({
     queryKey: ["pro-engagements"],
-    queryFn: () => fetchWithAuth("/api/engagements").then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth("/api/engagements");
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     staleTime: 20_000,
     refetchInterval: 30_000,
   });
@@ -3544,13 +3549,23 @@ function VerticalRequestsSection({ vertical, onUpdated }: { vertical: Vertical; 
   // device, no shared cache to invalidate) — same 30s/20s polling cadence.
   const { data: candidacies = [], refetch: refetchCandidacies } = useQuery<VerticalCandidacy[]>({
     queryKey: [`${vertical}-my-candidacies`],
-    queryFn: () => fetchWithAuth(`${apiBase}/my-candidacies`).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`${apiBase}/my-candidacies`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     staleTime: 20_000,
     refetchInterval: 30_000,
   });
   const { data: engagements = [], refetch: refetchEngagements } = useQuery<VerticalEngagement[]>({
     queryKey: [`${vertical}-my-engagements`],
-    queryFn: () => fetchWithAuth(`${apiBase}/engagements`).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`${apiBase}/engagements`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     staleTime: 20_000,
     refetchInterval: 30_000,
   });
@@ -3733,7 +3748,12 @@ function CandidacyOfferSection({ matchId, candidateId, myUserId }: { matchId: nu
     childSickLeaveFreeDaysPerMonth: number; childSickLeaveRetainerPct: number; availableDuringBreaks: boolean;
   }[]>({
     queryKey: ["pro-offers", matchId, candidateId],
-    queryFn: () => fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/offers`).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidateId}/offers`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: myUserId > 0,
     refetchInterval: 15_000,
   });
@@ -4085,7 +4105,12 @@ function TeacherInterviewSection({ candidacy: c, myUserId, onUpdated }: { candid
 
   const { data: offers = [] } = useQuery<InterviewTimeOffer[]>({
     queryKey: ["interview-time-offers", c.matchId, c.candidateId],
-    queryFn: () => fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/interview-time-offers`).then(r => r.json() as Promise<InterviewTimeOffer[]>),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/interview-time-offers`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: myUserId > 0 && c.requestStatus === "accepted" && !c.interviewConfirmedSlot,
     refetchInterval: 15_000,
   });
@@ -4402,7 +4427,12 @@ function ChooseEngagementSection({ candidacy: c, onUpdated }: { candidacy: Candi
     leaveTermsNotes: string | null;
   }[]>({
     queryKey: ["pro-offers", c.matchId, c.candidateId],
-    queryFn: () => fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/offers`).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/offers`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
   });
   const acceptedNegotiationOffer = acceptOffers.find(o => o.status === "accepted") ?? null;
 
@@ -4814,7 +4844,12 @@ function EnquiriesTab() {
   // of the same conversation settle on a consistent staleness window.
   const { data: candidacies = [], isLoading: loading, refetch } = useQuery<Candidacy[]>({
     queryKey: ["shadow-teacher-my-candidacies"],
-    queryFn: () => fetchWithAuth("/api/shadow-teacher/my-candidacies").then(r => r.json()) as Promise<Candidacy[]>,
+    queryFn: async () => {
+      const r = await fetchWithAuth("/api/shadow-teacher/my-candidacies");
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     staleTime: 20_000,
     refetchInterval: 30_000,
   });

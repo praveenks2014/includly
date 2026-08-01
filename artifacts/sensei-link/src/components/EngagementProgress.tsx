@@ -154,13 +154,23 @@ export function EngagementProgress({
 
   const { data: logs = [] } = useQuery<DailyLog[]>({
     queryKey: ["engagement-logs", active.id],
-    queryFn: () => fetchWithAuth(`/api/engagements/${active.id}/daily-logs`).then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/engagements/${active.id}/daily-logs`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: !!active.id,
   });
 
   const { data: childGoals = [] } = useQuery<ChildGoal[]>({
     queryKey: ["child-goals", active.childId],
-    queryFn: () => fetchWithAuth(`/api/children/${active.childId}/goals`).then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/children/${active.childId}/goals`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: !!active.childId,
   });
 
@@ -170,7 +180,12 @@ export function EngagementProgress({
   // with a new active prop, giving a fresh queryKey and a fresh fetch.
   const { data: behaviorLogs = [] } = useQuery<BehaviorLog[]>({
     queryKey: ["behavior-logs", active.childId],
-    queryFn: () => fetchWithAuth(`/api/behavior-logs?childId=${active.childId}`).then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/behavior-logs?childId=${active.childId}`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: !!active.childId,
   });
 

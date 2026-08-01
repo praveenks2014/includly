@@ -421,7 +421,12 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
   // tab below, so this summary doesn't show stale status either.
   const { data: engagements = [] } = useQuery<HomeEngagement[]>({
     queryKey: ["parent-engagements"],
-    queryFn: () => fetchWithAuth("/api/engagements").then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth("/api/engagements");
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     staleTime: 20_000,
     refetchInterval: 30_000,
   });
@@ -439,8 +444,11 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
   }
   const { data: behaviorWeekly } = useQuery<BehaviorWeeklySummary | null>({
     queryKey: ["behavior-weekly-summary", selectedChildId],
-    queryFn: () =>
-      fetchWithAuth(`/api/behavior-logs/weekly-summary?childId=${selectedChildId}`).then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/behavior-logs/weekly-summary?childId=${selectedChildId}`);
+      if (!r.ok) return null;
+      return r.json();
+    },
     enabled: !!selectedChildId,
   });
 
@@ -456,7 +464,12 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
   }
   const { data: homeSummary = [] } = useQuery<HomeSummaryRow[]>({
     queryKey: ["home-summary"],
-    queryFn: () => fetchWithAuth("/api/engagements/home-summary").then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth("/api/engagements/home-summary");
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
   });
   const childSummary = homeSummary.filter((e) => e.childId === selectedChildId);
   const pendingLogs = childSummary.filter((e) => e.todayParentLogOwed);
@@ -1284,7 +1297,12 @@ function ShadowTeacherTab() {
   // engagement-lifecycle query above.
   const { data: engagements = [], isLoading } = useQuery<STEngagement[]>({
     queryKey: ["parent-engagements"],
-    queryFn: () => fetchWithAuth("/api/engagements").then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth("/api/engagements");
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     staleTime: 20_000,
     refetchInterval: 30_000,
   });
@@ -1372,6 +1390,7 @@ function ShadowTeacherTab() {
     setReRequestLoading(true);
     try {
       const r = await fetchWithAuth(`/api/shadow-teacher/re-request-eligibility?childId=${childId}`);
+      if (!r.ok) throw new Error("Could not load eligibility");
       const data = await r.json() as ReRequestEligibility;
       setReRequestData(data);
     } catch {
@@ -2330,7 +2349,12 @@ function TutorEngagementCard() {
 
   const { data: engagements = [], isLoading } = useQuery<TutorEngagementRow[]>({
     queryKey: ["parent-tutor-engagements"],
-    queryFn: () => fetchWithAuth("/api/tutor/engagements").then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth("/api/tutor/engagements");
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     staleTime: 20_000,
     refetchInterval: 30_000,
   });
@@ -2345,13 +2369,23 @@ function TutorEngagementCard() {
   // soonest scheduled session.
   const { data: sessions = [] } = useQuery<TutorEngagementSession[]>({
     queryKey: ["tutor-engagement-sessions", active?.id],
-    queryFn: () => fetchWithAuth(`/api/tutor/engagements/${active!.id}/sessions`).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/tutor/engagements/${active!.id}/sessions`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: showStatStrip,
     staleTime: 20_000,
   });
   const { data: confirmations = [] } = useQuery<TutorPaymentConfirmation[]>({
     queryKey: ["tutor-engagement-payment-confirmations-parent", active?.id],
-    queryFn: () => fetchWithAuth(`/api/tutor/engagements/${active!.id}/payment-confirmations/parent`).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/tutor/engagements/${active!.id}/payment-confirmations/parent`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: showStatStrip,
     staleTime: 20_000,
   });
@@ -2519,7 +2553,12 @@ function TherapistEngagementCard() {
 
   const { data: engagements = [], isLoading } = useQuery<TherapistEngagementRow[]>({
     queryKey: ["parent-therapist-engagements"],
-    queryFn: () => fetchWithAuth("/api/therapist/engagements").then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth("/api/therapist/engagements");
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     staleTime: 20_000,
     refetchInterval: 30_000,
   });
@@ -2536,7 +2575,12 @@ function TherapistEngagementCard() {
   // marking), only meaningful when billingCadence === "per_session".
   const { data: sessions = [] } = useQuery<TherapistEngagementSession[]>({
     queryKey: ["therapist-engagement-sessions", active?.id],
-    queryFn: () => fetchWithAuth(`/api/therapist/engagements/${active!.id}/sessions`).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/therapist/engagements/${active!.id}/sessions`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: showStatStrip,
     staleTime: 20_000,
   });
@@ -2544,7 +2588,12 @@ function TherapistEngagementCard() {
   // derive their payment stat from the sessions list's paidAt instead.
   const { data: confirmations = [] } = useQuery<TherapistPaymentConfirmation[]>({
     queryKey: ["therapist-engagement-payment-confirmations-parent", active?.id],
-    queryFn: () => fetchWithAuth(`/api/therapist/engagements/${active!.id}/payment-confirmations/parent`).then(r => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/therapist/engagements/${active!.id}/payment-confirmations/parent`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: showStatStrip && !isPerSession,
     staleTime: 20_000,
   });
@@ -2726,7 +2775,12 @@ function ProgressTab() {
   // query key, so this progress summary doesn't show stale status either.
   const { data: engagements = [], isLoading } = useQuery<PEngagement[]>({
     queryKey: ["parent-engagements"],
-    queryFn: () => fetchWithAuth("/api/engagements").then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetchWithAuth("/api/engagements");
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
     staleTime: 20_000,
     refetchInterval: 30_000,
   });
