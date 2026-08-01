@@ -484,24 +484,49 @@ function addDaysIsoLocal(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+const ManualBlockRange = { startTime: /^\d{2}:\d{2}$/, endTime: /^\d{2}:\d{2}$/ };
+function isValidManualRanges(value: unknown): value is { startTime: string; endTime: string }[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((r) =>
+      r && typeof r === "object" &&
+      typeof (r as Record<string, unknown>)["startTime"] === "string" &&
+      typeof (r as Record<string, unknown>)["endTime"] === "string" &&
+      ManualBlockRange.startTime.test((r as Record<string, unknown>)["startTime"] as string) &&
+      ManualBlockRange.endTime.test((r as Record<string, unknown>)["endTime"] as string) &&
+      (r as { startTime: string; endTime: string }).startTime < (r as { startTime: string; endTime: string }).endTime,
+    )
+  );
+}
+
 // POST /professionals/me/calendar/quick-block-busy — bulk-blocks every OPEN
-// materialized slot that overlaps the professional's own busy windows
-// (recurring commitments across all 3 verticals + individually-scheduled
-// tutor/therapist sessions) across a date range. Reuses
-// getRecurringAndSessionBusyWindows/overlapsAnyWindow unchanged — not a new
-// definition of "busy", a bulk action over what's already computed (and,
-// since the calendar endpoint's booked-layer extension above, already
-// visible as the committed + booked layers) for every other exclusion
-// check in this codebase (generation job, manual-add guard, booking
-// endpoints).
+// materialized slot across a date range that overlaps a set of windows.
+// Two sources for those windows, same bulk-block mechanism either way —
+// this is deliberately ONE endpoint, not two:
+//   - ranges omitted (busy-hours quick-block): windows come from
+//     getRecurringAndSessionBusyWindows/overlapsAnyWindow, unchanged — not
+//     a new definition of "busy", and since the calendar endpoint's
+//     booked-layer extension above, already visible as the committed +
+//     booked layers.
+//   - ranges provided (manual range block): windows come directly from the
+//     caller instead — a professional blocking arbitrary time for their
+//     own reasons, independent of any computed commitment. Deliberately
+//     NOT merged with the computed busy windows in this mode; only the
+//     given ranges are applied, so this never blocks more than what was
+//     explicitly selected.
 router.post("/professionals/me/calendar/quick-block-busy", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
-  const { startDate, endDate } = req.body ?? {};
+  const { startDate, endDate, ranges } = req.body ?? {};
   if (
     typeof startDate !== "string" || typeof endDate !== "string" ||
     !/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) ||
     startDate > endDate
   ) {
     res.status(400).json({ error: "Invalid startDate/endDate (use YYYY-MM-DD, startDate <= endDate)" });
+    return;
+  }
+  if (ranges !== undefined && !isValidManualRanges(ranges)) {
+    res.status(400).json({ error: "ranges must be a non-empty array of {startTime, endTime} (HH:MM, startTime < endTime)" });
     return;
   }
 
@@ -522,9 +547,9 @@ router.post("/professionals/me/calendar/quick-block-busy", requireAuth, requireR
   while (cursor <= endDate) {
     const daySlots = openSlots.filter((s) => s.date === cursor);
     if (daySlots.length > 0) {
-      const busy = await getRecurringAndSessionBusyWindows(profId, cursor);
+      const windows = ranges ?? await getRecurringAndSessionBusyWindows(profId, cursor);
       for (const s of daySlots) {
-        if (overlapsAnyWindow(busy, s.startTime, s.endTime)) idsToBlock.push(s.id);
+        if (overlapsAnyWindow(windows, s.startTime, s.endTime)) idsToBlock.push(s.id);
       }
     }
     cursor = addDaysIsoLocal(cursor, 1);

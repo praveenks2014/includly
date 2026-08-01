@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, ShieldAlert } from "lucide-react";
+import { Plus, Loader2, ShieldAlert, Ban, Trash2 } from "lucide-react";
 import "./ProfessionalCalendar.css";
 
 interface CommittedBlock {
@@ -148,6 +148,13 @@ interface AddSlotDraft {
 
 const emptyDraft: AddSlotDraft = { date: "", startTime: "", endTime: "", priceInr: "" };
 
+interface TimeRange {
+  startTime: string;
+  endTime: string;
+}
+
+const emptyRange: TimeRange = { startTime: "09:00", endTime: "10:00" };
+
 export function ProfessionalCalendar() {
   const calendarRef = useRef<FullCalendar>(null);
   const { toast } = useToast();
@@ -158,6 +165,10 @@ export function ProfessionalCalendar() {
   const [draft, setDraft] = useState<AddSlotDraft>(emptyDraft);
   const [saving, setSaving] = useState(false);
   const [quickBlocking, setQuickBlocking] = useState(false);
+  const [rangeBlockOpen, setRangeBlockOpen] = useState(false);
+  const [rangeBlockDate, setRangeBlockDate] = useState("");
+  const [rangeBlockRanges, setRangeBlockRanges] = useState<TimeRange[]>([{ ...emptyRange }]);
+  const [rangeBlocking, setRangeBlocking] = useState(false);
 
   function refetch() {
     calendarRef.current?.getApi().refetchEvents();
@@ -299,11 +310,59 @@ export function ProfessionalCalendar() {
     }
   }
 
+  function openRangeBlock() {
+    const view = calendarRef.current?.getApi().view;
+    setRangeBlockDate(view ? format(view.activeStart, "yyyy-MM-dd") : "");
+    setRangeBlockRanges([{ ...emptyRange }]);
+    setRangeBlockOpen(true);
+  }
+  function addRangeRow() {
+    setRangeBlockRanges((prev) => [...prev, { ...emptyRange }]);
+  }
+  function removeRangeRow(idx: number) {
+    setRangeBlockRanges((prev) => prev.filter((_, i) => i !== idx));
+  }
+  function updateRangeRow(idx: number, field: keyof TimeRange, value: string) {
+    setRangeBlockRanges((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r)));
+  }
+
+  // Manual range block — same bulk-block endpoint as busy-hours quick-block
+  // above, just with caller-supplied ranges instead of computed busy
+  // windows (see sessions.ts's comment on quick-block-busy). Single day
+  // only: startDate === endDate, matching what this feature actually asked
+  // for ("multiple ranges during the SAME day"), even though the endpoint
+  // itself is range-capable.
+  async function handleRangeBlock() {
+    if (!rangeBlockDate || rangeBlockRanges.length === 0 || rangeBlockRanges.some((r) => !r.startTime || !r.endTime || r.startTime >= r.endTime)) {
+      toast({ title: "Add a date and at least one valid start/end range", variant: "destructive" });
+      return;
+    }
+    setRangeBlocking(true);
+    try {
+      const res = await fetchWithAuth("/api/professionals/me/calendar/quick-block-busy", {
+        method: "POST",
+        body: JSON.stringify({ startDate: rangeBlockDate, endDate: rangeBlockDate, ranges: rangeBlockRanges }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Could not block time range");
+      toast({ title: data.blockedCount > 0 ? `Blocked ${data.blockedCount} slot${data.blockedCount === 1 ? "" : "s"}` : "No open slots fall within those ranges" });
+      setRangeBlockOpen(false);
+      refetch();
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Could not block time range", variant: "destructive" });
+    } finally {
+      setRangeBlocking(false);
+    }
+  }
+
   return (
     <div className="pro-calendar bg-white border border-gray-100 rounded-2xl shadow-[0_2px_12px_rgba(26,35,64,0.06)] p-4">
       <div className="flex justify-end gap-2 mb-2">
         <Button size="sm" variant="ghost" onClick={handleQuickBlockBusy} disabled={quickBlocking} className="gap-1 text-xs text-[#1A2340] hover:bg-gray-100" aria-label="Block busy-hour conflicts in this view">
           {quickBlocking ? <Loader2 size={13} className="animate-spin" /> : <ShieldAlert size={13} />} Block busy-hour conflicts
+        </Button>
+        <Button size="sm" variant="ghost" onClick={openRangeBlock} className="gap-1 text-xs text-[#1A2340] hover:bg-gray-100" aria-label="Block a time range">
+          <Ban size={13} /> Block time range
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setAddOpen(true)} className="gap-1 text-xs text-[#2EC4A5] hover:text-[#26a88d] hover:bg-[#2EC4A5]/10" aria-label="Add one-off slot">
           <Plus size={13} /> Add one-off slot
@@ -413,6 +472,48 @@ export function ProfessionalCalendar() {
           <DialogFooter>
             <Button onClick={handleAddSlot} disabled={saving} className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white gap-2">
               {saving ? <Loader2 size={14} className="animate-spin" /> : "Add slot"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rangeBlockOpen} onOpenChange={setRangeBlockOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Block time range</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="range-block-date">Date</Label>
+              <Input id="range-block-date" type="date" value={rangeBlockDate} onChange={(e) => setRangeBlockDate(e.target.value)} />
+            </div>
+            <div>
+              <div className="flex items-center justify-between">
+                <Label>Ranges to block</Label>
+                <Button type="button" size="sm" variant="ghost" onClick={addRangeRow} className="h-6 px-2 text-xs text-[#2EC4A5] hover:text-[#26a88d] hover:bg-[#2EC4A5]/10">
+                  <Plus size={12} className="mr-1" /> Add another range
+                </Button>
+              </div>
+              <div className="space-y-1.5 mt-1.5">
+                {rangeBlockRanges.map((range, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5">
+                    <Input type="time" value={range.startTime} onChange={(e) => updateRangeRow(idx, "startTime", e.target.value)} className="h-8 text-xs" aria-label="Range start time" />
+                    <span className="text-gray-400 text-xs">to</span>
+                    <Input type="time" value={range.endTime} onChange={(e) => updateRangeRow(idx, "endTime", e.target.value)} className="h-8 text-xs" aria-label="Range end time" />
+                    {rangeBlockRanges.length > 1 && (
+                      <button onClick={() => removeRangeRow(idx)} className="text-gray-300 hover:text-red-400 transition-colors p-1 rounded-lg" aria-label="Remove range">
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <p className="text-xs text-gray-400">Every open slot on this date within any of these ranges will be blocked.</p>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleRangeBlock} disabled={rangeBlocking} className="bg-[#1A2340] hover:bg-[#242f52] text-white gap-2">
+              {rangeBlocking ? <Loader2 size={14} className="animate-spin" /> : "Block"}
             </Button>
           </DialogFooter>
         </DialogContent>
