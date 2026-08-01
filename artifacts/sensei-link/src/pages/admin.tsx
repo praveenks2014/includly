@@ -2050,24 +2050,47 @@ function AdminEngagementsTab() {
   const [loadingLifecycle, setLoadingLifecycle] = useState(false);
   const [form, setForm] = useState({ parentId: "", professionalId: "", childId: "", startDate: "", monthlyFeeInr: "", tier: "", notes: "" });
   const [creating, setCreating] = useState(false);
+  // Required — this endpoint activates the engagement immediately (no later
+  // "accept" step), so without a schedule captured here the engagement's
+  // commitment would silently never block anything (see admin.ts's comment
+  // on POST /admin/engagements).
+  const [scheduleSlots, setScheduleSlots] = useState<{ dayOfWeek: number; startTime: string; endTime: string }[]>([]);
+
+  function addScheduleSlot() {
+    setScheduleSlots((prev) => [...prev, { dayOfWeek: 1, startTime: "09:00", endTime: "10:00" }]);
+  }
+  function removeScheduleSlot(idx: number) {
+    setScheduleSlots((prev) => prev.filter((_, i) => i !== idx));
+  }
+  function updateScheduleSlot(idx: number, field: "dayOfWeek" | "startTime" | "endTime", value: string | number) {
+    setScheduleSlots((prev) => prev.map((s, i) => (i === idx ? { ...s, [field]: value } : s)));
+  }
 
   async function handleCreate() {
+    if (scheduleSlots.length === 0) {
+      toast({ title: "Add at least one recurring schedule slot", variant: "destructive" });
+      return;
+    }
     setCreating(true);
     try {
-      await fetchWithAuth("/api/admin/engagements", {
+      const res = await fetchWithAuth("/api/admin/engagements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           parentId: Number(form.parentId), professionalId: Number(form.professionalId),
           childId: form.childId ? Number(form.childId) : null, startDate: form.startDate,
           monthlyFeeInr: Number(form.monthlyFeeInr), tier: form.tier || null, notes: form.notes || null,
+          recurringSchedule: scheduleSlots,
         }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to create engagement");
       queryClient.invalidateQueries({ queryKey: ["admin-engagements"] });
       setShowCreate(false);
       setForm({ parentId: "", professionalId: "", childId: "", startDate: "", monthlyFeeInr: "", tier: "", notes: "" });
+      setScheduleSlots([]);
       toast({ title: "Engagement created ✓" });
-    } catch { toast({ title: "Failed to create engagement", variant: "destructive" }); }
+    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed to create engagement", variant: "destructive" }); }
     finally { setCreating(false); }
   }
 
@@ -2260,6 +2283,38 @@ function AdminEngagementsTab() {
                   className="rounded-lg focus-visible:ring-[#2EC4A5] mt-1" />
               </div>
             ))}
+
+            <div>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold text-[#1A2340]">Recurring Schedule (required)</Label>
+                <Button type="button" size="sm" variant="ghost" onClick={addScheduleSlot} className="h-6 px-2 text-xs text-[#2EC4A5] hover:text-[#26a88d] hover:bg-[#2EC4A5]/10">
+                  + Add day
+                </Button>
+              </div>
+              {scheduleSlots.length === 0 ? (
+                <p className="text-xs text-gray-400 mt-1">No schedule set — required before this engagement can be created.</p>
+              ) : (
+                <div className="space-y-1.5 mt-1.5">
+                  {scheduleSlots.map((slot, idx) => (
+                    <div key={idx} className="flex items-center gap-1.5">
+                      <select
+                        value={slot.dayOfWeek}
+                        onChange={(e) => updateScheduleSlot(idx, "dayOfWeek", Number(e.target.value))}
+                        className="h-8 text-xs border border-gray-200 rounded-lg px-1.5 bg-white focus:ring-[#2EC4A5] focus:ring-1"
+                      >
+                        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, dow) => <option key={dow} value={dow}>{d}</option>)}
+                      </select>
+                      <Input type="time" value={slot.startTime} onChange={(e) => updateScheduleSlot(idx, "startTime", e.target.value)} className="h-8 text-xs rounded-lg focus-visible:ring-[#2EC4A5]" />
+                      <span className="text-gray-400 text-xs">to</span>
+                      <Input type="time" value={slot.endTime} onChange={(e) => updateScheduleSlot(idx, "endTime", e.target.value)} className="h-8 text-xs rounded-lg focus-visible:ring-[#2EC4A5]" />
+                      <button onClick={() => removeScheduleSlot(idx)} className="text-gray-300 hover:text-red-400 transition-colors p-1 rounded-lg" aria-label="Remove slot">
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter className="gap-2">
             <Button variant="ghost" onClick={() => setShowCreate(false)}>Cancel</Button>

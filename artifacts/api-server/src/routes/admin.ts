@@ -1151,11 +1151,31 @@ router.get("/admin/engagements", ...adminGuard, async (_req, res): Promise<void>
   res.json(rows);
 });
 
+// recurringSchedule is required here, not optional, because this endpoint
+// inserts the engagement directly as status:"active" — unlike every other
+// creation path, there's no later "accept" step that would otherwise gate
+// activation behind supplying one. Without this, the engagement's commitment
+// is invisible to getCommittedEngagementBlocks/getRecurringAndSessionBusyWindows
+// (recurringScheduleJson stays NULL forever — no edit endpoint exists to fix
+// it after the fact), a real double-booking exclusion gap, not just a
+// display gap, since generation (B3) and manual-add (B7) read the same
+// NULL-safe-but-silently-empty function.
+const AdminEngagementRecurringScheduleSlot = z.object({
+  dayOfWeek: z.number().int().min(0).max(6),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
 // POST /admin/engagements — admin creates a new engagement (from a matched request)
 router.post("/admin/engagements", ...adminGuard, async (req, res): Promise<void> => {
-  const { parentId, professionalId, childId, matchRequestId, tier, startDate, monthlyFeeInr, notes } = req.body ?? {};
+  const { parentId, professionalId, childId, matchRequestId, tier, startDate, monthlyFeeInr, notes, recurringSchedule } = req.body ?? {};
   if (!parentId || !professionalId || !startDate || !monthlyFeeInr) {
     res.status(400).json({ error: "parentId, professionalId, startDate, monthlyFeeInr are required" });
+    return;
+  }
+  const parsedSchedule = z.array(AdminEngagementRecurringScheduleSlot).min(1).safeParse(recurringSchedule);
+  if (!parsedSchedule.success) {
+    res.status(400).json({ error: "recurringSchedule is required (at least one {dayOfWeek, startTime, endTime} slot)" });
     return;
   }
 
@@ -1172,6 +1192,7 @@ router.post("/admin/engagements", ...adminGuard, async (req, res): Promise<void>
       monthlyFeeInr: Number(monthlyFeeInr),
       notes: notes ?? null,
       status: "active",
+      recurringScheduleJson: parsedSchedule.data,
     })
     .returning();
 

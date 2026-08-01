@@ -18,6 +18,13 @@ import { z } from "zod";
 
 const router: IRouter = Router();
 
+// recurringSchedule is required for the same reason it's required on
+// POST /admin/engagements: this endpoint inserts status:"active" directly,
+// with no later "accept" step to gate activation behind supplying one —
+// see the longer comment on that endpoint in admin.ts. No live frontend
+// caller currently reaches this route, but it stays reachable, so it gets
+// the identical guard rather than being left as a dormant copy of the same
+// gap.
 const CreateEngagementBody = z.object({
   professionalId: z.number().int().positive(),
   childId:        z.number().int().positive().optional(),
@@ -26,6 +33,11 @@ const CreateEngagementBody = z.object({
   hoursPerWeek:   z.number().int().min(1).max(40),
   monthlyFeeInr:  z.number().int().min(0),
   notes:          z.string().optional(),
+  recurringSchedule: z.array(z.object({
+    dayOfWeek: z.number().int().min(0).max(6),
+    startTime: z.string().regex(/^\d{2}:\d{2}$/),
+    endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  })).min(1),
 });
 
 const LogWeekBody = z.object({
@@ -199,7 +211,7 @@ router.post("/engagements", requireAuth, requireRole("parent"), async (req, res)
   const parsed = CreateEngagementBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { professionalId, childId, matchRequestId, startDate, hoursPerWeek, monthlyFeeInr, notes } = parsed.data;
+  const { professionalId, childId, matchRequestId, startDate, hoursPerWeek, monthlyFeeInr, notes, recurringSchedule } = parsed.data;
 
   const nextBillingDate = addMonths(startDate, 1);
 
@@ -233,6 +245,7 @@ router.post("/engagements", requireAuth, requireRole("parent"), async (req, res)
       nextBillingDate,
       trialCreditInr,
       status: "active",
+      recurringScheduleJson: recurringSchedule,
     })
     .returning();
 
