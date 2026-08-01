@@ -11,7 +11,7 @@ import { AppShell } from "@/components/AppShell";
 import { ComingSoon } from "@/components/ComingSoon";
 import { RequireRole } from "@/guards/RequireRole";
 import { RequireChildProfile } from "@/guards/RequireChildProfile";
-import { SHELL_ROOT, isShellPath, type Role } from "@/nav/config";
+import { SHELL_ROOT, isShellPath, isKnownPublicPath, type Role } from "@/nav/config";
 import { useGetMe } from "@workspace/api-client-react";
 import { SelectedChildProvider } from "@/contexts/SelectedChildContext";
 import { SHOW_TUTOR_SEARCH, SHOW_THERAPIST_SEARCH } from "@/features";
@@ -98,7 +98,12 @@ function ClerkQueryClientCacheInvalidator() {
 
 // ─── Layout helpers ────────────────────────────────────────────────────────────
 
-const HIDE_NAVBAR_PATHS = ["/sign-in", "/sign-up", "/sso-callback", "/onboarding"];
+// /choose-role renders the exact same ChooseRolePage as /onboarding (a real,
+// actively-reached destination — sign-up.tsx's <SignUp fallbackRedirectUrl>
+// points here directly, see the route comment below) but was missing from
+// this list, so the same page showed no chrome via /onboarding and the
+// marketing Navbar via /choose-role depending on which URL reached it.
+const HIDE_NAVBAR_PATHS = ["/sign-in", "/sign-up", "/sso-callback", "/onboarding", "/choose-role"];
 
 // Wraps children in AppShell when signed in, bare layout otherwise.
 // Used for public pages (e.g. /resources, /support) that should show the parent
@@ -126,6 +131,21 @@ function Layout({ children }: { children: React.ReactNode }) {
     HIDE_NAVBAR_PATHS.some((p) => loc.startsWith(p)) ||
     isShellPath(loc) ||
     (isSignedIn === true && (loc.startsWith("/support") || loc.startsWith("/resources")));
+
+  // Dev-only tripwire for the exact gap that broke /search, /p/:id, /admin,
+  // /forum, and /choose-role: a signed-in user reaching a path that isn't
+  // in SHELL_PREFIXES/HIDE_NAVBAR_PATHS (so the marketing Navbar renders)
+  // and isn't explicitly reviewed as intentionally-public either. Fires the
+  // first time anyone visits the route locally, so a newly-added route
+  // can't silently fall through this gap again without at least a loud
+  // console warning during development.
+  if (import.meta.env.DEV && isSignedIn === true && !hideNav && !isKnownPublicPath(loc)) {
+    console.warn(
+      `[nav] "${loc}" shows the marketing Navbar to a signed-in user, and isn't in SHELL_PREFIXES, HIDE_NAVBAR_PATHS, or isKnownPublicPath. ` +
+      `Add it to the right list in nav/config.ts (or App.tsx's HIDE_NAVBAR_PATHS) — this is the same gap that broke /search, /p/:id, /admin, /forum, and /choose-role.`
+    );
+  }
+
   return (
     <>
       {!hideNav && <Navbar />}
