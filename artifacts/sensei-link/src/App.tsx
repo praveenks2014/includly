@@ -331,7 +331,18 @@ function Router() {
           <Route path="/dev-signin" component={DevSignInPage} />
         )}
         <Route path="/search" component={SearchPage} />
-        <Route path="/p/:id" component={ProfessionalProfilePage} />
+        {/* AuthShell (not ParentShell/RequireAuth) — this page must stay
+            reachable by signed-out visitors and by any signed-in role
+            (a professional viewing a peer's profile, etc.), not just
+            parents. Signed in, it gains SelectedChildProvider + AppShell
+            (so the tutor/therapist request widget below has real child
+            context — see the professional-profile.tsx routing fix); signed
+            out, it falls through to the bare page exactly as before. */}
+        <Route path="/p/:id">
+          <AuthShell>
+            <ProfessionalProfilePage />
+          </AuthShell>
+        </Route>
         <Route path="/pricing" component={PricingPage} />
         <Route path="/payment/success" component={PaymentSuccessPage} />
         <Route path="/payment/cancel" component={PaymentCancelPage} />
