@@ -209,10 +209,6 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
   const { data: availability } = useSpecialtyAvailability();
   const counts = availability?.counts ?? {};
 
-  function goToSearch(specialty: string) {
-    setLocation(`/search?specialty=${specialty}`);
-  }
-
   const dots: Record<string, DotState> = {
     shadow_teacher: shadowDot,
     home_tutor: tutorDot,
@@ -262,11 +258,13 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
     },
     psychiatrist: {
       isLive: SHOW_CONSULTATION_TILES && (counts["psychiatrist"] ?? 0) > 0,
-      // List View goes straight to search results, unchanged; Icon Grid
-      // expands the consultation mini-form inline first (same /services?open=
-      // mechanism as shadow_teacher/home_tutor/therapist above).
-      navigate: () =>
-        viewMode === "list" ? goToSearch("psychiatrist") : setLocation("/services?open=psychiatrist"),
+      // Both view modes expand the consultation mini-form inline now (same
+      // /services?open= mechanism as shadow_teacher/home_tutor/therapist
+      // above) — List View used to go straight to /search instead, but
+      // that was the same tile producing a different experience purely
+      // because of which view mode a parent happened to be in, with no
+      // real reason to keep it once Icon Grid's inline flow existed.
+      navigate: () => setLocation("/services?open=psychiatrist"),
       comingSoon: {
         icon: Brain,
         title: "Psychiatrist consultations coming soon",
@@ -275,10 +273,7 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
     },
     developmental_pediatrician: {
       isLive: SHOW_CONSULTATION_TILES && (counts["developmental_pediatrician"] ?? 0) > 0,
-      navigate: () =>
-        viewMode === "list"
-          ? goToSearch("developmental_pediatrician")
-          : setLocation("/services?open=developmental_pediatrician"),
+      navigate: () => setLocation("/services?open=developmental_pediatrician"),
       comingSoon: {
         icon: Baby,
         title: "Developmental Pediatrician consultations coming soon",
@@ -287,8 +282,7 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
     },
     neurologist: {
       isLive: SHOW_CONSULTATION_TILES && (counts["neurologist"] ?? 0) > 0,
-      navigate: () =>
-        viewMode === "list" ? goToSearch("neurologist") : setLocation("/services?open=neurologist"),
+      navigate: () => setLocation("/services?open=neurologist"),
       comingSoon: {
         icon: Activity,
         title: "Neurologist consultations coming soon",
@@ -306,11 +300,10 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
     },
     coaching: {
       isLive: SHOW_COACH_TILE && (counts["coaching"] ?? 0) > 0,
-      // List View goes straight to /search?specialty=coaching, unchanged
-      // (a parent can still pick an activity manually in the Filters panel
-      // there). Icon Grid expands the activity-selection form inline first,
-      // pre-supplying coachingSubType on arrival at search.
-      navigate: () => (viewMode === "list" ? goToSearch("coaching") : setLocation("/services?open=coaching")),
+      // Both view modes expand the activity-selection form inline now — see
+      // the psychiatrist entry above for why the old List-View-only
+      // /search escape hatch was removed.
+      navigate: () => setLocation("/services?open=coaching"),
       comingSoon: {
         icon: Trophy,
         title: "Inclusive Coach booking coming soon",
