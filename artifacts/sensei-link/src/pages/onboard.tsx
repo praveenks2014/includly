@@ -45,8 +45,38 @@ const STEP_SUBTITLES = [
   "Let parents know your session rate. You can always update this later.",
 ];
 
-const VERTICAL_CARDS = [
+type VerticalValue = "shadow_teacher" | "home_tutor" | "therapist";
+
+interface VerticalCard {
+  // Unique per card — drives selection highlighting. Distinct from `value`
+  // because Psychiatrist/Developmental Pediatrician/Neurologist share
+  // value: "therapist" with the generic Therapist card (all four are the
+  // SAME DB vertical — see professionalVerticalEnum's 3-value enum — the
+  // discipline lives one level down, in verticalDetails.discipline). Using
+  // `value` alone for isSelected would highlight all four at once.
+  id: string;
+  value: VerticalValue;
+  // Pre-fills verticalDetails.discipline for the 3 discipline-specific
+  // cards below — omitted (undefined) for Shadow Teacher/Home Tutor/the
+  // generic Therapist card, which don't pin a specific discipline.
+  discipline?: string;
+  // Overrides VERTICAL_TO_SPECIALTY's generic default so these 3 cards get
+  // the CORRECT specialty immediately at Step 0, instead of the
+  // "speech_therapy" placeholder that used to only get corrected once
+  // onboard-stage2.tsx's discipline dropdown was submitted.
+  specialty?: CreateProfessionalProfileBodySpecialty;
+  emoji: string;
+  title: string;
+  desc: string;
+  selectedBorder: string;
+  selectedBg: string;
+  selectedRing: string;
+  iconBg: string;
+}
+
+const VERTICAL_CARDS: VerticalCard[] = [
   {
+    id: "shadow_teacher",
     value: "shadow_teacher",
     emoji: "🧑‍🏫",
     title: "Shadow Teacher",
@@ -57,6 +87,7 @@ const VERTICAL_CARDS = [
     iconBg: "#CCFBF1",
   },
   {
+    id: "home_tutor",
     value: "home_tutor",
     emoji: "📚",
     title: "Home Tutor",
@@ -67,24 +98,85 @@ const VERTICAL_CARDS = [
     iconBg: "#DBEAFE",
   },
   {
+    id: "therapist",
     value: "therapist",
     emoji: "🩺",
     title: "Therapist / Special Educator",
-    desc: "I provide speech, OT, behavioural (ABA), or special education therapy. RCI registration required.",
+    // Accurate, not just less-wrong: RCI genuinely IS mandatory for some
+    // disciplines still bucketed under this generic card (Speech Therapy,
+    // Special Education, Clinical Psychology, Rehabilitation Counselling)
+    // — dropping the RCI mention entirely would be inaccurate in the other
+    // direction. The dropdown inside onboard-stage2.tsx states the exact
+    // per-discipline requirement once a specific discipline is chosen.
+    desc: "I provide speech, OT, ABA, or special education therapy. RCI registration required for select disciplines.",
     selectedBorder: "#7C3AED",
     selectedBg: "#F5F3FF",
     selectedRing: "rgba(124,58,237,0.18)",
     iconBg: "#EDE9FE",
   },
-] as const;
-
-type VerticalValue = (typeof VERTICAL_CARDS)[number]["value"];
+  {
+    id: "psychiatrist",
+    value: "therapist",
+    discipline: "Psychiatrist",
+    specialty: "psychiatrist",
+    emoji: "🧠",
+    title: "Psychiatrist",
+    desc: "I provide psychiatric consultations for children with special needs.",
+    selectedBorder: "#4F46E5",
+    selectedBg: "#EEF2FF",
+    selectedRing: "rgba(79,70,229,0.18)",
+    iconBg: "#E0E7FF",
+  },
+  {
+    id: "developmental_pediatrician",
+    value: "therapist",
+    discipline: "Developmental Pediatrician",
+    specialty: "developmental_pediatrician",
+    emoji: "👶",
+    title: "Developmental Pediatrician",
+    desc: "I provide developmental-pediatric consultations for children with special needs.",
+    selectedBorder: "#059669",
+    selectedBg: "#ECFDF5",
+    selectedRing: "rgba(5,150,105,0.18)",
+    iconBg: "#D1FAE5",
+  },
+  {
+    id: "neurologist",
+    value: "therapist",
+    discipline: "Neurologist",
+    specialty: "neurologist",
+    emoji: "⚡",
+    title: "Neurologist",
+    desc: "I provide neurology consultations for children with special needs.",
+    selectedBorder: "#9333EA",
+    selectedBg: "#FAF5FF",
+    selectedRing: "rgba(147,51,234,0.18)",
+    iconBg: "#F3E8FF",
+  },
+];
 
 const VERTICAL_TO_SPECIALTY: Record<VerticalValue, CreateProfessionalProfileBodySpecialty> = {
   shadow_teacher: "shadow_teacher",
   home_tutor: "special_tutor",
   therapist: "speech_therapy",
 };
+
+// Re-derives which of the 6 cards should show as selected when editing an
+// existing profile — matches a discipline-specific card first (so an
+// existing Neurologist correctly re-highlights the Neurologist card, not
+// the generic Therapist one), falling back to the generic card for that
+// vertical when no discipline is set or it doesn't match one of the 3
+// specific cards (e.g. Speech Therapy, OT, ABA — all still the generic
+// Therapist card).
+function findCardForProfile(vertical: VerticalValue | undefined, discipline: string | undefined): string {
+  if (!vertical) return "";
+  if (discipline) {
+    const specific = VERTICAL_CARDS.find((c) => c.value === vertical && c.discipline === discipline);
+    if (specific) return specific.id;
+  }
+  const generic = VERTICAL_CARDS.find((c) => c.value === vertical && !c.discipline);
+  return generic?.id ?? "";
+}
 
 const LANGUAGE_OPTIONS = [
   "English", "Hindi", "Tamil", "Telugu", "Kannada", "Malayalam",
@@ -108,6 +200,12 @@ export default function OnboardPage() {
 
   const [vertical, setVertical] = useState<VerticalValue | "">(
     (existingProfile?.vertical as VerticalValue | undefined) ?? ""
+  );
+  const [selectedCardId, setSelectedCardId] = useState<string>(
+    findCardForProfile(
+      existingProfile?.vertical as VerticalValue | undefined,
+      (existingProfile?.verticalDetails as { discipline?: string } | undefined)?.discipline,
+    ),
   );
   const isShadowTeacher = vertical === "shadow_teacher";
   const [form, setForm] = useState({
@@ -134,6 +232,13 @@ export default function OnboardPage() {
       profileExists.current = true;
       if (existingProfile.vertical && !vertical) {
         setVertical(existingProfile.vertical as VerticalValue);
+        setSelectedCardId((prev) =>
+          prev ||
+          findCardForProfile(
+            existingProfile.vertical as VerticalValue,
+            (existingProfile.verticalDetails as { discipline?: string } | undefined)?.discipline,
+          ),
+        );
       }
       setForm((prev) => ({
         ...prev,
@@ -251,7 +356,13 @@ export default function OnboardPage() {
 
   async function saveVertical() {
     if (!vertical) return;
-    const specialty = VERTICAL_TO_SPECIALTY[vertical];
+    const selectedCard = VERTICAL_CARDS.find((c) => c.id === selectedCardId);
+    // selectedCard.specialty (set only on the 3 discipline-specific cards)
+    // gives the CORRECT specialty immediately, instead of the generic
+    // placeholder VERTICAL_TO_SPECIALTY[vertical] would otherwise produce
+    // (e.g. "speech_therapy" for every therapist-vertical card) until
+    // onboard-stage2.tsx's discipline dropdown is submitted.
+    const specialty = selectedCard?.specialty ?? VERTICAL_TO_SPECIALTY[vertical];
     setIsSaving(true);
     try {
       if (!profileExists.current) {
@@ -268,6 +379,17 @@ export default function OnboardPage() {
       } else {
         await updateMutation.mutateAsync({
           data: { vertical, specialty },
+        });
+      }
+      // CreateProfessionalProfileBody has no verticalDetails field (only
+      // UpdateProfessionalProfileBody does, deep-merged server-side — see
+      // professionals.ts's PATCH route) — so a discipline pre-fill for a
+      // brand-new profile requires this follow-up PATCH regardless of
+      // whether the profile was just created or already existed. No-op
+      // (skipped entirely) for the 3 cards with no discipline field.
+      if (selectedCard?.discipline) {
+        await updateMutation.mutateAsync({
+          data: { verticalDetails: { discipline: selectedCard.discipline } },
         });
       }
       queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
@@ -480,12 +602,12 @@ export default function OnboardPage() {
         {step === 0 && (
           <div className="flex flex-col gap-3">
             {VERTICAL_CARDS.map((card) => {
-              const isSelected = vertical === card.value;
+              const isSelected = selectedCardId === card.id;
               return (
                 <button
-                  key={card.value}
+                  key={card.id}
                   type="button"
-                  onClick={() => setVertical(card.value)}
+                  onClick={() => { setVertical(card.value); setSelectedCardId(card.id); }}
                   className="flex items-start text-left w-full relative focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
                   style={{
                     gap: 14,
@@ -499,7 +621,7 @@ export default function OnboardPage() {
                     transition: "all 0.18s ease",
                     minHeight: 80,
                   }}
-                  data-testid={`vertical-card-${card.value}`}
+                  data-testid={`vertical-card-${card.id}`}
                 >
                   <div
                     className="flex items-center justify-center shrink-0 transition-colors"
