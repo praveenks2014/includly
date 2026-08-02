@@ -6,7 +6,7 @@ import { db, usersTable, professionalProfilesTable, adminSettingsTable, specialt
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
 import { notifyParentsOnProfileUpdate } from "../lib/notificationService";
 import { getClerkPrimaryEmail } from "../lib/clerkUser";
-import { recomputeSubmissionStatus, RCI_CERTIFICATE_DOC_TYPE } from "../lib/verificationRequirements";
+import { recomputeSubmissionStatus, RCI_CERTIFICATE_DOC_TYPE, RCI_REQUIRED_DISCIPLINES } from "../lib/verificationRequirements";
 import { onProfessionalBecameEligible } from "../lib/candidateRefresh";
 import {
   GetMyProfessionalProfileResponse,
@@ -477,6 +477,22 @@ router.post("/professionals/me/upi-verification/confirm", requireAuth, requireRo
   );
 });
 
+// RCI registration is only mandatory for the discipline subset that's
+// actually RCI-regulated in India — NOT every vertical === "therapist" row.
+// Developmental Pediatrician/Psychiatrist/Neurologist also use
+// vertical === "therapist" (the only fit in the 3-option vertical picker)
+// but are NMC-regulated doctors, not RCI-regulated. RCI_REQUIRED_DISCIPLINES
+// is imported directly from verificationRequirements.ts — the exact same Set
+// disciplineCredentialKind() uses for onboarding/admin-approval — so no
+// caller here defines "who needs an RCI cert" a second, divergent way.
+// Module-scope (not per-request) since it depends only on the table/column,
+// shared by both the search route and specialty-availability below so the
+// two never drift apart from each other either.
+const isRciRequiredDiscipline = inArray(
+  sql`(${professionalProfilesTable.verticalDetails}->>'discipline')`,
+  Array.from(RCI_REQUIRED_DISCIPLINES),
+);
+
 router.get("/professionals/search", optionalAuth, async (req, res): Promise<void> => {
   const parsed = SearchProfessionalsQueryParams.safeParse(req.query);
   if (!parsed.success) {
@@ -496,17 +512,21 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
   conditions.push(eq(professionalProfilesTable.verificationStatus, "verified"));
   // Only show activation-complete profiles (Stage 2 onboarding done)
   conditions.push(eq(professionalProfilesTable.paymentActivated, true));
-  // Therapists must have a CRR number on file — prevents unlicensed profiles appearing in search
-  conditions.push(sql`(${professionalProfilesTable.vertical} != 'therapist' OR (${professionalProfilesTable.rciCrrNumber} IS NOT NULL AND ${professionalProfilesTable.rciCrrNumber} != ''))`);
+
+  // Therapists in an RCI-required discipline must have a CRR number on file — prevents
+  // unlicensed profiles appearing in search. Non-RCI disciplines (medical/OT/ABA/ancillary)
+  // are unaffected by this condition.
+  conditions.push(sql`(${professionalProfilesTable.vertical} != 'therapist' OR NOT (${isRciRequiredDiscipline}) OR (${professionalProfilesTable.rciCrrNumber} IS NOT NULL AND ${professionalProfilesTable.rciCrrNumber} != ''))`);
   // Defense-in-depth: every listed specialist must have a government ID on file, and
-  // therapists must additionally have their RCI certificate on file. This is enforced
-  // directly at query time (not just at admin-approval time) so that legacy/manually
-  // mutated rows can never surface an under-verified specialist to parents.
+  // therapists in an RCI-required discipline must additionally have their RCI certificate
+  // on file. This is enforced directly at query time (not just at admin-approval time) so
+  // that legacy/manually mutated rows can never surface an under-verified specialist to
+  // parents.
   conditions.push(
     sql`EXISTS (SELECT 1 FROM ${identityVerificationsTable} iv WHERE iv.professional_id = ${professionalProfilesTable.id})`,
   );
   conditions.push(
-    sql`(${professionalProfilesTable.vertical} != 'therapist' OR EXISTS (
+    sql`(${professionalProfilesTable.vertical} != 'therapist' OR NOT (${isRciRequiredDiscipline}) OR EXISTS (
       SELECT 1 FROM ${professionalCertificationsTable} pc
       WHERE pc.professional_id = ${professionalProfilesTable.id} AND pc.document_type = ${RCI_CERTIFICATE_DOC_TYPE}
     ))`,
@@ -719,19 +739,35 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
 
 // GET /professionals/specialty-availability
 //
-// Public, parent-facing counts of VERIFIED professionals per specialty —
-// backs the Find-a-Specialist tile grid's visibility gating (a tile only
-// shows as live once its feature flag is on AND at least one verified
-// professional actually exists under that specialty). Same GROUP BY
-// specialty, COUNT(*) shape as admin.ts's platform-stats endpoint, just
-// scoped to verificationStatus='verified' and with no admin auth gate.
+// Public, parent-facing counts of professionals per specialty who would
+// actually be returned by /professionals/search right now — backs the
+// Find-a-Specialist tile grid's visibility gating (a tile only shows as live
+// once its feature flag is on AND at least one such professional actually
+// exists under that specialty). Deliberately mirrors search's exact
+// listability conditions (verified, payment-activated, identity doc on file,
+// RCI cert for RCI-required disciplines) — previously only checked
+// verificationStatus='verified', which could show a tile as "live" while
+// search itself would return zero results for it (e.g. a verified-but-not-
+// yet-payment-activated professional). Same GROUP BY specialty, COUNT(*)
+// shape as admin.ts's platform-stats endpoint, just with no admin auth gate.
 // Registered before the /:id route below so "specialty-availability"
 // can never be shadowed by that route's :id param matching.
 router.get("/professionals/specialty-availability", optionalAuth, async (_req, res): Promise<void> => {
   const rows = await db
     .select({ specialty: professionalProfilesTable.specialty, cnt: count() })
     .from(professionalProfilesTable)
-    .where(eq(professionalProfilesTable.verificationStatus, "verified"))
+    .where(
+      and(
+        eq(professionalProfilesTable.verificationStatus, "verified"),
+        eq(professionalProfilesTable.paymentActivated, true),
+        sql`EXISTS (SELECT 1 FROM ${identityVerificationsTable} iv WHERE iv.professional_id = ${professionalProfilesTable.id})`,
+        sql`(${professionalProfilesTable.vertical} != 'therapist' OR NOT (${isRciRequiredDiscipline}) OR (${professionalProfilesTable.rciCrrNumber} IS NOT NULL AND ${professionalProfilesTable.rciCrrNumber} != ''))`,
+        sql`(${professionalProfilesTable.vertical} != 'therapist' OR NOT (${isRciRequiredDiscipline}) OR EXISTS (
+          SELECT 1 FROM ${professionalCertificationsTable} pc
+          WHERE pc.professional_id = ${professionalProfilesTable.id} AND pc.document_type = ${RCI_CERTIFICATE_DOC_TYPE}
+        ))`,
+      ),
+    )
     .groupBy(professionalProfilesTable.specialty);
 
   const counts: Record<string, number> = {};

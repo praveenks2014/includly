@@ -48,7 +48,16 @@ export interface ProfileForRequirements {
 // discipline list or credential-kind mapping ever changes, update BOTH.
 export type TherapistDisciplineCredentialKind = "rci" | "ot" | "medical" | "aba" | "ancillary";
 
-const RCI_REQUIRED_DISCIPLINES = new Set([
+// Exported (not just used internally by disciplineCredentialKind below) so
+// that callers which can't call disciplineCredentialKind per-row — e.g. a
+// bulk SQL WHERE clause — can build their own "is this an RCI-required
+// discipline" condition against this SAME Set, rather than hand-typing a
+// second, parallel list that could silently drift from this one. See
+// artifacts/api-server/src/routes/professionals.ts's search route for the
+// concrete case (a "vertical === 'therapist' implies RCI required" gate that
+// used to ignore discipline entirely, incorrectly blocking NMC-regulated
+// doctors — fixed by importing this Set instead of re-deriving the list).
+export const RCI_REQUIRED_DISCIPLINES = new Set([
   "Speech & Language Therapy (SLT)",
   "Special Education",
   "Clinical Psychology",
