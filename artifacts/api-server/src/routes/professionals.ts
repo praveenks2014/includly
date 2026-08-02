@@ -6,7 +6,7 @@ import { db, usersTable, professionalProfilesTable, adminSettingsTable, specialt
 import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAuth";
 import { notifyParentsOnProfileUpdate } from "../lib/notificationService";
 import { getClerkPrimaryEmail } from "../lib/clerkUser";
-import { recomputeSubmissionStatus, RCI_CERTIFICATE_DOC_TYPE, RCI_REQUIRED_DISCIPLINES } from "../lib/verificationRequirements";
+import { recomputeSubmissionStatus, buildTherapistCredentialGateSql } from "../lib/verificationRequirements";
 import { onProfessionalBecameEligible } from "../lib/candidateRefresh";
 import {
   GetMyProfessionalProfileResponse,
@@ -477,21 +477,22 @@ router.post("/professionals/me/upi-verification/confirm", requireAuth, requireRo
   );
 });
 
-// RCI registration is only mandatory for the discipline subset that's
-// actually RCI-regulated in India — NOT every vertical === "therapist" row.
-// Developmental Pediatrician/Psychiatrist/Neurologist also use
-// vertical === "therapist" (the only fit in the 3-option vertical picker)
-// but are NMC-regulated doctors, not RCI-regulated. RCI_REQUIRED_DISCIPLINES
-// is imported directly from verificationRequirements.ts — the exact same Set
-// disciplineCredentialKind() uses for onboarding/admin-approval — so no
-// caller here defines "who needs an RCI cert" a second, divergent way.
-// Module-scope (not per-request) since it depends only on the table/column,
-// shared by both the search route and specialty-availability below so the
-// two never drift apart from each other either.
-const isRciRequiredDiscipline = inArray(
-  sql`(${professionalProfilesTable.verticalDetails}->>'discipline')`,
-  Array.from(RCI_REQUIRED_DISCIPLINES),
-);
+// Each credentialed discipline (RCI-required, OT/AIOTA, medical/NMC, ABA) has
+// its own mandatory number-field + certificate-document requirement — NOT a
+// blanket vertical === "therapist" check. buildTherapistCredentialGateSql()
+// is imported directly from verificationRequirements.ts — the exact same
+// discipline Sets and doc-type constants disciplineCredentialKind()/
+// computeVerificationRequirements() use for onboarding/admin-approval — so no
+// caller here defines "which credential is required" a second, divergent
+// way. Module-scope (not per-request) since it depends only on the
+// table/column, shared by both the search route and specialty-availability
+// below so the two never drift apart from each other either.
+const therapistCredentialGate = buildTherapistCredentialGateSql({
+  vertical: professionalProfilesTable.vertical,
+  verticalDetails: professionalProfilesTable.verticalDetails,
+  rciCrrNumber: professionalProfilesTable.rciCrrNumber,
+  professionalId: professionalProfilesTable.id,
+});
 
 router.get("/professionals/search", optionalAuth, async (req, res): Promise<void> => {
   const parsed = SearchProfessionalsQueryParams.safeParse(req.query);
@@ -513,24 +514,15 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
   // Only show activation-complete profiles (Stage 2 onboarding done)
   conditions.push(eq(professionalProfilesTable.paymentActivated, true));
 
-  // Therapists in an RCI-required discipline must have a CRR number on file — prevents
-  // unlicensed profiles appearing in search. Non-RCI disciplines (medical/OT/ABA/ancillary)
-  // are unaffected by this condition.
-  conditions.push(sql`(${professionalProfilesTable.vertical} != 'therapist' OR NOT (${isRciRequiredDiscipline}) OR (${professionalProfilesTable.rciCrrNumber} IS NOT NULL AND ${professionalProfilesTable.rciCrrNumber} != ''))`);
-  // Defense-in-depth: every listed specialist must have a government ID on file, and
-  // therapists in an RCI-required discipline must additionally have their RCI certificate
-  // on file. This is enforced directly at query time (not just at admin-approval time) so
-  // that legacy/manually mutated rows can never surface an under-verified specialist to
-  // parents.
+  // Defense-in-depth: every listed specialist must have a government ID on file, and every
+  // credentialed therapist discipline must have its own required number field AND matching
+  // certificate document on file. This is enforced directly at query time (not just at
+  // admin-approval time) so that legacy/manually mutated rows can never surface an
+  // under-verified specialist to parents.
   conditions.push(
     sql`EXISTS (SELECT 1 FROM ${identityVerificationsTable} iv WHERE iv.professional_id = ${professionalProfilesTable.id})`,
   );
-  conditions.push(
-    sql`(${professionalProfilesTable.vertical} != 'therapist' OR NOT (${isRciRequiredDiscipline}) OR EXISTS (
-      SELECT 1 FROM ${professionalCertificationsTable} pc
-      WHERE pc.professional_id = ${professionalProfilesTable.id} AND pc.document_type = ${RCI_CERTIFICATE_DOC_TYPE}
-    ))`,
-  );
+  conditions.push(therapistCredentialGate);
 
   if (verifiedOnly) {
     conditions.push(eq(professionalProfilesTable.isVerified, true));
@@ -745,13 +737,14 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
 // once its feature flag is on AND at least one such professional actually
 // exists under that specialty). Deliberately mirrors search's exact
 // listability conditions (verified, payment-activated, identity doc on file,
-// RCI cert for RCI-required disciplines) — previously only checked
-// verificationStatus='verified', which could show a tile as "live" while
-// search itself would return zero results for it (e.g. a verified-but-not-
-// yet-payment-activated professional). Same GROUP BY specialty, COUNT(*)
-// shape as admin.ts's platform-stats endpoint, just with no admin auth gate.
-// Registered before the /:id route below so "specialty-availability"
-// can never be shadowed by that route's :id param matching.
+// per-discipline credential document) via the SAME therapistCredentialGate
+// fragment search uses — previously only checked verificationStatus='verified',
+// which could show a tile as "live" while search itself would return zero
+// results for it (e.g. a verified-but-not-yet-payment-activated professional).
+// Same GROUP BY specialty, COUNT(*) shape as admin.ts's platform-stats
+// endpoint, just with no admin auth gate. Registered before the /:id route
+// below so "specialty-availability" can never be shadowed by that route's
+// :id param matching.
 router.get("/professionals/specialty-availability", optionalAuth, async (_req, res): Promise<void> => {
   const rows = await db
     .select({ specialty: professionalProfilesTable.specialty, cnt: count() })
@@ -761,11 +754,7 @@ router.get("/professionals/specialty-availability", optionalAuth, async (_req, r
         eq(professionalProfilesTable.verificationStatus, "verified"),
         eq(professionalProfilesTable.paymentActivated, true),
         sql`EXISTS (SELECT 1 FROM ${identityVerificationsTable} iv WHERE iv.professional_id = ${professionalProfilesTable.id})`,
-        sql`(${professionalProfilesTable.vertical} != 'therapist' OR NOT (${isRciRequiredDiscipline}) OR (${professionalProfilesTable.rciCrrNumber} IS NOT NULL AND ${professionalProfilesTable.rciCrrNumber} != ''))`,
-        sql`(${professionalProfilesTable.vertical} != 'therapist' OR NOT (${isRciRequiredDiscipline}) OR EXISTS (
-          SELECT 1 FROM ${professionalCertificationsTable} pc
-          WHERE pc.professional_id = ${professionalProfilesTable.id} AND pc.document_type = ${RCI_CERTIFICATE_DOC_TYPE}
-        ))`,
+        therapistCredentialGate,
       ),
     )
     .groupBy(professionalProfilesTable.specialty);

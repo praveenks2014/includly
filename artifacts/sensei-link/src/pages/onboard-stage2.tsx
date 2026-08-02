@@ -538,6 +538,137 @@ function RciCertificateSection({
   );
 }
 
+// Mandatory for Occupational Therapists — AIOTA membership is the closest
+// India has to a governing body for OT; the membership number alone (asked
+// for earlier in TherapistForm's kind === "ot" block) was previously
+// sufficient with no proof required. Mirrors RciCertificateSection above.
+function AiotaCertificateSection({
+  aiotaCertFileKey,
+  setAiotaCertFileKey,
+  alreadySubmitted,
+  disabled,
+}: {
+  aiotaCertFileKey: string;
+  setAiotaCertFileKey: (v: string) => void;
+  alreadySubmitted: boolean;
+  disabled: boolean;
+}) {
+  if (alreadySubmitted) {
+    return (
+      <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-4 flex items-center gap-2 text-green-700 text-sm font-medium">
+        <CheckCircle2 size={16} />
+        AIOTA membership certificate already submitted for verification.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label className="text-sm font-semibold text-gray-800">
+          AIOTA membership certificate <span className="text-red-500 ml-1">*</span>
+        </Label>
+        <p className="text-xs text-gray-500 mt-1">
+          A scan/photo of your AIOTA membership certificate — mandatory before you can appear in parent search.
+        </p>
+      </div>
+      <FileUploadField
+        label="Upload AIOTA certificate"
+        onUploaded={setAiotaCertFileKey}
+        uploadedPath={aiotaCertFileKey}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
+// Mandatory for Developmental Pediatricians/Psychiatrists/Neurologists — the
+// NMC/State Medical Council registration NUMBER alone (asked for earlier in
+// TherapistForm's kind === "medical" block) was previously sufficient with
+// no proof required. Mirrors RciCertificateSection above.
+function MedicalCouncilCertificateSection({
+  medicalCouncilCertFileKey,
+  setMedicalCouncilCertFileKey,
+  alreadySubmitted,
+  disabled,
+}: {
+  medicalCouncilCertFileKey: string;
+  setMedicalCouncilCertFileKey: (v: string) => void;
+  alreadySubmitted: boolean;
+  disabled: boolean;
+}) {
+  if (alreadySubmitted) {
+    return (
+      <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-4 flex items-center gap-2 text-green-700 text-sm font-medium">
+        <CheckCircle2 size={16} />
+        Medical council registration certificate already submitted for verification.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label className="text-sm font-semibold text-gray-800">
+          NMC / State Medical Council registration certificate <span className="text-red-500 ml-1">*</span>
+        </Label>
+        <p className="text-xs text-gray-500 mt-1">
+          A scan/photo of your registration certificate — mandatory before you can appear in parent search.
+        </p>
+      </div>
+      <FileUploadField
+        label="Upload registration certificate"
+        onUploaded={setMedicalCouncilCertFileKey}
+        uploadedPath={medicalCouncilCertFileKey}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
+// Mandatory for ABA/Behavioral Therapists — the credential type+number alone
+// (asked for earlier in TherapistForm's kind === "aba" block) was previously
+// sufficient with no proof required. Mirrors RciCertificateSection above.
+function AbaCredentialCertificateSection({
+  abaCertFileKey,
+  setAbaCertFileKey,
+  alreadySubmitted,
+  disabled,
+}: {
+  abaCertFileKey: string;
+  setAbaCertFileKey: (v: string) => void;
+  alreadySubmitted: boolean;
+  disabled: boolean;
+}) {
+  if (alreadySubmitted) {
+    return (
+      <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-4 flex items-center gap-2 text-green-700 text-sm font-medium">
+        <CheckCircle2 size={16} />
+        Credential proof already submitted for verification.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label className="text-sm font-semibold text-gray-800">
+          BCBA / RBT / QABA credential proof <span className="text-red-500 ml-1">*</span>
+        </Label>
+        <p className="text-xs text-gray-500 mt-1">
+          A scan/photo of your credential certificate — mandatory before you can appear in parent search.
+        </p>
+      </div>
+      <FileUploadField
+        label="Upload credential proof"
+        onUploaded={setAbaCertFileKey}
+        uploadedPath={abaCertFileKey}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
 // A professional's PRIMARY vertical (set at signup) hydrates from
 // useGetMyProfessionalProfile as before. An ADDITIONAL vertical they're
 // adding later hydrates from its own professional_offerings row instead —
@@ -797,12 +928,18 @@ function TherapistForm({
   isSaving,
   idProps,
   rciCertProps,
+  aiotaCertProps,
+  medicalCouncilCertProps,
+  abaCertProps,
 }: {
   form: TherapistForm;
   setForm: React.Dispatch<React.SetStateAction<TherapistForm>>;
   isSaving: boolean;
   idProps: IdentitySectionProps;
   rciCertProps: { rciCertFileKey: string; setRciCertFileKey: (v: string) => void; alreadySubmitted: boolean };
+  aiotaCertProps: { aiotaCertFileKey: string; setAiotaCertFileKey: (v: string) => void; alreadySubmitted: boolean };
+  medicalCouncilCertProps: { medicalCouncilCertFileKey: string; setMedicalCouncilCertFileKey: (v: string) => void; alreadySubmitted: boolean };
+  abaCertProps: { abaCertFileKey: string; setAbaCertFileKey: (v: string) => void; alreadySubmitted: boolean };
 }) {
   const kind = disciplineCredentialKind(form.discipline);
   const showRciBlock = kind === "rci" && form.rciRegistered === false;
@@ -1058,6 +1195,33 @@ function TherapistForm({
         />
       )}
 
+      {kind === "ot" && (
+        <AiotaCertificateSection
+          aiotaCertFileKey={aiotaCertProps.aiotaCertFileKey}
+          setAiotaCertFileKey={aiotaCertProps.setAiotaCertFileKey}
+          alreadySubmitted={aiotaCertProps.alreadySubmitted}
+          disabled={isSaving}
+        />
+      )}
+
+      {kind === "medical" && (
+        <MedicalCouncilCertificateSection
+          medicalCouncilCertFileKey={medicalCouncilCertProps.medicalCouncilCertFileKey}
+          setMedicalCouncilCertFileKey={medicalCouncilCertProps.setMedicalCouncilCertFileKey}
+          alreadySubmitted={medicalCouncilCertProps.alreadySubmitted}
+          disabled={isSaving}
+        />
+      )}
+
+      {kind === "aba" && (
+        <AbaCredentialCertificateSection
+          abaCertFileKey={abaCertProps.abaCertFileKey}
+          setAbaCertFileKey={abaCertProps.setAbaCertFileKey}
+          alreadySubmitted={abaCertProps.alreadySubmitted}
+          disabled={isSaving}
+        />
+      )}
+
       <IdentityDocumentSection {...idProps} disabled={isSaving} />
     </div>
   );
@@ -1143,11 +1307,17 @@ export default function OnboardStage2Page() {
   const [idFileKey, setIdFileKey] = useState("");
   const [dpdpConsent, setDpdpConsent] = useState(false);
   const [rciCertFileKey, setRciCertFileKey] = useState("");
+  const [aiotaCertFileKey, setAiotaCertFileKey] = useState("");
+  const [medicalCouncilCertFileKey, setMedicalCouncilCertFileKey] = useState("");
+  const [abaCertFileKey, setAbaCertFileKey] = useState("");
 
   const idVerif = idVerificationRaw as { status?: string } | null | undefined;
   const identityAlreadySubmitted = !!idVerif && idVerif.status !== "rejected";
   const certs = (certsRaw as { documentType: string }[] | undefined) ?? [];
   const rciCertAlreadySubmitted = certs.some((c) => c.documentType === "rci_certificate");
+  const aiotaCertAlreadySubmitted = certs.some((c) => c.documentType === "aiota_certificate");
+  const medicalCouncilCertAlreadySubmitted = certs.some((c) => c.documentType === "medical_council_certificate");
+  const abaCertAlreadySubmitted = certs.some((c) => c.documentType === "aba_credential_certificate");
   const hasAnyCert = certs.length > 0;
 
   function identityValid() {
@@ -1168,6 +1338,24 @@ export default function OnboardStage2Page() {
     rciCertFileKey,
     setRciCertFileKey,
     alreadySubmitted: rciCertAlreadySubmitted,
+  };
+
+  const aiotaCertProps = {
+    aiotaCertFileKey,
+    setAiotaCertFileKey,
+    alreadySubmitted: aiotaCertAlreadySubmitted,
+  };
+
+  const medicalCouncilCertProps = {
+    medicalCouncilCertFileKey,
+    setMedicalCouncilCertFileKey,
+    alreadySubmitted: medicalCouncilCertAlreadySubmitted,
+  };
+
+  const abaCertProps = {
+    abaCertFileKey,
+    setAbaCertFileKey,
+    alreadySubmitted: abaCertAlreadySubmitted,
   };
 
   // Hard gate for all professional verticals (payee roles) — the platform
@@ -1279,11 +1467,14 @@ export default function OnboardStage2Page() {
       if (!rciCertAlreadySubmitted && !rciCertFileKey) return false;
     } else if (kind === "ot") {
       if (!therapistForm.aiotaMembershipNumber.trim()) return false;
+      if (!aiotaCertAlreadySubmitted && !aiotaCertFileKey) return false;
       // NCAHP registration number is optional — not checked.
     } else if (kind === "medical") {
       if (!therapistForm.medicalCouncilRegistrationNumber.trim()) return false;
+      if (!medicalCouncilCertAlreadySubmitted && !medicalCouncilCertFileKey) return false;
     } else if (kind === "aba") {
       if (!therapistForm.abaCredentialType || !therapistForm.abaCredentialNumber.trim()) return false;
+      if (!abaCertAlreadySubmitted && !abaCertFileKey) return false;
       // Supervising-professional fields are capture-only — not checked.
     }
     // kind === "ancillary": no required field — optional certification body only.
@@ -1461,6 +1652,45 @@ export default function OnboardStage2Page() {
         if (!certRes.ok) {
           const body = await certRes.json().catch(() => ({}));
           throw new Error((body as { error?: string }).error ?? "RCI certificate submission failed");
+        }
+      }
+
+      // OT/medical/ABA certificate submissions — same mandatory-proof
+      // pattern as RCI above, one block per credential kind so each POSTs
+      // its own document type.
+      if (isTherapist && disciplineCredentialKind(therapistForm.discipline) === "ot" && !aiotaCertAlreadySubmitted && aiotaCertFileKey) {
+        const certRes = await fetchWithAuth("/api/verifications/certifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documentType: "aiota_certificate", fileKey: aiotaCertFileKey, vertical }),
+        });
+        if (!certRes.ok) {
+          const body = await certRes.json().catch(() => ({}));
+          throw new Error((body as { error?: string }).error ?? "AIOTA certificate submission failed");
+        }
+      }
+
+      if (isTherapist && disciplineCredentialKind(therapistForm.discipline) === "medical" && !medicalCouncilCertAlreadySubmitted && medicalCouncilCertFileKey) {
+        const certRes = await fetchWithAuth("/api/verifications/certifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documentType: "medical_council_certificate", fileKey: medicalCouncilCertFileKey, vertical }),
+        });
+        if (!certRes.ok) {
+          const body = await certRes.json().catch(() => ({}));
+          throw new Error((body as { error?: string }).error ?? "Medical council certificate submission failed");
+        }
+      }
+
+      if (isTherapist && disciplineCredentialKind(therapistForm.discipline) === "aba" && !abaCertAlreadySubmitted && abaCertFileKey) {
+        const certRes = await fetchWithAuth("/api/verifications/certifications", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documentType: "aba_credential_certificate", fileKey: abaCertFileKey, vertical }),
+        });
+        if (!certRes.ok) {
+          const body = await certRes.json().catch(() => ({}));
+          throw new Error((body as { error?: string }).error ?? "ABA credential certificate submission failed");
         }
       }
 
@@ -1659,6 +1889,9 @@ export default function OnboardStage2Page() {
                 isSaving={isSaving}
                 idProps={idProps}
                 rciCertProps={rciCertProps}
+                aiotaCertProps={aiotaCertProps}
+                medicalCouncilCertProps={medicalCouncilCertProps}
+                abaCertProps={abaCertProps}
               />
             )}
           </div>

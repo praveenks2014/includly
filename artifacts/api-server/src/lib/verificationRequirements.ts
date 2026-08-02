@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import {
   db,
   professionalProfilesTable,
@@ -25,6 +25,18 @@ export const RCI_CERTIFICATE_DOC_TYPE = "rci_certificate";
  * pendingClinicAddress on professionalProfilesTable) becomes reviewable.
  */
 export const PROOF_OF_ADDRESS_DOC_TYPE = "proof_of_address";
+
+/**
+ * Same string-tag convention as RCI_CERTIFICATE_DOC_TYPE, one per non-RCI
+ * credentialed discipline kind — see disciplineCredentialKind() below. Each
+ * of these closes the exact gap RCI_CERTIFICATE_DOC_TYPE already closed for
+ * "rci" disciplines: before these existed, "ot"/"medical"/"aba" disciplines
+ * required only a self-declared text field (membership/registration/
+ * credential number) with no check that any document backs it up.
+ */
+export const AIOTA_CERTIFICATE_DOC_TYPE = "aiota_certificate";
+export const MEDICAL_COUNCIL_CERTIFICATE_DOC_TYPE = "medical_council_certificate";
+export const ABA_CREDENTIAL_CERTIFICATE_DOC_TYPE = "aba_credential_certificate";
 
 export type VerificationVertical = "shadow_teacher" | "home_tutor" | "therapist";
 
@@ -63,8 +75,11 @@ export const RCI_REQUIRED_DISCIPLINES = new Set([
   "Clinical Psychology",
   "Rehabilitation Counselling",
 ]);
-const MEDICAL_COUNCIL_DISCIPLINES = new Set(["Developmental Pediatrician", "Psychiatrist", "Neurologist"]);
-const ABA_DISCIPLINES = new Set(["Applied Behavior Analysis (ABA)", "Behavioral Therapy"]);
+// Exported for the same reason as RCI_REQUIRED_DISCIPLINES above — bulk SQL
+// callers (buildTherapistCredentialGateSql() below) need these SAME Sets,
+// not a re-typed copy.
+export const MEDICAL_COUNCIL_DISCIPLINES = new Set(["Developmental Pediatrician", "Psychiatrist", "Neurologist"]);
+export const ABA_DISCIPLINES = new Set(["Applied Behavior Analysis (ABA)", "Behavioral Therapy"]);
 
 export function disciplineCredentialKind(discipline: string): TherapistDisciplineCredentialKind {
   if (discipline === "Occupational Therapy (OT)") return "ot";
@@ -166,25 +181,36 @@ export function computeVerificationRequirements(
     } else if (kind === "ot") {
       // Occupational therapists are regulated via AIOTA membership, not RCI.
       // NCAHP registration is captured if present but stays optional —
-      // NCAHP registers are still being rolled out nationally.
+      // NCAHP registers are still being rolled out nationally. Both the
+      // membership number AND the actual AIOTA certificate upload are
+      // mandatory — mirrors the RCI branch above; a self-declared number
+      // alone previously let this discipline reach met:true with zero
+      // documents on file.
       const aiota = vd["aiotaMembershipNumber"];
       if (typeof aiota !== "string" || !aiota.trim()) missing.push("aiota_membership_number");
+      if (!certDocumentTypes.includes(AIOTA_CERTIFICATE_DOC_TYPE)) missing.push("aiota_certificate");
     } else if (kind === "medical") {
       // Developmental pediatricians and psychiatrists are medical doctors —
-      // regulated by NMC/State Medical Council, not RCI.
+      // regulated by NMC/State Medical Council, not RCI. Both the
+      // registration number AND the actual registration certificate upload
+      // are mandatory — same rationale as the OT branch above.
       const nmc = vd["medicalCouncilRegistrationNumber"];
       if (typeof nmc !== "string" || !nmc.trim()) missing.push("medical_council_registration_number");
+      if (!certDocumentTypes.includes(MEDICAL_COUNCIL_CERTIFICATE_DOC_TYPE)) missing.push("medical_council_certificate");
     } else if (kind === "aba") {
       // ABA/behavioral therapists are certified via an international body
       // (BCBA/RBT/QABA), not RCI. Whether they must additionally practice
       // under RCI-registered supervision is a genuinely unsettled compliance
       // question in India — supervisingProfessionalName/supervisingRciNumber
-      // are captured on the profile but deliberately NOT enforced here.
+      // are captured on the profile but deliberately NOT enforced here. Both
+      // the credential type+number AND the actual credential proof upload
+      // are mandatory — same rationale as the OT/medical branches above.
       const credType = vd["abaCredentialType"];
       const credNumber = vd["abaCredentialNumber"];
       if (typeof credType !== "string" || !credType.trim() || typeof credNumber !== "string" || !credNumber.trim()) {
         missing.push("aba_credential");
       }
+      if (!certDocumentTypes.includes(ABA_CREDENTIAL_CERTIFICATE_DOC_TYPE)) missing.push("aba_credential_certificate");
     }
     // kind === "ancillary" (Physiotherapy, Developmental Therapy,
     // Psychotherapy/Counselling, Other): no discipline-specific credential
@@ -201,6 +227,47 @@ export function computeVerificationRequirements(
   }
 
   return { met: missing.length === 0, missing, warnings };
+}
+
+/**
+ * Bulk-SQL equivalent of computeVerificationRequirements()'s discipline
+ * branch — for callers that can't call that function per-row (a WHERE
+ * clause across hundreds of candidates would be N+1). Built from the SAME
+ * exported discipline Sets and doc-type constants used above, so this can
+ * never define "who needs which credential document" a second, divergent
+ * way. Column refs are passed in (not a hardcoded table) so this works
+ * identically against professionalProfilesTable (primary vertical) and
+ * professionalOfferingsTable (an additional offering) — both have columns
+ * of the same name/shape.
+ *
+ * Returns one condition: `vertical != 'therapist' OR <this discipline's
+ * required number field is present AND its matching certificate document
+ * exists>`, true unconditionally for "ancillary" disciplines (no
+ * credential to check).
+ */
+export function buildTherapistCredentialGateSql(cols: {
+  vertical: SQLWrapper;
+  verticalDetails: SQLWrapper;
+  rciCrrNumber: SQLWrapper;
+  professionalId: SQLWrapper;
+}): SQL {
+  const discipline = sql`(${cols.verticalDetails}->>'discipline')`;
+
+  const certExists = (docType: string) =>
+    sql`EXISTS (SELECT 1 FROM ${professionalCertificationsTable} pc WHERE pc.professional_id = ${cols.professionalId} AND pc.document_type = ${docType})`;
+  const jsonFieldPresent = (field: string) =>
+    sql`(${cols.verticalDetails}->>${field} IS NOT NULL AND ${cols.verticalDetails}->>${field} != '')`;
+  const rciNumberPresent = sql`(${cols.rciCrrNumber} IS NOT NULL AND ${cols.rciCrrNumber} != '')`;
+
+  const caseExpr = sql`CASE
+    WHEN ${discipline} = 'Occupational Therapy (OT)' THEN (${jsonFieldPresent("aiotaMembershipNumber")} AND ${certExists(AIOTA_CERTIFICATE_DOC_TYPE)})
+    WHEN ${inArray(discipline, Array.from(RCI_REQUIRED_DISCIPLINES))} THEN (${rciNumberPresent} AND ${certExists(RCI_CERTIFICATE_DOC_TYPE)})
+    WHEN ${inArray(discipline, Array.from(MEDICAL_COUNCIL_DISCIPLINES))} THEN (${jsonFieldPresent("medicalCouncilRegistrationNumber")} AND ${certExists(MEDICAL_COUNCIL_CERTIFICATE_DOC_TYPE)})
+    WHEN ${inArray(discipline, Array.from(ABA_DISCIPLINES))} THEN (${jsonFieldPresent("abaCredentialType")} AND ${jsonFieldPresent("abaCredentialNumber")} AND ${certExists(ABA_CREDENTIAL_CERTIFICATE_DOC_TYPE)})
+    ELSE TRUE
+  END`;
+
+  return sql`(${cols.vertical} != 'therapist' OR (${caseExpr}))`;
 }
 
 /**
@@ -394,6 +461,15 @@ export async function isOfferingListable(professionalId: number, vertical: Verif
     : settings?.therapistListingFeeEnabled;
 
   if (listingFeeEnabled && !offering.listingFeePaidAt) return false;
+
+  // Credential re-check at the single-row action level — reuses the exact
+  // same computeVerificationRequirements()-backed function used to gate
+  // admin approval, rather than re-deriving the rule a third way. Previously
+  // this function only checked verified+pricing+listing-fee, with no
+  // credential check at all, unlike the bulk SQL queries which (for
+  // therapist) now also apply buildTherapistCredentialGateSql().
+  const requirements = await getVerificationRequirementsForOffering(professionalId, vertical);
+  if (!requirements.met) return false;
 
   return true;
 }

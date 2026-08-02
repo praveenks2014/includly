@@ -24,7 +24,7 @@ import { z } from "zod/v4";
 import { rankCandidates, type MatchSnapshot } from "../lib/shadowTeacherScoring";
 import { createInAppNotification } from "../lib/notificationService";
 import { generateOtp } from "../lib/otp";
-import { isOfferingListable, disciplineToNeededEnum } from "../lib/verificationRequirements";
+import { isOfferingListable, disciplineToNeededEnum, buildTherapistCredentialGateSql } from "../lib/verificationRequirements";
 import { creditWallet } from "../lib/ledger";
 import { RecurringScheduleSlot, checkRecurringScheduleConflict } from "../lib/recurringSchedule";
 import { resolveOffering } from "../lib/offeringResolver";
@@ -106,6 +106,26 @@ async function getProfessionalUserId(professionalId: number): Promise<number | n
   return row?.userId ?? null;
 }
 
+// Same buildTherapistCredentialGateSql() fragment professionals.ts's search
+// route uses, applied against BOTH the primary profile's own columns and an
+// additional therapist offering's own columns — certifications are
+// person-level, not offering-level, so professionalId always resolves via
+// professionalProfilesTable.id regardless of which branch matched. This
+// closes the audit finding that candidate-surfacing (this function) had NO
+// discipline/credential check at all, for any discipline including RCI.
+const therapistCredentialGatePrimary = buildTherapistCredentialGateSql({
+  vertical: professionalProfilesTable.vertical,
+  verticalDetails: professionalProfilesTable.verticalDetails,
+  rciCrrNumber: professionalProfilesTable.rciCrrNumber,
+  professionalId: professionalProfilesTable.id,
+});
+const therapistCredentialGateOffering = buildTherapistCredentialGateSql({
+  vertical: professionalOfferingsTable.vertical,
+  verticalDetails: professionalOfferingsTable.verticalDetails,
+  rciCrrNumber: professionalOfferingsTable.rciCrrNumber,
+  professionalId: professionalProfilesTable.id,
+});
+
 /**
  * Candidate surfacing — mirrors shadow-teacher's surfaceCandidatesForMatch /
  * tutor's surfaceCandidatesForTutorMatch structurally. CROSS-REFERENCE: the
@@ -141,12 +161,14 @@ async function surfaceCandidatesForTherapistMatch(match: TherapistMatchRow): Pro
             eq(professionalProfilesTable.verificationStatus, "verified"),
             isNotNull(professionalProfilesTable.pricingMinINR),
             ...(therapistListingFeeEnabled ? [isNotNull(professionalProfilesTable.listingFeePaidAt)] : []),
+            therapistCredentialGatePrimary,
           ),
           and(
             isNotNull(professionalOfferingsTable.id),
             eq(professionalOfferingsTable.verificationStatus, "verified"),
             isNotNull(professionalOfferingsTable.pricingMinINR),
             ...(therapistListingFeeEnabled ? [isNotNull(professionalOfferingsTable.listingFeePaidAt)] : []),
+            therapistCredentialGateOffering,
           ),
         )!,
         eq(professionalProfilesTable.paymentActivated, true),
