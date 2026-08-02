@@ -642,7 +642,7 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
     offersHomeVisits: profile?.offersHomeVisits ?? false,
     willingToTravel: profile?.willingToTravel ?? false,
     travelRadiusKm: profile?.travelRadiusKm ?? 0,
-    languages: (profile as (typeof profile & { languages?: string[] | null }))?.languages ?? [] as string[],
+    languages: profile?.languages ?? [] as string[],
   });
 
   useEffect(() => {
@@ -662,7 +662,7 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
         offersHomeVisits: profile.offersHomeVisits ?? false,
         willingToTravel: profile.willingToTravel ?? false,
         travelRadiusKm: profile.travelRadiusKm ?? 0,
-        languages: (profile as (typeof profile & { languages?: string[] | null }))?.languages ?? [],
+        languages: profile.languages ?? [],
       });
     }
   }, [profile, editing]);

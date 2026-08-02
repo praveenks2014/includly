@@ -151,6 +151,10 @@ export const GetMyProfessionalProfileResponse = zod.object({
   bio: zod.string().nullish(),
   yearsExperience: zod.number(),
   qualifications: zod.string(),
+  languages: zod
+    .array(zod.string())
+    .nullish()
+    .describe("Languages this professional works in — parents filter by language"),
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   latitude: zod.number().nullish(),
@@ -243,6 +247,10 @@ export const CreateProfessionalProfileBody = zod.object({
   bio: zod.string().optional(),
   yearsExperience: zod.number(),
   qualifications: zod.string(),
+  languages: zod
+    .array(zod.string())
+    .optional()
+    .describe("Languages this professional works in — parents filter by language"),
   city: zod.string().optional(),
   country: zod.string().optional(),
   latitude: zod.number().optional(),
@@ -303,6 +311,10 @@ export const UpdateProfessionalProfileBody = zod.object({
   bio: zod.string().optional(),
   yearsExperience: zod.number().optional(),
   qualifications: zod.string().optional(),
+  languages: zod
+    .array(zod.string())
+    .optional()
+    .describe("Languages this professional works in — parents filter by language"),
   city: zod.string().optional(),
   country: zod.string().optional(),
   latitude: zod.number().optional(),
@@ -372,6 +384,10 @@ export const UpdateProfessionalProfileResponse = zod.object({
   bio: zod.string().nullish(),
   yearsExperience: zod.number(),
   qualifications: zod.string(),
+  languages: zod
+    .array(zod.string())
+    .nullish()
+    .describe("Languages this professional works in — parents filter by language"),
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   latitude: zod.number().nullish(),

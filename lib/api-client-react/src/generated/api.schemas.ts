@@ -141,6 +141,11 @@ export interface ProfessionalProfile {
   bio?: string | null;
   yearsExperience: number;
   qualifications: string;
+  /**
+   * Languages this professional works in — parents filter by language
+   * @nullable
+   */
+  languages?: string[] | null;
   /** @nullable */
   city?: string | null;
   /** @nullable */
@@ -354,6 +359,8 @@ export interface CreateProfessionalProfileBody {
   bio?: string;
   yearsExperience: number;
   qualifications: string;
+  /** Languages this professional works in — parents filter by language */
+  languages?: string[];
   city?: string;
   country?: string;
   latitude?: number;
@@ -408,6 +415,8 @@ export interface UpdateProfessionalProfileBody {
   bio?: string;
   yearsExperience?: number;
   qualifications?: string;
+  /** Languages this professional works in — parents filter by language */
+  languages?: string[];
   city?: string;
   country?: string;
   latitude?: number;
