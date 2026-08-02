@@ -40,7 +40,7 @@ import {
 import { resolveOffering } from "../lib/offeringResolver";
 import { onProfessionalBecameEligible } from "../lib/candidateRefresh";
 
-const OFFERING_VERTICALS: VerificationVertical[] = ["shadow_teacher", "home_tutor", "therapist"];
+const OFFERING_VERTICALS: VerificationVertical[] = ["shadow_teacher", "home_tutor", "therapist", "coaching"];
 
 const clerkClient = createClerkClient({ secretKey: process.env["CLERK_SECRET_KEY"] });
 const router: IRouter = Router();

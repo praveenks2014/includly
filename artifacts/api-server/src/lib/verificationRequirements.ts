@@ -38,7 +38,7 @@ export const AIOTA_CERTIFICATE_DOC_TYPE = "aiota_certificate";
 export const MEDICAL_COUNCIL_CERTIFICATE_DOC_TYPE = "medical_council_certificate";
 export const ABA_CREDENTIAL_CERTIFICATE_DOC_TYPE = "aba_credential_certificate";
 
-export type VerificationVertical = "shadow_teacher" | "home_tutor" | "therapist";
+export type VerificationVertical = "shadow_teacher" | "home_tutor" | "therapist" | "coaching";
 
 export interface ProfileForRequirements {
   vertical: VerificationVertical;
@@ -163,6 +163,11 @@ export function computeVerificationRequirements(
   // credential number, never to this).
   if (!profile.upiVerifiedAt) missing.push("upi_verification");
 
+  // vertical === "coaching" deliberately matches neither branch below —
+  // identity document + UPI verification (both already checked above) are
+  // the only requirements for coaching, same as home_tutor. No regulator
+  // exists for coaching activities in India, so there is no credential
+  // concept to gate on here, unlike therapist's discipline-based checks.
   if (profile.vertical === "therapist") {
     const vd = (profile.verticalDetails ?? {}) as Record<string, unknown>;
     const discipline = typeof vd["discipline"] === "string" ? (vd["discipline"] as string) : "";
@@ -454,11 +459,18 @@ export async function isOfferingListable(professionalId: number, vertical: Verif
   // Listing-fee gate (admin-toggle-controlled, per category). No-op when a
   // category's toggle is off — see the cross-reference comment above: any
   // change here must be mirrored in the bulk candidate-surfacing SQL queries.
+  // Explicit per-vertical branches (not a trailing else) so a new vertical
+  // added later can never silently inherit an existing one's fee toggle —
+  // this is exactly the bug a "not shadow_teacher, not home_tutor ⇒
+  // therapist" fallthrough would cause. Coaching has no listing-fee concept
+  // yet (no admin_settings column exists for it) — explicitly false, not an
+  // accidental inheritance of therapist's toggle.
   const [settings] = await db.select().from(adminSettingsTable).limit(1);
   const listingFeeEnabled =
     vertical === "shadow_teacher" ? settings?.shadowTeacherListingFeeEnabled
     : vertical === "home_tutor" ? settings?.tutorListingFeeEnabled
-    : settings?.therapistListingFeeEnabled;
+    : vertical === "therapist" ? settings?.therapistListingFeeEnabled
+    : false;
 
   if (listingFeeEnabled && !offering.listingFeePaidAt) return false;
 

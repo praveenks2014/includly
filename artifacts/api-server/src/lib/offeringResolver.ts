@@ -1,7 +1,7 @@
 import { eq, and } from "drizzle-orm";
 import { db, professionalProfilesTable, professionalOfferingsTable } from "@workspace/db";
 
-export type OfferingVertical = "shadow_teacher" | "home_tutor" | "therapist";
+export type OfferingVertical = "shadow_teacher" | "home_tutor" | "therapist" | "coaching";
 
 /**
  * THE single place that resolves "what are this offering's effective field
@@ -25,6 +25,7 @@ export interface ResolvedOffering {
   pricingMinINR: number | null;
   pricingMaxINR: number | null;
   rciCrrNumber: string | null;
+  coachingSubType: string | null;
   billingCadence: string | null;
   verificationStatus: string;
   isVerified: boolean;
@@ -43,6 +44,7 @@ export async function resolveOffering(
       pricingMinINR: professionalProfilesTable.pricingMinINR,
       pricingMaxINR: professionalProfilesTable.pricingMaxINR,
       rciCrrNumber: professionalProfilesTable.rciCrrNumber,
+      coachingSubType: professionalProfilesTable.coachingSubType,
       billingCadence: professionalProfilesTable.billingCadence,
       verificationStatus: professionalProfilesTable.verificationStatus,
       isVerified: professionalProfilesTable.isVerified,
@@ -64,6 +66,7 @@ export async function resolveOffering(
       pricingMinINR: profile.pricingMinINR,
       pricingMaxINR: profile.pricingMaxINR,
       rciCrrNumber: profile.rciCrrNumber,
+      coachingSubType: profile.coachingSubType,
       billingCadence: profile.billingCadence,
       verificationStatus: profile.verificationStatus,
       isVerified: profile.isVerified,
@@ -93,6 +96,7 @@ export async function resolveOffering(
     pricingMinINR: offering.pricingMinINR,
     pricingMaxINR: offering.pricingMaxINR,
     rciCrrNumber: offering.rciCrrNumber,
+    coachingSubType: offering.coachingSubType,
     billingCadence: offering.billingCadence,
     verificationStatus: offering.verificationStatus,
     isVerified: offering.isVerified,

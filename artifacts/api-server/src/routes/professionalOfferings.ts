@@ -22,6 +22,7 @@ const UpdateOfferingBody = z.object({
   pricingMinINR: z.number().int().nonnegative().optional(),
   pricingMaxINR: z.number().int().nonnegative().optional(),
   rciCrrNumber: z.string().optional(),
+  coachingSubType: z.enum(["swimming", "dance", "music", "sports", "singing", "fitness", "art", "yoga"]).optional(),
 });
 
 async function getMyProfile(userId: number) {
@@ -53,6 +54,7 @@ router.get("/professionals/me/offerings", requireAuth, requireRole("professional
       pricingMinINR: profile.pricingMinINR,
       pricingMaxINR: profile.pricingMaxINR,
       rciCrrNumber: profile.rciCrrNumber,
+      coachingSubType: profile.coachingSubType,
       verificationStatus: profile.verificationStatus,
       isVerified: profile.isVerified,
       rejectionReason: profile.rejectionReason,
@@ -64,6 +66,7 @@ router.get("/professionals/me/offerings", requireAuth, requireRole("professional
       pricingMinINR: o.pricingMinINR,
       pricingMaxINR: o.pricingMaxINR,
       rciCrrNumber: o.rciCrrNumber,
+      coachingSubType: o.coachingSubType,
       verificationStatus: o.verificationStatus,
       isVerified: o.isVerified,
       rejectionReason: o.rejectionReason,
@@ -138,7 +141,7 @@ router.patch("/professionals/me/offerings/:vertical", requireAuth, requireRole("
     return;
   }
 
-  const { verticalDetails: incomingVd, pricingMinINR, pricingMaxINR, rciCrrNumber } = parsed.data;
+  const { verticalDetails: incomingVd, pricingMinINR, pricingMaxINR, rciCrrNumber, coachingSubType } = parsed.data;
 
   if (vertical === profile.vertical) {
     // Primary offering — same storage the existing single-vertical flow has
@@ -151,6 +154,7 @@ router.patch("/professionals/me/offerings/:vertical", requireAuth, requireRole("
     if (pricingMinINR !== undefined) updateData.pricingMinINR = pricingMinINR;
     if (pricingMaxINR !== undefined) updateData.pricingMaxINR = pricingMaxINR;
     if (rciCrrNumber !== undefined) updateData.rciCrrNumber = rciCrrNumber;
+    if (coachingSubType !== undefined) updateData.coachingSubType = coachingSubType;
 
     const [updated] = await db
       .update(professionalProfilesTable)
@@ -189,6 +193,7 @@ router.patch("/professionals/me/offerings/:vertical", requireAuth, requireRole("
   if (pricingMinINR !== undefined) updateData.pricingMinINR = pricingMinINR;
   if (pricingMaxINR !== undefined) updateData.pricingMaxINR = pricingMaxINR;
   if (rciCrrNumber !== undefined) updateData.rciCrrNumber = rciCrrNumber;
+  if (coachingSubType !== undefined) updateData.coachingSubType = coachingSubType;
 
   const [updated] = await db
     .update(professionalOfferingsTable)

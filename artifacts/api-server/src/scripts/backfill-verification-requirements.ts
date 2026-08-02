@@ -63,6 +63,13 @@ async function main() {
     const legacyCertKey = typeof vd.certKey === "string" && vd.certKey.trim() ? vd.certKey.trim() : null;
 
     if (legacyCertKey) {
+      // "training_certificate" is the correct fallback tag for every
+      // non-therapist vertical, coaching included — matches how a coach's
+      // own optional certification upload is treated (encouraged, not
+      // gated, same as shadow_teacher/home_tutor). Not a fallthrough bug:
+      // coaching never had a legacy certKey to migrate (didn't exist as a
+      // vertical before this backfill script was last run), but this is
+      // the behavior it would correctly get if that were ever untrue.
       const docType = profile.vertical === "therapist" ? RCI_CERTIFICATE_DOC_TYPE : "training_certificate";
 
       const [existing] = await db

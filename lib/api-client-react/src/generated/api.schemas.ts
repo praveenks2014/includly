@@ -110,6 +110,7 @@ export const ProfessionalProfileSpecialty = {
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
   therapy_centre: "therapy_centre",
+  coaching: "coaching",
 } as const;
 
 export type ProfessionalProfileVerificationStatus =
@@ -129,6 +130,20 @@ export const ProfessionalProfileVertical = {
   shadow_teacher: "shadow_teacher",
   home_tutor: "home_tutor",
   therapist: "therapist",
+  coaching: "coaching",
+} as const;
+
+export type CoachingSubType = (typeof CoachingSubType)[keyof typeof CoachingSubType];
+
+export const CoachingSubType = {
+  swimming: "swimming",
+  dance: "dance",
+  music: "music",
+  sports: "sports",
+  singing: "singing",
+  fitness: "fitness",
+  art: "art",
+  yoga: "yoga",
 } as const;
 
 export interface ProfessionalProfile {
@@ -146,6 +161,11 @@ export interface ProfessionalProfile {
    * @nullable
    */
   languages?: string[] | null;
+  /**
+   * Coaching activity — only meaningful when specialty is "coaching"
+   * @nullable
+   */
+  coachingSubType?: CoachingSubType | null;
   /** @nullable */
   city?: string | null;
   /** @nullable */
@@ -337,6 +357,7 @@ export const CreateProfessionalProfileBodySpecialty = {
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
   therapy_centre: "therapy_centre",
+  coaching: "coaching",
 } as const;
 
 /**
@@ -349,6 +370,7 @@ export const CreateProfessionalProfileBodyVertical = {
   shadow_teacher: "shadow_teacher",
   home_tutor: "home_tutor",
   therapist: "therapist",
+  coaching: "coaching",
 } as const;
 
 export interface CreateProfessionalProfileBody {
@@ -361,6 +383,8 @@ export interface CreateProfessionalProfileBody {
   qualifications: string;
   /** Languages this professional works in — parents filter by language */
   languages?: string[];
+  /** Coaching activity — only meaningful when specialty is "coaching" */
+  coachingSubType?: CoachingSubType;
   city?: string;
   country?: string;
   latitude?: number;
@@ -393,6 +417,7 @@ export const UpdateProfessionalProfileBodySpecialty = {
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
   therapy_centre: "therapy_centre",
+  coaching: "coaching",
 } as const;
 
 /**
@@ -405,6 +430,7 @@ export const UpdateProfessionalProfileBodyVertical = {
   shadow_teacher: "shadow_teacher",
   home_tutor: "home_tutor",
   therapist: "therapist",
+  coaching: "coaching",
 } as const;
 
 export interface UpdateProfessionalProfileBody {
@@ -417,6 +443,8 @@ export interface UpdateProfessionalProfileBody {
   qualifications?: string;
   /** Languages this professional works in — parents filter by language */
   languages?: string[];
+  /** Coaching activity — only meaningful when specialty is "coaching" */
+  coachingSubType?: CoachingSubType;
   city?: string;
   country?: string;
   latitude?: number;
@@ -1155,6 +1183,7 @@ export const SearchProfessionalsSpecialty = {
   developmental_pediatrician: "developmental_pediatrician",
   neurologist: "neurologist",
   therapy_centre: "therapy_centre",
+  coaching: "coaching",
 } as const;
 
 export type StripeWebhookBody = { [key: string]: unknown };

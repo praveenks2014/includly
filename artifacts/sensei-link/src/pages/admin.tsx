@@ -1837,6 +1837,12 @@ function SettingsTab() {
               </div>
             </div>
           ))}
+          <p className="text-xs text-gray-400">
+            Inclusive Coach has no listing fee yet — no admin_settings toggle exists for it. Coaching's
+            listability gate (isOfferingListable) explicitly returns false for it rather than silently
+            reusing another category's toggle; add a real coaching toggle here (and the matching
+            settings columns) if a coaching listing fee is ever wanted.
+          </p>
         </div>
 
         {/* ── Tutor — Fees & Payment Mode ── */}

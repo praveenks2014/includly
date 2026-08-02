@@ -61,13 +61,14 @@ router.get("/settings/public", async (_req, res): Promise<void> => {
   });
 });
 
-type VerticalValue = "shadow_teacher" | "home_tutor" | "therapist";
+type VerticalValue = "shadow_teacher" | "home_tutor" | "therapist" | "coaching";
 
 function computeProfileComplete(profile: {
   fullName: string | null | undefined;
   vertical: VerticalValue;
   verticalDetails: unknown;
   rciCrrNumber: string | null | undefined;
+  coachingSubType: string | null | undefined;
 }): boolean {
   if (!profile.fullName) return false;
   const vd = (profile.verticalDetails ?? {}) as Record<string, unknown>;
@@ -84,6 +85,11 @@ function computeProfileComplete(profile: {
         profile.rciCrrNumber &&
         arr("conditionsTreated")
       );
+    case "coaching":
+      // coachingSubType is its own DB column (not inside verticalDetails,
+      // unlike therapist's discipline) — mirrors ageGroups/conditionsSupported
+      // shape used by the other verticals' completeness checks.
+      return !!(profile.coachingSubType && arr("conditionsSupported") && arr("ageGroups"));
     default:
       return false;
   }

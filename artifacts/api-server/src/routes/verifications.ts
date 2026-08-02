@@ -17,7 +17,7 @@ import {
   type VerificationVertical,
 } from "../lib/verificationRequirements";
 
-const KNOWN_VERTICALS: VerificationVertical[] = ["shadow_teacher", "home_tutor", "therapist"];
+const KNOWN_VERTICALS: VerificationVertical[] = ["shadow_teacher", "home_tutor", "therapist", "coaching"];
 
 // Identity docs and certifications are person-level (one government ID, any
 // number of certificates, shared across every offering) — but recomputing

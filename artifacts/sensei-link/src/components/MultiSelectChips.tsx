@@ -6,7 +6,7 @@ interface MultiSelectChipsProps {
   onChange: (next: string[]) => void;
   max?: number;
   disabled?: boolean;
-  color?: "teal" | "blue" | "violet";
+  color?: "teal" | "blue" | "violet" | "orange";
 }
 
 const COLOR_CLASSES = {
@@ -21,6 +21,10 @@ const COLOR_CLASSES = {
   violet: {
     active: "bg-violet-600 text-white border-violet-600",
     inactive: "bg-white text-gray-700 border-gray-200 hover:border-violet-400 hover:text-violet-700",
+  },
+  orange: {
+    active: "bg-orange-600 text-white border-orange-600",
+    inactive: "bg-white text-gray-700 border-gray-200 hover:border-orange-400 hover:text-orange-700",
   },
 };
 

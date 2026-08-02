@@ -1777,6 +1777,7 @@ components:
             - developmental_pediatrician
             - neurologist
             - therapy_centre
+            - coaching
         bio:
           type: ["string", "null"]
         yearsExperience:
@@ -1823,10 +1824,14 @@ components:
           type: ["integer", "null"]
         vertical:
           type: string
-          enum: [shadow_teacher, home_tutor, therapist]
+          enum: [shadow_teacher, home_tutor, therapist, coaching]
         verticalDetails:
           nullable: true
           description: Vertical-specific structured details (e.g. therapist licensing info)
+        coachingSubType:
+          type: ["string", "null"]
+          enum: [swimming, dance, music, sports, singing, fitness, art, yoga, null]
+          description: Coaching activity — only meaningful when specialty is "coaching"
         rciCrrNumber:
           type: ["string", "null"]
           description: RCI Central Rehabilitation Register number — required for therapists to be searchable
@@ -2061,10 +2066,15 @@ components:
             - developmental_pediatrician
             - neurologist
             - therapy_centre
+            - coaching
         vertical:
           type: string
-          enum: [shadow_teacher, home_tutor, therapist]
+          enum: [shadow_teacher, home_tutor, therapist, coaching]
           description: Verification vertical — determines mandatory document requirements (e.g. RCI cert for therapist)
+        coachingSubType:
+          type: string
+          enum: [swimming, dance, music, sports, singing, fitness, art, yoga]
+          description: Coaching activity — only meaningful when specialty is "coaching"
         bio:
           type: string
         yearsExperience:
@@ -2125,10 +2135,15 @@ components:
             - developmental_pediatrician
             - neurologist
             - therapy_centre
+            - coaching
         vertical:
           type: string
-          enum: [shadow_teacher, home_tutor, therapist]
+          enum: [shadow_teacher, home_tutor, therapist, coaching]
           description: Verification vertical — determines mandatory document requirements (e.g. RCI cert for therapist)
+        coachingSubType:
+          type: string
+          enum: [swimming, dance, music, sports, singing, fitness, art, yoga]
+          description: Coaching activity — only meaningful when specialty is "coaching"
         bio:
           type: string
         yearsExperience:

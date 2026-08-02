@@ -7,6 +7,7 @@ export const professionalVerticalEnum = pgEnum("professional_vertical", [
   "shadow_teacher",
   "home_tutor",
   "therapist",
+  "coaching",
 ]);
 
 export const specialtyEnum = pgEnum("specialty", [

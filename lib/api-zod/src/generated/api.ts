@@ -147,6 +147,7 @@ export const GetMyProfessionalProfileResponse = zod.object({
     "developmental_pediatrician",
     "neurologist",
     "therapy_centre",
+    "coaching",
   ]),
   bio: zod.string().nullish(),
   yearsExperience: zod.number(),
@@ -155,6 +156,10 @@ export const GetMyProfessionalProfileResponse = zod.object({
     .array(zod.string())
     .nullish()
     .describe("Languages this professional works in — parents filter by language"),
+  coachingSubType: zod
+    .enum(["swimming", "dance", "music", "sports", "singing", "fitness", "art", "yoga"])
+    .nullish()
+    .describe("Coaching activity — only meaningful when specialty is \"coaching\""),
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   latitude: zod.number().nullish(),
@@ -187,7 +192,7 @@ export const GetMyProfessionalProfileResponse = zod.object({
   email: zod.string().nullish(),
   pricingMinINR: zod.number().nullish(),
   pricingMaxINR: zod.number().nullish(),
-  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).optional(),
+  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist", "coaching"]).optional(),
   verticalDetails: zod
     .unknown()
     .nullish()
@@ -237,9 +242,10 @@ export const CreateProfessionalProfileBody = zod.object({
     "developmental_pediatrician",
     "neurologist",
     "therapy_centre",
+    "coaching",
   ]),
   vertical: zod
-    .enum(["shadow_teacher", "home_tutor", "therapist"])
+    .enum(["shadow_teacher", "home_tutor", "therapist", "coaching"])
     .optional()
     .describe(
       "Verification vertical — determines mandatory document requirements (e.g. RCI cert for therapist)",
@@ -251,6 +257,10 @@ export const CreateProfessionalProfileBody = zod.object({
     .array(zod.string())
     .optional()
     .describe("Languages this professional works in — parents filter by language"),
+  coachingSubType: zod
+    .enum(["swimming", "dance", "music", "sports", "singing", "fitness", "art", "yoga"])
+    .optional()
+    .describe("Coaching activity — only meaningful when specialty is \"coaching\""),
   city: zod.string().optional(),
   country: zod.string().optional(),
   latitude: zod.number().optional(),
@@ -300,10 +310,11 @@ export const UpdateProfessionalProfileBody = zod.object({
       "developmental_pediatrician",
       "neurologist",
       "therapy_centre",
+    "coaching",
     ])
     .optional(),
   vertical: zod
-    .enum(["shadow_teacher", "home_tutor", "therapist"])
+    .enum(["shadow_teacher", "home_tutor", "therapist", "coaching"])
     .optional()
     .describe(
       "Verification vertical — determines mandatory document requirements (e.g. RCI cert for therapist)",
@@ -315,6 +326,10 @@ export const UpdateProfessionalProfileBody = zod.object({
     .array(zod.string())
     .optional()
     .describe("Languages this professional works in — parents filter by language"),
+  coachingSubType: zod
+    .enum(["swimming", "dance", "music", "sports", "singing", "fitness", "art", "yoga"])
+    .optional()
+    .describe("Coaching activity — only meaningful when specialty is \"coaching\""),
   city: zod.string().optional(),
   country: zod.string().optional(),
   latitude: zod.number().optional(),
@@ -380,6 +395,7 @@ export const UpdateProfessionalProfileResponse = zod.object({
     "developmental_pediatrician",
     "neurologist",
     "therapy_centre",
+    "coaching",
   ]),
   bio: zod.string().nullish(),
   yearsExperience: zod.number(),
@@ -388,6 +404,10 @@ export const UpdateProfessionalProfileResponse = zod.object({
     .array(zod.string())
     .nullish()
     .describe("Languages this professional works in — parents filter by language"),
+  coachingSubType: zod
+    .enum(["swimming", "dance", "music", "sports", "singing", "fitness", "art", "yoga"])
+    .nullish()
+    .describe("Coaching activity — only meaningful when specialty is \"coaching\""),
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   latitude: zod.number().nullish(),
@@ -420,7 +440,7 @@ export const UpdateProfessionalProfileResponse = zod.object({
   email: zod.string().nullish(),
   pricingMinINR: zod.number().nullish(),
   pricingMaxINR: zod.number().nullish(),
-  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).optional(),
+  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist", "coaching"]).optional(),
   verticalDetails: zod
     .unknown()
     .nullish()
@@ -542,7 +562,7 @@ export const GetProfessionalResponse = zod.object({
   // session. This is the authoritative signal for which engagement flow a
   // profile should show (professional-profile.tsx's widget-swap), not the
   // specialty string or the specialtyToVertical() display heuristic.
-  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).nullish(),
+  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist", "coaching"]).nullish(),
 });
 
 /**
@@ -562,6 +582,7 @@ export const SearchProfessionalsQueryParams = zod.object({
       "developmental_pediatrician",
       "neurologist",
       "therapy_centre",
+    "coaching",
     ])
     .optional(),
   city: zod.coerce.string().optional(),
@@ -945,6 +966,7 @@ export const GetProfessionalDashboardResponse = zod.object({
         "developmental_pediatrician",
         "neurologist",
         "therapy_centre",
+    "coaching",
       ]),
       bio: zod.string().nullish(),
       yearsExperience: zod.number(),
@@ -982,7 +1004,7 @@ export const GetProfessionalDashboardResponse = zod.object({
       pricingMinINR: zod.number().nullish(),
       pricingMaxINR: zod.number().nullish(),
       vertical: zod
-        .enum(["shadow_teacher", "home_tutor", "therapist"])
+        .enum(["shadow_teacher", "home_tutor", "therapist", "coaching"])
         .optional(),
       verticalDetails: zod
         .unknown()
@@ -1390,6 +1412,7 @@ export const AdminApproveProfessionalResponse = zod.object({
     "developmental_pediatrician",
     "neurologist",
     "therapy_centre",
+    "coaching",
   ]),
   bio: zod.string().nullish(),
   yearsExperience: zod.number(),
@@ -1426,7 +1449,7 @@ export const AdminApproveProfessionalResponse = zod.object({
   email: zod.string().nullish(),
   pricingMinINR: zod.number().nullish(),
   pricingMaxINR: zod.number().nullish(),
-  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).optional(),
+  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist", "coaching"]).optional(),
   verticalDetails: zod
     .unknown()
     .nullish()
@@ -1482,6 +1505,7 @@ export const AdminRejectProfessionalResponse = zod.object({
     "developmental_pediatrician",
     "neurologist",
     "therapy_centre",
+    "coaching",
   ]),
   bio: zod.string().nullish(),
   yearsExperience: zod.number(),
@@ -1518,7 +1542,7 @@ export const AdminRejectProfessionalResponse = zod.object({
   email: zod.string().nullish(),
   pricingMinINR: zod.number().nullish(),
   pricingMaxINR: zod.number().nullish(),
-  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist"]).optional(),
+  vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist", "coaching"]).optional(),
   verticalDetails: zod
     .unknown()
     .nullish()

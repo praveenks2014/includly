@@ -1,5 +1,5 @@
 import { pgTable, serial, integer, text, timestamp, boolean, json, unique } from "drizzle-orm/pg-core";
-import { professionalProfilesTable, professionalVerticalEnum, verificationStatusEnum, therapistBillingCadenceEnum } from "./professionals";
+import { professionalProfilesTable, professionalVerticalEnum, verificationStatusEnum, therapistBillingCadenceEnum, coachingSubTypeEnum } from "./professionals";
 
 // A professional's ADDITIONAL (non-primary) service offerings. The professional's
 // original/primary vertical stays exactly where it always was — on
@@ -19,6 +19,12 @@ export const professionalOfferingsTable = pgTable("professional_offerings", {
   pricingMinINR: integer("pricing_min_inr"),
   pricingMaxINR: integer("pricing_max_inr"),
   rciCrrNumber: text("rci_crr_number"),
+  // Mirrors rciCrrNumber's dedicated-column pattern above — coachingSubType
+  // is a real column (not verticalDetails JSON) on professional_profiles
+  // too, since search/discovery filters on it directly. Same reasoning
+  // applies here: an additional coaching offering needs its own persisted
+  // activity, independent of any other offering's data.
+  coachingSubType: coachingSubTypeEnum("coaching_sub_type"),
   verificationStatus: verificationStatusEnum("verification_status").notNull().default("unsubmitted"),
   isVerified: boolean("is_verified").notNull().default(false),
   rejectionReason: text("rejection_reason"),

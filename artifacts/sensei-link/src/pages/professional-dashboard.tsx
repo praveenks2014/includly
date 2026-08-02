@@ -62,7 +62,7 @@ interface CertDoc { id: number; documentType: string; fileKey: string; uploadedA
 type SlotDraft = { dayOfWeek: number; startTime: string; endTime: string; slotDurationMinutes: number; priceInr: number; bufferMins: number; };
 
 // ─── Multi-vertical offerings ──────────────────────────────────────────────
-type OfferingVertical = "shadow_teacher" | "home_tutor" | "therapist";
+type OfferingVertical = "shadow_teacher" | "home_tutor" | "therapist" | "coaching";
 interface Offering {
   isPrimary: boolean;
   vertical: OfferingVertical;
@@ -70,11 +70,12 @@ interface Offering {
   isVerified: boolean;
   rejectionReason: string | null;
 }
-const ALL_VERTICALS: OfferingVertical[] = ["shadow_teacher", "home_tutor", "therapist"];
+const ALL_VERTICALS: OfferingVertical[] = ["shadow_teacher", "home_tutor", "therapist", "coaching"];
 const VERTICAL_LABELS: Record<OfferingVertical, string> = {
   shadow_teacher: "Shadow Teacher",
   home_tutor: "Home Tutor",
   therapist: "Therapist / Special Educator",
+  coaching: "Inclusive Coach",
 };
 
 function useMyOfferings() {

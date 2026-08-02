@@ -1,3 +1,4 @@
+- [Vertical type duplicated across 9 sites](vertical-type-duplication.md) — professionalVerticalEnum has no shared TS type; VerificationVertical/VerticalValue/OfferingVertical are hand-typed separately in 9 places; adding a new vertical value needs a manual audit, not just a schema edit
 - [V2 booking status enum](v2-status-enum.md) — all 10 V2 statuses must be kept in sync across DB enum, api.schemas.ts, STATUS_LABELS/COLORS in sessions.tsx and professional-dashboard.tsx
 - [Shadow match redesign pattern](shadow-match-redesign.md) — new flow: no upfront fee; free match → shortlisted → chat (masked) → commit (first month Razorpay) → engagement; migration at 0014_shadow_match_redesign.sql
 - [OTP visibility rules](otp-visibility.md) — startOtp revealed at paid_held+session_started; endOtp only at session_started; never expose before payment

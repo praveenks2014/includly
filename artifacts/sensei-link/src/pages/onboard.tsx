@@ -45,7 +45,7 @@ const STEP_SUBTITLES = [
   "Let parents know your session rate. You can always update this later.",
 ];
 
-type VerticalValue = "shadow_teacher" | "home_tutor" | "therapist";
+type VerticalValue = "shadow_teacher" | "home_tutor" | "therapist" | "coaching";
 
 interface VerticalCard {
   // Unique per card — drives selection highlighting. Distinct from `value`
@@ -153,12 +153,35 @@ const VERTICAL_CARDS: VerticalCard[] = [
     selectedRing: "rgba(147,51,234,0.18)",
     iconBg: "#F3E8FF",
   },
+  {
+    // Its own vertical (not a discipline within "therapist" like the 3
+    // consultation cards above) — coaching has no credential/discipline
+    // concept at all, so it doesn't share therapist's shape. Activity
+    // (swimming/dance/music/etc.) is picked inside CoachForm on stage2,
+    // mirroring how therapist disciplines are picked inside TherapistForm,
+    // not at this top-level card — same reasoning as every other vertical
+    // here. Orange matches this category's existing parent-facing color
+    // (serviceCategories.ts's Inclusive Coach tile).
+    id: "coaching",
+    value: "coaching",
+    emoji: "🏆",
+    title: "Inclusive Coach",
+    desc: "I coach swimming, dance, music, sports, or similar activities for children with special needs.",
+    selectedBorder: "#EA580C",
+    selectedBg: "#FFF7ED",
+    selectedRing: "rgba(234,88,12,0.18)",
+    iconBg: "#FFEDD5",
+  },
 ];
 
 const VERTICAL_TO_SPECIALTY: Record<VerticalValue, CreateProfessionalProfileBodySpecialty> = {
   shadow_teacher: "shadow_teacher",
   home_tutor: "special_tutor",
   therapist: "speech_therapy",
+  // Unlike therapist's placeholder (corrected later once a discipline is
+  // chosen), coaching's specialty is unambiguous from the start — there's
+  // no discipline-style sub-branch that changes it.
+  coaching: "coaching",
 };
 
 // Re-derives which of the 6 cards should show as selected when editing an

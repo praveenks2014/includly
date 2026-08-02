@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { MultiSelectChips } from "@/components/MultiSelectChips";
+import { COACHING_SUB_TYPE_OPTIONS } from "@/lib/specialties";
 import { FileUploadField } from "@/components/FileUploadField";
 import {
   Loader2,
@@ -28,15 +29,16 @@ import {
   ChevronDown,
 } from "lucide-react";
 
-type VerticalValue = "shadow_teacher" | "home_tutor" | "therapist";
+type VerticalValue = "shadow_teacher" | "home_tutor" | "therapist" | "coaching";
 
 const VERTICAL_META: Record<
   VerticalValue,
-  { emoji: string; title: string; color: "teal" | "blue" | "violet" }
+  { emoji: string; title: string; color: "teal" | "blue" | "violet" | "orange" }
 > = {
   shadow_teacher: { emoji: "🧑‍🏫", title: "Shadow Teacher", color: "teal" },
   home_tutor: { emoji: "📚", title: "Home Tutor", color: "blue" },
   therapist: { emoji: "🩺", title: "Therapist / Special Educator", color: "violet" },
+  coaching: { emoji: "🏆", title: "Inclusive Coach", color: "orange" },
 };
 
 const CONDITIONS_OPTIONS = [
@@ -270,6 +272,24 @@ type TherapistForm = {
   conditionsTreatedOther: string;
   sessionModes: string[];
   ageGroups: string[];
+  certKey: string;
+};
+
+type CoachForm = {
+  // The activity (swimming/dance/music/etc.) — coaching's equivalent of
+  // TherapistForm's discipline field, but with no credential-kind branching
+  // since coaching has no regulator/credential concept in India at all.
+  coachingSubType: string;
+  // Reuses THERAPIST_CONDITIONS (not ShadowForm's CONDITIONS_OPTIONS,
+  // which has its own "no_experience" exclusive-option UX specific to
+  // shadow teaching) — same generic special-needs-conditions list, not a
+  // new one invented for coaching.
+  conditionsSupported: string[];
+  conditionsSupportedOther: string;
+  sessionModes: string[];
+  ageGroups: string[];
+  // Optional, encouraged-not-required — mirrors ShadowForm's certKey
+  // pattern exactly (coaching has no mandatory credential to gate on).
   certKey: string;
 };
 
@@ -678,6 +698,7 @@ interface MyOffering {
   vertical: VerticalValue;
   verticalDetails: unknown;
   rciCrrNumber: string | null;
+  coachingSubType: string | null;
   verificationStatus: string;
 }
 
@@ -1227,6 +1248,93 @@ function TherapistForm({
   );
 }
 
+function CoachForm({
+  form,
+  setForm,
+  isSaving,
+  idProps,
+}: {
+  form: CoachForm;
+  setForm: React.Dispatch<React.SetStateAction<CoachForm>>;
+  isSaving: boolean;
+  idProps: IdentitySectionProps;
+}) {
+  return (
+    <div className="space-y-7">
+      <div className="space-y-2">
+        <SelectField
+          label="Activity you coach"
+          value={form.coachingSubType}
+          options={COACHING_SUB_TYPE_OPTIONS}
+          onChange={(v) => setForm((f) => ({ ...f, coachingSubType: v }))}
+          required
+        />
+      </div>
+
+      <ChipsField
+        label="Conditions you have experience supporting"
+        required
+        hint="Select all that apply"
+      >
+        <MultiSelectChips
+          options={THERAPIST_CONDITIONS}
+          selected={form.conditionsSupported}
+          onChange={(v) => setForm((f) => ({ ...f, conditionsSupported: v }))}
+          color="orange"
+          disabled={isSaving}
+        />
+        {form.conditionsSupported.includes("others") && (
+          <Input
+            value={form.conditionsSupportedOther}
+            onChange={(e) => setForm((f) => ({ ...f, conditionsSupportedOther: e.target.value }))}
+            placeholder="Describe the conditions you have experience supporting"
+            disabled={isSaving}
+            className="h-10 text-sm mt-2"
+          />
+        )}
+      </ChipsField>
+
+      <ChipsField label="Session modes you offer" required hint="Select all that apply">
+        <MultiSelectChips
+          options={SESSION_MODES}
+          selected={form.sessionModes}
+          onChange={(v) => setForm((f) => ({ ...f, sessionModes: v }))}
+          color="orange"
+          disabled={isSaving}
+        />
+      </ChipsField>
+
+      <ChipsField label="Age groups you coach" required hint="Select all that apply">
+        <MultiSelectChips
+          options={AGE_GROUPS}
+          selected={form.ageGroups}
+          onChange={(v) => setForm((f) => ({ ...f, ageGroups: v }))}
+          color="orange"
+          disabled={isSaving}
+        />
+      </ChipsField>
+
+      <div className="space-y-2">
+        <Label className="text-sm font-semibold text-gray-800">
+          Certification <span className="text-gray-400 font-normal">(encouraged, not required)</span>
+        </Label>
+        <p className="text-xs text-gray-500">
+          A coaching certification, degree, or any relevant credential — profiles with a document on file are
+          reviewed faster and shown as more trusted to parents.
+        </p>
+        <FileUploadField
+          label="Upload document"
+          onUploaded={(key) => setForm((f) => ({ ...f, certKey: key }))}
+          uploadedPath={form.certKey}
+          disabled={isSaving}
+        />
+      </div>
+
+      <IdentityDocumentSection {...idProps} disabled={isSaving} />
+    </div>
+  );
+}
+
 export default function OnboardStage2Page() {
   const params = useParams<{ vertical: string }>();
   const [, setLocation] = useLocation();
@@ -1244,6 +1352,7 @@ export default function OnboardStage2Page() {
   const isShadow = vertical === "shadow_teacher";
   const isTutor = vertical === "home_tutor";
   const isTherapist = vertical === "therapist";
+  const isCoach = vertical === "coaching";
 
   // Is this vertical the professional's original/primary one, or an
   // additional offering they're adding on top of it?
@@ -1276,6 +1385,19 @@ export default function OnboardStage2Page() {
       existingVd.specialNeedsExp !== undefined ? (existingVd.specialNeedsExp as boolean) : null,
     specialEducationCertified: (existingVd.specialEducationCertified as boolean) ?? false,
     teachingApproaches: (existingVd.teachingApproaches as string[]) ?? [],
+    certKey: (existingVd.certKey as string) ?? "",
+  });
+
+  const [coachForm, setCoachForm] = useState<CoachForm>({
+    // coachingSubType is its own DB column (mirrors rciCrrNumber's
+    // dedicated-column pattern) on BOTH professional_profiles (primary)
+    // and professional_offerings (additional) — hydrates from whichever
+    // one this vertical actually resolves to.
+    coachingSubType: (isAdditionalOffering ? myOffering?.coachingSubType : profile?.coachingSubType) ?? "",
+    conditionsSupported: (existingVd.conditionsSupported as string[]) ?? [],
+    conditionsSupportedOther: (existingVd.conditionsSupportedOther as string) ?? "",
+    sessionModes: (existingVd.sessionModes as string[]) ?? [],
+    ageGroups: (existingVd.ageGroups as string[]) ?? [],
     certKey: (existingVd.certKey as string) ?? "",
   });
 
@@ -1481,6 +1603,17 @@ export default function OnboardStage2Page() {
     return true;
   }
 
+  function isCoachValid() {
+    const base =
+      !!coachForm.coachingSubType &&
+      coachForm.conditionsSupported.length > 0 &&
+      coachForm.sessionModes.length > 0 &&
+      coachForm.ageGroups.length > 0;
+    if (!base) return false;
+    if (coachForm.conditionsSupported.includes("others") && !coachForm.conditionsSupportedOther.trim()) return false;
+    return true;
+  }
+
   function isValid() {
     if (!identityValid()) return false;
     // TEMP: UPI verification made non-blocking for onboarding submission,
@@ -1499,6 +1632,7 @@ export default function OnboardStage2Page() {
     if (isShadow) return isShadowValid();
     if (isTutor) return isTutorValid();
     if (isTherapist) return isTherapistValid();
+    if (isCoach) return isCoachValid();
     return false;
   }
 
@@ -1542,7 +1676,29 @@ export default function OnboardStage2Page() {
           teachingApproaches: tutorForm.teachingApproaches,
           ...(tutorForm.certKey ? { certKey: tutorForm.certKey } : {}),
         };
+      } else if (isCoach) {
+        verticalDetails = {
+          conditionsSupported: coachForm.conditionsSupported,
+          ...(coachForm.conditionsSupported.includes("others")
+            ? { conditionsSupportedOther: coachForm.conditionsSupportedOther.trim() }
+            : {}),
+          sessionModes: coachForm.sessionModes,
+          ageGroups: coachForm.ageGroups,
+          ...(coachForm.certKey ? { certKey: coachForm.certKey } : {}),
+        };
+        // coachingSubType is its own DB column (like specialty/rciCrrNumber
+        // for therapist above), not part of verticalDetails — must go
+        // through extraPatch, not the JSON blob.
+        extraPatch.coachingSubType = coachForm.coachingSubType;
       } else {
+        // isTherapist — explicitly the ONLY remaining case (not a bare
+        // fallthrough) now that shadow/tutor/coach are all checked above.
+        // Previously this final else assumed "not shadow, not tutor ⇒
+        // therapist" with no isTherapist check at all — a real bug once
+        // coaching existed as a 4th vertical, since a coaching submission
+        // would have silently fallen into this branch and sent
+        // therapist-shaped fields (discipline, RCI credential data) that
+        // make no sense for a coach.
         const credentialKind = disciplineCredentialKind(therapistForm.discipline);
         verticalDetails = {
           discipline: therapistForm.discipline,
@@ -1762,6 +1918,8 @@ export default function OnboardStage2Page() {
       ? "ring-teal-500/30"
       : meta.color === "blue"
       ? "ring-blue-500/30"
+      : meta.color === "orange"
+      ? "ring-orange-500/30"
       : "ring-violet-500/30";
 
   const accentBg =
@@ -1769,6 +1927,8 @@ export default function OnboardStage2Page() {
       ? "bg-teal-600 hover:bg-teal-700"
       : meta.color === "blue"
       ? "bg-blue-600 hover:bg-blue-700"
+      : meta.color === "orange"
+      ? "bg-orange-600 hover:bg-orange-700"
       : "bg-violet-600 hover:bg-violet-700";
 
   const validForm = isValid();
@@ -1893,6 +2053,9 @@ export default function OnboardStage2Page() {
                 medicalCouncilCertProps={medicalCouncilCertProps}
                 abaCertProps={abaCertProps}
               />
+            )}
+            {isCoach && (
+              <CoachForm form={coachForm} setForm={setCoachForm} isSaving={isSaving} idProps={idProps} />
             )}
           </div>
 
