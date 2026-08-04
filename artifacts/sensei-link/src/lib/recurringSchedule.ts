@@ -61,3 +61,59 @@ export function formatRecurringScheduleSummary(slots: RecurringScheduleSlot[] | 
     .map((s) => `${DAYS_SHORT[s.dayOfWeek]} ${formatTime12h(s.startTime)}–${formatTime12h(s.endTime)}`)
     .join(", ");
 }
+
+function toMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
+export const DEFAULT_SCHEDULE_WARNING_BUFFER_MINUTES = 90;
+
+export interface ScheduleWarning {
+  slot: RecurringScheduleSlot;
+  message: string;
+}
+
+// Accept-time soft warning (Part 4) — compares a schedule a professional is
+// about to commit to for ONE engagement against their own descriptive
+// generalAvailabilityJson (the "usual weekly availability" set on the
+// dashboard, see GeneralAvailabilityCard). Purely informational — never
+// blocks acceptance, and fires nothing when the professional hasn't stated
+// any general availability (same "neutral when missing" convention as
+// scoreCandidate's dimensions), since an unstated field is not evidence of
+// a conflict.
+export function checkAgainstGeneralAvailability(
+  proposedSlots: RecurringScheduleSlot[],
+  generalAvailability: RecurringScheduleSlot[] | null | undefined,
+  bufferMinutes: number = DEFAULT_SCHEDULE_WARNING_BUFFER_MINUTES,
+): ScheduleWarning[] {
+  if (!generalAvailability || generalAvailability.length === 0) return [];
+
+  const warnings: ScheduleWarning[] = [];
+  for (const slot of proposedSlots) {
+    const sameDay = generalAvailability.filter((a) => a.dayOfWeek === slot.dayOfWeek);
+    if (sameDay.length === 0) {
+      warnings.push({
+        slot,
+        message: `You haven't stated any usual availability for ${DAYS_FULL[slot.dayOfWeek]} — this may be outside your normal schedule.`,
+      });
+      continue;
+    }
+
+    const slotStart = toMinutes(slot.startTime);
+    const slotEnd = toMinutes(slot.endTime);
+
+    let bestFit: { window: RecurringScheduleSlot; overflow: number } | null = null;
+    for (const a of sameDay) {
+      const overflow = Math.max(toMinutes(a.startTime) - slotStart, slotEnd - toMinutes(a.endTime), 0);
+      if (!bestFit || overflow < bestFit.overflow) bestFit = { window: a, overflow };
+    }
+    if (bestFit && bestFit.overflow > bufferMinutes) {
+      warnings.push({
+        slot,
+        message: `This falls outside your usual ${DAYS_FULL[slot.dayOfWeek]} availability of ${formatTime12h(bestFit.window.startTime)}–${formatTime12h(bestFit.window.endTime)} by ${bestFit.overflow} minutes.`,
+      });
+    }
+  }
+  return warnings;
+}

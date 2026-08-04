@@ -210,6 +210,22 @@ export const GetMyProfessionalProfileResponse = zod.object({
     .string()
     .nullish()
     .describe("Reason given by admin when the application was rejected"),
+  earliestStartDate: zod
+    .string()
+    .nullish()
+    .describe("Shadow-teacher only — earliest date this professional can begin a NEW engagement"),
+  generalAvailabilityJson: zod
+    .array(
+      zod.object({
+        dayOfWeek: zod.number().int().min(0).max(6),
+        startTime: zod.string(),
+        endTime: zod.string(),
+      }),
+    )
+    .nullish()
+    .describe(
+      "Shadow-teacher only — descriptive general weekly availability, NOT a committed schedule (see shadow_teacher_engagements.recurringScheduleJson for that)",
+    ),
   upiId: zod
     .string()
     .nullish()
@@ -380,6 +396,22 @@ export const UpdateProfessionalProfileBody = zod.object({
     .max(5)
     .optional()
     .describe("Up to 5 free-form specialization tags"),
+  earliestStartDate: zod
+    .string()
+    .optional()
+    .describe("Shadow-teacher only — earliest date this professional can begin a NEW engagement"),
+  generalAvailabilityJson: zod
+    .array(
+      zod.object({
+        dayOfWeek: zod.number().int().min(0).max(6),
+        startTime: zod.string(),
+        endTime: zod.string(),
+      }),
+    )
+    .optional()
+    .describe(
+      "Shadow-teacher only — descriptive general weekly availability, NOT a committed schedule (see shadow_teacher_engagements.recurringScheduleJson for that)",
+    ),
 });
 
 export const UpdateProfessionalProfileResponse = zod.object({
@@ -458,6 +490,22 @@ export const UpdateProfessionalProfileResponse = zod.object({
     .string()
     .nullish()
     .describe("Reason given by admin when the application was rejected"),
+  earliestStartDate: zod
+    .string()
+    .nullish()
+    .describe("Shadow-teacher only — earliest date this professional can begin a NEW engagement"),
+  generalAvailabilityJson: zod
+    .array(
+      zod.object({
+        dayOfWeek: zod.number().int().min(0).max(6),
+        startTime: zod.string(),
+        endTime: zod.string(),
+      }),
+    )
+    .nullish()
+    .describe(
+      "Shadow-teacher only — descriptive general weekly availability, NOT a committed schedule (see shadow_teacher_engagements.recurringScheduleJson for that)",
+    ),
   upiId: zod
     .string()
     .nullish()
@@ -751,6 +799,7 @@ export const GetMySettingsResponse = zod.object({
   platformSalaryEnabled: zod.boolean(),
   trialDirectPayEnabled: zod.boolean(),
   trialFeeInr: zod.number(),
+  scheduleWarningBufferMinutes: zod.number(),
 });
 
 /**

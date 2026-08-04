@@ -122,6 +122,12 @@ export const adminSettingsTable = pgTable("admin_settings", {
   // apart from the existing commitResponseTimeoutDays, which is a different
   // timeout for the untouched no-trial/direct-commit path.
   shadowTeacherEngagementChoiceTimeoutDays: integer("shadow_teacher_engagement_choice_timeout_days").notNull().default(7),
+  // Accept-time soft warning (Part 4) — how far outside a teacher's stated
+  // generalAvailabilityJson their proposed per-engagement schedule may fall
+  // before the accept-time UI warns them. Purely informational, never
+  // blocks acceptance (see checkAgainstGeneralAvailability). Exposed via
+  // /settings/me since any professional (not just admins) needs to read it.
+  scheduleWarningBufferMinutes: integer("schedule_warning_buffer_minutes").notNull().default(90),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

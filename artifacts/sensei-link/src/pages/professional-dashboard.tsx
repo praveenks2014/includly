@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { useUser } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,6 +14,7 @@ import {
   useGetMySessions,
   useCreateUpiVerificationOrder,
   useConfirmUpiVerification,
+  useGetMySettings,
   getGetProfessionalDashboardQueryKey,
   getGetMyProfessionalProfileQueryKey,
   type ProfessionalProfile,
@@ -50,7 +51,7 @@ import { CityAutocomplete, type CityResult } from "@/components/CityAutocomplete
 import { SHOW_TUTOR_SEARCH, SHOW_THERAPIST_SEARCH } from "@/features";
 import type { Vertical } from "@/components/VerticalRequestWidget";
 import { RecurringScheduleEditor } from "@/components/RecurringScheduleEditor";
-import { type RecurringScheduleSlot } from "@/lib/recurringSchedule";
+import { type RecurringScheduleSlot, checkAgainstGeneralAvailability, DEFAULT_SCHEDULE_WARNING_BUFFER_MINUTES } from "@/lib/recurringSchedule";
 import { VerticalCandidacyCard, type VerticalCandidacy } from "@/components/VerticalCandidacyCard";
 import { VerticalEngagementCard, type VerticalEngagement } from "@/components/VerticalEngagementCard";
 
@@ -605,6 +606,82 @@ function AdditionalOfferingsCard() {
   );
 }
 
+// Shadow-teacher only — descriptive general availability (generalAvailabilityJson)
+// and earliest-start-date, used for compatibility scoring against a parent's
+// desired schedule (see shadowTeacherScoring.ts). Deliberately NOT the same
+// concept as RecurringScheduleEditor's other 2 call sites (the committed,
+// per-engagement recurringScheduleJson) — this describes the teacher's
+// general pattern, isn't required, and doesn't block the calendar. Reuses
+// the same editor component with overridden title/description for that
+// reason, own independent save (not bundled into ProfileTab's bigger edit
+// form, same reasoning as AdditionalOfferingsCard being its own card).
+function GeneralAvailabilityCard({ profile }: { profile: ProfessionalProfile | undefined }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { mutateAsync: patchProfile, isPending } = useUpdateProfessionalProfile();
+  const [earliestStartDate, setEarliestStartDate] = useState(profile?.earliestStartDate ?? "");
+  const [availability, setAvailability] = useState<RecurringScheduleSlot[]>(
+    (profile?.generalAvailabilityJson as RecurringScheduleSlot[] | null | undefined) ?? [],
+  );
+
+  if (!profile || profile.vertical !== "shadow_teacher") return null;
+
+  async function handleSave() {
+    try {
+      await patchProfile({
+        data: {
+          earliestStartDate: earliestStartDate.trim() || undefined,
+          generalAvailabilityJson: availability,
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
+      toast({ title: "Availability updated ✓" });
+    } catch {
+      toast({ title: "Could not save availability", variant: "destructive" });
+    }
+  }
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-4">
+      <div>
+        <p className="text-sm font-semibold text-[#1A2340]">General Availability</p>
+        <p className="text-xs text-gray-400 mt-1">
+          Descriptive only — helps match you with families whose desired schedule fits your usual pattern. This is
+          NOT a commitment and doesn't block your calendar; each engagement's actual schedule is still set
+          separately when you accept it.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-sm font-medium text-foreground">Earliest date you can start a new engagement</Label>
+        <Input
+          type="date"
+          value={earliestStartDate}
+          onChange={(e) => setEarliestStartDate(e.target.value)}
+          className="rounded-lg focus-visible:ring-[#2EC4A5] max-w-xs"
+        />
+      </div>
+
+      <RecurringScheduleEditor
+        slots={availability}
+        onChange={setAvailability}
+        title="Your usual weekly availability"
+        description="Add the day(s) and time(s) you're generally free — a rough pattern, not a promise. This is separate from the specific schedule you commit to for each engagement."
+      />
+
+      <Button
+        onClick={handleSave}
+        disabled={isPending}
+        size="sm"
+        className="bg-[#2EC4A5] hover:bg-[#26a88d] text-white gap-2 rounded-xl"
+      >
+        {isPending ? <Loader2 size={13} className="animate-spin" /> : null}
+        Save Availability
+      </Button>
+    </div>
+  );
+}
+
 function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -792,6 +869,7 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
       )}
 
       <AdditionalOfferingsCard />
+      <GeneralAvailabilityCard profile={profile} />
 
       {/* Edit form */}
       {!editing ? (
@@ -2343,6 +2421,15 @@ function EngagementTab() {
     },
     staleTime: 5 * 60_000,
   });
+  const { data: mySettings } = useGetMySettings();
+  const acceptanceScheduleWarnings = useMemo(
+    () => checkAgainstGeneralAvailability(
+      acceptanceSchedule,
+      profile?.generalAvailabilityJson as RecurringScheduleSlot[] | null | undefined,
+      mySettings?.scheduleWarningBufferMinutes ?? DEFAULT_SCHEDULE_WARNING_BUFFER_MINUTES,
+    ),
+    [acceptanceSchedule, profile, mySettings],
+  );
 
   async function handleTeacherAcceptance(action: "accept" | "decline") {
     if (!active) return;
@@ -2834,6 +2921,7 @@ function EngagementTab() {
                   By accepting you commit to starting on the proposed date and entering the parent's start code to activate the engagement.
                 </p>
                 <RecurringScheduleEditor slots={acceptanceSchedule} onChange={setAcceptanceSchedule} />
+                <ScheduleAvailabilityWarning warnings={acceptanceScheduleWarnings} />
                 <TermsAcknowledgment
                   scheduleSummary={formatScheduleSummary(acceptanceSchedule)}
                   monthlyFeeLabel={`₹${parseFloat(active.monthlyFeeInr).toLocaleString("en-IN")}`}
@@ -3656,6 +3744,8 @@ interface Candidacy {
   interviewDoneAt:        string | null;
   trialDaysRequested:     number | null;
   trialDaysAccepted:      number | null;
+  // Piece B — negotiated weekly-schedule outcome, once agreed.
+  acceptedWeeklyScheduleJson: RecurringScheduleSlot[] | null;
   threadId:            number | null;
   messageCount:        number;
   lastMessageAt:       string | null;
@@ -4255,6 +4345,154 @@ function TeacherInterviewSection({ candidacy: c, myUserId, onUpdated }: { candid
   );
 }
 
+// ── TeacherWeeklyScheduleNegotiation (Piece B) — same bidirectional
+// propose/counter/accept shape as TeacherInterviewSection above, copy-
+// adapted for a weekly {dayOfWeek,startTime,endTime}[] pattern instead of a
+// single date+time. Mirrors ShadowTeacherRequestWidget.tsx's parent-side
+// WeeklyScheduleNegotiation — separately maintained per this file's
+// established duplication convention (see DeclinePostInterviewAction).
+function TeacherWeeklyScheduleNegotiation({ candidacy: c, myUserId, onUpdated }: { candidacy: Candidacy; myUserId: number; onUpdated: () => void }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [proposedSlots, setProposedSlots] = useState<RecurringScheduleSlot[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [showProposeForm, setShowProposeForm] = useState(false);
+
+  const { data: offers = [] } = useQuery<{ id: number; raisedByUserId: number; raisedByRole: string; slots: RecurringScheduleSlot[]; status: string }[]>({
+    queryKey: ["weekly-schedule-offers", c.matchId, c.candidateId],
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/weekly-schedule-offers`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: myUserId > 0 && c.requestStatus === "accepted" && !c.acceptedWeeklyScheduleJson,
+    refetchInterval: 15_000,
+  });
+
+  if (c.requestStatus !== "accepted") return null;
+
+  const myPendingOffer = offers.find(o => o.status === "pending" && o.raisedByUserId === myUserId);
+  const theirPendingOffer = offers.find(o => o.status === "pending" && o.raisedByUserId !== myUserId);
+
+  async function proposeOrCounter() {
+    if (proposedSlots.length === 0) { toast({ title: "Add at least one day/time", variant: "destructive" }); return; }
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/weekly-schedule-offers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slots: proposedSlots }),
+      });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not propose this schedule", variant: "destructive" }); return; }
+      setProposedSlots([]);
+      setShowProposeForm(false);
+      queryClient.invalidateQueries({ queryKey: ["weekly-schedule-offers", c.matchId, c.candidateId] });
+    } finally { setSubmitting(false); }
+  }
+
+  async function acceptOffer(offerId: number) {
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/weekly-schedule-offers/${offerId}/accept`, { method: "PATCH" });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not accept this schedule", variant: "destructive" }); return; }
+      queryClient.invalidateQueries({ queryKey: ["weekly-schedule-offers", c.matchId, c.candidateId] });
+      onUpdated();
+    } finally { setSubmitting(false); }
+  }
+
+  async function withdrawOffer(offerId: number) {
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${c.matchId}/candidates/${c.candidateId}/weekly-schedule-offers/${offerId}`, { method: "DELETE" });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not withdraw", variant: "destructive" }); return; }
+      queryClient.invalidateQueries({ queryKey: ["weekly-schedule-offers", c.matchId, c.candidateId] });
+    } finally { setSubmitting(false); }
+  }
+
+  const proposeForm = (
+    <div className="space-y-1.5">
+      <RecurringScheduleEditor
+        slots={proposedSlots}
+        onChange={setProposedSlots}
+        title="Propose a weekly schedule"
+        description="Not a commitment yet — this starts a negotiation the parent can accept or counter."
+      />
+      <Button
+        size="sm"
+        onClick={() => void proposeOrCounter()}
+        disabled={submitting || proposedSlots.length === 0}
+        className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs h-8 rounded-xl"
+      >
+        {submitting ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
+        {theirPendingOffer ? "Send counter-proposal" : "Send proposal"}
+      </Button>
+    </div>
+  );
+
+  if (c.acceptedWeeklyScheduleJson) {
+    return (
+      <div className="mb-3 p-4 bg-green-50 border border-green-200 rounded-xl">
+        <p className="text-sm font-bold text-green-900">Agreed weekly schedule: {formatScheduleSummary(c.acceptedWeeklyScheduleJson)}</p>
+      </div>
+    );
+  }
+
+  if (theirPendingOffer) {
+    return (
+      <div className="mb-3 p-4 bg-purple-50 border border-purple-200 rounded-xl space-y-2">
+        <p className="text-sm font-bold text-purple-900">Parent proposed: {formatScheduleSummary(theirPendingOffer.slots)}</p>
+        <Button
+          size="sm"
+          onClick={() => void acceptOffer(theirPendingOffer.id)}
+          disabled={submitting}
+          className="w-full bg-purple-600 hover:bg-purple-700 text-white text-xs h-8 rounded-xl"
+        >
+          {submitting ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
+          Accept this schedule
+        </Button>
+        {showProposeForm ? proposeForm : (
+          <button onClick={() => setShowProposeForm(true)} className="w-full text-[10px] text-purple-700 hover:underline">
+            or propose a different schedule instead
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (myPendingOffer) {
+    return (
+      <div className="mb-3 p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
+        <p className="text-xs font-semibold text-amber-800">You proposed: {formatScheduleSummary(myPendingOffer.slots)} — awaiting parent's response…</p>
+        <button
+          onClick={() => void withdrawOffer(myPendingOffer.id)}
+          disabled={submitting}
+          className="w-full text-[11px] text-red-500 hover:underline disabled:opacity-50"
+        >
+          Withdraw
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-3 p-4 bg-purple-50 border border-purple-200 rounded-xl space-y-1.5">
+      {showProposeForm ? proposeForm : (
+        <>
+          <p className="text-xs text-purple-800">Propose a weekly schedule — the parent can accept or counter.</p>
+          <Button
+            size="sm"
+            onClick={() => setShowProposeForm(true)}
+            className="w-full bg-white border border-purple-200 text-purple-800 hover:bg-purple-50 text-xs h-8 rounded-xl"
+          >
+            Propose a schedule
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── TeacherTrialAcceptSection — Task 3f: teacher offers up to trialDaysRequested ──
 function TeacherTrialAcceptSection({ candidacy: c, onUpdated }: { candidacy: Candidacy; onUpdated: () => void }) {
   const { toast } = useToast();
@@ -4408,6 +4646,26 @@ const TEACHER_DECLINE_REASONS: { value: string; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
+// Amber accept-time soft warning (Part 4) shown when a proposed schedule
+// falls outside the professional's own stated general availability — never
+// blocks acceptance, purely informational. Shared between the two live
+// teacher-acceptance surfaces (ChooseEngagementSection and EngagementTab's
+// legacy teacher-acceptance screen).
+function ScheduleAvailabilityWarning({ warnings }: { warnings: { slot: RecurringScheduleSlot; message: string }[] }) {
+  if (warnings.length === 0) return null;
+  return (
+    <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+      <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+      <div className="flex-1 space-y-1">
+        <p className="text-xs font-semibold text-amber-900">Outside your usual availability</p>
+        {warnings.map((w, i) => (
+          <p key={i} className="text-[11px] text-amber-800">{w.message}</p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ChooseEngagementSection({ candidacy: c, onUpdated }: { candidacy: Candidacy; onUpdated: () => void }) {
   const { toast } = useToast();
   const [schedule, setSchedule] = useState<RecurringScheduleSlot[]>([]);
@@ -4416,6 +4674,17 @@ function ChooseEngagementSection({ candidacy: c, onUpdated }: { candidacy: Candi
   const [showDeclineForm, setShowDeclineForm] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
   const [declineNote, setDeclineNote] = useState("");
+
+  const { data: myProfile } = useGetMyProfessionalProfile();
+  const { data: mySettings } = useGetMySettings();
+  const scheduleWarnings = useMemo(
+    () => checkAgainstGeneralAvailability(
+      schedule,
+      myProfile?.generalAvailabilityJson as RecurringScheduleSlot[] | null | undefined,
+      mySettings?.scheduleWarningBufferMinutes ?? DEFAULT_SCHEDULE_WARNING_BUFFER_MINUTES,
+    ),
+    [schedule, myProfile, mySettings],
+  );
 
   // Same query key as CandidacyOfferSection's offers query — React Query
   // dedupes, no extra request — read here just for the accepted offer's
@@ -4475,6 +4744,7 @@ function ChooseEngagementSection({ candidacy: c, onUpdated }: { candidacy: Candi
       {!showDeclineForm ? (
         <>
           <RecurringScheduleEditor slots={schedule} onChange={setSchedule} />
+          <ScheduleAvailabilityWarning warnings={scheduleWarnings} />
           <TermsAcknowledgment
             scheduleSummary={formatScheduleSummary(schedule)}
             monthlyFeeLabel="To be confirmed once you accept"
@@ -4579,6 +4849,7 @@ function CandidacyCard({ candidacy: c, onOpen, myUserId, onUpdated }: { candidac
 
       <RespondRequestBlock candidacy={c} onUpdated={onUpdated} />
       <TeacherInterviewSection candidacy={c} myUserId={myUserId} onUpdated={onUpdated} />
+      <TeacherWeeklyScheduleNegotiation candidacy={c} myUserId={myUserId} onUpdated={onUpdated} />
       <TeacherTrialAcceptSection candidacy={c} onUpdated={onUpdated} />
 
       {c.matchStatus === "trial_pending" && c.isSelected && c.trialLocation && (

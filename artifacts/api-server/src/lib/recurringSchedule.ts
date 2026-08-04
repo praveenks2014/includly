@@ -63,25 +63,34 @@ interface ExistingSlot {
 export async function checkRecurringScheduleConflict(
   professionalId: number,
   newSlots: RecurringScheduleSlotType[],
-  exclude: { vertical: EngagementVertical; engagementId: number },
+  // engagementId is null for a NOT-YET-CREATED engagement (e.g. a
+  // check-before-insert call) — there is no row to exclude in that case,
+  // since nothing with this id exists in the table yet.
+  exclude: { vertical: EngagementVertical; engagementId: number | null },
 ): Promise<string | null> {
   const shadowConditions = [
     eq(shadowTeacherEngagementsTable.professionalId, professionalId),
     sql`${shadowTeacherEngagementsTable.status} != 'ended'`,
   ];
-  if (exclude.vertical === "shadow_teacher") shadowConditions.push(ne(shadowTeacherEngagementsTable.id, exclude.engagementId));
+  if (exclude.vertical === "shadow_teacher" && exclude.engagementId !== null) {
+    shadowConditions.push(ne(shadowTeacherEngagementsTable.id, exclude.engagementId));
+  }
 
   const tutorConditions = [
     eq(tutorEngagementsTable.professionalId, professionalId),
     sql`${tutorEngagementsTable.status} != 'ended'`,
   ];
-  if (exclude.vertical === "tutor") tutorConditions.push(ne(tutorEngagementsTable.id, exclude.engagementId));
+  if (exclude.vertical === "tutor" && exclude.engagementId !== null) {
+    tutorConditions.push(ne(tutorEngagementsTable.id, exclude.engagementId));
+  }
 
   const therapistConditions = [
     eq(therapistEngagementsTable.professionalId, professionalId),
     sql`${therapistEngagementsTable.status} != 'ended'`,
   ];
-  if (exclude.vertical === "therapist") therapistConditions.push(ne(therapistEngagementsTable.id, exclude.engagementId));
+  if (exclude.vertical === "therapist" && exclude.engagementId !== null) {
+    therapistConditions.push(ne(therapistEngagementsTable.id, exclude.engagementId));
+  }
 
   const [shadowRows, tutorRows, therapistRows] = await Promise.all([
     db.select({ recurringScheduleJson: shadowTeacherEngagementsTable.recurringScheduleJson })

@@ -15,6 +15,7 @@ import {
   childrenTable,
   negotiationOffersTable,
   interviewTimeOffersTable,
+  weeklyScheduleOffersTable,
   professionalAvailabilityTable,
   connectThreadsTable,
   paymentsTable,
@@ -22,12 +23,13 @@ import {
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { z } from "zod/v4";
-import { rankCandidates, maskBody, type MatchSnapshot, type ProfessionalForScoring } from "../lib/shadowTeacherScoring";
+import { rankCandidates, maskBody, type MatchSnapshot, type ProfessionalForScoring, type WeeklyScheduleSlot } from "../lib/shadowTeacherScoring";
 import { notifyMatchShortlisted, notifyMatchChatMessage, notifyParentOnTrialDone, createInAppNotification } from "../lib/notificationService";
 import { generateOtp } from "../lib/otp";
 import { creditWallet } from "../lib/ledger";
 import { resolveStuckShadowTeacherMatch } from "../lib/stuckEngagementResolver";
 import { getSettings, parseTiers, filterBySchoolHours, computeEffectiveAvailableFrom } from "../lib/shadowTeacherMatching";
+import { checkRecurringScheduleConflict, RecurringScheduleSlot } from "../lib/recurringSchedule";
 import { JITSI_CONFIG_SUFFIX } from "../lib/jitsi";
 import { haversineKm } from "../lib/geo";
 
@@ -216,6 +218,7 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
     childBudgetMaxInr: match.childBudgetMaxInr ?? null,
     childPreferredModes: match.childPreferredModes ?? null,
     childDesiredStartDate: match.childDesiredStartDate ?? null,
+    childDesiredWeeklyScheduleJson: match.childDesiredWeeklyScheduleJson as WeeklyScheduleSlot[] | null ?? null,
   };
 
   const ranked = rankCandidates(snap, professionalsForScoring, tiers, 3);
@@ -340,6 +343,11 @@ const NewRequestBody = z.object({
   // shadowTeacherScoring.ts) and the choose-engagement fallback in this
   // file — both already read this column; this is the first write path.
   childDesiredStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  // Piece B — parent's initial, non-negotiated desired weekly schedule.
+  // Same compatibility-scoring-signal role as childDesiredStartDate above,
+  // set once at request time; NOT the negotiated result (see
+  // weeklyScheduleOffersTable for the per-candidate propose/counter).
+  childDesiredWeeklyScheduleJson: z.array(RecurringScheduleSlot).optional(),
 }).refine((b) => (b.schoolLat == null) === (b.schoolLng == null), {
   message: "schoolLat and schoolLng must both be present or both absent",
 });
@@ -351,7 +359,7 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
     return;
   }
 
-  const { childId, extraNotes, budgetMinInr, budgetMaxInr, schoolName, schoolLat, schoolLng, childDesiredStartDate } = parsed.data;
+  const { childId, extraNotes, budgetMinInr, budgetMaxInr, schoolName, schoolLat, schoolLng, childDesiredStartDate, childDesiredWeeklyScheduleJson } = parsed.data;
 
   // Load child (must belong to this parent)
   const [child] = await db
@@ -439,6 +447,7 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
         schoolLat:           schoolLat ?? null,
         schoolLng:           schoolLng ?? null,
         childDesiredStartDate: childDesiredStartDate ?? null,
+        childDesiredWeeklyScheduleJson: childDesiredWeeklyScheduleJson ?? null,
       })
       .returning();
     await surfaceCandidatesForMatch(waivedMatch);
@@ -479,6 +488,7 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
       schoolLat: schoolLat ?? null,
       schoolLng: schoolLng ?? null,
       childDesiredStartDate: childDesiredStartDate ?? null,
+      childDesiredWeeklyScheduleJson: childDesiredWeeklyScheduleJson ?? null,
       providerOrderId: order.id as string,
     })
     .returning();
@@ -691,6 +701,8 @@ router.get("/shadow-teacher/my-request", requireAuth, requireRole("parent"), asy
       interviewDoneAt: c.interviewDoneAt,
       trialDaysRequested: c.trialDaysRequested,
       trialDaysAccepted: c.trialDaysAccepted,
+      // Piece B — negotiated weekly-schedule outcome, once agreed.
+      acceptedWeeklyScheduleJson: c.acceptedWeeklyScheduleJson,
       // For the upcoming candidate-card display — never used to exclude.
       effectiveAvailableFrom: availabilityMap.get(pro.id) ?? pro.earliestStartDate,
       // #18 — display-only distance from the parent-confirmed school
@@ -787,6 +799,7 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       interviewDoneAt:        shadowMatchCandidatesTable.interviewDoneAt,
       trialDaysRequested:     shadowMatchCandidatesTable.trialDaysRequested,
       trialDaysAccepted:      shadowMatchCandidatesTable.trialDaysAccepted,
+      acceptedWeeklyScheduleJson: shadowMatchCandidatesTable.acceptedWeeklyScheduleJson,
     })
     .from(shadowMatchCandidatesTable)
     .innerJoin(shadowTeacherMatchesTable, eq(shadowMatchCandidatesTable.matchId, shadowTeacherMatchesTable.id))
@@ -834,6 +847,7 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
         interviewDoneAt:        shadowMatchCandidatesTable.interviewDoneAt,
         trialDaysRequested:     shadowMatchCandidatesTable.trialDaysRequested,
         trialDaysAccepted:      shadowMatchCandidatesTable.trialDaysAccepted,
+        acceptedWeeklyScheduleJson: shadowMatchCandidatesTable.acceptedWeeklyScheduleJson,
       })
       .from(shadowMatchCandidatesTable)
       .innerJoin(shadowTeacherMatchesTable, eq(shadowMatchCandidatesTable.matchId, shadowTeacherMatchesTable.id))
@@ -914,6 +928,8 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       interviewDoneAt:        c.interviewDoneAt        ?? null,
       trialDaysRequested:     c.trialDaysRequested     ?? null,
       trialDaysAccepted:      c.trialDaysAccepted      ?? null,
+      // Piece B — negotiated weekly-schedule outcome, once agreed.
+      acceptedWeeklyScheduleJson: c.acceptedWeeklyScheduleJson ?? null,
       threadId:        thread?.threadId ?? null,
       messageCount:    counts ? Number(counts.messageCount) : 0,
       lastMessageAt:   counts?.lastMessageAt ?? null,
@@ -1797,6 +1813,197 @@ router.delete("/shadow-teacher/:matchId/candidates/:candidateId/interview-time-o
   res.json({ withdrawn, restored });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ── Bidirectional weekly-schedule propose/counter (Piece B) ───────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// Same state machine as the interview-time-offers block above — copy-adapted,
+// not shared, since slots (a weekly {dayOfWeek,startTime,endTime}[] pattern)
+// is a different shape from a single proposedDate/proposedTime pair, and
+// there's no interview-style 3-day-window validation or Jitsi side-effect
+// here. Keyed to (matchId, candidateId), same as interviewTimeOffersTable —
+// a professional only ever attaches to a match via a specific
+// shadowMatchCandidatesTable row, so this negotiation only becomes available
+// once a candidate exists (the parent's own non-negotiated initial ask lives
+// separately on shadowTeacherMatchesTable.childDesiredWeeklyScheduleJson,
+// set at request time). Accepting snapshots onto
+// shadowMatchCandidatesTable.acceptedWeeklyScheduleJson — descriptive/
+// compatibility signal only (feeds Part 3's scoring), NOT the committed
+// schedule, which is still set independently at actual accept time.
+
+// ── GET /shadow-teacher/:matchId/candidates/:candidateId/weekly-schedule-offers ─
+router.get("/shadow-teacher/:matchId/candidates/:candidateId/weekly-schedule-offers", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  const offers = await db.select().from(weeklyScheduleOffersTable)
+    .where(and(eq(weeklyScheduleOffersTable.matchId, matchId), eq(weeklyScheduleOffersTable.candidateId, candidateId)))
+    .orderBy(weeklyScheduleOffersTable.createdAt);
+  res.json(offers);
+});
+
+// ── POST /shadow-teacher/:matchId/candidates/:candidateId/weekly-schedule-offers ─
+const WeeklyScheduleOfferBody = z.object({
+  slots: z.array(RecurringScheduleSlot).min(1),
+});
+router.post("/shadow-teacher/:matchId/candidates/:candidateId/weekly-schedule-offers", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const parsed = WeeklyScheduleOfferBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  if (ctx.candidate.acceptedWeeklyScheduleJson) { res.status(409).json({ error: "A weekly schedule has already been agreed for this candidacy" }); return; }
+
+  // Same supersede-then-insert transaction + advisory lock as the
+  // interview-time-offers/negotiation-offers endpoints — see those
+  // endpoints' comments for why the lock is required, not optional.
+  const [offer] = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${matchId}, ${candidateId})`);
+    await tx.update(weeklyScheduleOffersTable)
+      .set({ status: "superseded", updatedAt: new Date() })
+      .where(and(
+        eq(weeklyScheduleOffersTable.matchId, matchId),
+        eq(weeklyScheduleOffersTable.candidateId, candidateId),
+        eq(weeklyScheduleOffersTable.status, "pending"),
+      ));
+    return tx.insert(weeklyScheduleOffersTable).values({
+      matchId,
+      candidateId,
+      raisedByUserId: req.userId!,
+      raisedByRole: ctx.myRole,
+      slots: parsed.data.slots,
+      status: "pending",
+    }).returning();
+  });
+
+  try {
+    if (ctx.myRole === "parent") {
+      const [pro] = await db.select({ userId: professionalProfilesTable.userId })
+        .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, ctx.candidate.professionalId)).limit(1);
+      if (pro) await createInAppNotification(pro.userId, {
+        type: "weekly_schedule_proposed",
+        title: "Parent proposed a weekly schedule",
+        body: "Log in to review, accept, or counter the proposed weekly schedule.",
+        relatedType: "match", relatedId: matchId,
+      });
+    } else {
+      await createInAppNotification(ctx.match.parentId, {
+        type: "weekly_schedule_proposed",
+        title: "Teacher proposed a weekly schedule",
+        body: "Log in to review, accept, or counter the proposed weekly schedule.",
+        relatedType: "match", relatedId: matchId,
+      });
+    }
+  } catch { /* non-blocking */ }
+
+  res.status(201).json(offer);
+});
+
+// ── PATCH /shadow-teacher/:matchId/candidates/:candidateId/weekly-schedule-offers/:offerId/accept ─
+router.patch("/shadow-teacher/:matchId/candidates/:candidateId/weekly-schedule-offers/:offerId/accept", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  const offerId = parseInt(req.params["offerId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId) || isNaN(offerId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+
+  // Unlike the interview-time-offers accept endpoint this was copy-adapted
+  // from, the read-check-write here runs under the same advisory lock as
+  // POST/DELETE — without it, a counter-offer from the other party landing
+  // between the SELECT and the UPDATEs below could get silently superseded
+  // by this accept without anyone ever seeing it, while this request goes
+  // on to commit the OLDER offer's slots as the agreed schedule.
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${matchId}, ${candidateId})`);
+    const [offer] = await tx.select().from(weeklyScheduleOffersTable)
+      .where(and(eq(weeklyScheduleOffersTable.id, offerId), eq(weeklyScheduleOffersTable.matchId, matchId), eq(weeklyScheduleOffersTable.candidateId, candidateId), eq(weeklyScheduleOffersTable.status, "pending")))
+      .limit(1);
+    if (!offer) return { ok: false, status: 404, body: { error: "Pending offer not found" } } as const;
+    if (offer.raisedByRole === ctx.myRole) return { ok: false, status: 403, body: { error: "You cannot accept your own offer" } } as const;
+
+    await tx.update(weeklyScheduleOffersTable)
+      .set({ status: "superseded", updatedAt: new Date() })
+      .where(and(eq(weeklyScheduleOffersTable.matchId, matchId), eq(weeklyScheduleOffersTable.candidateId, candidateId), eq(weeklyScheduleOffersTable.status, "pending")));
+    const [accepted] = await tx.update(weeklyScheduleOffersTable)
+      .set({ status: "accepted", updatedAt: new Date() })
+      .where(eq(weeklyScheduleOffersTable.id, offerId))
+      .returning();
+
+    // Snapshot onto shadowMatchCandidatesTable — same "accept-time snapshot"
+    // convention as interviewConfirmedSlot/meetLink above.
+    await tx.update(shadowMatchCandidatesTable)
+      .set({ acceptedWeeklyScheduleJson: offer.slots })
+      .where(eq(shadowMatchCandidatesTable.id, candidateId));
+
+    return { ok: true, offer, accepted } as const;
+  });
+
+  if (!result.ok) { res.status(result.status).json(result.body); return; }
+  const { offer, accepted } = result;
+
+  try {
+    if (offer.raisedByUserId) {
+      await createInAppNotification(offer.raisedByUserId, {
+        type: "weekly_schedule_accepted",
+        title: "Weekly schedule accepted!",
+        body: "Your proposed weekly schedule was accepted.",
+        relatedType: "match", relatedId: matchId,
+      });
+    }
+  } catch { /* non-blocking */ }
+
+  res.json({ ...accepted, acceptedWeeklyScheduleJson: offer.slots });
+});
+
+// ── DELETE /shadow-teacher/:matchId/candidates/:candidateId/weekly-schedule-offers/:offerId ─
+router.delete("/shadow-teacher/:matchId/candidates/:candidateId/weekly-schedule-offers/:offerId", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const matchId = parseInt(req.params["matchId"] as string, 10);
+  const candidateId = parseInt(req.params["candidateId"] as string, 10);
+  const offerId = parseInt(req.params["offerId"] as string, 10);
+  if (isNaN(matchId) || isNaN(candidateId) || isNaN(offerId)) { res.status(400).json({ error: "Invalid params" }); return; }
+  const ctx = await resolveNegotiationAccess(matchId, candidateId, req.userId!, req.userRole!);
+  if (!ctx) { res.status(403).json({ error: "Access denied or not found" }); return; }
+  const [offer] = await db.select().from(weeklyScheduleOffersTable)
+    .where(and(eq(weeklyScheduleOffersTable.id, offerId), eq(weeklyScheduleOffersTable.matchId, matchId), eq(weeklyScheduleOffersTable.candidateId, candidateId)))
+    .limit(1);
+  if (!offer) { res.status(404).json({ error: "Offer not found" }); return; }
+  if (offer.raisedByUserId !== req.userId) { res.status(403).json({ error: "You can only withdraw your own offer" }); return; }
+  if (offer.status !== "pending") { res.status(409).json({ error: "Only pending offers can be withdrawn" }); return; }
+
+  // Same advisory lock + restore-predecessor logic as DELETE /interview-time-offers/:offerId.
+  const { withdrawn, restored } = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${matchId}, ${candidateId})`);
+    const [withdrawnRow] = await tx.update(weeklyScheduleOffersTable)
+      .set({ status: "withdrawn", updatedAt: new Date() })
+      .where(eq(weeklyScheduleOffersTable.id, offerId))
+      .returning();
+
+    const [previous] = await tx.select().from(weeklyScheduleOffersTable)
+      .where(and(
+        eq(weeklyScheduleOffersTable.matchId, matchId),
+        eq(weeklyScheduleOffersTable.candidateId, candidateId),
+        eq(weeklyScheduleOffersTable.status, "superseded"),
+        lt(weeklyScheduleOffersTable.createdAt, offer.createdAt),
+      ))
+      .orderBy(desc(weeklyScheduleOffersTable.createdAt))
+      .limit(1);
+
+    if (!previous) return { withdrawn: withdrawnRow, restored: null as typeof withdrawnRow | null };
+
+    const [restoredRow] = await tx.update(weeklyScheduleOffersTable)
+      .set({ status: "pending", updatedAt: new Date() })
+      .where(eq(weeklyScheduleOffersTable.id, previous.id))
+      .returning();
+    return { withdrawn: withdrawnRow, restored: restoredRow };
+  });
+
+  res.json({ withdrawn, restored });
+});
+
 // ── POST /shadow-teacher/:matchId/candidates/:candidateId/mark-interview-done ─
 // Either party who actually attended can mark it done — resolveNegotiationAccess
 // below is the real access gate (only the match's parent or the candidate's own
@@ -2167,6 +2374,20 @@ router.post("/shadow-teacher/:matchId/candidates/:candidateId/choose-engagement"
   }
 
   // ── Accept ────────────────────────────────────────────────────────────────
+  // Checked BEFORE the engagement is inserted below (not insert-then-
+  // rollback) — this engagement doesn't exist yet, so there's no row to
+  // exclude from the comparison; engagementId: null tells
+  // checkRecurringScheduleConflict exactly that. Mirrors
+  // lifecycleRequests.ts:671-677's call shape (the same guard that already
+  // exists on the OTHER engagement-creation path, commit/order ->
+  // commit/verify -> finalizeCommit -> teacher-acceptance) — this was the
+  // one live path missing it.
+  const conflict = await checkRecurringScheduleConflict(ctx.candidate.professionalId, recurringSchedule!, {
+    vertical: "shadow_teacher",
+    engagementId: null,
+  });
+  if (conflict) { res.status(409).json({ error: conflict }); return; }
+
   const teacherRow = await loadCommitContext(matchId, ctx.match.parentId, ctx.candidate.professionalId, ["trial_done"]);
   if ("error" in teacherRow) { res.status(teacherRow.error.status).json(teacherRow.error.body); return; }
   const {
@@ -3594,6 +3815,7 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
         childBudgetMaxInr: match.childBudgetMaxInr ?? null,
         childPreferredModes: match.childPreferredModes ?? null,
         childDesiredStartDate: match.childDesiredStartDate ?? null,
+        childDesiredWeeklyScheduleJson: match.childDesiredWeeklyScheduleJson as WeeklyScheduleSlot[] | null ?? null,
       };
 
       const [maxRankRow] = await db

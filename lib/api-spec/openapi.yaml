@@ -1840,6 +1840,21 @@ components:
         rejectionReason:
           type: ["string", "null"]
           description: Reason given by admin when the application was rejected
+        earliestStartDate:
+          type: ["string", "null"]
+          description: Shadow-teacher only — earliest date this professional can begin a NEW engagement
+        generalAvailabilityJson:
+          type: ["array", "null"]
+          description: Shadow-teacher only — descriptive general weekly availability, NOT a committed schedule
+          items:
+            type: object
+            properties:
+              dayOfWeek:
+                type: integer
+              startTime:
+                type: string
+              endTime:
+                type: string
         upiId:
           type: ["string", "null"]
           description: UPI ID — returned only in private (own profile) response
@@ -2195,6 +2210,21 @@ components:
             type: string
           maxItems: 5
           description: Up to 5 free-form specialization tags
+        earliestStartDate:
+          type: string
+          description: Shadow-teacher only — earliest date this professional can begin a NEW engagement
+        generalAvailabilityJson:
+          type: array
+          description: Shadow-teacher only — descriptive general weekly availability, NOT a committed schedule
+          items:
+            type: object
+            properties:
+              dayOfWeek:
+                type: integer
+              startTime:
+                type: string
+              endTime:
+                type: string
 
     Rating:
       type: object
@@ -2971,12 +3001,15 @@ components:
           type: boolean
         trialFeeInr:
           type: integer
+        scheduleWarningBufferMinutes:
+          type: integer
       required:
         - placementFeeInr
         - activationFeeInr
         - platformSalaryEnabled
         - trialDirectPayEnabled
         - trialFeeInr
+        - scheduleWarningBufferMinutes
 
     VapidPublicKeyResponse:
       type: object

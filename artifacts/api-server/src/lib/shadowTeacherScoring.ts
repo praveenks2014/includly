@@ -6,6 +6,12 @@
  */
 import { haversineKm } from "./geo";
 
+export interface WeeklyScheduleSlot {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+}
+
 export interface MatchSnapshot {
   childCity: string | null;
   childLat: number | null;
@@ -18,6 +24,11 @@ export interface MatchSnapshot {
   // Optional: tutor.ts/therapist.ts also reuse this scoring lib and don't
   // capture a desired start date — absent means neutral score for everyone.
   childDesiredStartDate?: string | null;
+  // Piece B — parent's initial, non-negotiated desired weekly schedule (see
+  // shadowTeacherMatchesTable.childDesiredWeeklyScheduleJson). Compatibility
+  // signal only — never excludes. Optional for the same reason as
+  // childDesiredStartDate above: tutor/therapist don't capture this.
+  childDesiredWeeklyScheduleJson?: WeeklyScheduleSlot[] | null;
 }
 
 export interface ProfessionalForScoring {
@@ -39,6 +50,14 @@ export interface ProfessionalForScoring {
   // reason as childDesiredStartDate: tutor/therapist matching doesn't
   // compute it, and absent scores neutrally.
   effectiveAvailableFrom?: string | null;
+  // Piece A — professional's own descriptive general weekly availability
+  // (professionalProfilesTable.generalAvailabilityJson), NOT a committed
+  // schedule. Typed unknown (not WeeklyScheduleSlot[]) so every caller that
+  // spreads a raw professionalProfilesTable row — most don't remap this
+  // field at all — satisfies the type without a cast at each of the 5+
+  // call sites across shadowTeacher.ts/tutor.ts/therapist.ts/
+  // candidateRefresh.ts; narrowed once, inside scoreScheduleOverlap.
+  generalAvailabilityJson?: unknown;
 }
 
 export interface TierDef {
@@ -142,6 +161,49 @@ function scoreStartDate(snap: MatchSnapshot, pro: ProfessionalForScoring): numbe
   return 0;
 }
 
+function toMinutes(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
+function overlapMinutes(a: WeeklyScheduleSlot, b: WeeklyScheduleSlot): number {
+  const start = Math.max(toMinutes(a.startTime), toMinutes(b.startTime));
+  const end = Math.min(toMinutes(a.endTime), toMinutes(b.endTime));
+  return Math.max(0, end - start);
+}
+
+// Compatibility scoring only — NEVER excludes a candidate (Rule 2), same
+// convention as scoreStartDate above. Measures what fraction of the
+// parent's desired weekly schedule (childDesiredWeeklyScheduleJson) falls
+// within the professional's stated general availability
+// (generalAvailabilityJson) — both are descriptive/non-committed inputs,
+// not the negotiated/committed schedule. Missing data on either side scores
+// a neutral default (~half of max), matching every other dimension's
+// convention for "nothing to compare".
+function scoreScheduleOverlap(snap: MatchSnapshot, pro: ProfessionalForScoring): number {
+  const desired = snap.childDesiredWeeklyScheduleJson;
+  const available = pro.generalAvailabilityJson as WeeklyScheduleSlot[] | null | undefined;
+
+  if (!desired || desired.length === 0) return 10;
+  if (!available || available.length === 0) return 10;
+
+  const totalMinutes = desired.reduce((sum, s) => sum + Math.max(0, toMinutes(s.endTime) - toMinutes(s.startTime)), 0);
+  if (totalMinutes === 0) return 10;
+
+  let coveredMinutes = 0;
+  for (const d of desired) {
+    for (const a of available) {
+      if (d.dayOfWeek === a.dayOfWeek) coveredMinutes += overlapMinutes(d, a);
+    }
+  }
+  const coverage = Math.min(coveredMinutes / totalMinutes, 1);
+
+  if (coverage >= 1) return 20;
+  if (coverage >= 0.5) return 12;
+  if (coverage > 0) return 5;
+  return 0;
+}
+
 export interface ScoredCandidate {
   professionalId: number;
   score: number;
@@ -152,6 +214,7 @@ export interface ScoredCandidate {
   homeVisitScore: number;
   verifiedScore: number;
   startDateScore: number;
+  scheduleOverlapScore: number;
   ratingBonus: number;
 }
 
@@ -167,6 +230,7 @@ export function scoreCandidate(
   const homeVisitScore = scoreHomeVisit(snap, pro);
   const verifiedScore = scoreVerified(pro);
   const startDateScore = scoreStartDate(snap, pro);
+  const scheduleOverlapScore = scoreScheduleOverlap(snap, pro);
   const ratingBonus = pro.averageRating != null ? (pro.averageRating / 5) * 5 : 0;
 
   const score =
@@ -176,7 +240,8 @@ export function scoreCandidate(
     languageScore +
     homeVisitScore +
     verifiedScore +
-    startDateScore;
+    startDateScore +
+    scheduleOverlapScore;
 
   return {
     professionalId: pro.id,
@@ -188,6 +253,7 @@ export function scoreCandidate(
     homeVisitScore,
     verifiedScore,
     startDateScore,
+    scheduleOverlapScore,
     ratingBonus: Math.round(ratingBonus * 10) / 10,
   };
 }

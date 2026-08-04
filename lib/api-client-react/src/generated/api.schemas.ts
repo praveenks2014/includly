@@ -216,6 +216,16 @@ export interface ProfessionalProfile {
    */
   rejectionReason?: string | null;
   /**
+   * Shadow-teacher only — earliest date this professional can begin a NEW engagement
+   * @nullable
+   */
+  earliestStartDate?: string | null;
+  /**
+   * Shadow-teacher only — descriptive general weekly availability, NOT a committed schedule (see shadow_teacher_engagements.recurringScheduleJson for that)
+   * @nullable
+   */
+  generalAvailabilityJson?: { dayOfWeek: number; startTime: string; endTime: string }[] | null;
+  /**
    * UPI ID — returned only in private (own profile) response
    * @nullable
    */
@@ -470,6 +480,10 @@ export interface UpdateProfessionalProfileBody {
   verticalDetails?: { [key: string]: unknown };
   /** Up to 5 free-form specialization tags */
   specializationTags?: string[];
+  /** Shadow-teacher only — earliest date this professional can begin a NEW engagement */
+  earliestStartDate?: string;
+  /** Shadow-teacher only — descriptive general weekly availability, NOT a committed schedule (see shadow_teacher_engagements.recurringScheduleJson for that) */
+  generalAvailabilityJson?: { dayOfWeek: number; startTime: string; endTime: string }[];
 }
 
 export interface Rating {
@@ -844,6 +858,7 @@ export interface MySettings {
   platformSalaryEnabled: boolean;
   trialDirectPayEnabled: boolean;
   trialFeeInr: number;
+  scheduleWarningBufferMinutes: number;
 }
 
 export interface VapidPublicKeyResponse {

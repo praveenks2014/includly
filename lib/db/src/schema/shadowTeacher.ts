@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, pgEnum, boolean, real } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, pgEnum, boolean, real, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -57,6 +57,15 @@ export const shadowTeacherMatchesTable = pgTable("shadow_teacher_matches", {
   // — never excludes a candidate, only ranks them relative to how well their
   // effective availability lines up with this date.
   childDesiredStartDate: text("child_desired_start_date"),
+  // Parent's initial, non-negotiated desired weekly schedule — captured at
+  // request time, same "descriptive, compatibility-signal-only" role as
+  // childDesiredStartDate above (see scoreStartDate). NOT the negotiated
+  // result — once a candidate is shortlisted, the parent and that specific
+  // professional can propose/counter via weeklyScheduleOffersTable, whose
+  // accepted outcome snapshots onto shadowMatchCandidatesTable.
+  // acceptedWeeklyScheduleJson instead. Shape:
+  // { dayOfWeek: 0-6, startTime: "HH:MM", endTime: "HH:MM" }[]
+  childDesiredWeeklyScheduleJson: jsonb("child_desired_weekly_schedule_json"),
   extraNotes: text("extra_notes"),
   selectedProfessionalId: integer("selected_professional_id").references(() => professionalProfilesTable.id, { onDelete: "set null" }),
   feePaidAt: timestamp("fee_paid_at", { withTimezone: true }),

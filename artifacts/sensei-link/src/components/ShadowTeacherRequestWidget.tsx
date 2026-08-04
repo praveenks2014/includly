@@ -28,7 +28,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShadowMatchChatDrawer } from "./ShadowMatchChatDrawer";
 import { UpiPayQRDialog } from "./UpiPayQRDialog";
 import { TermsAcknowledgment } from "./TermsAcknowledgment";
-import { formatRecurringScheduleSummary } from "@/lib/recurringSchedule";
+import { formatRecurringScheduleSummary, type RecurringScheduleSlot } from "@/lib/recurringSchedule";
+import { RecurringScheduleEditor } from "./RecurringScheduleEditor";
 import { SchoolAutocomplete } from "./SchoolAutocomplete";
 import { ProfessionalAvatar } from "./ProfessionalAvatar";
 import { useGetMe } from "@workspace/api-client-react";
@@ -88,6 +89,9 @@ interface Candidate {
   // school suggestion (no precise point to measure from) — never an
   // approximate/guessed figure.
   schoolDistanceKm: number | null;
+  // Piece B — negotiated weekly-schedule outcome, once agreed via
+  // WeeklyScheduleNegotiation below.
+  acceptedWeeklyScheduleJson: RecurringScheduleSlot[] | null;
 }
 
 interface MatchWithCandidates {
@@ -804,6 +808,153 @@ function InterviewSection({ matchId, candidate, myUserId }: { matchId: number; c
   );
 }
 
+interface WeeklyScheduleOffer {
+  id: number;
+  raisedByUserId: number;
+  raisedByRole: string;
+  slots: RecurringScheduleSlot[];
+  status: string;
+}
+
+// ── WeeklyScheduleNegotiation (Piece B) — same bidirectional propose/
+// counter/accept shape as InterviewSection above, copy-adapted for a
+// {dayOfWeek,startTime,endTime}[] weekly pattern instead of a single
+// date+time. Once agreed, terminal — shows the agreed schedule and stops
+// offering propose/counter (there's no "mark done" step here, unlike
+// interview, since acceptedWeeklyScheduleJson is a descriptive/scoring
+// signal, not a step that gates the rest of the flow).
+function WeeklyScheduleNegotiation({ matchId, candidate, myUserId }: { matchId: number; candidate: Candidate; myUserId: number }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [proposedSlots, setProposedSlots] = useState<RecurringScheduleSlot[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [showProposeForm, setShowProposeForm] = useState(false);
+
+  const { data: offers = [] } = useQuery<WeeklyScheduleOffer[]>({
+    queryKey: ["weekly-schedule-offers", matchId, candidate.id],
+    queryFn: async () => {
+      const r = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/weekly-schedule-offers`);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: myUserId > 0 && candidate.requestStatus === "accepted" && !candidate.acceptedWeeklyScheduleJson,
+    refetchInterval: 15_000,
+  });
+
+  if (candidate.requestStatus !== "accepted") return null;
+
+  const myPendingOffer = offers.find(o => o.status === "pending" && o.raisedByUserId === myUserId);
+  const theirPendingOffer = offers.find(o => o.status === "pending" && o.raisedByUserId !== myUserId);
+
+  async function proposeOrCounter() {
+    if (proposedSlots.length === 0) { toast({ title: "Add at least one day/time", variant: "destructive" }); return; }
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/weekly-schedule-offers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slots: proposedSlots }),
+      });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not propose this schedule", variant: "destructive" }); return; }
+      setProposedSlots([]);
+      setShowProposeForm(false);
+      queryClient.invalidateQueries({ queryKey: ["weekly-schedule-offers", matchId, candidate.id] });
+    } finally { setSubmitting(false); }
+  }
+
+  async function acceptOffer(offerId: number) {
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/weekly-schedule-offers/${offerId}/accept`, { method: "PATCH" });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not accept this schedule", variant: "destructive" }); return; }
+      queryClient.invalidateQueries({ queryKey: ["weekly-schedule-offers", matchId, candidate.id] });
+      queryClient.invalidateQueries({ queryKey: ["shadow-teacher-my-request"] });
+    } finally { setSubmitting(false); }
+  }
+
+  async function withdrawOffer(offerId: number) {
+    setSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/shadow-teacher/${matchId}/candidates/${candidate.id}/weekly-schedule-offers/${offerId}`, { method: "DELETE" });
+      if (!res.ok) { const e = await res.json() as { error?: string }; toast({ title: e.error ?? "Could not withdraw", variant: "destructive" }); return; }
+      queryClient.invalidateQueries({ queryKey: ["weekly-schedule-offers", matchId, candidate.id] });
+    } finally { setSubmitting(false); }
+  }
+
+  const proposeForm = (
+    <div className="space-y-1.5">
+      <RecurringScheduleEditor
+        slots={proposedSlots}
+        onChange={setProposedSlots}
+        title="Propose a weekly schedule"
+        description="Not a commitment yet — this starts a negotiation the teacher can accept or counter."
+      />
+      <button
+        onClick={() => void proposeOrCounter()}
+        disabled={submitting || proposedSlots.length === 0}
+        className="w-full text-xs bg-[#2EC4A5] text-white rounded-lg px-2.5 py-1.5 font-semibold disabled:opacity-50"
+      >
+        {submitting ? <Loader2 size={13} className="animate-spin mx-auto" /> : (theirPendingOffer ? "Send counter-proposal" : "Send proposal")}
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="border-t border-gray-100 pt-3 space-y-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Weekly Schedule</p>
+
+      {candidate.acceptedWeeklyScheduleJson ? (
+        <div className="w-full text-center text-xs font-semibold px-2.5 py-2 rounded-xl bg-green-50 text-green-700 border border-green-200">
+          Agreed: {formatRecurringScheduleSummary(candidate.acceptedWeeklyScheduleJson)}
+        </div>
+      ) : theirPendingOffer ? (
+        <div className="space-y-1.5">
+          <div className="w-full text-center text-xs font-semibold px-2.5 py-2 rounded-xl bg-amber-50 text-amber-700 border border-amber-200">
+            Teacher proposed: {formatRecurringScheduleSummary(theirPendingOffer.slots)}
+          </div>
+          <button
+            onClick={() => void acceptOffer(theirPendingOffer.id)}
+            disabled={submitting}
+            className="w-full flex items-center justify-center gap-1.5 text-xs bg-[#2EC4A5] text-white rounded-xl py-2 font-semibold hover:bg-[#26a88d] disabled:opacity-50"
+          >
+            <CheckCircle2 size={13} />
+            Accept this schedule
+          </button>
+          {showProposeForm ? proposeForm : (
+            <button onClick={() => setShowProposeForm(true)} className="w-full text-[11px] text-gray-400 hover:text-gray-600 underline underline-offset-2">
+              or propose a different schedule instead
+            </button>
+          )}
+        </div>
+      ) : myPendingOffer ? (
+        <div className="space-y-1.5">
+          <div className="w-full text-center text-xs font-semibold px-2.5 py-2 rounded-xl bg-amber-50 text-amber-700 border border-amber-200">
+            You proposed: {formatRecurringScheduleSummary(myPendingOffer.slots)} — awaiting response…
+          </div>
+          <button
+            onClick={() => void withdrawOffer(myPendingOffer.id)}
+            disabled={submitting}
+            className="w-full text-[11px] text-red-500 hover:underline disabled:opacity-50"
+          >
+            Withdraw
+          </button>
+        </div>
+      ) : showProposeForm ? proposeForm : (
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-gray-500">Propose a weekly schedule — the teacher can accept or counter.</p>
+          <button
+            onClick={() => setShowProposeForm(true)}
+            className="w-full text-xs bg-white border border-gray-200 text-[#1A2340] rounded-lg px-2.5 py-1.5 font-semibold hover:bg-gray-50"
+          >
+            Propose a schedule
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const POST_INTERVIEW_DECLINE_REASON_OPTIONS: { value: string; label: string }[] = [
   { value: "schedule_mismatch", label: "Schedule doesn't work out" },
   { value: "salary_mismatch", label: "Salary/rate doesn't match expectations" },
@@ -1112,7 +1263,10 @@ function CandidateCard({
         )}
 
         {!committed && !trialMode && (
-          <InterviewSection matchId={matchId} candidate={candidate} myUserId={myUserId} />
+          <>
+            <InterviewSection matchId={matchId} candidate={candidate} myUserId={myUserId} />
+            <WeeklyScheduleNegotiation matchId={matchId} candidate={candidate} myUserId={myUserId} />
+          </>
         )}
 
         {p.bio && <p className="text-xs text-gray-500 line-clamp-2">{p.bio}</p>}
@@ -1270,6 +1424,12 @@ export function ShadowTeacherRequestWidget() {
   // choose-engagement fallback in shadowTeacher.ts, both of which read this
   // column but had nothing real to read until now).
   const [desiredStartDate, setDesiredStartDate] = useState("");
+  // Piece B — parent's initial, non-negotiated desired weekly schedule.
+  // Same "descriptive compatibility signal, set once at request time" role
+  // as desiredStartDate above. NOT the negotiated result — once a candidate
+  // is shortlisted, WeeklyScheduleNegotiation lets the parent and that
+  // specific professional propose/counter a real agreed schedule.
+  const [desiredWeeklySchedule, setDesiredWeeklySchedule] = useState<RecurringScheduleSlot[]>([]);
 
   function selectSalaryPreset(preset: typeof MONTHLY_SALARY_PRESETS[number]) {
     const toggling = preset.key === salaryPresetKey;
@@ -1365,6 +1525,7 @@ export function ShadowTeacherRequestWidget() {
           // free-typed text.
           ...(schoolLat != null && schoolLng != null && { schoolLat, schoolLng }),
           ...(desiredStartDate && { childDesiredStartDate: desiredStartDate }),
+          ...(desiredWeeklySchedule.length > 0 && { childDesiredWeeklyScheduleJson: desiredWeeklySchedule }),
         }),
       });
       const data = await res.json() as {
@@ -1964,6 +2125,20 @@ export function ShadowTeacherRequestWidget() {
                 value={desiredStartDate}
                 onChange={(e) => setDesiredStartDate(e.target.value)}
                 className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#2EC4A5]"
+              />
+            </div>
+
+            <div>
+              <Label className="text-sm mb-1.5 block">Desired weekly schedule <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                A rough starting point — not final. Once you shortlist a teacher, you can propose and agree on the
+                actual weekly schedule together.
+              </p>
+              <RecurringScheduleEditor
+                slots={desiredWeeklySchedule}
+                onChange={setDesiredWeeklySchedule}
+                title="Days and times you're looking for"
+                description="Add the day(s) and time(s) you'd ideally like sessions to happen."
               />
             </div>
 

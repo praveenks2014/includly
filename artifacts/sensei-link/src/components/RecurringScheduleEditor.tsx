@@ -12,8 +12,22 @@ function calcEndTime(start: string, mins: number) {
 // for all three recurring-engagement verticals (Shadow Teacher, Tutor,
 // Therapist) — was Shadow-Teacher-only (TeacherScheduleEditor in
 // professional-dashboard.tsx) before Tutor/Therapist gained the identical
-// recurringScheduleJson concept.
-export function RecurringScheduleEditor({ slots, onChange }: { slots: RecurringScheduleSlot[]; onChange: (slots: RecurringScheduleSlot[]) => void; }) {
+// recurringScheduleJson concept. Also reused for shadow-teacher's
+// DESCRIPTIVE generalAvailabilityJson (a different concept — not a
+// commitment, not required, doesn't block the calendar) — title/description
+// are overridable for that case; defaults keep the original
+// commitment-specific copy for the 3 existing call sites unchanged.
+export function RecurringScheduleEditor({
+  slots,
+  onChange,
+  title = "Your weekly commitment",
+  description = "Add the day(s) and time(s) you're committing to for this engagement. This blocks your calendar — required before you can accept.",
+}: {
+  slots: RecurringScheduleSlot[];
+  onChange: (slots: RecurringScheduleSlot[]) => void;
+  title?: string;
+  description?: string;
+}) {
   function addSlot(day: number) {
     const daySlots = slots.filter((s) => s.dayOfWeek === day);
     const lastEnd = daySlots.length > 0
@@ -30,10 +44,8 @@ export function RecurringScheduleEditor({ slots, onChange }: { slots: RecurringS
 
   return (
     <div className="space-y-2.5">
-      <p className="text-xs font-semibold text-[#1A2340]">Your weekly commitment</p>
-      <p className="text-[11px] text-gray-500">
-        Add the day(s) and time(s) you're committing to for this engagement. This blocks your calendar — required before you can accept.
-      </p>
+      <p className="text-xs font-semibold text-[#1A2340]">{title}</p>
+      <p className="text-[11px] text-gray-500">{description}</p>
       <div className="space-y-2">
         {[1, 2, 3, 4, 5, 6, 0].map((day) => {
           const daySlots = slots.map((s, i) => ({ ...s, _idx: i })).filter((s) => s.dayOfWeek === day);

@@ -629,6 +629,7 @@ router.get("/settings/me", requireAuth, async (_req, res): Promise<void> => {
     platformSalaryEnabled: settings.platformSalaryEnabled,
     trialDirectPayEnabled: settings.trialDirectPayEnabled,
     trialFeeInr: settings.trialFeeInr,
+    scheduleWarningBufferMinutes: settings.scheduleWarningBufferMinutes,
   });
 });
 

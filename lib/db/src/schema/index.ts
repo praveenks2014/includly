@@ -36,6 +36,7 @@ export * from "./shadowMatchChat";
 export * from "./childGoals";
 export * from "./negotiationOffers";
 export * from "./interviewTimeOffers";
+export * from "./weeklyScheduleOffers";
 export * from "./communityAi";
 export * from "./behaviorLogs";
 export * from "./waitlist";

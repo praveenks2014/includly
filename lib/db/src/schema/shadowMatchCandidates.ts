@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, real, text, timestamp, index, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, real, text, jsonb, timestamp, index, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { shadowTeacherMatchesTable } from "./shadowTeacher";
@@ -45,6 +45,14 @@ export const shadowMatchCandidatesTable = pgTable(
     interviewDoneAt: timestamp("interview_done_at", { withTimezone: true }),
     trialDaysRequested: integer("trial_days_requested"),
     trialDaysAccepted: integer("trial_days_accepted"),
+    // Snapshot of the negotiated outcome once a weeklyScheduleOffersTable
+    // offer is accepted for this (matchId, candidateId) pair — same
+    // "accept-time snapshot onto the candidate row" convention as
+    // interviewConfirmedSlot/meetLink above. Descriptive/compatibility
+    // signal only (feeds Part 3's scoring) — NOT the committed schedule,
+    // which is still set independently at actual accept time via
+    // recurringScheduleJson on the resulting engagement.
+    acceptedWeeklyScheduleJson: jsonb("accepted_weekly_schedule_json"),
     // Auto-refresh notice tracking — set once the parent has been shown the
     // "a stronger match is now available" banner for this candidate (only
     // ever meaningful when addedBy = 'auto_refresh'). Null means the notice
