@@ -1,8 +1,9 @@
-import { pgTable, serial, integer, text, timestamp, boolean, real, pgEnum, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, boolean, real, pgEnum, index, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { childrenTable } from "./children";
+import { professionalProfilesTable } from "./professionals";
 
 export const centreStatusEnum = pgEnum("centre_status", [
   "draft",
@@ -43,6 +44,15 @@ export const therapyCentresTable = pgTable("therapy_centres", {
   rejectedReason: text("rejected_reason"),
   commissionPctOverride: real("commission_pct_override"),
   platformDefaultCommissionPct: real("platform_default_commission_pct").notNull().default(15),
+  // Centre-admin credential gate — the admin/owner account must PERSONALLY
+  // hold a verified Clinical Psychology (RCI) credential, reusing the exact
+  // same professional_profiles/computeVerificationRequirements() machinery
+  // individual professionals go through — not a separate "named
+  // clinically-responsible person" model, and not a second verification
+  // mechanism. PATCH /admin/centres/:id/verify's approve/verify/set_live
+  // actions gate on this profile's verificationStatus, in addition to (not
+  // instead of) the centre's own business-registration fields above.
+  adminProfessionalProfileId: integer("admin_professional_profile_id").references(() => professionalProfilesTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
@@ -56,9 +66,35 @@ export const centreTherapistsTable = pgTable("centre_therapists", {
   qualifications: text("qualifications"),
   yearsExperience: integer("years_experience").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
+  // Real sub-account architecture — this roster row stays the centre-facing
+  // directory concept (display name/photo/bio the centre controls); once
+  // linked, professionalProfileId points at the actual Clerk-authenticated,
+  // individually-credentialed identity that slots/bookings/OTP-confirmation
+  // columns key against. Nullable because a roster row can exist in
+  // "invited, not yet accepted" state before the therapist completes their
+  // own signup and credential submission — the admin never submits
+  // credentials on a therapist's behalf; see accountStatus below.
+  // Unique (nulls excepted, standard Postgres behavior) enforces one
+  // therapist-to-centre at a time — deliberately not modeled as many-to-many
+  // yet; multi-centre affiliation is deferred, cheap to lift later by
+  // dropping this constraint, not something worth designing for now.
+  professionalProfileId: integer("professional_profile_id").references(() => professionalProfilesTable.id, { onDelete: "set null" }),
+  // Account-invite lifecycle, separate from isActive (which governs
+  // roster/employment visibility, not login state). Plain text, not an enum
+  // — this is a brand-new flow still likely to need iteration, same
+  // reasoning as shadowMatchCandidatesTable.requestStatus's own comment.
+  // Values: not_invited | invited | active | revoked.
+  accountStatus: text("account_status").notNull().default("not_invited"),
+  invitedEmail: text("invited_email"),
+  invitedAt: timestamp("invited_at", { withTimezone: true }),
+  inviteAcceptedAt: timestamp("invite_accepted_at", { withTimezone: true }),
+  invitedByUserId: integer("invited_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-}, (t) => [index("centre_therapists_centre_id_idx").on(t.centreId)]);
+}, (t) => [
+  index("centre_therapists_centre_id_idx").on(t.centreId),
+  unique("centre_therapists_professional_profile_unique").on(t.professionalProfileId),
+]);
 
 export const centreTherapistSlotsTable = pgTable("centre_therapist_slots", {
   id: serial("id").primaryKey(),

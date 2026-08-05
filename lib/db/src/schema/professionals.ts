@@ -142,6 +142,19 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   // shadow-teacher matching at all beyond Rule 1's booked-commitment check.
   earliestStartDate: text("earliest_start_date"),
   generalAvailabilityJson: jsonb("general_availability_json"),
+  // Therapy-centre sub-account architecture — set once a centre's invited
+  // therapist accepts and this profile becomes centre_therapists-linked
+  // (see centreTherapistsTable.professionalProfileId, the canonical
+  // roster-to-identity link). Denormalized here, deliberately NOT a real FK
+  // (no .references() — would require importing therapyCentres.ts from
+  // this file, which already imports the reverse direction, a circular
+  // schema-file dependency), same soft-reference convention already used
+  // elsewhere in this codebase (verifiedBy/rejectedBy/decidedBy/releasedBy)
+  // for references that can't or shouldn't be a hard FK. Exists so
+  // authorization checks ("is this professional centre-employed, and by
+  // whom") don't require a backward join through centre_therapists on
+  // every request. Null = independent professional, unaffiliated.
+  employingCentreId: integer("employing_centre_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
