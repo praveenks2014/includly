@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, desc } from "drizzle-orm";
+import { createClerkClient } from "@clerk/express";
 import { db } from "@workspace/db";
 import {
   therapyCentresTable,
@@ -10,12 +11,14 @@ import {
   centreServicePackagesTable,
   centreCancellationPoliciesTable,
   priceChangeRequestsTable,
+  professionalProfilesTable,
   usersTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { z } from "zod/v4";
 
 const router: IRouter = Router();
+const clerkClient = createClerkClient({ secretKey: process.env["CLERK_SECRET_KEY"] });
 
 const centreAdminGuard = [requireAuth, requireRole("centre_admin", "admin")] as const;
 const authGuard = [requireAuth] as const;
@@ -148,6 +151,37 @@ router.post("/centres/:id/submit", ...centreAdminGuard, async (req, res): Promis
   res.json(updated);
 });
 
+// ── POST /centres/:id/link-admin-credential — link the admin's OWN, already-
+// existing professional_profiles row (created via the normal POST
+// /professionals/me path, discipline = Clinical Psychology) as this centre's
+// credential gate. Deliberately takes NO body — the profile is looked up by
+// req.userId, never a client-supplied id, so a centre can never link
+// someone else's verified credential to satisfy its own gate. Reuses the
+// individual professional's verification flow completely unmodified; this
+// endpoint only records the link, it never sets verificationStatus itself.
+router.post("/centres/:id/link-admin-credential", ...centreAdminGuard, async (req, res): Promise<void> => {
+  const id = parsedId(req.params.id);
+  if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
+  if (!(await ownscentre(req.userId!, id)) && req.userRole !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
+
+  const [profile] = await db.select().from(professionalProfilesTable).where(eq(professionalProfilesTable.userId, req.userId!));
+  if (!profile) {
+    res.status(404).json({ error: "Create your own professional profile first (discipline: Clinical Psychology) before linking it to your centre." });
+    return;
+  }
+  const discipline = (profile.verticalDetails as { discipline?: string } | null)?.discipline ?? null;
+  if (profile.vertical !== "therapist" || discipline !== "Clinical Psychology") {
+    res.status(400).json({ error: "Your linked profile must be a Therapist profile with discipline Clinical Psychology." });
+    return;
+  }
+
+  const [updated] = await db.update(therapyCentresTable)
+    .set({ adminProfessionalProfileId: profile.id, updatedAt: new Date() })
+    .where(eq(therapyCentresTable.id, id))
+    .returning();
+  res.json(updated);
+});
+
 // ── THERAPISTS ───────────────────────────────────────────────────────────────
 
 router.get("/centres/:id/therapists", ...authGuard, async (req, res): Promise<void> => {
@@ -186,6 +220,85 @@ router.delete("/centres/:id/therapists/:tid", ...centreAdminGuard, async (req, r
   if (!(await ownscentre(req.userId!, id)) && req.userRole !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
   await db.delete(centreTherapistsTable).where(and(eq(centreTherapistsTable.id, tid), eq(centreTherapistsTable.centreId, id)));
   res.json({ ok: true });
+});
+
+// ── POST /centres/:id/therapists/:tid/invite — send a real, Clerk-
+// authenticated sub-account invite for an existing roster row. Does not
+// create or touch professionalProfileId — that only ever gets set by the
+// therapist's own accept action below, once THEY independently pass the
+// same credential-verification flow any standalone professional goes
+// through. The admin vouches for nothing beyond "this person should be
+// invited"; it cannot mark anyone verified.
+const InviteTherapistBody = z.object({ email: z.string().email() });
+router.post("/centres/:id/therapists/:tid/invite", ...centreAdminGuard, async (req, res): Promise<void> => {
+  const id = parsedId(req.params.id);
+  const tid = parsedId(req.params.tid);
+  if (!id || !tid) { res.status(400).json({ error: "Invalid id" }); return; }
+  if (!(await ownscentre(req.userId!, id)) && req.userRole !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
+
+  const parsed = InviteTherapistBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [therapist] = await db.select().from(centreTherapistsTable)
+    .where(and(eq(centreTherapistsTable.id, tid), eq(centreTherapistsTable.centreId, id)));
+  if (!therapist) { res.status(404).json({ error: "Not found" }); return; }
+  if (therapist.professionalProfileId) { res.status(409).json({ error: "This therapist already has a linked account" }); return; }
+
+  try {
+    await clerkClient.invitations.createInvitation({
+      emailAddress: parsed.data.email,
+      publicMetadata: { intendedRole: "professional", centreTherapistId: tid },
+    });
+  } catch (err) {
+    res.status(502).json({ error: err instanceof Error ? err.message : "Could not send invitation" });
+    return;
+  }
+
+  const [updated] = await db.update(centreTherapistsTable)
+    .set({
+      invitedEmail: parsed.data.email,
+      invitedAt: new Date(),
+      invitedByUserId: req.userId!,
+      accountStatus: "invited",
+      updatedAt: new Date(),
+    })
+    .where(eq(centreTherapistsTable.id, tid))
+    .returning();
+  res.json(updated);
+});
+
+// ── POST /centres/therapist-invites/accept — the invited therapist's OWN
+// action, once they've completed the normal professional onboarding
+// (POST /professionals/me) themselves, with their own credential documents.
+// No centreId/tid in the URL — deliberately matched by the caller's own
+// verified email against invitedEmail, so nobody can claim a roster slot
+// that isn't theirs. This is a LINK action only; it never sets
+// verificationStatus — the individual gate is untouched and still runs on
+// this profile exactly as it would for any standalone professional.
+router.post("/centres/therapist-invites/accept", ...authGuard, async (req, res): Promise<void> => {
+  const [me] = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, req.userId!));
+  if (!me?.email) { res.status(400).json({ error: "No verified email on your account" }); return; }
+
+  const [profile] = await db.select().from(professionalProfilesTable).where(eq(professionalProfilesTable.userId, req.userId!));
+  if (!profile) {
+    res.status(404).json({ error: "Complete your own professional profile and credential submission first, then accept the invite." });
+    return;
+  }
+
+  const [invite] = await db.select().from(centreTherapistsTable)
+    .where(and(eq(centreTherapistsTable.invitedEmail, me.email), eq(centreTherapistsTable.accountStatus, "invited")));
+  if (!invite) { res.status(404).json({ error: "No pending invite found for your email" }); return; }
+
+  const [updated] = await db.update(centreTherapistsTable)
+    .set({ professionalProfileId: profile.id, accountStatus: "active", inviteAcceptedAt: new Date(), updatedAt: new Date() })
+    .where(eq(centreTherapistsTable.id, invite.id))
+    .returning();
+
+  await db.update(professionalProfilesTable)
+    .set({ employingCentreId: invite.centreId })
+    .where(eq(professionalProfilesTable.id, profile.id));
+
+  res.json(updated);
 });
 
 // ── THERAPIST SLOTS ──────────────────────────────────────────────────────────
@@ -438,6 +551,27 @@ router.patch("/admin/centres/:id/verify", ...adminGuard, async (req, res): Promi
   }).safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { action, notes, reason, commissionPctOverride } = parsed.data;
+
+  // Centre-admin credential gate — the owner must PERSONALLY hold a
+  // verified Clinical Psychology (RCI) credential before the centre itself
+  // can be approved or go live. Reuses the individual professional
+  // verification status directly; this route never sets it.
+  if (action === "approve" || action === "verify" || action === "set_live") {
+    const [centre] = await db.select({ adminProfessionalProfileId: therapyCentresTable.adminProfessionalProfileId })
+      .from(therapyCentresTable).where(eq(therapyCentresTable.id, id));
+    if (!centre) { res.status(404).json({ error: "Not found" }); return; }
+    if (!centre.adminProfessionalProfileId) {
+      res.status(400).json({ error: "The centre admin must link a verified Clinical Psychology credential before this centre can be approved." });
+      return;
+    }
+    const [adminProfile] = await db.select({ verificationStatus: professionalProfilesTable.verificationStatus })
+      .from(professionalProfilesTable).where(eq(professionalProfilesTable.id, centre.adminProfessionalProfileId));
+    if (adminProfile?.verificationStatus !== "verified") {
+      res.status(400).json({ error: "The centre admin's Clinical Psychology credential has not been verified yet." });
+      return;
+    }
+  }
+
   const now = new Date();
   let update: Record<string, unknown> = { updatedAt: now };
   if (action === "approve" || action === "verify") {
