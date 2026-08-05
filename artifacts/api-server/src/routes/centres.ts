@@ -162,7 +162,13 @@ router.post("/centres/:id/submit", ...centreAdminGuard, async (req, res): Promis
 router.post("/centres/:id/link-admin-credential", ...centreAdminGuard, async (req, res): Promise<void> => {
   const id = parsedId(req.params.id);
   if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
-  if (!(await ownscentre(req.userId!, id)) && req.userRole !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
+  // Deliberately NOT the usual "|| req.userRole !== 'admin'" bypass used
+  // elsewhere in this file. This endpoint links whoever is CALLING it as
+  // the centre's credential — a platform admin acting "on behalf of" a
+  // centre here would link THEIR OWN profile, not the actual owner's,
+  // silently defeating the "the owner personally holds this" guarantee.
+  // Only the centre's real owner may ever call this.
+  if (!(await ownscentre(req.userId!, id))) { res.status(403).json({ error: "Forbidden" }); return; }
 
   const [profile] = await db.select().from(professionalProfilesTable).where(eq(professionalProfilesTable.userId, req.userId!));
   if (!profile) {
