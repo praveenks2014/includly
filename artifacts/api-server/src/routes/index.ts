@@ -35,6 +35,7 @@ import parentNeedsRouter from "./parentNeeds";
 import centresRouter from "./centres";
 import goalsRouter from "./goals";
 import behaviorLogsRouter from "./behaviorLogs";
+import platformDuesRouter from "./platformDues";
 
 const router: IRouter = Router();
 
@@ -78,6 +79,7 @@ router.use(parentNeedsRouter);
 router.use(centresRouter);
 router.use(goalsRouter);
 router.use(behaviorLogsRouter);
+router.use(platformDuesRouter);
 router.use(devRouter);
 
 export default router;

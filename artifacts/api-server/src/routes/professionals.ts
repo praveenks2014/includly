@@ -7,6 +7,7 @@ import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAu
 import { notifyParentsOnProfileUpdate } from "../lib/notificationService";
 import { getClerkPrimaryEmail } from "../lib/clerkUser";
 import { recomputeSubmissionStatus, buildTherapistCredentialGateSql } from "../lib/verificationRequirements";
+import { buildNotOverdueGateSql } from "../lib/platformDues";
 import { onProfessionalBecameEligible } from "../lib/candidateRefresh";
 import {
   GetMyProfessionalProfileResponse,
@@ -529,6 +530,15 @@ router.get("/professionals/search", optionalAuth, async (req, res): Promise<void
     sql`EXISTS (SELECT 1 FROM ${identityVerificationsTable} iv WHERE iv.professional_id = ${professionalProfilesTable.id})`,
   );
   conditions.push(therapistCredentialGate);
+  // B8 delisting gate — a professional with an overdue platform-dues
+  // invoice is excluded from search, same enforcement point as the
+  // credential gate above. Self-sufficient SQL (computes overdue-ness
+  // directly rather than trusting the lazy resolver to have already run
+  // for this specific professional) — see buildNotOverdueGateSql's own
+  // comment. No live consumer exists yet for ownerType 'centre' (centres
+  // aren't publicly searchable until that sub-build lands); this only
+  // applies to the 'professional' case today.
+  conditions.push(buildNotOverdueGateSql("professional", professionalProfilesTable.id));
 
   if (verifiedOnly) {
     conditions.push(eq(professionalProfilesTable.isVerified, true));
