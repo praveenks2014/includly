@@ -37,6 +37,8 @@ export * from "./childGoals";
 export * from "./negotiationOffers";
 export * from "./interviewTimeOffers";
 export * from "./weeklyScheduleOffers";
+export * from "./platformDues";
+export * from "./disputes";
 export * from "./communityAi";
 export * from "./behaviorLogs";
 export * from "./waitlist";

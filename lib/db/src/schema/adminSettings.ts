@@ -128,6 +128,22 @@ export const adminSettingsTable = pgTable("admin_settings", {
   // blocks acceptance (see checkAgainstGeneralAvailability). Exposed via
   // /settings/me since any professional (not just admins) needs to read it.
   scheduleWarningBufferMinutes: integer("schedule_warning_buffer_minutes").notNull().default(90),
+  // B8 — platform-dues invoice due date (createdAt + this many days).
+  // Independently configurable from otpStallFlagDays below even though
+  // both default to 5 — conceptually different things ("how long to pay
+  // an issued invoice" vs. "how long before an unconfirmed session gets
+  // flagged"), kept separate rather than sharing one setting so they can
+  // diverge later without an accidental coupling.
+  platformDuesTimeoutDays: integer("platform_dues_timeout_days").notNull().default(5),
+  // Attendance sub-build (not yet built) — how long an OTP-unconfirmed
+  // session sits before being surfaced to admin review. NO auto-resolution
+  // in either direction, ever; this only controls when it gets flagged.
+  // Defined now, alongside B8, per the shared-dispute-mechanism design;
+  // has zero effect until that sub-build wires in the lazy resolver that
+  // reads it — same pattern as centre_cancellation_policies being
+  // definable well before any consumer existed, this dormancy is
+  // intentional and sequenced, not an oversight.
+  otpStallFlagDays: integer("otp_stall_flag_days").notNull().default(5),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
