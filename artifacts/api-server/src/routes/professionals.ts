@@ -7,7 +7,7 @@ import { requireAuth, optionalAuth, requireRole } from "../middlewares/requireAu
 import { notifyParentsOnProfileUpdate } from "../lib/notificationService";
 import { getClerkPrimaryEmail } from "../lib/clerkUser";
 import { recomputeSubmissionStatus, buildTherapistCredentialGateSql } from "../lib/verificationRequirements";
-import { buildNotOverdueGateSql } from "../lib/platformDues";
+import { buildNotOverdueGateSql, isOwnerOverdue } from "../lib/platformDues";
 import { onProfessionalBecameEligible } from "../lib/candidateRefresh";
 import {
   GetMyProfessionalProfileResponse,
@@ -771,6 +771,7 @@ router.get("/professionals/specialty-availability", optionalAuth, async (_req, r
         eq(professionalProfilesTable.paymentActivated, true),
         sql`EXISTS (SELECT 1 FROM ${identityVerificationsTable} iv WHERE iv.professional_id = ${professionalProfilesTable.id})`,
         therapistCredentialGate,
+        buildNotOverdueGateSql("professional", professionalProfilesTable.id),
       ),
     )
     .groupBy(professionalProfilesTable.specialty);
@@ -808,6 +809,16 @@ router.get("/professionals/:id", optionalAuth, async (req, res): Promise<void> =
 
   // Gate unapproved profiles — only admins can view pending/rejected profiles publicly
   if (profile.verificationStatus !== "verified" && req.userRole !== "admin") {
+    res.status(404).json({ error: "Professional not found" });
+    return;
+  }
+
+  // B8 delisting gate — same enforcement point as /professionals/search
+  // (buildNotOverdueGateSql), added here after a live test found this
+  // route didn't have it: a delisted professional was invisible in search
+  // but still fully viewable by direct URL. Admin bypass mirrors the
+  // verificationStatus check immediately above it.
+  if (req.userRole !== "admin" && (await isOwnerOverdue("professional", profile.id))) {
     res.status(404).json({ error: "Professional not found" });
     return;
   }
@@ -949,6 +960,13 @@ router.get("/professionals/:id/certifications", async (req, res): Promise<void> 
     res.json([]);
     return;
   }
+  // Deliberately NOT gated on B8 overdue-ness (unlike search/specialty-
+  // availability/profile-detail above) — an overdue platform-dues invoice
+  // doesn't retroactively make an already-verified credential document
+  // illegitimate. The verificationStatus check above exists to protect
+  // against showing documents for someone we can't actually vouch for;
+  // owing the platform money is an unrelated fact about a real, verified
+  // professional.
 
   const certs = await db
     .select({

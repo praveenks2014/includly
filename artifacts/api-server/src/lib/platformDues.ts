@@ -93,3 +93,24 @@ export function buildNotOverdueGateSql(ownerType: DuesOwnerType, ownerIdColumn: 
       AND (pdi.status = 'overdue' OR (pdi.status = 'pending' AND pdi.due_at < now()))
   )`;
 }
+
+// Single-row companion to buildNotOverdueGateSql above, for call sites that
+// already have one specific owner loaded (e.g. GET /professionals/:id)
+// rather than composing a list query's WHERE clause. Same self-sufficient
+// logic, same "correct even if the lazy resolver hasn't run" property —
+// added after a live test found the list-query gate (search) and this
+// single-row gate (profile detail) had drifted out of parity: a delisted
+// professional was invisible in search but still fully viewable by direct
+// URL, contradicting the credential-verification gate's own precedent
+// (verificationStatus !== "verified" already 404s the same route for
+// non-admins). Returns true when overdue (i.e. should be gated).
+export async function isOwnerOverdue(ownerType: DuesOwnerType, ownerId: number): Promise<boolean> {
+  const [row] = await db.select({ id: platformDuesInvoicesTable.id }).from(platformDuesInvoicesTable)
+    .where(and(
+      eq(platformDuesInvoicesTable.ownerType, ownerType),
+      eq(platformDuesInvoicesTable.ownerId, ownerId),
+      sql`(${platformDuesInvoicesTable.status} = 'overdue' OR (${platformDuesInvoicesTable.status} = 'pending' AND ${platformDuesInvoicesTable.dueAt} < now()))`,
+    ))
+    .limit(1);
+  return !!row;
+}
