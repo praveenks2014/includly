@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useUser } from "@clerk/react";
+import { useUser, useClerk } from "@clerk/react";
 import { fetchWithAuth } from "@/lib/api";
 import {
   useGetMe,
@@ -40,7 +40,7 @@ import {
   Loader2, Users, BarChart3, Settings, CheckCircle, XCircle, Clock,
   ShieldAlert, ShieldCheck, UserCheck, FileText, Eye, ExternalLink, Bell,
   IndianRupee, CreditCard, Menu, X, UserX, Shield, ChevronRight, Flag,
-  Building2, Plus, Check, Edit2, Trash2, Package, AlertTriangle,
+  Building2, Plus, Check, Edit2, Trash2, Package, AlertTriangle, LogOut,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -405,6 +405,7 @@ function ModerationTab() {
 export default function AdminPage() {
   const [, setLocation] = useLocation();
   const { isLoaded } = useUser();
+  const { signOut } = useClerk();
   const { data: me, isLoading: meLoading } = useGetMe();
   const [activeTab, setActiveTab] = useState<SidebarTab>("overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -500,7 +501,15 @@ export default function AdminPage() {
           ))}
         </nav>
 
-        <div className="px-3 py-4 border-t border-white/10">
+        <div className="px-3 py-4 border-t border-white/10 space-y-2">
+          <button
+            onClick={() => signOut(() => setLocation("/"))}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/60 hover:text-white hover:bg-white/10 transition-all focus-visible:ring-2 focus-visible:ring-[#2EC4A5]"
+            aria-label="Log out"
+          >
+            <LogOut size={18} />
+            Log out
+          </button>
           <p className="text-xs text-white/30 px-3">Includly Admin v2</p>
         </div>
       </aside>

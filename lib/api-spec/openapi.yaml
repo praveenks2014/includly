@@ -1691,7 +1691,7 @@ components:
           type: ["string", "null"]
         role:
           type: string
-          enum: [parent, professional, admin]
+          enum: [parent, professional, centre_admin, admin]
         city:
           type: ["string", "null"]
         country:
@@ -1710,6 +1710,14 @@ components:
           type: string
           enum: [tiles, list]
           description: "Parent-facing Services page layout preference. Defaults to 'tiles'."
+        supportTypes:
+          type: array
+          items:
+            type: string
+          description: Parent-only — kinds of support being looked for, collected at onboarding
+        childCount:
+          type: ["integer", "null"]
+          description: Parent-only — collected at onboarding
         createdAt:
           type: string
           format: date-time
@@ -1745,6 +1753,12 @@ components:
         servicesViewMode:
           type: string
           enum: [tiles, list]
+        supportTypes:
+          type: array
+          items:
+            type: string
+        childCount:
+          type: integer
 
     SetRoleBody:
       type: object

@@ -33,6 +33,7 @@ export type UserProfileRole =
 export const UserProfileRole = {
   parent: "parent",
   professional: "professional",
+  centre_admin: "centre_admin",
   admin: "admin",
 } as const;
 
@@ -68,6 +69,12 @@ export interface UserProfile {
   onboardingComplete?: boolean;
   /** Parent-facing Services page layout preference. Defaults to 'tiles'. */
   servicesViewMode?: "tiles" | "list";
+  /** Parent-only — kinds of support being looked for, collected at onboarding */
+  supportTypes?: string[];
+  /** Parent-only — collected at onboarding
+   * @nullable
+   */
+  childCount?: number | null;
   createdAt: string;
 }
 
@@ -84,6 +91,8 @@ export interface UpdateUserBody {
   shareHomeLocation?: boolean;
   avatarUrl?: string;
   servicesViewMode?: "tiles" | "list";
+  supportTypes?: string[];
+  childCount?: number;
 }
 
 export type SetRoleBodyRole =

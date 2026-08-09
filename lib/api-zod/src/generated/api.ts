@@ -25,7 +25,7 @@ export const GetMeResponse = zod.object({
   phone: zod.string().nullish(),
   fullName: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
-  role: zod.enum(["parent", "professional", "admin"]),
+  role: zod.enum(["parent", "professional", "centre_admin", "admin"]),
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   location: zod.string().nullish(),
@@ -44,6 +44,15 @@ export const GetMeResponse = zod.object({
   shareHomeLocation: zod.boolean().optional(),
   onboardingComplete: zod.boolean().optional(),
   servicesViewMode: zod.enum(["tiles", "list"]).optional(),
+  // Parent-only — which kinds of support the parent is looking for,
+  // collected at onboarding (choose-role.tsx's parent wizard). Was missing
+  // from this contract entirely, silently stripping it from every
+  // PATCH /users/me call.
+  supportTypes: zod.array(zod.string()).optional(),
+  // Parent-only — collected at the same onboarding step. TopBar.tsx already
+  // reads this field (its "adding another child?" nudge) — it was always
+  // undefined until this field existed on the contract.
+  childCount: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -67,6 +76,11 @@ export const UpdateMeBody = zod.object({
   shareHomeLocation: zod.boolean().optional(),
   avatarUrl: zod.string().optional(),
   servicesViewMode: zod.enum(["tiles", "list"]).optional(),
+  // Parent onboarding (choose-role.tsx) submits both of these — was missing
+  // from this contract entirely, silently stripped by Zod's default strip
+  // mode on every call, so neither was ever actually persisted.
+  supportTypes: zod.array(zod.string()).optional(),
+  childCount: zod.number().int().optional(),
 });
 
 export const UpdateMeResponse = zod.object({
@@ -111,7 +125,7 @@ export const SetMyRoleResponse = zod.object({
   phone: zod.string().nullish(),
   fullName: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
-  role: zod.enum(["parent", "professional", "admin"]),
+  role: zod.enum(["parent", "professional", "centre_admin", "admin"]),
   city: zod.string().nullish(),
   country: zod.string().nullish(),
   location: zod.string().nullish(),
