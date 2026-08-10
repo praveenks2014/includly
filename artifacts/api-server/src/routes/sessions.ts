@@ -915,17 +915,54 @@ router.post("/sessions/verify-payment", requireAuth, async (req: Request, res: R
     return;
   }
 
-  const [confirmed] = await db
-    .update(sessionBookingsTable)
-    .set({
-      status: "confirmed",
-      providerPaymentId: razorpayPaymentId,
-      startOtp: generateOtp(),
-      endOtp: generateOtp(),
-      updatedAt: new Date(),
-    })
-    .where(eq(sessionBookingsTable.id, sessionId))
-    .returning();
+  // This is the endpoint that actually closes the Razorpay-path race —
+  // POST /sessions/book's own lock only protects its own insert
+  // (status:"pending_payment", which never conflicts), so two concurrent
+  // bookings for the same slot can both reach payment and both arrive
+  // here. Same lock-then-recheck-then-write pattern as book/reschedule.
+  // NOT handled here, flagged rather than silently built: if this parent's
+  // payment already succeeded with Razorpay before losing the race, they've
+  // been charged for a slot they don't get — that's a refund-flow gap,
+  // out of scope for "add the lock," not something to quietly solve here.
+  let confirmed: typeof booking | undefined;
+  try {
+    await db.transaction(async (tx) => {
+      await tx.execute(bookingSlotLockSql(booking.professionalId, booking.bookedDate, booking.startTime));
+
+      const [conflict] = await tx
+        .select({ id: sessionBookingsTable.id })
+        .from(sessionBookingsTable)
+        .where(and(
+          eq(sessionBookingsTable.professionalId, booking.professionalId),
+          eq(sessionBookingsTable.bookedDate, booking.bookedDate),
+          eq(sessionBookingsTable.startTime, booking.startTime),
+          eq(sessionBookingsTable.status, "confirmed"),
+          ne(sessionBookingsTable.id, sessionId),
+        ));
+      if (conflict) {
+        throw Object.assign(new Error("SLOT_TAKEN"), { statusCode: 409 });
+      }
+
+      [confirmed] = await tx
+        .update(sessionBookingsTable)
+        .set({
+          status: "confirmed",
+          providerPaymentId: razorpayPaymentId,
+          startOtp: generateOtp(),
+          endOtp: generateOtp(),
+          updatedAt: new Date(),
+        })
+        .where(eq(sessionBookingsTable.id, sessionId))
+        .returning();
+    });
+  } catch (err: unknown) {
+    const e = err as Error & { statusCode?: number };
+    if (e.message === "SLOT_TAKEN") {
+      res.status(409).json({ error: "This slot was booked by someone else while your payment was processing. Contact support for a refund." });
+      return;
+    }
+    throw err;
+  }
 
   // Create ledger entry: funds held until specialist marks session complete
   void (async () => {
