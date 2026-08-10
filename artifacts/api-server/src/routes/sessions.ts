@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, sql, gte, lte, inArray } from "drizzle-orm";
+import { eq, ne, and, desc, sql, gte, lte, inArray } from "drizzle-orm";
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import {
@@ -30,6 +30,7 @@ import {
   VerifySessionPaymentBody,
   UpdateSessionStatusBody,
 } from "@workspace/api-zod";
+import { z } from "zod/v4";
 
 const router: IRouter = Router();
 
@@ -564,6 +565,14 @@ router.post("/professionals/me/calendar/quick-block-busy", requireAuth, requireR
   res.json({ blockedCount: idsToBlock.length });
 });
 
+// Advisory-lock key shared by booking-creation and reschedule — same
+// (professionalId, date, startTime) slot identity either way, so a create
+// and a reschedule racing for the same slot serialize against each other
+// too, not just two creates or two reschedules independently.
+function bookingSlotLockSql(professionalId: number, date: string, startTime: string) {
+  return sql`SELECT pg_advisory_xact_lock(hashtext(${professionalId}::text || ':' || ${date} || ':' || ${startTime}))`;
+}
+
 router.post("/sessions/book", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const parsed = BookSessionBody.safeParse(req.body);
   if (!parsed.success) {
@@ -573,6 +582,10 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
 
   const { professionalId, bookedDate, startTime, endTime, durationMinutes, amountInr, notes, childId } = { childId: undefined as number | undefined, ...parsed.data };
 
+  // Fast-path pre-check — not the authoritative guard (that's the
+  // advisory-lock-protected re-check inside each branch below), just avoids
+  // doing profile lookups / calling Razorpay for an obviously-conflicting
+  // request before ever acquiring the lock.
   const [existing] = await db
     .select({ id: sessionBookingsTable.id })
     .from(sessionBookingsTable)
@@ -604,11 +617,31 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
     prof.specialty === "psychiatrist"
   );
   if (isCreditSpecialty) {
-    // Wrap credit deduction + booking in a transaction so credit is never lost on booking failure
+    // Advisory lock + re-check + credit deduction + insert, all in one
+    // transaction — this branch inserts directly as status:"confirmed", the
+    // exact row shape the conflict check filters on, so without the lock
+    // two concurrent requests for the same slot could both pass the
+    // pre-check above and both insert as confirmed. Credit deduction was
+    // already transactional; the lock/re-check close the actual race.
     let bookingId: number | null = null;
 
     try {
       await db.transaction(async (tx) => {
+        await tx.execute(bookingSlotLockSql(professionalId, bookedDate, startTime));
+
+        const [conflict] = await tx
+          .select({ id: sessionBookingsTable.id })
+          .from(sessionBookingsTable)
+          .where(and(
+            eq(sessionBookingsTable.professionalId, professionalId),
+            eq(sessionBookingsTable.bookedDate, bookedDate),
+            eq(sessionBookingsTable.startTime, startTime),
+            eq(sessionBookingsTable.status, "confirmed"),
+          ));
+        if (conflict) {
+          throw Object.assign(new Error("SLOT_TAKEN"), { statusCode: 400 });
+        }
+
         // Atomic deduction: only succeeds if credits > 0, prevents over-draw
         const deductResult = await tx
           .update(usersTable)
@@ -643,6 +676,10 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
       });
     } catch (err: unknown) {
       const e = err as Error & { statusCode?: number };
+      if (e.message === "SLOT_TAKEN") {
+        res.status(400).json({ error: "This slot is already booked" });
+        return;
+      }
       if (e.message === "NO_SESSION_CREDITS") {
         res.status(402).json({
           error: "You need session credits to book with this specialist. Purchase a session pass to continue.",
@@ -658,43 +695,179 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
     return;
   }
 
-  // Standard Razorpay payment flow for other specialties
+  // Standard Razorpay payment flow for other specialties. This branch
+  // inserts as status:"pending_payment" (default), which the conflict
+  // check above never matches — the real confirmed-vs-confirmed race for
+  // this flow is at POST /sessions/verify-payment (a separate endpoint,
+  // not covered by this fix), not here. Still lock-protected for
+  // consistency with the credit branch and to avoid ever creating a
+  // Razorpay order for a slot that's confirmed-taken the instant before.
   const razorpay = getRazorpay();
   if (!razorpay) {
     res.status(503).json({ error: "Payment gateway not configured" });
     return;
   }
 
-  const order = await razorpay.orders.create({
-    amount: amountInr * 100,
-    currency: "INR",
-    receipt: `session_${Date.now()}`,
-  });
+  let bookingResult: { id: number; orderId: string } | null = null;
+  try {
+    await db.transaction(async (tx) => {
+      await tx.execute(bookingSlotLockSql(professionalId, bookedDate, startTime));
 
-  const [booking] = await db
-    .insert(sessionBookingsTable)
-    .values({
-      professionalId,
-      parentId: req.userId!,
-      bookedDate,
-      startTime,
-      endTime,
-      durationMinutes,
-      amountInr,
-      commissionInr,
-      notes: notes ?? null,
-      childId: childId ?? null,
-      providerOrderId: order.id as string,
-    })
-    .returning();
+      const [conflict] = await tx
+        .select({ id: sessionBookingsTable.id })
+        .from(sessionBookingsTable)
+        .where(and(
+          eq(sessionBookingsTable.professionalId, professionalId),
+          eq(sessionBookingsTable.bookedDate, bookedDate),
+          eq(sessionBookingsTable.startTime, startTime),
+          eq(sessionBookingsTable.status, "confirmed"),
+        ));
+      if (conflict) {
+        throw Object.assign(new Error("SLOT_TAKEN"), { statusCode: 400 });
+      }
+
+      const order = await razorpay.orders.create({
+        amount: amountInr * 100,
+        currency: "INR",
+        receipt: `session_${Date.now()}`,
+      });
+
+      const [booking] = await tx
+        .insert(sessionBookingsTable)
+        .values({
+          professionalId,
+          parentId: req.userId!,
+          bookedDate,
+          startTime,
+          endTime,
+          durationMinutes,
+          amountInr,
+          commissionInr,
+          notes: notes ?? null,
+          childId: childId ?? null,
+          providerOrderId: order.id as string,
+        })
+        .returning();
+
+      bookingResult = { id: booking.id, orderId: order.id as string };
+    });
+  } catch (err: unknown) {
+    const e = err as Error & { statusCode?: number };
+    if (e.message === "SLOT_TAKEN") {
+      res.status(400).json({ error: "This slot is already booked" });
+      return;
+    }
+    throw err;
+  }
 
   res.json({
-    sessionId: booking.id,
-    orderId: order.id,
+    sessionId: bookingResult!.id,
+    orderId: bookingResult!.orderId,
     amount: amountInr * 100,
     currency: "INR",
     keyId: process.env["RAZORPAY_KEY_ID"]!,
   });
+});
+
+// ── PATCH /sessions/:id/reschedule ────────────────────────────────────────
+// In-place update of the SAME booking row (same id) — no slots table
+// involvement, since slots.bookingId/'booked' is explicitly NOT the write-
+// path source of truth in this system (see the file-header comment above
+// slotsTable and GET /professionals/:id/bookable-slots's own comment) —
+// the real conflict-prevention mechanism is a live query against
+// session_bookings directly, which is exactly what this reuses. Same
+// advisory-lock-protected re-check as the create endpoint above (shared
+// bookingSlotLockSql helper, same lock key shape), so a reschedule racing
+// a concurrent booking-creation — or another reschedule — for the same
+// slot serializes correctly instead of double-booking. Re-issues OTPs and
+// clears otpAttempts/otpLockedAt on every reschedule, same rationale as
+// the tutor/therapist reschedule fix: the verify-otp endpoints always
+// compare against the DB value at call time, so overwriting these columns
+// makes the pre-reschedule codes unmatchable the instant this commits.
+// Gated to status:"confirmed" (booked + paid, not yet started) — mirrors
+// this table's own pre-start state, same as tutor/therapist's
+// status:"scheduled" gate.
+const RescheduleSessionBookingBody = z.object({
+  bookedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startTime: z.string(),
+  endTime: z.string(),
+});
+router.patch("/sessions/:id/reschedule", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const sessionId = parseInt(req.params["id"] as string, 10);
+  if (isNaN(sessionId)) { res.status(400).json({ error: "Invalid session id" }); return; }
+  const parsed = RescheduleSessionBookingBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [booking] = await db.select().from(sessionBookingsTable).where(eq(sessionBookingsTable.id, sessionId));
+  if (!booking) { res.status(404).json({ error: "Session not found" }); return; }
+
+  let isProfessional = false;
+  if (req.userRole === "professional") {
+    const [prof] = await db.select({ id: professionalProfilesTable.id }).from(professionalProfilesTable)
+      .where(eq(professionalProfilesTable.userId, req.userId!));
+    isProfessional = !!prof && prof.id === booking.professionalId;
+  }
+  if (booking.parentId !== req.userId! && !isProfessional && req.userRole !== "admin") {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
+
+  // Server-side gate, not inferred from UI flow — an already-started or
+  // otherwise non-pre-session booking cannot be rescheduled via this path
+  // even via a direct API call.
+  if (booking.status !== "confirmed") {
+    res.status(409).json({ error: "Only a confirmed (not yet started) session can be rescheduled" });
+    return;
+  }
+
+  const { bookedDate, startTime, endTime } = parsed.data;
+
+  let updated: typeof booking | undefined;
+  try {
+    await db.transaction(async (tx) => {
+      await tx.execute(bookingSlotLockSql(booking.professionalId, bookedDate, startTime));
+
+      const [conflict] = await tx
+        .select({ id: sessionBookingsTable.id })
+        .from(sessionBookingsTable)
+        .where(and(
+          eq(sessionBookingsTable.professionalId, booking.professionalId),
+          eq(sessionBookingsTable.bookedDate, bookedDate),
+          eq(sessionBookingsTable.startTime, startTime),
+          eq(sessionBookingsTable.status, "confirmed"),
+          ne(sessionBookingsTable.id, sessionId),
+        ));
+      if (conflict) {
+        throw Object.assign(new Error("SLOT_TAKEN"), { statusCode: 409 });
+      }
+
+      const now = new Date();
+      [updated] = await tx
+        .update(sessionBookingsTable)
+        .set({
+          bookedDate,
+          startTime,
+          endTime,
+          startOtp: generateOtp(),
+          endOtp: generateOtp(),
+          otpIssuedAt: now,
+          otpAttempts: 0,
+          otpLockedAt: null,
+          updatedAt: now,
+        })
+        .where(eq(sessionBookingsTable.id, sessionId))
+        .returning();
+    });
+  } catch (err: unknown) {
+    const e = err as Error & { statusCode?: number };
+    if (e.message === "SLOT_TAKEN") {
+      res.status(409).json({ error: "That time is already booked" });
+      return;
+    }
+    throw err;
+  }
+
+  res.json(updated);
 });
 
 router.post("/sessions/verify-payment", requireAuth, async (req: Request, res: Response): Promise<void> => {
