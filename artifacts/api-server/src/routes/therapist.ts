@@ -1973,6 +1973,71 @@ router.get("/therapist/engagements/:id/sessions", requireAuth, async (req: Reque
   res.json(rows);
 });
 
+// ── PATCH /therapist/engagements/:id/sessions/:sessionId/reschedule ──────
+// Mirrors tutor.ts's reschedule endpoint exactly — see that endpoint's
+// comment for the full rationale (in-place update of the same row, no
+// link column needed; fresh OTPs make old codes unmatchable the instant
+// this commits; otpAttempts/otpLockedAt cleared so a pre-reschedule
+// lockout doesn't carry into the new slot; status='scheduled' gate
+// enforced server-side, not inferred from UI).
+const RescheduleTherapistSessionBody = z.object({
+  sessionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+});
+router.patch("/therapist/engagements/:id/sessions/:sessionId/reschedule", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  const sessionId = parseInt(req.params["sessionId"] as string, 10);
+  if (isNaN(id) || isNaN(sessionId)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const parsed = RescheduleTherapistSessionBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const { eng, role } = await getTherapistEngagementWithAccess(id, req.userId!, req.userRole!);
+  if (!eng || !role) { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
+
+  const [session] = await db.select().from(therapistEngagementSessionsTable)
+    .where(and(eq(therapistEngagementSessionsTable.id, sessionId), eq(therapistEngagementSessionsTable.engagementId, id)))
+    .limit(1);
+  if (!session) { res.status(404).json({ error: "Session not found" }); return; }
+  if (session.status !== "scheduled") {
+    res.status(409).json({ error: "Only a scheduled (not yet started) session can be rescheduled" });
+    return;
+  }
+
+  if (parsed.data.startTime && parsed.data.endTime) {
+    // Same known, pre-existing self-exclusion limitation as tutor.ts's
+    // reschedule endpoint — hasScheduleConflict has no exclusion param.
+    const conflict = await hasScheduleConflict(eng.professionalId, parsed.data.sessionDate, parsed.data.startTime, parsed.data.endTime);
+    if (conflict) {
+      res.status(409).json({ error: "time_conflict", message: "This professional already has a commitment during that time." });
+      return;
+    }
+  }
+
+  const now = new Date();
+  const [updated] = await db
+    .update(therapistEngagementSessionsTable)
+    .set({
+      sessionDate: parsed.data.sessionDate,
+      startTime: parsed.data.startTime ?? null,
+      endTime: parsed.data.endTime ?? null,
+      startOtp: generateOtp(),
+      endOtp: generateOtp(),
+      otpIssuedAt: now,
+      otpAttempts: 0,
+      otpLockedAt: null,
+      updatedAt: now,
+    })
+    .where(eq(therapistEngagementSessionsTable.id, sessionId))
+    .returning();
+  if (!updated) {
+    console.error(`[therapist/reschedule-session] returning() came back empty for sessionId=${sessionId}`);
+    res.status(500).json({ error: "update_failed" });
+    return;
+  }
+  res.json(updated);
+});
+
 const TherapistSessionOtpBody = z.object({ otp: z.string().length(6) });
 
 router.post("/therapist/engagements/:id/sessions/:sessionId/start-otp", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {

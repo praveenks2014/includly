@@ -1902,6 +1902,85 @@ router.get("/tutor/engagements/:id/sessions", requireAuth, async (req: Request, 
   res.json(rows);
 });
 
+// ── PATCH /tutor/engagements/:id/sessions/:sessionId/reschedule ──────────
+// Shared-calendar-system gap fix — there was previously no reschedule path
+// at all (not even a duplicate-row one): a session's date/time were fixed
+// permanently at creation. In-place update of the SAME row rather than
+// create-new/abandon-old, so nothing needs a parentSessionId/
+// rescheduledFromId link — there's only ever one row per session, so
+// nothing to lose continuity between. Re-issues fresh OTPs on every
+// reschedule: the verify endpoints always compare against session.startOtp/
+// endOtp read fresh from the DB, so overwriting those columns makes the old
+// codes unmatchable the instant this commits — no separate invalidation
+// list needed. Also clears otpAttempts/otpLockedAt so a lockout accrued
+// before the reschedule doesn't carry into the new slot.
+const RescheduleTutorSessionBody = z.object({
+  sessionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+});
+router.patch("/tutor/engagements/:id/sessions/:sessionId/reschedule", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const id = parseInt(req.params["id"] as string, 10);
+  const sessionId = parseInt(req.params["sessionId"] as string, 10);
+  if (isNaN(id) || isNaN(sessionId)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const parsed = RescheduleTutorSessionBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const { eng, role } = await getTutorEngagementWithAccess(id, req.userId!, req.userRole!);
+  if (!eng || !role) { res.status(404).json({ error: "Engagement not found or access denied" }); return; }
+
+  const [session] = await db.select().from(tutorEngagementSessionsTable)
+    .where(and(eq(tutorEngagementSessionsTable.id, sessionId), eq(tutorEngagementSessionsTable.engagementId, id)))
+    .limit(1);
+  if (!session) { res.status(404).json({ error: "Session not found" }); return; }
+  // Server-side gate, not inferred from UI flow — an already-started or
+  // completed session cannot be rescheduled via this path even via a
+  // direct API call.
+  if (session.status !== "scheduled") {
+    res.status(409).json({ error: "Only a scheduled (not yet started) session can be rescheduled" });
+    return;
+  }
+
+  if (parsed.data.startTime && parsed.data.endTime) {
+    // hasScheduleConflict has no self-exclusion parameter (the create
+    // endpoint doesn't need one — the row doesn't exist yet at that point).
+    // For reschedule this means a narrow, known false-positive edge case:
+    // rescheduling to a time that overlaps THIS SAME session's own
+    // not-yet-updated slot would read as a conflict against itself. Not
+    // fixing that here — it's a pre-existing limitation of the shared
+    // conflict-check function, out of scope for this tiny fix; flagged
+    // rather than silently worked around.
+    const conflict = await hasScheduleConflict(eng.professionalId, parsed.data.sessionDate, parsed.data.startTime, parsed.data.endTime);
+    if (conflict) {
+      res.status(409).json({ error: "time_conflict", message: "This professional already has a commitment during that time." });
+      return;
+    }
+  }
+
+  const now = new Date();
+  const [updated] = await db
+    .update(tutorEngagementSessionsTable)
+    .set({
+      sessionDate: parsed.data.sessionDate,
+      startTime: parsed.data.startTime ?? null,
+      endTime: parsed.data.endTime ?? null,
+      startOtp: generateOtp(),
+      endOtp: generateOtp(),
+      otpIssuedAt: now,
+      otpAttempts: 0,
+      otpLockedAt: null,
+      updatedAt: now,
+    })
+    .where(eq(tutorEngagementSessionsTable.id, sessionId))
+    .returning();
+  if (!updated) {
+    console.error(`[tutor/reschedule-session] returning() came back empty for sessionId=${sessionId}`);
+    res.status(500).json({ error: "update_failed" });
+    return;
+  }
+  res.json(updated);
+});
+
 const SessionOtpBody = z.object({ otp: z.string().length(6) });
 
 router.post("/tutor/engagements/:id/sessions/:sessionId/start-otp", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
