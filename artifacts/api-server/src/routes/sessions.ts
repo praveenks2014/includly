@@ -16,6 +16,7 @@ import {
   tutorEngagementSessionsTable,
   therapistEngagementsTable,
   therapistEngagementSessionsTable,
+  therapyCentresTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { generateOtp } from "../lib/otp";
@@ -42,9 +43,50 @@ function getRazorpay() {
 }
 
 function getSessionCommission(specialty: string): number {
+  // The "therapy_centre" branch below predates the real centre-identity
+  // model (employingCentreId) — a professional_profiles row is never
+  // actually created with this specialty value in production (only a
+  // demo-seed script does, per the therapy-centre audit). Left as-is,
+  // not fixed here — resolveBookingCommission below is the real,
+  // employingCentreId-driven path for centre-employed professionals now.
   if (specialty === "therapy_centre") return 149;
   if (specialty === "psychiatrist" || specialty === "neurologist") return 99;
   return 49;
+}
+
+// Resolves the REAL commission for a booking, checking whether the
+// professional is centre-employed first. Centre-employed: percentage of
+// the (server-computed, not client-supplied) amountInr, using the centre's
+// own commissionPctOverride if set, else its platformDefaultCommissionPct
+// — resolvedCommissionPct is returned so the caller can snapshot it onto
+// the booking row. Non-centre: unchanged flat-amount specialty rate,
+// resolvedCommissionPct null (nothing was resolved from a centre rate).
+async function resolveBookingCommission(
+  professionalId: number,
+  specialty: string,
+  amountInr: number,
+): Promise<{ commissionInr: number; resolvedCommissionPct: number | null }> {
+  const [prof] = await db
+    .select({ employingCentreId: professionalProfilesTable.employingCentreId })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.id, professionalId));
+
+  if (prof?.employingCentreId) {
+    const [centre] = await db
+      .select({
+        commissionPctOverride: therapyCentresTable.commissionPctOverride,
+        platformDefaultCommissionPct: therapyCentresTable.platformDefaultCommissionPct,
+      })
+      .from(therapyCentresTable)
+      .where(eq(therapyCentresTable.id, prof.employingCentreId));
+
+    if (centre) {
+      const pct = centre.commissionPctOverride ?? centre.platformDefaultCommissionPct;
+      return { commissionInr: Math.round((amountInr * pct) / 100), resolvedCommissionPct: pct };
+    }
+  }
+
+  return { commissionInr: getSessionCommission(specialty), resolvedCommissionPct: null };
 }
 
 router.get("/sessions/availability", requireAuth, requireRole("professional", "admin"), async (req: Request, res: Response): Promise<void> => {
@@ -580,7 +622,12 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
     return;
   }
 
-  const { professionalId, bookedDate, startTime, endTime, durationMinutes, amountInr, notes, childId } = { childId: undefined as number | undefined, ...parsed.data };
+  // amountInr, endTime and durationMinutes are still accepted in the request
+  // body (BookSessionBody keeps requiring them, for frontend backward-
+  // compatibility) but deliberately never read from here on — both branches
+  // below resolve endTime/duration (and price, where relevant) from the
+  // authoritative slots row instead. See each branch's slot lookup for why.
+  const { professionalId, bookedDate, startTime, notes, childId } = { childId: undefined as number | undefined, ...parsed.data };
 
   // Fast-path pre-check — not the authoritative guard (that's the
   // advisory-lock-protected re-check inside each branch below), just avoids
@@ -607,8 +654,6 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
     .select({ specialty: professionalProfilesTable.specialty })
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.id, professionalId));
-
-  const commissionInr = prof ? getSessionCommission(prof.specialty) : 49;
 
   // Credit-based booking for therapists and psychologists
   const isCreditSpecialty = prof && (
@@ -642,6 +687,29 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
           throw Object.assign(new Error("SLOT_TAKEN"), { statusCode: 400 });
         }
 
+        // Authoritative duration/endTime source — same reasoning as the
+        // Razorpay branch's price lookup below: never trust client-supplied
+        // endTime/durationMinutes. This branch has no price at stake
+        // (amountInr is always 0 here), but the stored duration is still
+        // each party's permanent record of how long the session was agreed
+        // to be — letting a parent invent an arbitrary duration would
+        // corrupt that record independent of any pricing exploit, and
+        // undermines the exact attendance-integrity guarantee this system
+        // exists to provide. No matching slot means this date/time was
+        // never actually offered — reject rather than silently accept an
+        // invented one.
+        const [slot] = await tx
+          .select({ durationMins: slotsTable.durationMins, endTime: slotsTable.endTime })
+          .from(slotsTable)
+          .where(and(
+            eq(slotsTable.professionalId, professionalId),
+            eq(slotsTable.date, bookedDate),
+            eq(slotsTable.startTime, startTime),
+          ));
+        if (!slot) {
+          throw Object.assign(new Error("NO_MATCHING_SLOT"), { statusCode: 400 });
+        }
+
         // Atomic deduction: only succeeds if credits > 0, prevents over-draw
         const deductResult = await tx
           .update(usersTable)
@@ -660,8 +728,8 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
             parentId: req.userId!,
             bookedDate,
             startTime,
-            endTime,
-            durationMinutes,
+            endTime: slot.endTime,
+            durationMinutes: slot.durationMins,
             amountInr: 0,
             commissionInr: 0,
             notes: notes ?? null,
@@ -688,6 +756,10 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
         });
         return;
       }
+      if (e.message === "NO_MATCHING_SLOT") {
+        res.status(400).json({ error: "This date/time is not an available slot for this professional" });
+        return;
+      }
       throw err;
     }
 
@@ -708,7 +780,7 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
     return;
   }
 
-  let bookingResult: { id: number; orderId: string } | null = null;
+  let bookingResult: { id: number; orderId: string; amountInr: number } | null = null;
   try {
     await db.transaction(async (tx) => {
       await tx.execute(bookingSlotLockSql(professionalId, bookedDate, startTime));
@@ -726,8 +798,31 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
         throw Object.assign(new Error("SLOT_TAKEN"), { statusCode: 400 });
       }
 
+      // Authoritative price source — never trust the client-supplied
+      // amountInr. The real materialized slot (generated by
+      // slotGeneration.ts, snapshotted from the professional's own
+      // availability template) is the only source of truth for what this
+      // exact professional/date/time is actually priced at. No matching
+      // slot means this date/time was never actually offered — reject
+      // rather than silently accept an invented one.
+      const [slot] = await tx
+        .select({ priceInr: slotsTable.priceInr, durationMins: slotsTable.durationMins, endTime: slotsTable.endTime })
+        .from(slotsTable)
+        .where(and(
+          eq(slotsTable.professionalId, professionalId),
+          eq(slotsTable.date, bookedDate),
+          eq(slotsTable.startTime, startTime),
+        ));
+      if (!slot) {
+        throw Object.assign(new Error("NO_MATCHING_SLOT"), { statusCode: 400 });
+      }
+      const realAmountInr = slot.priceInr;
+
+      const { commissionInr: resolvedCommissionInr, resolvedCommissionPct } =
+        await resolveBookingCommission(professionalId, prof?.specialty ?? "", realAmountInr);
+
       const order = await razorpay.orders.create({
-        amount: amountInr * 100,
+        amount: realAmountInr * 100,
         currency: "INR",
         receipt: `session_${Date.now()}`,
       });
@@ -739,22 +834,27 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
           parentId: req.userId!,
           bookedDate,
           startTime,
-          endTime,
-          durationMinutes,
-          amountInr,
-          commissionInr,
+          endTime: slot.endTime,
+          durationMinutes: slot.durationMins,
+          amountInr: realAmountInr,
+          commissionInr: resolvedCommissionInr,
+          resolvedCommissionPct,
           notes: notes ?? null,
           childId: childId ?? null,
           providerOrderId: order.id as string,
         })
         .returning();
 
-      bookingResult = { id: booking.id, orderId: order.id as string };
+      bookingResult = { id: booking.id, orderId: order.id as string, amountInr: realAmountInr };
     });
   } catch (err: unknown) {
     const e = err as Error & { statusCode?: number };
     if (e.message === "SLOT_TAKEN") {
       res.status(400).json({ error: "This slot is already booked" });
+      return;
+    }
+    if (e.message === "NO_MATCHING_SLOT") {
+      res.status(400).json({ error: "This date/time is not an available slot for this professional" });
       return;
     }
     throw err;
@@ -763,7 +863,7 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
   res.json({
     sessionId: bookingResult!.id,
     orderId: bookingResult!.orderId,
-    amount: amountInr * 100,
+    amount: bookingResult!.amountInr * 100,
     currency: "INR",
     keyId: process.env["RAZORPAY_KEY_ID"]!,
   });

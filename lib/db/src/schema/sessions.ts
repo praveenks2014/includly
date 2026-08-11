@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp, boolean, pgEnum, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, boolean, real, pgEnum, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { professionalProfilesTable } from "./professionals";
@@ -60,6 +60,16 @@ export const sessionBookingsTable = pgTable("session_bookings", {
   durationMinutes: integer("duration_minutes").notNull(),
   amountInr: integer("amount_inr").notNull(),
   commissionInr: integer("commission_inr").notNull().default(0),
+  // Snapshot of the % rate actually used to compute commissionInr, ONLY
+  // when it came from a centre's own commission rate (therapy_centres.
+  // commissionPctOverride, falling back to platformDefaultCommissionPct) —
+  // null for the existing flat-specialty-rate model (getSessionCommission),
+  // which stays unchanged. Same "snapshot business-logic toggles at the
+  // moment they're determined" principle used throughout this project
+  // (activationFeeEnabled, trialDirectPay, etc.) — a later change to the
+  // centre's rate must never retroactively reinterpret an already-placed
+  // booking's commission.
+  resolvedCommissionPct: real("resolved_commission_pct"),
   status: sessionStatusEnum("status").notNull().default("pending_payment"),
   providerOrderId: text("provider_order_id"),
   providerPaymentId: text("provider_payment_id"),
