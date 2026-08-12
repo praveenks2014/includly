@@ -6,17 +6,32 @@ import {
   db,
   therapyCentresTable,
   centreTherapistsTable,
+  centreServicesTable,
   centreServicePricesTable,
   centreServicePackagesTable,
   centreServicePackagePurchasesTable,
   therapyBookingsTable,
   professionalProfilesTable,
   slotsTable,
+  usersTable,
+  adminSettingsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { generateOtp } from "../lib/otp";
 import { postDuesCharge } from "../lib/platformDues";
+import { createInAppNotification } from "../lib/notificationService";
 import { z } from "zod/v4";
+
+// Same constant sessionsV2.ts uses for sessionBookingsTable's OTP lockout —
+// ported, not imported, since that's a route-file-to-route-file boundary
+// this codebase doesn't cross (see slotGeneration.ts's own convention note
+// re: trivial per-file duplication).
+const OTP_MAX_ATTEMPTS = 5;
+
+async function getOtpSettings() {
+  const [s] = await db.select({ otpValidityMinutes: adminSettingsTable.otpValidityMinutes, otpStallFlagDays: adminSettingsTable.otpStallFlagDays }).from(adminSettingsTable).limit(1);
+  return s ?? { otpValidityMinutes: 10, otpStallFlagDays: 5 };
+}
 
 const router: IRouter = Router();
 
@@ -396,6 +411,7 @@ router.patch("/therapy-bookings/:id/reschedule", requireAuth, async (req: Reques
           endOtp: generateOtp(),
           otpIssuedAt: now,
           otpAttempts: 0,
+          otpLockedAt: null,
           updatedAt: now,
         })
         .where(eq(therapyBookingsTable.id, bookingId))
@@ -570,30 +586,232 @@ router.get("/therapy-bookings/packages/purchases/mine", requireAuth, async (req:
   res.json(rows);
 });
 
-// ── PATCH /therapy-bookings/:id/mark-completed ──────────────────────────────
-// TEMPORARY stand-in for Step 2's OTP-driven completion flow (endOtp
-// verification will replace this transition's trigger). The postDuesCharge
-// wiring below is NOT temporary — it's the real, final settlement path;
-// this endpoint only exists so that wiring can be proven correct before
-// Step 2's OTP endpoints exist. Routes through postDuesCharge, never
-// ledger.ts's releaseWithCommission -- see the commission-gap finding this
-// migration was built to fix: a centre's resolvedCommissionPct must
-// actually reach settlement, not just sit snapshotted on the booking row.
-router.patch("/therapy-bookings/:id/mark-completed", requireAuth, requireRole("professional", "admin"), async (req: Request, res: Response): Promise<void> => {
+// ── GET /therapy-bookings/:id ───────────────────────────────────────────────
+// Mirrors GET /sessions-v2/:id's access-check + showOtps shape exactly —
+// admin/parent/participating-professional only; startOtp/endOtp stripped
+// to undefined outside the window where the parent is allowed to reveal
+// them to the therapist in person.
+router.get("/therapy-bookings/:id", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const bookingId = parsedId(req.params["id"] as string);
   if (!bookingId) { res.status(400).json({ error: "Invalid booking id" }); return; }
 
   const [booking] = await db.select().from(therapyBookingsTable).where(eq(therapyBookingsTable.id, bookingId));
   if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
 
-  if (req.userRole !== "admin") {
+  const isAdmin = req.userRole === "admin";
+  const isParent = booking.parentId === req.userId;
+  let isPro = false;
+  if (!isAdmin && !isParent) {
     const [prof] = await db.select({ id: professionalProfilesTable.id }).from(professionalProfilesTable)
       .where(eq(professionalProfilesTable.userId, req.userId!));
-    if (!prof || prof.id !== booking.professionalId) { res.status(403).json({ error: "Access denied" }); return; }
+    isPro = !!prof && prof.id === booking.professionalId;
+  }
+  if (!isAdmin && !isParent && !isPro) { res.status(403).json({ error: "Access denied" }); return; }
+
+  const showOtps = isParent && ["confirmed", "session_started"].includes(booking.status ?? "");
+
+  res.json({
+    ...booking,
+    startOtp: showOtps ? booking.startOtp : undefined,
+    endOtp: showOtps ? booking.endOtp : undefined,
+  });
+});
+
+// ── POST /therapy-bookings/:id/start-otp ────────────────────────────────────
+// Ported from sessionsV2.ts's start-otp control flow verbatim (lock check
+// -> expiry check+regen -> mismatch/attempt-increment/lock+alert -> success
+// transition) -- same shape, different table, different final status names
+// ('confirmed' here where V2 has 'paid_held'). requireRole("professional")
+// PLUS the professionalId ownership check below is what actually
+// guarantees startConfirmedByUserId can only ever be set to the therapist's
+// own sub-account userId -- a centre_admin has the wrong role and never
+// reaches the ownership check at all.
+const OtpBody = z.object({ otp: z.string().length(6) });
+router.post("/therapy-bookings/:id/start-otp", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const bookingId = parsedId(req.params["id"] as string);
+  if (!bookingId) { res.status(400).json({ error: "Invalid booking id" }); return; }
+  const parsed = OtpBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "OTP must be 6 digits" }); return; }
+
+  const [prof] = await db.select({ id: professionalProfilesTable.id }).from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.userId, req.userId!));
+  if (!prof) { res.status(404).json({ error: "Professional profile not found" }); return; }
+
+  const [booking] = await db.select().from(therapyBookingsTable)
+    .where(and(eq(therapyBookingsTable.id, bookingId), eq(therapyBookingsTable.professionalId, prof.id)));
+  if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+  if (booking.status !== "confirmed") { res.status(400).json({ error: "Booking is not in a startable status" }); return; }
+
+  if (booking.otpLockedAt) { res.status(403).json({ error: "OTP is locked due to too many failed attempts. Contact admin." }); return; }
+
+  const settings = await getOtpSettings();
+  const now = new Date();
+
+  if (booking.otpIssuedAt) {
+    const expiryMs = settings.otpValidityMinutes * 60 * 1000;
+    if (now.getTime() - booking.otpIssuedAt.getTime() > expiryMs) {
+      await db.update(therapyBookingsTable).set({
+        startOtp: generateOtp(), endOtp: generateOtp(), otpIssuedAt: now, otpAttempts: 0, updatedAt: now,
+      }).where(eq(therapyBookingsTable.id, bookingId));
+      res.status(400).json({ error: "OTP expired — a new OTP has been generated. Ask the parent to check their app." });
+      return;
+    }
   }
 
-  if (booking.status !== "confirmed") {
-    res.status(409).json({ error: "Only a confirmed session can be marked completed" });
+  if (parsed.data.otp !== booking.startOtp) {
+    const newAttempts = (booking.otpAttempts ?? 0) + 1;
+    if (newAttempts >= OTP_MAX_ATTEMPTS) {
+      await db.update(therapyBookingsTable).set({ otpAttempts: newAttempts, otpLockedAt: now, updatedAt: now }).where(eq(therapyBookingsTable.id, bookingId));
+      void createInAppNotification(booking.parentId, {
+        type: "session_otp_locked",
+        title: "OTP locked — admin alerted",
+        body: "Too many wrong OTP attempts. Admin has been notified.",
+        relatedType: "therapy_booking",
+        relatedId: bookingId,
+      }).catch(() => {});
+      res.status(403).json({ error: "Too many failed attempts — OTP locked. Admin has been alerted." });
+      return;
+    }
+    await db.update(therapyBookingsTable).set({ otpAttempts: newAttempts, updatedAt: now }).where(eq(therapyBookingsTable.id, bookingId));
+    res.status(400).json({ error: "Incorrect OTP", attemptsRemaining: OTP_MAX_ATTEMPTS - newAttempts });
+    return;
+  }
+
+  const [updated] = await db
+    .update(therapyBookingsTable)
+    .set({ status: "session_started", startedAt: now, startConfirmedByUserId: req.userId!, otpAttempts: 0, updatedAt: now })
+    .where(eq(therapyBookingsTable.id, bookingId))
+    .returning();
+
+  res.json(updated);
+});
+
+// ── POST /therapy-bookings/:id/end-otp ──────────────────────────────────────
+// Same shape as start-otp. On success this is the REAL completion trigger —
+// fires postDuesCharge, same as the (now admin-only) mark-completed stub
+// did, so settlement behaves identically regardless of which path a
+// session reaches session_completed through.
+router.post("/therapy-bookings/:id/end-otp", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const bookingId = parsedId(req.params["id"] as string);
+  if (!bookingId) { res.status(400).json({ error: "Invalid booking id" }); return; }
+  const parsed = OtpBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "OTP must be 6 digits" }); return; }
+
+  const [prof] = await db.select({ id: professionalProfilesTable.id }).from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.userId, req.userId!));
+  if (!prof) { res.status(404).json({ error: "Professional profile not found" }); return; }
+
+  const [booking] = await db.select().from(therapyBookingsTable)
+    .where(and(eq(therapyBookingsTable.id, bookingId), eq(therapyBookingsTable.professionalId, prof.id)));
+  if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+  if (booking.status !== "session_started") { res.status(400).json({ error: "Booking has not been started yet" }); return; }
+
+  if (booking.otpLockedAt) { res.status(403).json({ error: "OTP is locked due to too many failed attempts. Contact admin." }); return; }
+
+  const settings = await getOtpSettings();
+  const now = new Date();
+
+  if (booking.otpIssuedAt) {
+    const expiryMs = settings.otpValidityMinutes * 60 * 1000;
+    if (now.getTime() - booking.otpIssuedAt.getTime() > expiryMs) {
+      await db.update(therapyBookingsTable).set({
+        startOtp: generateOtp(), endOtp: generateOtp(), otpIssuedAt: now, otpAttempts: 0, updatedAt: now,
+      }).where(eq(therapyBookingsTable.id, bookingId));
+      res.status(400).json({ error: "OTP expired — a new OTP has been generated. Ask the parent to check their app." });
+      return;
+    }
+  }
+
+  if (parsed.data.otp !== booking.endOtp) {
+    const newAttempts = (booking.otpAttempts ?? 0) + 1;
+    if (newAttempts >= OTP_MAX_ATTEMPTS) {
+      await db.update(therapyBookingsTable).set({ otpAttempts: newAttempts, otpLockedAt: now, updatedAt: now }).where(eq(therapyBookingsTable.id, bookingId));
+      void createInAppNotification(booking.parentId, {
+        type: "session_otp_locked",
+        title: "OTP locked — admin alerted",
+        body: "Too many wrong OTP attempts. Admin has been notified.",
+        relatedType: "therapy_booking",
+        relatedId: bookingId,
+      }).catch(() => {});
+      res.status(403).json({ error: "Too many failed attempts — OTP locked. Admin has been alerted." });
+      return;
+    }
+    await db.update(therapyBookingsTable).set({ otpAttempts: newAttempts, updatedAt: now }).where(eq(therapyBookingsTable.id, bookingId));
+    res.status(400).json({ error: "Incorrect OTP", attemptsRemaining: OTP_MAX_ATTEMPTS - newAttempts });
+    return;
+  }
+
+  const [updated] = await db
+    .update(therapyBookingsTable)
+    .set({ status: "session_completed", completedAt: now, endConfirmedByUserId: req.userId!, otpAttempts: 0, updatedAt: now })
+    .where(eq(therapyBookingsTable.id, bookingId))
+    .returning();
+
+  await postDuesCharge({
+    ownerType: "centre",
+    ownerId: booking.centreId,
+    sourceType: "therapy_booking",
+    sourceId: booking.id,
+    amountInr: booking.commissionInr,
+  });
+
+  res.json(updated);
+});
+
+// ── POST /therapy-bookings/:id/regenerate-otp ───────────────────────────────
+// Either participant (parent or the therapist) can request fresh codes if
+// the old ones expired or were lost -- mirrors sessionsV2.ts's regenerate
+// endpoint.
+router.post("/therapy-bookings/:id/regenerate-otp", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const bookingId = parsedId(req.params["id"] as string);
+  if (!bookingId) { res.status(400).json({ error: "Invalid booking id" }); return; }
+
+  const [booking] = await db.select().from(therapyBookingsTable).where(eq(therapyBookingsTable.id, bookingId));
+  if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+  const isParent = booking.parentId === req.userId;
+  let isPro = false;
+  if (!isParent) {
+    const [prof] = await db.select({ id: professionalProfilesTable.id }).from(professionalProfilesTable)
+      .where(eq(professionalProfilesTable.userId, req.userId!));
+    isPro = !!prof && prof.id === booking.professionalId;
+  }
+  if (!isParent && !isPro) { res.status(403).json({ error: "Access denied" }); return; }
+
+  if (!["confirmed", "session_started"].includes(booking.status ?? "")) {
+    res.status(400).json({ error: "OTP regeneration not applicable in current status" });
+    return;
+  }
+
+  const now = new Date();
+  await db.update(therapyBookingsTable).set({
+    startOtp: generateOtp(), endOtp: generateOtp(), otpIssuedAt: now, otpAttempts: 0, otpLockedAt: null, updatedAt: now,
+  }).where(eq(therapyBookingsTable.id, bookingId));
+
+  res.json({ message: "OTPs regenerated successfully" });
+});
+
+// ── PATCH /therapy-bookings/:id/mark-completed ──────────────────────────────
+// Admin-only human-resolution path for a stalled booking (see
+// isBookingStalled/GET /admin/therapy-bookings/stalled below) -- a
+// therapist ALWAYS goes through real start-otp/end-otp now that those
+// exist; this is deliberately not reachable by "professional" anymore, so
+// there's no shortcut around actual OTP confirmation. Gate broadened from
+// 'confirmed' only to also accept 'session_started', since a stalled
+// session can be stuck at either point (never started, or started but
+// never ended) -- both are things this action needs to be able to resolve.
+// Still routes through postDuesCharge, same as end-otp's success path, so
+// settlement behaves identically regardless of which path reached
+// session_completed.
+router.patch("/therapy-bookings/:id/mark-completed", requireAuth, requireRole("admin"), async (req: Request, res: Response): Promise<void> => {
+  const bookingId = parsedId(req.params["id"] as string);
+  if (!bookingId) { res.status(400).json({ error: "Invalid booking id" }); return; }
+
+  const [booking] = await db.select().from(therapyBookingsTable).where(eq(therapyBookingsTable.id, bookingId));
+  if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+  if (!["confirmed", "session_started"].includes(booking.status ?? "")) {
+    res.status(409).json({ error: "Only a confirmed or in-progress session can be marked completed" });
     return;
   }
 
@@ -612,6 +830,71 @@ router.patch("/therapy-bookings/:id/mark-completed", requireAuth, requireRole("p
   });
 
   res.json(updated);
+});
+
+// ── GET /admin/therapy-bookings/stalled ─────────────────────────────────────
+// Lazy, evaluated-on-read surfacing -- NOT a cron, NOT auto-resolved, same
+// discipline as B8's isOwnerOverdue/resolveOverdueDuesInvoices, explicitly
+// NOT stuckEngagementResolver.ts's trial-timeout auto-progression pattern
+// (a stalled session must never silently become "completed" on its own).
+// Response is deliberately rich, not just IDs -- an admin needs to be able
+// to act from this list without a second lookup: who's involved, how long
+// it's been stalled, and specifically which side's confirmation is
+// missing (waitingOn), since "confirmed" (never started) and
+// "session_started" (started, never ended) call for different follow-up.
+function isBookingStalled(bookedDate: string, status: string, stallFlagDays: number): boolean {
+  if (status !== "confirmed" && status !== "session_started") return false;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - stallFlagDays);
+  return bookedDate <= cutoff.toISOString().slice(0, 10);
+}
+
+router.get("/admin/therapy-bookings/stalled", requireAuth, requireRole("admin"), async (req: Request, res: Response): Promise<void> => {
+  const settings = await getOtpSettings();
+
+  const candidates = await db
+    .select({
+      id: therapyBookingsTable.id,
+      centreId: therapyBookingsTable.centreId,
+      centreName: therapyCentresTable.name,
+      professionalId: therapyBookingsTable.professionalId,
+      therapistName: centreTherapistsTable.name,
+      parentId: therapyBookingsTable.parentId,
+      parentName: usersTable.fullName,
+      parentEmail: usersTable.email,
+      serviceId: therapyBookingsTable.serviceId,
+      serviceName: centreServicesTable.name,
+      bookedDate: therapyBookingsTable.bookedDate,
+      startTime: therapyBookingsTable.startTime,
+      endTime: therapyBookingsTable.endTime,
+      status: therapyBookingsTable.status,
+      startedAt: therapyBookingsTable.startedAt,
+      otpLockedAt: therapyBookingsTable.otpLockedAt,
+      amountInr: therapyBookingsTable.amountInr,
+      commissionInr: therapyBookingsTable.commissionInr,
+    })
+    .from(therapyBookingsTable)
+    .innerJoin(therapyCentresTable, eq(therapyCentresTable.id, therapyBookingsTable.centreId))
+    .leftJoin(centreTherapistsTable, eq(centreTherapistsTable.professionalProfileId, therapyBookingsTable.professionalId))
+    .innerJoin(usersTable, eq(usersTable.id, therapyBookingsTable.parentId))
+    .innerJoin(centreServicesTable, eq(centreServicesTable.id, therapyBookingsTable.serviceId))
+    .where(sql`${therapyBookingsTable.status} IN ('confirmed', 'session_started')`);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const stalled = candidates
+    .filter((b) => isBookingStalled(b.bookedDate, b.status, settings.otpStallFlagDays))
+    .map((b) => {
+      const stalledDays = Math.floor((new Date(today).getTime() - new Date(b.bookedDate).getTime()) / (24 * 60 * 60 * 1000));
+      return {
+        ...b,
+        stalledDays,
+        waitingOn: b.status === "confirmed" ? "start_confirmation" : "end_confirmation",
+        otpCurrentlyLocked: !!b.otpLockedAt,
+      };
+    })
+    .sort((a, b) => b.stalledDays - a.stalledDays);
+
+  res.json(stalled);
 });
 
 export default router;
