@@ -309,11 +309,18 @@ router.get("/centres/:id/services", ...authGuard, async (req, res): Promise<void
   const serviceIds = services.map((s) => s.id);
   let prices: { serviceId: number; priceInr: number; effectiveFrom: string }[] = [];
   if (serviceIds.length > 0) {
+    // Tiebreaker on id DESC, not just effectiveFrom DESC -- two price rows
+    // can legitimately share the same effectiveFrom (a same-day
+    // correction, or two prices both entered "effective today"). Without
+    // a deterministic tiebreaker here, this display could disagree with
+    // what therapyBookings.ts's resolveCurrentServicePrice() actually
+    // charges a parent for the exact same ambiguous case — same fix,
+    // same reasoning, kept in sync with that function.
     const allPrices = await db
-      .select({ serviceId: centreServicePricesTable.serviceId, priceInr: centreServicePricesTable.priceInr, effectiveFrom: centreServicePricesTable.effectiveFrom })
+      .select({ id: centreServicePricesTable.id, serviceId: centreServicePricesTable.serviceId, priceInr: centreServicePricesTable.priceInr, effectiveFrom: centreServicePricesTable.effectiveFrom })
       .from(centreServicePricesTable)
       .where(eq(centreServicePricesTable.centreId, id))
-      .orderBy(desc(centreServicePricesTable.effectiveFrom));
+      .orderBy(desc(centreServicePricesTable.effectiveFrom), desc(centreServicePricesTable.id));
     const latestByService = new Map<number, { serviceId: number; priceInr: number; effectiveFrom: string }>();
     for (const p of allPrices) {
       if (p.effectiveFrom <= today && !latestByService.has(p.serviceId)) {

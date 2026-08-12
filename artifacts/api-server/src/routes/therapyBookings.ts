@@ -60,11 +60,18 @@ async function resolveCentreCommission(
   amountInr: number,
 ): Promise<{ commissionInr: number; centreAmountInr: number; resolvedCommissionPct: number }> {
   const today = new Date().toISOString().slice(0, 10);
+  // Tiebreaker on id DESC, not just effectiveFrom DESC -- two price rows
+  // CAN legitimately share the same effectiveFrom (a same-day correction,
+  // or two prices both entered "effective today"), and id (a serial
+  // primary key, assigned atomically and strictly unique) is the only
+  // column here guaranteed to break that tie the same way every time.
+  // createdAt would mostly work but isn't provably collision-proof for
+  // rows inserted in the same transaction/tight batch -- id is.
   const priceRows = await db
-    .select({ commissionPctOverride: centreServicePricesTable.commissionPctOverride, effectiveFrom: centreServicePricesTable.effectiveFrom })
+    .select({ id: centreServicePricesTable.id, commissionPctOverride: centreServicePricesTable.commissionPctOverride, effectiveFrom: centreServicePricesTable.effectiveFrom })
     .from(centreServicePricesTable)
     .where(and(eq(centreServicePricesTable.centreId, centreId), eq(centreServicePricesTable.serviceId, serviceId)))
-    .orderBy(desc(centreServicePricesTable.effectiveFrom));
+    .orderBy(desc(centreServicePricesTable.effectiveFrom), desc(centreServicePricesTable.id));
   const currentPriceRow = priceRows.find((p) => p.effectiveFrom <= today) ?? null;
 
   const [centre] = await db
@@ -86,11 +93,12 @@ async function resolveCentreCommission(
 // bookings from that point on.
 async function resolveCurrentServicePrice(centreId: number, serviceId: number): Promise<number | null> {
   const today = new Date().toISOString().slice(0, 10);
+  // Same id-DESC tiebreaker as resolveCentreCommission, same reasoning.
   const rows = await db
-    .select({ priceInr: centreServicePricesTable.priceInr, effectiveFrom: centreServicePricesTable.effectiveFrom })
+    .select({ id: centreServicePricesTable.id, priceInr: centreServicePricesTable.priceInr, effectiveFrom: centreServicePricesTable.effectiveFrom })
     .from(centreServicePricesTable)
     .where(and(eq(centreServicePricesTable.centreId, centreId), eq(centreServicePricesTable.serviceId, serviceId)))
-    .orderBy(desc(centreServicePricesTable.effectiveFrom));
+    .orderBy(desc(centreServicePricesTable.effectiveFrom), desc(centreServicePricesTable.id));
   const current = rows.find((p) => p.effectiveFrom <= today);
   return current?.priceInr ?? null;
 }
