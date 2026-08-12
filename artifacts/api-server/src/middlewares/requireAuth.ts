@@ -20,6 +20,28 @@ export const requireAuth = async (
   res: Response,
   next: NextFunction,
 ): Promise<void> => {
+  // ── DEV-ONLY test-auth bypass ───────────────────────────────────────────
+  // Skips Clerk JWT verification for scripted integration tests.
+  // Double-gated: NODE_ENV !== "production" AND ALLOW_TEST_AUTH_BYPASS=1.
+  // Never reachable in production; used exclusively by verify-*.ts scripts.
+  if (process.env.NODE_ENV !== "production" && process.env.ALLOW_TEST_AUTH_BYPASS === "1") {
+    const hdr = req.headers["x-test-override-user-id"];
+    const raw = Array.isArray(hdr) ? hdr[0] : hdr;
+    if (raw) {
+      const uid = parseInt(raw, 10);
+      if (!isNaN(uid)) {
+        const [u] = await db.select().from(usersTable).where(eq(usersTable.id, uid));
+        if (u) {
+          req.userId = u.id;
+          req.userRole = u.role as UserRole;
+          req.clerkId = u.clerkId ?? `test-bypass-${u.id}`;
+          return next();
+        }
+      }
+    }
+  }
+  // ───────────────────────────────────────────────────────────────────────
+
   const authResult = getAuth(req);
   const clerkId = authResult?.userId;
 

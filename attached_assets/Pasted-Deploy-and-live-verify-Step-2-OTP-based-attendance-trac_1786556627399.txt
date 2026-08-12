@@ -1,0 +1,91 @@
+Deploy and live-verify Step 2 (OTP-based attendance tracking) — commit
+8139637848cada51cfc80921cc692b9f61891fa5 on main. Schema (otp_locked_at,
+start_confirmed_by_user_id, end_confirmed_by_user_id) is already live from
+the prior deploy — this is a code-only deploy, no drizzle-kit push needed.
+
+## 1. Deploy
+1. git pull origin main
+2. Restart api-server.
+3. Report the deployed commit hash — must be
+   8139637848cada51cfc80921cc692b9f61891fa5.
+
+## 2. REQUIRED PROOF #1 — ownership resolution, real HTTP, not just logic
+Set up: a real centre-employed therapist (real professionalProfileId,
+real Clerk session) with a real confirmed therapy_bookings row, AND a
+real centre_admin session for the SAME centre.
+
+1. As the centre_admin, attempt POST /therapy-bookings/:id/start-otp on
+   that booking (even with the correct startOtp value, if you can see it
+   via direct DB query for test purposes). Report the literal HTTP status
+   and body. Expect 403 Forbidden — the role gate must reject this before
+   any ownership or OTP-correctness check runs at all.
+2. As the REAL therapist, GET /therapy-bookings/:id as the parent (or
+   query the DB directly) to obtain the real startOtp, then POST
+   /therapy-bookings/:id/start-otp with the correct code as themselves.
+   Report the real response.
+3. Query the booking row:
+   SELECT status, started_at, start_confirmed_by_user_id FROM
+   therapy_bookings WHERE id = <id>;
+   Confirm start_confirmed_by_user_id equals the THERAPIST's own users.id
+   (paste both values side by side to show the match), status =
+   'session_started', started_at is set.
+4. Repeat for end-otp: therapist submits the correct endOtp, confirm
+   end_confirmed_by_user_id = the same therapist's users.id, status =
+   'session_completed', completed_at set.
+5. Query platform_dues_charges for a new row with source_id = this
+   booking's id, amount_inr = the booking's commission_inr — confirm
+   end-otp's success is what actually fired postDuesCharge, same as the
+   old mark-completed stub did.
+
+## 3. Wrong-code / lockout / admin alert
+1. As the real therapist, submit 5 wrong start-otp codes in a row on a
+   fresh confirmed booking. Confirm attempts 1-4 return 400 with
+   attemptsRemaining counting down, and the 5th returns 403 "OTP is
+   locked."
+2. Query the row: otp_locked_at should be set, otp_attempts = 5.
+3. Query notifications for the parent (booking.parentId): confirm a row
+   with type='session_otp_locked' exists.
+4. Confirm a 6th attempt (even with the CORRECT code now) still returns
+   403 — locked stays locked until explicit regeneration.
+5. POST /therapy-bookings/:id/regenerate-otp (as parent or therapist).
+   Confirm otp_locked_at is cleared, otp_attempts reset to 0, and
+   startOtp/endOtp are DIFFERENT values than before.
+
+## 4. REQUIRED PROOF #2 — stalled-session surfacing, real and legible
+1. Create (or backdate via direct DB update for test purposes) a real
+   therapy_bookings row: status='confirmed', booked_date more than
+   otp_stall_flag_days (5) days in the past.
+2. Create a second one: status='session_started', started_at set, same
+   backdating.
+3. GET /admin/therapy-bookings/stalled as admin. Paste the FULL raw JSON
+   response. Confirm it includes, per item: centre name, therapist name,
+   parent name/email, service name, booked date/time, current status,
+   stalledDays (correct count), waitingOn ('start_confirmation' for the
+   first row, 'end_confirmation' for the second), and whether otp is
+   currently locked. Confirm a normal on-time confirmed booking (< 5
+   days old) does NOT appear in this list.
+4. As admin, PATCH /therapy-bookings/:id/mark-completed on the first
+   stalled row. Confirm it resolves (status='session_completed') and a
+   platform_dues_charges row appears for it.
+5. As the (now-stalled, now-irrelevant) therapist, attempt PATCH
+   /therapy-bookings/:id/mark-completed on the second stalled row.
+   Confirm 403 — this path is admin-only now.
+
+## 5. Reschedule interaction
+1. Lock a booking's OTP (5 wrong attempts, as in step 3).
+2. Reschedule it (PATCH /therapy-bookings/:id/reschedule).
+3. Confirm otp_locked_at is cleared and fresh OTP codes were issued — a
+   reschedule must not leave a booking permanently locked out.
+
+## 6. OTP visibility gating
+1. GET /therapy-bookings/:id as the PARENT while status='confirmed' —
+   confirm startOtp/endOtp are present (real 6-digit strings).
+2. GET the same booking as the THERAPIST — confirm startOtp/endOtp are
+   BOTH absent/undefined in the response (they must never see it in
+   their own app; the parent has to tell them).
+3. GET the same booking as the parent again AFTER status has moved to
+   'session_completed' — confirm startOtp/endOtp are now absent (outside
+   the reveal window).
+
+Report raw request/response pairs and raw query output for every item —
+not summarized as "confirmed."

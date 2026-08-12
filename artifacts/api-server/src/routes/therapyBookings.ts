@@ -662,7 +662,7 @@ router.post("/therapy-bookings/:id/start-otp", requireAuth, requireRole("profess
     const newAttempts = (booking.otpAttempts ?? 0) + 1;
     if (newAttempts >= OTP_MAX_ATTEMPTS) {
       await db.update(therapyBookingsTable).set({ otpAttempts: newAttempts, otpLockedAt: now, updatedAt: now }).where(eq(therapyBookingsTable.id, bookingId));
-      void createInAppNotification(booking.parentId, {
+      await createInAppNotification(booking.parentId, {
         type: "session_otp_locked",
         title: "OTP locked — admin alerted",
         body: "Too many wrong OTP attempts. Admin has been notified.",
@@ -726,7 +726,7 @@ router.post("/therapy-bookings/:id/end-otp", requireAuth, requireRole("professio
     const newAttempts = (booking.otpAttempts ?? 0) + 1;
     if (newAttempts >= OTP_MAX_ATTEMPTS) {
       await db.update(therapyBookingsTable).set({ otpAttempts: newAttempts, otpLockedAt: now, updatedAt: now }).where(eq(therapyBookingsTable.id, bookingId));
-      void createInAppNotification(booking.parentId, {
+      await createInAppNotification(booking.parentId, {
         type: "session_otp_locked",
         title: "OTP locked — admin alerted",
         body: "Too many wrong OTP attempts. Admin has been notified.",

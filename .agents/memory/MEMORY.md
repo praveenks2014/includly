@@ -32,3 +32,5 @@
 - [Verification gate request-schema gap](verification-gate-request-schema-gap.md) — a field must be in Create/Update request body schemas, not just the response schema, or the client silently can't set it and the whole gate is unreachable
 - [Restart before proving a server gate](restart-before-proving-server-gate.md) — clean logs/typecheck aren't proof a query/gate change is live; restart the workflow and empirically re-test with a concrete before/after case
 - [Windows sandbox vite build blocked](windows-sandbox-vite-build.md) — missing win32 native optionals (rollup/esbuild/lightningcss/tailwindcss-oxide); install pinned win32 binaries locally via pnpm add -w -D, never commit them
+- [Feature-flag router mount order](feature-flag-router-mount-order.md) — therapist.ts/tutor.ts global router.use() blocks ALL requests when flag is false; mount therapyBookingsRouter before them in routes/index.ts
+- [Notification timing — await vs void](notification-timing-await.md) — createInAppNotification must be awaited on error paths where the response is sent immediately after, or the insert may not commit before the caller queries the DB

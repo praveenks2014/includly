@@ -6,8 +6,8 @@
 // of truth: every tutor/therapist route checks its flag and returns 404
 // (not 403 — a disabled feature shouldn't even hint it exists) when off, so
 // nothing is reachable even if a URL is guessed while the frontend is hidden.
-export const SHOW_TUTOR_SEARCH = false;
-export const SHOW_THERAPIST_SEARCH = false;
+export const SHOW_TUTOR_SEARCH = true;
+export const SHOW_THERAPIST_SEARCH = true;
 
 // SHOW_CONSULTATION_TILES / SHOW_COACH_TILE — unlike the two flags above,
 // these have no dedicated route to 404-gate: the consultation/coach tiles

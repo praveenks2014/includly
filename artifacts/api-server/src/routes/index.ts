@@ -70,6 +70,14 @@ router.use(communityAiRouter);
 router.use(resourcesRouter);
 router.use(referralsRouter);
 router.use(shadowTeacherRouter);
+// Mount therapy-bookings BEFORE the feature-gated tutorRouter/therapistRouter
+// because those routers apply a global router.use() middleware that returns
+// 404 for ALL requests (not just their own routes) when the flag is off.
+// Express sub-routers with an unconditional router.use() intercept every
+// request that reaches them, including requests destined for later-mounted
+// routers — same reason devRouter is mounted at the top of this file.
+router.use(centresRouter);
+router.use(therapyBookingsRouter);
 router.use(tutorRouter);
 router.use(therapistRouter);
 router.use(sessionsV2Router);
@@ -77,8 +85,6 @@ router.use(lifecycleRouter);
 router.use(dailyLogsRouter);
 router.use(salaryPaymentsRouter);
 router.use(parentNeedsRouter);
-router.use(centresRouter);
-router.use(therapyBookingsRouter);
 router.use(goalsRouter);
 router.use(behaviorLogsRouter);
 router.use(platformDuesRouter);

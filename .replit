@@ -35,3 +35,15 @@ VAPID_PUBLIC_KEY = "BBZwJ6mAeSF3QAdCKjVTrhiF8UFde34DWomAK6Kkxneu3ia80lnpCXbYuVLt
 VAPID_SUBJECT = "mailto:admin@senseilink.com"
 VITE_VAPID_PUBLIC_KEY = "BBZwJ6mAeSF3QAdCKjVTrhiF8UFde34DWomAK6Kkxneu3ia80lnpCXbYuVLtQiRNlPBzi3NrU7K1zJHOnIjxsO0"
 ADMIN_CLERK_ID = "user_3DXRlgXBazvEMk4OWWB6tqX9isE"
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 80
+
+[[ports]]
+localPort = 23642
+externalPort = 3000
