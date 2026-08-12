@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 import { professionalProfilesTable } from "./professionals";
 import { usersTable } from "./users";
 import { childrenTable } from "./children";
+import { centreServicesTable } from "./therapyCentres";
 
 export const sessionStatusEnum = pgEnum("session_status", [
   "pending_payment",
@@ -46,6 +47,16 @@ export const professionalAvailabilityTable = pgTable("professional_availability"
   bufferMins: integer("buffer_mins").notNull().default(0),
   effectiveFrom: text("effective_from"),
   effectiveTo: text("effective_to"),
+  // Set only for a centre-employed professional's template, when they (or
+  // their centre admin) declare which of the centre's own services this
+  // recurring block is for — this is "slot_type," resolved against the
+  // centre's real, already-live service catalog rather than a new
+  // free-standing enum. Null for every non-centre professional, unchanged.
+  // Deliberately does NOT carry price — price is resolved live from
+  // centreServicePricesTable at booking time (see therapyBookings.ts),
+  // never snapshotted here, so a centre's price changes apply to new
+  // bookings immediately without needing slots to regenerate.
+  serviceId: integer("service_id").references(() => centreServicesTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
@@ -134,6 +145,11 @@ export const slotsTable = pgTable(
     // schema. A professional changing their template's price later must
     // not retroactively alter slots already generated from the old price.
     priceInr: integer("price_inr").notNull(),
+    // Propagated from professionalAvailabilityTable.serviceId at generation
+    // time (see slotGeneration.ts) — unlike priceInr, deliberately NOT a
+    // price snapshot, just which centre service this slot is for. Null for
+    // every non-centre professional's slots, unchanged.
+    serviceId: integer("service_id").references(() => centreServicesTable.id, { onDelete: "set null" }),
     status: slotStatusEnum("status").notNull().default("open"),
     // Unused this pass — see file header comment above.
     bookingId: integer("booking_id").references(() => sessionBookingsTable.id, { onDelete: "set null" }),

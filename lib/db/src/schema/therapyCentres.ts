@@ -96,17 +96,14 @@ export const centreTherapistsTable = pgTable("centre_therapists", {
   unique("centre_therapists_professional_profile_unique").on(t.professionalProfileId),
 ]);
 
-export const centreTherapistSlotsTable = pgTable("centre_therapist_slots", {
-  id: serial("id").primaryKey(),
-  therapistId: integer("therapist_id").notNull().references(() => centreTherapistsTable.id, { onDelete: "cascade" }),
-  centreId: integer("centre_id").notNull().references(() => therapyCentresTable.id, { onDelete: "cascade" }),
-  dayOfWeek: integer("day_of_week").notNull(),
-  startTime: text("start_time").notNull(),
-  endTime: text("end_time").notNull(),
-  slotDurationMinutes: integer("slot_duration_minutes").notNull().default(60),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [index("centre_therapist_slots_therapist_idx").on(t.therapistId)]);
+// centreTherapistSlotsTable (dropped) predated the real sub-account model
+// below — every centre therapist now has a genuine professionalProfileId
+// (centreTherapistsTable.professionalProfileId), so their bookable calendar
+// is the exact same professionalAvailabilityTable/slotsTable/
+// slotGeneration.ts mechanism every other professional uses. Confirmed
+// dead before removal: whole-repo grep found only this table's own
+// definition, its CRUD routes in centres.ts (no frontend caller anywhere),
+// and the initial migration snapshot — zero real consumers.
 
 export const centreServiceModeEnum = pgEnum("centre_service_mode", ["in_centre", "home_visit", "online"]);
 
@@ -146,6 +143,37 @@ export const centreServicePackagesTable = pgTable("centre_service_packages", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [index("centre_service_packages_service_id_idx").on(t.serviceId)]);
+
+export const packagePurchaseStatusEnum = pgEnum("package_purchase_status", [
+  "pending_payment",
+  "active",
+  "exhausted",
+  "cancelled",
+]);
+
+// A parent's actual purchase of a package offering — centreServicePackagesTable
+// is just the offering (sessionCount/priceInr a centre defines); this is the
+// real "who bought one, how many sessions are left" record individual
+// therapy_bookings rows consume against one at a time. sessionsTotal/
+// amountPaidInr are snapshotted from the offering AT PURCHASE TIME — same
+// discipline as every other fee/rate snapshot in this project — so a later
+// change to the offering's own sessionCount/priceInr never retroactively
+// alters a purchase already made.
+export const centreServicePackagePurchasesTable = pgTable("centre_service_package_purchases", {
+  id: serial("id").primaryKey(),
+  packageId: integer("package_id").notNull().references(() => centreServicePackagesTable.id, { onDelete: "cascade" }),
+  centreId: integer("centre_id").notNull().references(() => therapyCentresTable.id, { onDelete: "cascade" }),
+  serviceId: integer("service_id").notNull().references(() => centreServicesTable.id, { onDelete: "cascade" }),
+  parentId: integer("parent_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  sessionsTotal: integer("sessions_total").notNull(),
+  sessionsConsumed: integer("sessions_consumed").notNull().default(0),
+  amountPaidInr: integer("amount_paid_inr").notNull(),
+  status: packagePurchaseStatusEnum("status").notNull().default("pending_payment"),
+  providerOrderId: text("provider_order_id"),
+  providerPaymentId: text("provider_payment_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (t) => [index("centre_service_package_purchases_parent_id_idx").on(t.parentId)]);
 
 export const priceChangeRequestStatusEnum = pgEnum("price_change_request_status", [
   "pending",
@@ -201,7 +229,20 @@ export const therapyBookingsTable = pgTable("therapy_bookings", {
   parentId: integer("parent_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   centreId: integer("centre_id").notNull().references(() => therapyCentresTable.id, { onDelete: "cascade" }),
   serviceId: integer("service_id").notNull().references(() => centreServicesTable.id),
+  // Denormalized from centreTherapistsTable.professionalProfileId at booking
+  // time — this is what the shared professionalAvailabilityTable/slotsTable/
+  // bookingSlotLockSql mechanism actually keys on, so conflict-checks and
+  // locks match the same identity slot generation used, without a join to
+  // centre_therapists on every hot-path query. therapistId (below) stays for
+  // centre-facing display of the roster row.
+  professionalId: integer("professional_id").notNull().references(() => professionalProfilesTable.id, { onDelete: "cascade" }),
   packageId: integer("package_id").references(() => centreServicePackagesTable.id),
+  // Set only when this booking was consumed against a real package purchase
+  // (centreServicePackagePurchasesTable) rather than paid for directly —
+  // Step 3's invoice logic reads completed bookings either way, but this is
+  // what lets it distinguish "already paid via package" from "paid per
+  // session" when reconciling a centre's dues.
+  packagePurchaseId: integer("package_purchase_id").references(() => centreServicePackagePurchasesTable.id, { onDelete: "set null" }),
   therapistId: integer("therapist_id").references(() => centreTherapistsTable.id),
   childId: integer("child_id").references(() => childrenTable.id, { onDelete: "set null" }),
   bookedDate: text("booked_date").notNull(),
@@ -211,6 +252,11 @@ export const therapyBookingsTable = pgTable("therapy_bookings", {
   amountInr: integer("amount_inr").notNull(),
   commissionInr: integer("commission_inr").notNull().default(0),
   centreAmountInr: integer("centre_amount_inr").notNull().default(0),
+  // Snapshot of the % rate actually used to compute commissionInr — same
+  // three-tier resolution and "never retroactively reinterpret an
+  // already-placed booking" discipline as sessionBookingsTable's own
+  // resolvedCommissionPct.
+  resolvedCommissionPct: real("resolved_commission_pct"),
   providerOrderId: text("provider_order_id"),
   providerPaymentId: text("provider_payment_id"),
   startOtp: text("start_otp"),
@@ -249,3 +295,7 @@ export type CentreService = typeof centreServicesTable.$inferSelect;
 export const insertTherapyBookingSchema = createInsertSchema(therapyBookingsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertTherapyBooking = z.infer<typeof insertTherapyBookingSchema>;
 export type TherapyBooking = typeof therapyBookingsTable.$inferSelect;
+
+export const insertCentreServicePackagePurchaseSchema = createInsertSchema(centreServicePackagePurchasesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertCentreServicePackagePurchase = z.infer<typeof insertCentreServicePackagePurchaseSchema>;
+export type CentreServicePackagePurchase = typeof centreServicePackagePurchasesTable.$inferSelect;

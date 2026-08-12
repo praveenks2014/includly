@@ -5,7 +5,6 @@ import { db } from "@workspace/db";
 import {
   therapyCentresTable,
   centreTherapistsTable,
-  centreTherapistSlotsTable,
   centreServicesTable,
   centreServicePricesTable,
   centreServicePackagesTable,
@@ -72,14 +71,6 @@ const UpsertTherapistBody = z.object({
   specializations: z.string().optional(),
   qualifications: z.string().optional(),
   yearsExperience: z.number().int().min(0).optional(),
-  isActive: z.boolean().optional(),
-});
-
-const UpsertSlotBody = z.object({
-  dayOfWeek: z.number().int().min(0).max(6),
-  startTime: z.string(),
-  endTime: z.string(),
-  slotDurationMinutes: z.number().int().min(15).optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -305,37 +296,6 @@ router.post("/centres/therapist-invites/accept", ...authGuard, async (req, res):
     .where(eq(professionalProfilesTable.id, profile.id));
 
   res.json(updated);
-});
-
-// ── THERAPIST SLOTS ──────────────────────────────────────────────────────────
-
-router.get("/centres/:id/therapists/:tid/slots", ...authGuard, async (req, res): Promise<void> => {
-  const id = parsedId(req.params.id);
-  const tid = parsedId(req.params.tid);
-  if (!id || !tid) { res.status(400).json({ error: "Invalid id" }); return; }
-  const rows = await db.select().from(centreTherapistSlotsTable).where(and(eq(centreTherapistSlotsTable.therapistId, tid), eq(centreTherapistSlotsTable.centreId, id)));
-  res.json(rows);
-});
-
-router.post("/centres/:id/therapists/:tid/slots", ...centreAdminGuard, async (req, res): Promise<void> => {
-  const id = parsedId(req.params.id);
-  const tid = parsedId(req.params.tid);
-  if (!id || !tid) { res.status(400).json({ error: "Invalid id" }); return; }
-  if (!(await ownscentre(req.userId!, id)) && req.userRole !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
-  const parsed = UpsertSlotBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const [slot] = await db.insert(centreTherapistSlotsTable).values({ therapistId: tid, centreId: id, ...parsed.data }).returning();
-  res.status(201).json(slot);
-});
-
-router.delete("/centres/:id/therapists/:tid/slots/:sid", ...centreAdminGuard, async (req, res): Promise<void> => {
-  const id = parsedId(req.params.id);
-  const tid = parsedId(req.params.tid);
-  const sid = parsedId(req.params.sid);
-  if (!id || !tid || !sid) { res.status(400).json({ error: "Invalid id" }); return; }
-  if (!(await ownscentre(req.userId!, id)) && req.userRole !== "admin") { res.status(403).json({ error: "Forbidden" }); return; }
-  await db.delete(centreTherapistSlotsTable).where(and(eq(centreTherapistSlotsTable.id, sid), eq(centreTherapistSlotsTable.centreId, id)));
-  res.json({ ok: true });
 });
 
 // ── SERVICES ─────────────────────────────────────────────────────────────────

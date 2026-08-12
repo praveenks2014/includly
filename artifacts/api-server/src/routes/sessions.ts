@@ -17,6 +17,7 @@ import {
   therapistEngagementsTable,
   therapistEngagementSessionsTable,
   therapyCentresTable,
+  centreServicesTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { generateOtp } from "../lib/otp";
@@ -139,6 +140,56 @@ router.put("/sessions/availability", requireAuth, requireRole("professional", "a
     .returning();
 
   res.json(inserted);
+});
+
+// ── PATCH /sessions/availability/:id — link a template row to a centre
+// service ("slot_type"). Centre-scoped only: a non-centre-employed
+// professional has no serviceId to set, and this deliberately does not
+// touch the individual-professional path at all (SetAvailabilityBody, the
+// shared PUT above, is left exactly as-is). Local Zod schema, not the
+// generated api-zod contract — this field is meaningless outside the
+// centre case, so it doesn't belong in the cross-vertical contract.
+const SetTemplateServiceBody = z.object({ serviceId: z.number().int().positive().nullable() });
+router.patch("/sessions/availability/:id", requireAuth, requireRole("professional", "admin"), async (req: Request, res: Response): Promise<void> => {
+  const templateId = parseInt(req.params["id"] as string, 10);
+  if (isNaN(templateId)) { res.status(400).json({ error: "Invalid template id" }); return; }
+  const parsed = SetTemplateServiceBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [prof] = await db
+    .select({ id: professionalProfilesTable.id, employingCentreId: professionalProfilesTable.employingCentreId })
+    .from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.userId, req.userId!));
+  if (!prof) { res.status(404).json({ error: "Professional profile not found" }); return; }
+  if (!prof.employingCentreId) {
+    res.status(400).json({ error: "Only a centre-employed professional's template can be linked to a service" });
+    return;
+  }
+
+  const [template] = await db
+    .select({ id: professionalAvailabilityTable.id })
+    .from(professionalAvailabilityTable)
+    .where(and(eq(professionalAvailabilityTable.id, templateId), eq(professionalAvailabilityTable.professionalId, prof.id)));
+  if (!template) { res.status(404).json({ error: "Template not found" }); return; }
+
+  if (parsed.data.serviceId !== null) {
+    const [service] = await db
+      .select({ id: centreServicesTable.id })
+      .from(centreServicesTable)
+      .where(and(eq(centreServicesTable.id, parsed.data.serviceId), eq(centreServicesTable.centreId, prof.employingCentreId)));
+    if (!service) {
+      res.status(400).json({ error: "serviceId must belong to your own employing centre" });
+      return;
+    }
+  }
+
+  const [updated] = await db
+    .update(professionalAvailabilityTable)
+    .set({ serviceId: parsed.data.serviceId, updatedAt: new Date() })
+    .where(eq(professionalAvailabilityTable.id, templateId))
+    .returning();
+
+  res.json(updated);
 });
 
 router.get("/professionals/:id/availability", async (req: Request, res: Response): Promise<void> => {

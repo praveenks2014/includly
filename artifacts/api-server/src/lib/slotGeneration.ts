@@ -40,6 +40,7 @@ interface CandidateSlot {
   endTime: string;
   durationMins: number;
   priceInr: number;
+  serviceId: number | null;
   generatedFromTemplateId: number;
 }
 
@@ -101,6 +102,7 @@ export async function runSlotGenerationJob(): Promise<void> {
               endTime: slotEnd,
               durationMins: tpl.slotDurationMinutes,
               priceInr: tpl.priceInr,
+              serviceId: tpl.serviceId,
               generatedFromTemplateId: tpl.id,
             });
           }
