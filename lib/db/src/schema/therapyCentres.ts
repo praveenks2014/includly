@@ -263,8 +263,21 @@ export const therapyBookingsTable = pgTable("therapy_bookings", {
   endOtp: text("end_otp"),
   otpIssuedAt: timestamp("otp_issued_at", { withTimezone: true }),
   otpAttempts: integer("otp_attempts").notNull().default(0),
+  // Locked after OTP_MAX_ATTEMPTS wrong tries — same mechanism as
+  // sessionBookingsTable's own otpLockedAt (see sessionsV2.ts's start-otp/
+  // end-otp), ported here rather than reused directly since this is a
+  // different table.
+  otpLockedAt: timestamp("otp_locked_at", { withTimezone: true }),
   startedAt: timestamp("started_at", { withTimezone: true }),
   completedAt: timestamp("completed_at", { withTimezone: true }),
+  // Set only on a SUCCESSFUL start-otp/end-otp submission, to the
+  // submitting professional's own userId — never client-supplied, always
+  // req.userId from inside a requireRole("professional") + ownership-
+  // checked handler, so this can never resolve to a centre admin's
+  // account. This is the actual record a real attendance dispute leans
+  // on: who confirmed the session started/ended, not just that it did.
+  startConfirmedByUserId: integer("start_confirmed_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
+  endConfirmedByUserId: integer("end_confirmed_by_user_id").references(() => usersTable.id, { onDelete: "set null" }),
   sessionNote: text("session_note"),
   sharedConcernIds: text("shared_concern_ids"),
   consentSharedProfile: boolean("consent_shared_profile").notNull().default(false),
