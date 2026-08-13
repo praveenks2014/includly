@@ -12,6 +12,8 @@ import {
   priceChangeRequestsTable,
   professionalProfilesTable,
   usersTable,
+  therapyBookingsTable,
+  adminSettingsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { z } from "zod/v4";
@@ -296,6 +298,79 @@ router.post("/centres/therapist-invites/accept", ...authGuard, async (req, res):
     .where(eq(professionalProfilesTable.id, profile.id));
 
   res.json(updated);
+});
+
+// ── BOOKINGS ─────────────────────────────────────────────────────────────────
+
+// GET /centres/:id/bookings — the real content /centre/bookings needs (was
+// still falling back to the Overview tab). Centre-scoped: only the centre's
+// own owner (ownscentre) or a platform admin can see it — a centre_admin
+// for centre A gets 403 attempting centre B's bookings, same guard shape as
+// every other centre-scoped route in this file. Optional ?therapistId=
+// filters to one roster entry (therapyBookingsTable.therapistId, the same
+// centre_therapists.id every other centre-facing view already uses).
+//
+// waitingOn/isStalled cover EVERY booking here, not just stalled ones —
+// unlike GET /admin/therapy-bookings/stalled (Step 2), which is platform-
+// admin-only, spans every centre, and only returns already-stalled rows.
+// This is the centre's own day-to-day view: waitingOn tells them which OTP
+// step is next for a booking that's still in flight (confirmed = waiting on
+// start, session_started = waiting on end, anything else = null, nothing
+// pending), and isStalled/stalledDays layer the same otpStallFlagDays
+// threshold on top so urgency is visible without a second lookup.
+router.get("/centres/:id/bookings", ...authGuard, async (req, res): Promise<void> => {
+  const id = parsedId(req.params.id);
+  if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
+  if (!(await ownscentre(req.userId!, id)) && req.userRole !== "admin") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const therapistId = req.query["therapistId"] ? parsedId(req.query["therapistId"] as string) : null;
+  if (req.query["therapistId"] && !therapistId) { res.status(400).json({ error: "Invalid therapistId" }); return; }
+
+  const [settings] = await db.select({ otpStallFlagDays: adminSettingsTable.otpStallFlagDays }).from(adminSettingsTable).limit(1);
+  const stallFlagDays = settings?.otpStallFlagDays ?? 5;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - stallFlagDays);
+  const cutoffDate = cutoff.toISOString().slice(0, 10);
+  const todayDate = new Date().toISOString().slice(0, 10);
+
+  const rows = await db
+    .select({
+      id: therapyBookingsTable.id,
+      therapistId: therapyBookingsTable.therapistId,
+      therapistName: centreTherapistsTable.name,
+      serviceId: therapyBookingsTable.serviceId,
+      serviceName: centreServicesTable.name,
+      parentId: therapyBookingsTable.parentId,
+      parentName: usersTable.fullName,
+      bookedDate: therapyBookingsTable.bookedDate,
+      startTime: therapyBookingsTable.startTime,
+      endTime: therapyBookingsTable.endTime,
+      status: therapyBookingsTable.status,
+      amountInr: therapyBookingsTable.amountInr,
+      commissionInr: therapyBookingsTable.commissionInr,
+      createdAt: therapyBookingsTable.createdAt,
+    })
+    .from(therapyBookingsTable)
+    .leftJoin(centreTherapistsTable, eq(centreTherapistsTable.id, therapyBookingsTable.therapistId))
+    .innerJoin(centreServicesTable, eq(centreServicesTable.id, therapyBookingsTable.serviceId))
+    .innerJoin(usersTable, eq(usersTable.id, therapyBookingsTable.parentId))
+    .where(and(
+      eq(therapyBookingsTable.centreId, id),
+      therapistId ? eq(therapyBookingsTable.therapistId, therapistId) : undefined,
+    ))
+    .orderBy(desc(therapyBookingsTable.bookedDate), desc(therapyBookingsTable.startTime));
+
+  const result = rows.map((b) => {
+    const waitingOn = b.status === "confirmed" ? "start_confirmation" : b.status === "session_started" ? "end_confirmation" : null;
+    const isStalled = waitingOn !== null && b.bookedDate <= cutoffDate;
+    const stalledDays = isStalled ? Math.floor((new Date(todayDate).getTime() - new Date(b.bookedDate).getTime()) / (24 * 60 * 60 * 1000)) : null;
+    return { ...b, waitingOn, isStalled, stalledDays };
+  });
+
+  res.json(result);
 });
 
 // ── SERVICES ─────────────────────────────────────────────────────────────────
