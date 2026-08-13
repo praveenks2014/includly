@@ -70,12 +70,17 @@ router.use(communityAiRouter);
 router.use(resourcesRouter);
 router.use(referralsRouter);
 router.use(shadowTeacherRouter);
-// Mount therapy-bookings BEFORE the feature-gated tutorRouter/therapistRouter
-// because those routers apply a global router.use() middleware that returns
-// 404 for ALL requests (not just their own routes) when the flag is off.
-// Express sub-routers with an unconditional router.use() intercept every
-// request that reaches them, including requests destined for later-mounted
-// routers — same reason devRouter is mounted at the top of this file.
+// Mount order here no longer matters for feature-flag/role gating:
+// tutorRouter/therapistRouter/behaviorLogsRouter's own internal gates are
+// now scoped with router.use("/path", ...) instead of an unconditional
+// router.use(...), so they only ever intercept requests actually bound
+// for their own routes (see the comments in tutor.ts/therapist.ts/
+// behaviorLogs.ts). Previously an unscoped gate in any of those files
+// would 404/403 every request reaching it regardless of destination,
+// silently blocking every later-mounted router whenever a flag was off
+// or the caller wasn't a parent — that's the actual defect the Aug 12
+// "count: 1" / therapy-bookings incident traced back to. This ordering
+// is kept as-is for readability, not because it's load-bearing anymore.
 router.use(centresRouter);
 router.use(therapyBookingsRouter);
 router.use(tutorRouter);

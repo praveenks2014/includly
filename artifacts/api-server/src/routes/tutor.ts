@@ -48,7 +48,14 @@ const router: IRouter = Router();
 // share state with this one — both must be flipped together at launch.
 // Also redundant with (not a replacement for) the earlier app.ts-level
 // path check, which is the first of the two checkpoints to run.
-router.use((_req, res, next) => {
+// Scoped to "/tutor" (Express's own path-prefix matching on router.use,
+// not a hand-rolled req.path check) — this router is mounted with no path
+// prefix in routes/index.ts, so an unscoped gate here would 404 EVERY
+// request that reaches this router regardless of destination, including
+// ones bound for entirely different, later-mounted routers. This is the
+// actual defect the Aug 12 "count: 1" / therapy-bookings incident traced
+// back to — mount order no longer matters after this fix.
+router.use("/tutor", (_req, res, next) => {
   if (!SHOW_TUTOR_SEARCH) { res.status(404).json({ error: "Not found" }); return; }
   next();
 });

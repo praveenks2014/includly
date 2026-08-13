@@ -8,8 +8,14 @@ const router: IRouter = Router();
 
 // ALL behavior-log routes are parent-only — enforced here at the router level.
 // No teacher, admin, or centre_admin token ever reaches the handlers below.
-router.use(requireAuth);
-router.use(requireRole("parent"));
+// Scoped to "/behavior-logs" (Express's own path-prefix matching on
+// router.use, not a hand-rolled req.path check) — this router is mounted
+// with no path prefix in routes/index.ts (router.use(behaviorLogsRouter)),
+// so an unscoped router.use(requireRole(...)) here would 403 EVERY
+// request that reaches this router, including ones bound for entirely
+// different, later-mounted routers (e.g. platformDuesRouter, mounted
+// immediately after this one) — not just this file's own routes.
+router.use("/behavior-logs", requireAuth, requireRole("parent"));
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
