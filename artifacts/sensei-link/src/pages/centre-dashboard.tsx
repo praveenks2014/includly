@@ -77,7 +77,35 @@ interface CancellationPolicy {
   offerCompensationSlot: boolean;
 }
 
-type SidebarTab = "overview" | "therapists" | "services" | "cancellation" | "settings";
+type SidebarTab = "overview" | "bookings" | "therapists" | "services" | "cancellation" | "settings";
+
+interface CentreBooking {
+  id: number;
+  therapistId: number | null;
+  therapistName: string | null;
+  serviceId: number;
+  serviceName: string;
+  parentId: number;
+  parentName: string;
+  bookedDate: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  amountInr: number;
+  commissionInr: number;
+  waitingOn: "start_confirmation" | "end_confirmation" | null;
+  isStalled: boolean;
+  stalledDays: number | null;
+}
+
+const BOOKING_STATUS_LABEL: Record<string, { label: string; color: string }> = {
+  pending_payment: { label: "Pending payment", color: "bg-gray-100 text-gray-600 border-gray-200" },
+  confirmed: { label: "Confirmed", color: "bg-blue-50 text-blue-700 border-blue-200" },
+  session_started: { label: "In session", color: "bg-teal-50 text-teal-700 border-teal-200" },
+  session_completed: { label: "Completed", color: "bg-green-50 text-green-700 border-green-200" },
+  cancelled_by_parent: { label: "Cancelled (parent)", color: "bg-red-50 text-red-700 border-red-200" },
+  cancelled_by_centre: { label: "Cancelled (centre)", color: "bg-red-50 text-red-700 border-red-200" },
+};
 
 const THERAPY_TYPES = [
   "Occupational Therapy", "Speech Therapy", "Behavioral / ABA",
@@ -105,10 +133,12 @@ export default function CentreDashboard() {
   const queryClient = useQueryClient();
 
   const activeTab: SidebarTab = (() => {
+    if (loc.startsWith("/centre/bookings")) return "bookings";
     if (loc.startsWith("/centre/roster"))   return "therapists";
     if (loc.startsWith("/centre/services")) return "services";
     return "overview";
   })();
+  const [bookingsTherapistFilter, setBookingsTherapistFilter] = useState<string>("");
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -141,6 +171,16 @@ export default function CentreDashboard() {
       return r.ok ? r.json() : [];
     },
     enabled: !!centre?.id,
+  });
+
+  const { data: bookings = [], isLoading: bookingsLoading } = useQuery<CentreBooking[]>({
+    queryKey: ["centre-bookings", centre?.id, bookingsTherapistFilter],
+    queryFn: async () => {
+      const qs = bookingsTherapistFilter ? `?therapistId=${bookingsTherapistFilter}` : "";
+      const r = await fetchWithAuth(`/api/centres/${centre!.id}/bookings${qs}`);
+      return r.ok ? r.json() : [];
+    },
+    enabled: !!centre?.id && activeTab === "bookings",
   });
 
   const { data: policy, refetch: refetchPolicy } = useQuery<CancellationPolicy | null>({
@@ -275,6 +315,15 @@ export default function CentreDashboard() {
       <div className="px-4 sm:px-6 py-6">
         {activeTab === "overview" && centre && (
           <OverviewTab centre={centre} therapists={therapists} services={services} onSubmit={handleSubmitForReview} submitting={submitting} />
+        )}
+        {activeTab === "bookings" && centre && (
+          <BookingsTab
+            bookings={bookings}
+            isLoading={bookingsLoading}
+            therapists={therapists}
+            therapistFilter={bookingsTherapistFilter}
+            onTherapistFilterChange={setBookingsTherapistFilter}
+          />
         )}
         {activeTab === "therapists" && centre && (
           <TherapistsTab centreId={centre.id} therapists={therapists} onRefresh={refetchTherapists} />
@@ -585,6 +634,85 @@ function ChecklistItem({ done, label }: { done: boolean; label: string }) {
     <div className="flex items-center gap-2 text-sm">
       {done ? <CheckCircle2 size={15} className="text-teal-500" /> : <div className="w-[15px] h-[15px] rounded-full border-2 border-gray-300" />}
       <span className={done ? "text-gray-700" : "text-gray-400"}>{label}</span>
+    </div>
+  );
+}
+
+function BookingsTab({ bookings, isLoading, therapists, therapistFilter, onTherapistFilterChange }: {
+  bookings: CentreBooking[];
+  isLoading: boolean;
+  therapists: Therapist[];
+  therapistFilter: string;
+  onTherapistFilterChange: (v: string) => void;
+}) {
+  return (
+    <div className="max-w-3xl space-y-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-lg font-serif font-bold text-[#1A2340]">Bookings</h2>
+          <p className="text-xs text-gray-400">Every session booked at your centre, and where each one stands.</p>
+        </div>
+        <select
+          value={therapistFilter}
+          onChange={(e) => onTherapistFilterChange(e.target.value)}
+          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-[#1A2340] bg-white"
+        >
+          <option value="">All therapists</option>
+          {therapists.map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {isLoading && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center text-gray-400">
+          <Loader2 size={24} className="mx-auto mb-2 animate-spin" />
+        </div>
+      )}
+
+      {!isLoading && bookings.length === 0 && (
+        <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-10 text-center text-gray-400">
+          <Clock size={32} className="mx-auto mb-2 opacity-30" />
+          <p className="text-sm">No bookings {therapistFilter ? "for this therapist " : ""}yet.</p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {bookings.map((b) => {
+          const statusCfg = BOOKING_STATUS_LABEL[b.status] ?? { label: b.status, color: "bg-gray-100 text-gray-600 border-gray-200" };
+          return (
+            <div key={b.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="min-w-0">
+                  <p className="font-semibold text-[#1A2340]">{b.serviceName}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {b.bookedDate} · {b.startTime}–{b.endTime}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {b.therapistName ?? "Unassigned therapist"} · Parent: {b.parentName}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium ${statusCfg.color}`}>
+                    {statusCfg.label}
+                  </div>
+                  {b.isStalled && (
+                    <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium bg-orange-50 text-orange-700 border-orange-200">
+                      <AlertCircle size={12} />
+                      {b.waitingOn === "start_confirmation" ? "Never started" : "Never ended"} · {b.stalledDays}d
+                    </div>
+                  )}
+                  {!b.isStalled && b.waitingOn && (
+                    <p className="text-[11px] text-gray-400">
+                      Waiting on {b.waitingOn === "start_confirmation" ? "start" : "end"} OTP
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

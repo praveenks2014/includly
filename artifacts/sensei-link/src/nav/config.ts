@@ -85,6 +85,7 @@ export const NAV: Record<Exclude<Role, "admin">, NavItem[]> = {
   ],
   centre_admin: [
     tab("Overview", LayoutDashboard, "/centre/overview"),
+    tab("Bookings", CalendarCheck, "/centre/bookings"),
     tab("Roster", Users, "/centre/roster"),
     tab("Services", Layers, "/centre/services"),
   ],
