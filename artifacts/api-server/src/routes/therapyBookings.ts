@@ -619,6 +619,56 @@ router.get("/therapy-bookings/:id", requireAuth, async (req: Request, res: Respo
   });
 });
 
+// ── POST /therapy-bookings/:id/feedback ─────────────────────────────────────
+// Structured content into sessionNote (existing, unused column) — same
+// JSON.stringify(content) convention dailyLogs.ts uses for
+// engagementDailyLogsTable.content, not a new storage pattern. The guardrail
+// against diagnostic/clinical-assessment language is the schema shape
+// itself: these three fields are all descriptive by construction — there is
+// no field shaped like "diagnosis" or "assessment" to fill in, same
+// technique dailyLogs.ts's TeacherLogContentSchema uses (taughtToday/
+// behaviorMood/feedback/reteachAtHome). No content moderation needed
+// because there's nothing diagnostic-shaped available to write.
+// Therapist-only, same professionalProfileId ownership guard already
+// proven for start-otp/end-otp — never the centre admin, same reasoning:
+// only the person who actually ran the session can describe it. Gated to
+// session_completed — feedback can't exist for a session that never
+// happened or hasn't finished yet. POST overwrites any existing note
+// (edit-in-place), matching regenerate-otp's own "just overwrite" pattern
+// elsewhere in this file rather than adding separate create/edit endpoints.
+const SessionFeedbackBody = z.object({
+  sessionCovered: z.string().min(1).max(2000),
+  childEngagement: z.string().min(1).max(2000),
+  homeActivities: z.string().max(2000).optional(),
+});
+router.post("/therapy-bookings/:id/feedback", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const bookingId = parsedId(req.params["id"] as string);
+  if (!bookingId) { res.status(400).json({ error: "Invalid booking id" }); return; }
+  const parsed = SessionFeedbackBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [prof] = await db.select({ id: professionalProfilesTable.id }).from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.userId, req.userId!));
+  if (!prof) { res.status(404).json({ error: "Professional profile not found" }); return; }
+
+  const [booking] = await db.select().from(therapyBookingsTable)
+    .where(and(eq(therapyBookingsTable.id, bookingId), eq(therapyBookingsTable.professionalId, prof.id)));
+  if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+  if (booking.status !== "session_completed") {
+    res.status(400).json({ error: "Feedback can only be submitted for a completed session" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(therapyBookingsTable)
+    .set({ sessionNote: JSON.stringify(parsed.data), updatedAt: new Date() })
+    .where(eq(therapyBookingsTable.id, bookingId))
+    .returning();
+
+  res.json(updated);
+});
+
 // ── POST /therapy-bookings/:id/start-otp ────────────────────────────────────
 // Ported from sessionsV2.ts's start-otp control flow verbatim (lock check
 // -> expiry check+regen -> mismatch/attempt-increment/lock+alert -> success

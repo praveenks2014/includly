@@ -352,6 +352,7 @@ router.get("/centres/:id/bookings", ...authGuard, async (req, res): Promise<void
       amountInr: therapyBookingsTable.amountInr,
       commissionInr: therapyBookingsTable.commissionInr,
       createdAt: therapyBookingsTable.createdAt,
+      sessionNote: therapyBookingsTable.sessionNote,
     })
     .from(therapyBookingsTable)
     .leftJoin(centreTherapistsTable, eq(centreTherapistsTable.id, therapyBookingsTable.therapistId))
@@ -363,11 +364,14 @@ router.get("/centres/:id/bookings", ...authGuard, async (req, res): Promise<void
     ))
     .orderBy(desc(therapyBookingsTable.bookedDate), desc(therapyBookingsTable.startTime));
 
-  const result = rows.map((b) => {
+  const result = rows.map(({ sessionNote, ...b }) => {
     const waitingOn = b.status === "confirmed" ? "start_confirmation" : b.status === "session_started" ? "end_confirmation" : null;
     const isStalled = waitingOn !== null && b.bookedDate <= cutoffDate;
     const stalledDays = isStalled ? Math.floor((new Date(todayDate).getTime() - new Date(b.bookedDate).getTime()) / (24 * 60 * 60 * 1000)) : null;
-    return { ...b, waitingOn, isStalled, stalledDays };
+    // List summary only — the note's own content lives behind
+    // GET /therapy-bookings/:id, same "list vs detail" split already used
+    // for OTP codes on that route.
+    return { ...b, waitingOn, isStalled, stalledDays, hasFeedback: sessionNote !== null };
   });
 
   res.json(result);
