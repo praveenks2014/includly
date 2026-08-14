@@ -18,6 +18,7 @@ import {
   therapistEngagementSessionsTable,
   therapyCentresTable,
   centreServicesTable,
+  therapyBookingsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { generateOtp } from "../lib/otp";
@@ -253,7 +254,31 @@ router.get("/professionals/:id/bookable-slots", async (req: Request, res: Respon
       ),
     );
 
-  const bookedTimes = new Set(existingBookings.map((b) => b.startTime));
+  // A centre-employed professional's calendar is the SAME
+  // professionalAvailabilityTable/slotsTable every professional uses (see
+  // the therapyBookingsTable migration's own reasoning) — but their
+  // CONFIRMED bookings live in therapyBookingsTable, not
+  // sessionBookingsTable. Without this second exclusion query, a slot
+  // already confirmed via /therapy-bookings/book would still show as
+  // "open" here — the write-path lock in that endpoint would still
+  // correctly reject an actual double-booking attempt, but the display
+  // would misleadingly offer an already-taken slot in the meantime. Found
+  // during the parent-facing-UI audit, fixed before building on top of it.
+  const existingTherapyBookings = await db
+    .select({
+      startTime: therapyBookingsTable.startTime,
+      endTime: therapyBookingsTable.endTime,
+    })
+    .from(therapyBookingsTable)
+    .where(
+      and(
+        eq(therapyBookingsTable.professionalId, profId),
+        eq(therapyBookingsTable.bookedDate, dateStr),
+        eq(therapyBookingsTable.status, "confirmed"),
+      ),
+    );
+
+  const bookedTimes = new Set([...existingBookings, ...existingTherapyBookings].map((b) => b.startTime));
 
   // Recurring commitments (all 3 verticals) + individually-scheduled
   // tutor/therapist sessions.

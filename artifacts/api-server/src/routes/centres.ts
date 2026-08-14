@@ -112,6 +112,54 @@ router.get("/centres/mine", ...centreAdminGuard, async (req, res): Promise<void>
   res.json(full);
 });
 
+// Public-safe field set for parent-facing browse/detail — deliberately
+// excludes ownerUserId, verification internals (verificationNotes,
+// verifiedBy, rejectedBy, rejectedReason), commissionPctOverride/
+// platformDefaultCommissionPct, registrationNumbers, certificatesJson, and
+// adminProfessionalProfileId. Must stay registered AFTER /centres/mine so
+// "mine" is never captured as :id.
+const publicCentreFields = {
+  id: therapyCentresTable.id,
+  name: therapyCentresTable.name,
+  description: therapyCentresTable.description,
+  address: therapyCentresTable.address,
+  city: therapyCentresTable.city,
+  state: therapyCentresTable.state,
+  pincode: therapyCentresTable.pincode,
+  latitude: therapyCentresTable.latitude,
+  longitude: therapyCentresTable.longitude,
+  phone: therapyCentresTable.phone,
+  email: therapyCentresTable.email,
+  website: therapyCentresTable.website,
+  photos: therapyCentresTable.photos,
+  languagesSpoken: therapyCentresTable.languagesSpoken,
+  therapyTypesOffered: therapyCentresTable.therapyTypesOffered,
+  operatingHoursJson: therapyCentresTable.operatingHoursJson,
+  yearsInOperation: therapyCentresTable.yearsInOperation,
+} as const;
+
+// ── GET /centres — public browse list, live centres only ────────────────────
+router.get("/centres", ...authGuard, async (_req, res): Promise<void> => {
+  const rows = await db
+    .select(publicCentreFields)
+    .from(therapyCentresTable)
+    .where(eq(therapyCentresTable.status, "live"))
+    .orderBy(therapyCentresTable.name);
+  res.json(rows);
+});
+
+// ── GET /centres/:id — public centre detail, live centres only ──────────────
+router.get("/centres/:id", ...authGuard, async (req, res): Promise<void> => {
+  const id = parsedId(req.params.id);
+  if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [centre] = await db
+    .select(publicCentreFields)
+    .from(therapyCentresTable)
+    .where(and(eq(therapyCentresTable.id, id), eq(therapyCentresTable.status, "live")));
+  if (!centre) { res.status(404).json({ error: "Centre not found" }); return; }
+  res.json(centre);
+});
+
 // ── POST /centres — create new centre ───────────────────────────────────────
 router.post("/centres", ...centreAdminGuard, async (req, res): Promise<void> => {
   const parsed = UpsertCentreBody.safeParse(req.body);
@@ -183,10 +231,43 @@ router.post("/centres/:id/link-admin-credential", ...centreAdminGuard, async (re
 
 // ── THERAPISTS ───────────────────────────────────────────────────────────────
 
+// Enriched with the real sub-account's professionalProfilesTable fields
+// (left-joined, null until an invited therapist actually accepts and
+// completes their own profile) — this is what lets the parent-facing
+// centre-browse UI reuse ProfessionalCard directly instead of a second,
+// roster-only card component. `id` stays the roster row id (unchanged,
+// what the centre-admin edit/delete actions already key on);
+// `professionalProfileId` is the real id booking/ProfessionalCard need —
+// callers must not confuse the two.
 router.get("/centres/:id/therapists", ...authGuard, async (req, res): Promise<void> => {
   const id = parsedId(req.params.id);
   if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
-  const rows = await db.select().from(centreTherapistsTable).where(eq(centreTherapistsTable.centreId, id)).orderBy(centreTherapistsTable.createdAt);
+  const rows = await db
+    .select({
+      id: centreTherapistsTable.id,
+      centreId: centreTherapistsTable.centreId,
+      name: centreTherapistsTable.name,
+      photoUrl: centreTherapistsTable.photoUrl,
+      specializations: centreTherapistsTable.specializations,
+      qualifications: centreTherapistsTable.qualifications,
+      yearsExperience: centreTherapistsTable.yearsExperience,
+      isActive: centreTherapistsTable.isActive,
+      accountStatus: centreTherapistsTable.accountStatus,
+      professionalProfileId: centreTherapistsTable.professionalProfileId,
+      profSpecialty: professionalProfilesTable.specialty,
+      profBio: professionalProfilesTable.bio,
+      profIsVerified: professionalProfilesTable.isVerified,
+      profVerificationStatus: professionalProfilesTable.verificationStatus,
+      profAverageRating: professionalProfilesTable.averageRating,
+      profTotalRatings: professionalProfilesTable.totalRatings,
+      profPaymentActivated: professionalProfilesTable.paymentActivated,
+      profAvatarUrl: usersTable.avatarUrl,
+    })
+    .from(centreTherapistsTable)
+    .leftJoin(professionalProfilesTable, eq(professionalProfilesTable.id, centreTherapistsTable.professionalProfileId))
+    .leftJoin(usersTable, eq(usersTable.id, professionalProfilesTable.userId))
+    .where(eq(centreTherapistsTable.centreId, id))
+    .orderBy(centreTherapistsTable.createdAt);
   res.json(rows);
 });
 
