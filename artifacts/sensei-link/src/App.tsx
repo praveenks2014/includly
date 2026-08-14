@@ -44,6 +44,8 @@ import ChildOnboardingPage from "@/pages/onboarding-child";
 import OnboardStage2Page from "@/pages/onboard-stage2";
 import TherapyCentresPage from "@/pages/therapy-centres";
 import TherapyCentreDetailPage from "@/pages/therapy-centre-detail";
+import TherapyBookingsPage from "@/pages/therapy-bookings";
+import TherapyBookingDetailPage from "@/pages/therapy-booking-detail";
 
 // REQUIRED — copy verbatim per Replit-managed Clerk skill.
 // Resolves the key from window.location.hostname so the same build serves
@@ -533,6 +535,24 @@ function Router() {
             <RequireChildProfile>
               <AppShell>
                 <TherapyCentreDetailPage />
+              </AppShell>
+            </RequireChildProfile>
+          </ParentShell>
+        </Route>
+        <Route path="/therapy-bookings">
+          <ParentShell>
+            <RequireChildProfile>
+              <AppShell>
+                <TherapyBookingsPage />
+              </AppShell>
+            </RequireChildProfile>
+          </ParentShell>
+        </Route>
+        <Route path="/therapy-bookings/:id">
+          <ParentShell>
+            <RequireChildProfile>
+              <AppShell>
+                <TherapyBookingDetailPage />
               </AppShell>
             </RequireChildProfile>
           </ParentShell>

@@ -18,6 +18,7 @@
  *   2. Parent pays       → POST /therapy-bookings/verify-payment → status = confirmed
  */
 import { useState } from "react";
+import { Link } from "wouter";
 import {
   useGetBookableSlots,
   type BookableSlot,
@@ -169,6 +170,9 @@ export function CentreBookingWidget({
             </div>
           </div>
         )}
+        <Link href={`/therapy-bookings/${booking.id}`} className="block text-center text-sm text-[#2EC4A5] hover:underline">
+          View and manage this session
+        </Link>
       </div>
     );
   }

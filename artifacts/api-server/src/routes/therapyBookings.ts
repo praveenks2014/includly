@@ -588,6 +588,44 @@ router.get("/therapy-bookings/packages/purchases/mine", requireAuth, async (req:
   res.json(rows);
 });
 
+// ── GET /therapy-bookings/mine — parent's own bookings, list view ──────────
+// Same enrichment + list/detail split as GET /centres/:id/bookings (the
+// centre-admin equivalent): joined display names so the parent doesn't get
+// raw centreId/therapistId/serviceId with nothing to render, hasFeedback
+// flag only (the note's own content stays behind GET /therapy-bookings/:id,
+// same as OTPs). Unlike the centre-admin view, this spans every centre a
+// parent has ever booked with, so centreName is joined too (that view
+// never needed it — always scoped to one centre already).
+router.get("/therapy-bookings/mine", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const rows = await db
+    .select({
+      id: therapyBookingsTable.id,
+      centreId: therapyBookingsTable.centreId,
+      centreName: therapyCentresTable.name,
+      therapistId: therapyBookingsTable.therapistId,
+      therapistName: centreTherapistsTable.name,
+      serviceId: therapyBookingsTable.serviceId,
+      serviceName: centreServicesTable.name,
+      professionalId: therapyBookingsTable.professionalId,
+      bookedDate: therapyBookingsTable.bookedDate,
+      startTime: therapyBookingsTable.startTime,
+      endTime: therapyBookingsTable.endTime,
+      status: therapyBookingsTable.status,
+      amountInr: therapyBookingsTable.amountInr,
+      createdAt: therapyBookingsTable.createdAt,
+      sessionNote: therapyBookingsTable.sessionNote,
+    })
+    .from(therapyBookingsTable)
+    .innerJoin(therapyCentresTable, eq(therapyCentresTable.id, therapyBookingsTable.centreId))
+    .leftJoin(centreTherapistsTable, eq(centreTherapistsTable.id, therapyBookingsTable.therapistId))
+    .innerJoin(centreServicesTable, eq(centreServicesTable.id, therapyBookingsTable.serviceId))
+    .where(eq(therapyBookingsTable.parentId, req.userId!))
+    .orderBy(desc(therapyBookingsTable.bookedDate), desc(therapyBookingsTable.startTime));
+
+  const result = rows.map(({ sessionNote, ...b }) => ({ ...b, hasFeedback: sessionNote !== null }));
+  res.json(result);
+});
+
 // ── GET /therapy-bookings/:id ───────────────────────────────────────────────
 // Mirrors GET /sessions-v2/:id's access-check + showOtps shape exactly —
 // admin/parent/participating-professional only; startOtp/endOtp stripped
@@ -612,8 +650,21 @@ router.get("/therapy-bookings/:id", requireAuth, async (req: Request, res: Respo
 
   const showOtps = isParent && ["confirmed", "session_started"].includes(booking.status ?? "");
 
+  // Display names only -- three cheap PK lookups rather than a joined
+  // query, since every id is already known from the single row above.
+  // Zero frontend consumers of this endpoint existed before this change,
+  // so widening the response shape here is safe -- nothing to break.
+  const [centre] = await db.select({ name: therapyCentresTable.name }).from(therapyCentresTable).where(eq(therapyCentresTable.id, booking.centreId));
+  const [service] = await db.select({ name: centreServicesTable.name }).from(centreServicesTable).where(eq(centreServicesTable.id, booking.serviceId));
+  const therapist = booking.therapistId
+    ? (await db.select({ name: centreTherapistsTable.name }).from(centreTherapistsTable).where(eq(centreTherapistsTable.id, booking.therapistId)))[0]
+    : null;
+
   res.json({
     ...booking,
+    centreName: centre?.name ?? null,
+    serviceName: service?.name ?? null,
+    therapistName: therapist?.name ?? null,
     startOtp: showOtps ? booking.startOtp : undefined,
     endOtp: showOtps ? booking.endOtp : undefined,
   });
