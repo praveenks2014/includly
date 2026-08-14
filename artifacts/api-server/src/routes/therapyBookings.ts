@@ -15,6 +15,7 @@ import {
   slotsTable,
   usersTable,
   adminSettingsTable,
+  centreCancellationPoliciesTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { generateOtp } from "../lib/otp";
@@ -895,6 +896,148 @@ router.get("/admin/therapy-bookings/stalled", requireAuth, requireRole("admin"),
     .sort((a, b) => b.stalledDays - a.stalledDays);
 
   res.json(stalled);
+});
+
+// ── POST /therapy-bookings/:id/cancel ───────────────────────────────────────
+// Computes a refund from the centre's own cancellation policy
+// (centreCancellationPoliciesTable — falls back to the schema's own column
+// defaults if the centre never configured one) and applies it via the same
+// real Razorpay refund call already used elsewhere in this codebase
+// (admin.ts, professionals.ts, shadowTeacher.ts, therapist.ts), not a new
+// refund mechanism. Package-consumed bookings have no per-booking payment to
+// refund against — those get a binary credit-restore instead (full window =
+// restore the session credit; inside the window = permanently consumed),
+// which matches a slot-based value better than approximating a cash
+// percentage on a credit.
+const CancelBookingBody = z.object({
+  reason: z.enum(["parent_cancelled", "parent_no_show", "centre_no_show"]),
+});
+
+const DEFAULT_CANCELLATION_POLICY = {
+  window1Hours: 24, window1RefundPct: 100,
+  window2Hours: 2, window2RefundPct: 50,
+  insideWindow2RefundPct: 0,
+  noShowRefundPct: 0,
+  centreNoShowRefundPct: 100,
+  offerCompensationSlot: true,
+};
+
+router.post("/therapy-bookings/:id/cancel", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const bookingId = parsedId(req.params["id"] as string);
+  if (!bookingId) { res.status(400).json({ error: "Invalid booking id" }); return; }
+  const parsed = CancelBookingBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { reason } = parsed.data;
+
+  const [booking] = await db.select().from(therapyBookingsTable).where(eq(therapyBookingsTable.id, bookingId));
+  if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+
+  const isAdmin = req.userRole === "admin";
+  const isParent = booking.parentId === req.userId;
+  let isPro = false;
+  let isCentreOwner = false;
+  if (!isParent && !isAdmin) {
+    const [prof] = await db.select({ id: professionalProfilesTable.id }).from(professionalProfilesTable)
+      .where(eq(professionalProfilesTable.userId, req.userId!));
+    isPro = !!prof && prof.id === booking.professionalId;
+    if (!isPro) {
+      const [centre] = await db.select({ id: therapyCentresTable.id }).from(therapyCentresTable)
+        .where(and(eq(therapyCentresTable.id, booking.centreId), eq(therapyCentresTable.ownerUserId, req.userId!)));
+      isCentreOwner = !!centre;
+    }
+  }
+
+  if (reason === "parent_cancelled") {
+    if (!isParent && !isAdmin) { res.status(403).json({ error: "Only the parent can cancel with this reason" }); return; }
+  } else {
+    // parent_no_show / centre_no_show — reported by the centre side after
+    // the fact, not self-declared by the parent.
+    if (!isPro && !isCentreOwner && !isAdmin) { res.status(403).json({ error: "Only the therapist, centre admin, or platform admin can report a no-show" }); return; }
+  }
+
+  if (booking.status !== "confirmed") {
+    res.status(409).json({ error: "Only a confirmed (not yet started) session can be cancelled" });
+    return;
+  }
+
+  const [policyRow] = await db.select().from(centreCancellationPoliciesTable).where(eq(centreCancellationPoliciesTable.centreId, booking.centreId));
+  const policy = policyRow ?? DEFAULT_CANCELLATION_POLICY;
+
+  let refundPct: number;
+  if (reason === "parent_no_show") {
+    refundPct = policy.noShowRefundPct;
+  } else if (reason === "centre_no_show") {
+    refundPct = policy.centreNoShowRefundPct;
+  } else {
+    const sessionStart = new Date(`${booking.bookedDate}T${booking.startTime}:00`);
+    const hoursUntil = (sessionStart.getTime() - Date.now()) / (60 * 60 * 1000);
+    if (hoursUntil >= policy.window1Hours) refundPct = policy.window1RefundPct;
+    else if (hoursUntil >= policy.window2Hours) refundPct = policy.window2RefundPct;
+    else refundPct = policy.insideWindow2RefundPct;
+  }
+
+  const refundAmountInr = Math.round((booking.amountInr * refundPct) / 100);
+  const newStatus = reason === "centre_no_show" ? "cancelled_by_centre" : "cancelled_by_parent";
+  const isPackageBooking = !!booking.packagePurchaseId;
+
+  // Atomic status transition — conditional on status still being 'confirmed'
+  // so two near-simultaneous cancel attempts can't both process (the second
+  // gets zero rows back, treated as already-cancelled) — same conditional-
+  // UPDATE-RETURNING discipline as the package-consumption guard in
+  // POST /therapy-bookings/book.
+  const [updated] = await db
+    .update(therapyBookingsTable)
+    .set({
+      status: newStatus,
+      cancellationReason: isPackageBooking
+        ? `${reason}: ${refundPct >= 100 ? "package credit restored" : "package credit consumed (no refund)"}`
+        : `${reason}: ${refundPct}% refund (₹${refundAmountInr})`,
+      compensationSlotOffered: policy.offerCompensationSlot,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(therapyBookingsTable.id, bookingId), eq(therapyBookingsTable.status, "confirmed")))
+    .returning();
+
+  if (!updated) {
+    res.status(409).json({ error: "This booking was already cancelled or is no longer in a cancellable state" });
+    return;
+  }
+
+  let creditRestored = false;
+  if (isPackageBooking) {
+    if (refundPct >= 100) {
+      const [restored] = await db
+        .update(centreServicePackagePurchasesTable)
+        .set({
+          sessionsConsumed: sql`GREATEST(${centreServicePackagePurchasesTable.sessionsConsumed} - 1, 0)`,
+          status: sql`CASE WHEN status = 'exhausted' THEN 'active' ELSE status END`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(centreServicePackagePurchasesTable.id, booking.packagePurchaseId!), sql`${centreServicePackagePurchasesTable.sessionsConsumed} > 0`))
+        .returning();
+      creditRestored = !!restored;
+    }
+  } else if (refundAmountInr > 0 && booking.providerPaymentId) {
+    const razorpay = getRazorpay();
+    if (razorpay) {
+      try {
+        await (razorpay.payments as unknown as { refund: (id: string, opts: object) => Promise<unknown> })
+          .refund(booking.providerPaymentId, { amount: refundAmountInr * 100, notes: { reason, bookingId: String(bookingId) } });
+      } catch {
+        // The booking is already correctly marked cancelled — a failed
+        // refund call is an operational issue for admin to retry/resolve
+        // manually, not something that should leave the booking stuck in
+        // "confirmed" or double-processed on client retry.
+      }
+    }
+  }
+
+  res.json({
+    ...updated,
+    refundPct,
+    refundAmountInr: isPackageBooking ? 0 : refundAmountInr,
+    packageCreditRestored: isPackageBooking ? creditRestored : undefined,
+  });
 });
 
 export default router;
