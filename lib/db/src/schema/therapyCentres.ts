@@ -283,6 +283,15 @@ export const therapyBookingsTable = pgTable("therapy_bookings", {
   consentSharedProfile: boolean("consent_shared_profile").notNull().default(false),
   cancellationReason: text("cancellation_reason"),
   compensationSlotOffered: boolean("compensation_slot_offered").notNull().default(false),
+  // Set when a cancellation-triggered Razorpay refund call itself fails
+  // (network error, invalid/expired payment id, gateway rejection, etc.) —
+  // the booking is still correctly marked cancelled (that must never be
+  // blocked on this), but the refund genuinely never reached the payment
+  // gateway. Lazy-surfaced via GET /admin/therapy-bookings/refund-failed,
+  // same "no silent resolution" principle as isBookingStalled — an admin
+  // must see and act on this, never have it silently disappear.
+  refundFailedAt: timestamp("refund_failed_at", { withTimezone: true }),
+  refundFailureReason: text("refund_failure_reason"),
   releasedAt: timestamp("released_at", { withTimezone: true }),
   releasedBy: integer("released_by"),
   priceSnapshotJson: text("price_snapshot_json"),

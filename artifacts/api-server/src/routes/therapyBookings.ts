@@ -21,6 +21,7 @@ import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { generateOtp } from "../lib/otp";
 import { postDuesCharge } from "../lib/platformDues";
 import { createInAppNotification } from "../lib/notificationService";
+import { logger } from "../lib/logger";
 import { z } from "zod/v4";
 
 // Same constant sessionsV2.ts uses for sessionBookingsTable's OTP lockout —
@@ -1023,11 +1024,24 @@ router.post("/therapy-bookings/:id/cancel", requireAuth, async (req: Request, re
       try {
         await (razorpay.payments as unknown as { refund: (id: string, opts: object) => Promise<unknown> })
           .refund(booking.providerPaymentId, { amount: refundAmountInr * 100, notes: { reason, bookingId: String(bookingId) } });
-      } catch {
-        // The booking is already correctly marked cancelled — a failed
-        // refund call is an operational issue for admin to retry/resolve
-        // manually, not something that should leave the booking stuck in
-        // "confirmed" or double-processed on client retry.
+      } catch (err: unknown) {
+        // The booking is already correctly marked cancelled — that must
+        // never be blocked on this. But a failed refund must never fail
+        // SILENTLY: log it with enough detail to act on, and flag the
+        // booking itself so it surfaces on GET /admin/therapy-bookings/
+        // refund-failed — same "no silent resolution, admin must see and
+        // act" principle as isBookingStalled. Without this, a parent's
+        // cancellation would appear to fully succeed while the refund
+        // never actually reached Razorpay at all.
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        logger.error(
+          { bookingId, providerPaymentId: booking.providerPaymentId, attemptedAmountInr: refundAmountInr, err: errorMessage },
+          "Cancellation refund failed — booking cancelled but refund did not reach Razorpay",
+        );
+        await db
+          .update(therapyBookingsTable)
+          .set({ refundFailedAt: new Date(), refundFailureReason: errorMessage, updatedAt: new Date() })
+          .where(eq(therapyBookingsTable.id, bookingId));
       }
     }
   }
@@ -1038,6 +1052,61 @@ router.post("/therapy-bookings/:id/cancel", requireAuth, async (req: Request, re
     refundAmountInr: isPackageBooking ? 0 : refundAmountInr,
     packageCreditRestored: isPackageBooking ? creditRestored : undefined,
   });
+});
+
+// ── GET /admin/therapy-bookings/refund-failed ───────────────────────────────
+// Lazy, evaluated-on-read surfacing — no cron, no auto-retry. A failed
+// refund is exactly the kind of thing that must never silently resolve
+// itself; an admin has to see it and take real action (retry via Razorpay's
+// dashboard directly, or handle it another way), same principle as
+// GET /admin/therapy-bookings/stalled. Rich response for the same reason
+// that one is: an admin needs to be able to act without a second lookup.
+router.get("/admin/therapy-bookings/refund-failed", requireAuth, requireRole("admin"), async (req: Request, res: Response): Promise<void> => {
+  const rows = await db
+    .select({
+      id: therapyBookingsTable.id,
+      centreId: therapyBookingsTable.centreId,
+      centreName: therapyCentresTable.name,
+      parentId: therapyBookingsTable.parentId,
+      parentName: usersTable.fullName,
+      parentEmail: usersTable.email,
+      bookedDate: therapyBookingsTable.bookedDate,
+      startTime: therapyBookingsTable.startTime,
+      amountInr: therapyBookingsTable.amountInr,
+      cancellationReason: therapyBookingsTable.cancellationReason,
+      providerPaymentId: therapyBookingsTable.providerPaymentId,
+      refundFailedAt: therapyBookingsTable.refundFailedAt,
+      refundFailureReason: therapyBookingsTable.refundFailureReason,
+    })
+    .from(therapyBookingsTable)
+    .innerJoin(therapyCentresTable, eq(therapyCentresTable.id, therapyBookingsTable.centreId))
+    .innerJoin(usersTable, eq(usersTable.id, therapyBookingsTable.parentId))
+    .where(sql`${therapyBookingsTable.refundFailedAt} IS NOT NULL`)
+    .orderBy(desc(therapyBookingsTable.refundFailedAt));
+
+  res.json(rows);
+});
+
+// ── PATCH /admin/therapy-bookings/:id/mark-refund-resolved ─────────────────
+// Clears the flag once an admin has actually handled the refund by some
+// other means (typically Razorpay's own dashboard) — this endpoint never
+// itself moves money, it only closes out the surfaced item, mirroring the
+// disputes table's own "records the decision, doesn't execute it" design.
+router.patch("/admin/therapy-bookings/:id/mark-refund-resolved", requireAuth, requireRole("admin"), async (req: Request, res: Response): Promise<void> => {
+  const bookingId = parsedId(req.params["id"] as string);
+  if (!bookingId) { res.status(400).json({ error: "Invalid booking id" }); return; }
+
+  const [booking] = await db.select().from(therapyBookingsTable).where(eq(therapyBookingsTable.id, bookingId));
+  if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+  if (!booking.refundFailedAt) { res.status(409).json({ error: "This booking has no outstanding refund failure" }); return; }
+
+  const [updated] = await db
+    .update(therapyBookingsTable)
+    .set({ refundFailedAt: null, refundFailureReason: null, updatedAt: new Date() })
+    .where(eq(therapyBookingsTable.id, bookingId))
+    .returning();
+
+  res.json(updated);
 });
 
 export default router;
