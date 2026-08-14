@@ -625,6 +625,11 @@ export const GetProfessionalResponse = zod.object({
   // profile should show (professional-profile.tsx's widget-swap), not the
   // specialty string or the specialtyToVertical() display heuristic.
   vertical: zod.enum(["shadow_teacher", "home_tutor", "therapist", "coaching"]).nullish(),
+  // Non-null means this professional is a centre-employed therapist —
+  // POST /sessions/book rejects them server-side; this is the frontend's
+  // signal to never render BookingWidgetV2 for them in the first place,
+  // same discipline as the "widget-swap" comment on `vertical` above.
+  employingCentreId: zod.number().nullish(),
 });
 
 /**

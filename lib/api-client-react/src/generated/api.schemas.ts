@@ -309,6 +309,13 @@ export interface ProfessionalDetail {
    * @nullable
    */
   vertical?: ProfessionalProfileVertical | null;
+  /**
+   * Non-null means this professional is a centre-employed therapist —
+   * POST /sessions/book rejects them server-side; this is the frontend's
+   * signal to never render BookingWidgetV2 for them in the first place.
+   * @nullable
+   */
+  employingCentreId?: number | null;
 }
 
 export interface ProfessionalSearchResult {

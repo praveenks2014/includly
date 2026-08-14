@@ -601,7 +601,21 @@ export default function ProfessionalProfilePage() {
                 (no registered engagement vertical at all) also falls
                 through to BookingWidgetV2 unchanged. */}
             {isSignedIn && (
-              p.vertical === "shadow_teacher" ? <ShadowTeacherRequestWidget />
+              // Checked FIRST, ahead of the vertical branches below — a
+              // centre-employed therapist can still have vertical:"therapist"
+              // like any other, but POST /sessions/book rejects them
+              // server-side (no concept of centre pricing/package
+              // consumption/postDuesCharge settlement/therapyBookingsTable
+              // OTP/cancellation-policy/feedback). Never show a booking
+              // widget that would fail at submission — the parent-facing
+              // centre booking flow itself is separately scoped, not yet
+              // built.
+              p.employingCentreId ? (
+                <div className="bg-muted/40 border border-border rounded-xl p-4 text-sm text-muted-foreground">
+                  This specialist is part of a therapy centre. Centre booking is coming soon — check back shortly.
+                </div>
+              )
+              : p.vertical === "shadow_teacher" ? <ShadowTeacherRequestWidget />
               : p.vertical === "home_tutor" ? <VerticalRequestWidget vertical="tutor" />
               : p.vertical === "therapist" && !NON_ENGAGEMENT_SPECIALTIES.has(p.specialty)
                 ? <VerticalRequestWidget vertical="therapist" />

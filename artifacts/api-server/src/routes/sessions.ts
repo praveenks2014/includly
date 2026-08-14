@@ -702,9 +702,29 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
   }
 
   const [prof] = await db
-    .select({ specialty: professionalProfilesTable.specialty })
+    .select({ specialty: professionalProfilesTable.specialty, employingCentreId: professionalProfilesTable.employingCentreId })
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.id, professionalId));
+
+  // URGENT fix — this endpoint has no concept of centre pricing, package
+  // consumption, resolvedCommissionPct settlement (postDuesCharge), OTP via
+  // therapyBookingsTable's fields, cancellation-policy enforcement, or
+  // feedback — all of that was built exclusively against
+  // therapyBookingsTable. A centre-employed professional must book through
+  // /therapy-bookings/book instead. Rejecting rather than internally
+  // redirecting: the two endpoints have genuinely different request/
+  // response shapes (package-purchase branch, different verify-payment
+  // endpoint), and the calling frontend (BookingWidgetV2) has no ability to
+  // render a therapy-bookings response correctly even if this silently
+  // redirected — a clear rejection is more honest than a response shape
+  // the client can't actually handle.
+  if (prof?.employingCentreId) {
+    res.status(400).json({
+      error: "This professional is employed by a therapy centre and must be booked through the centre's own booking flow, not this one.",
+      code: "CENTRE_EMPLOYED_PROFESSIONAL",
+    });
+    return;
+  }
 
   // Credit-based booking for therapists and psychologists
   const isCreditSpecialty = prof && (
