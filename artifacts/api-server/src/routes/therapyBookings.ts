@@ -219,7 +219,7 @@ router.post("/therapy-bookings/book", requireAuth, async (req: Request, res: Res
           .update(centreServicePackagePurchasesTable)
           .set({
             sessionsConsumed: sql`${centreServicePackagePurchasesTable.sessionsConsumed} + 1`,
-            status: sql`CASE WHEN ${centreServicePackagePurchasesTable.sessionsConsumed} + 1 >= ${centreServicePackagePurchasesTable.sessionsTotal} THEN 'exhausted' ELSE 'active' END`,
+            status: sql`CASE WHEN ${centreServicePackagePurchasesTable.sessionsConsumed} + 1 >= ${centreServicePackagePurchasesTable.sessionsTotal} THEN 'exhausted'::package_purchase_status ELSE 'active'::package_purchase_status END`,
             updatedAt: new Date(),
           })
           .where(and(
@@ -1061,7 +1061,7 @@ router.post("/therapy-bookings/:id/cancel", requireAuth, async (req: Request, re
         .update(centreServicePackagePurchasesTable)
         .set({
           sessionsConsumed: sql`GREATEST(${centreServicePackagePurchasesTable.sessionsConsumed} - 1, 0)`,
-          status: sql`CASE WHEN status = 'exhausted' THEN 'active' ELSE status END`,
+          status: sql`CASE WHEN status = 'exhausted' THEN 'active'::package_purchase_status ELSE status END`,
           updatedAt: new Date(),
         })
         .where(and(eq(centreServicePackagePurchasesTable.id, booking.packagePurchaseId!), sql`${centreServicePackagePurchasesTable.sessionsConsumed} > 0`))
