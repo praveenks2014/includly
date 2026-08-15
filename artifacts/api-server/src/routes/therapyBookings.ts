@@ -626,6 +626,45 @@ router.get("/therapy-bookings/mine", requireAuth, async (req: Request, res: Resp
   res.json(result);
 });
 
+// ── GET /therapy-bookings/mine-as-professional — therapist's own bookings ──
+// Same shape as GET /therapy-bookings/mine, filtered by professionalId
+// (looked up from req.userId, never client-supplied) instead of parentId.
+// parentName joined instead of therapistName -- the caller IS the
+// therapist, so their own name is redundant; the parent's name is what
+// they actually need to see for each session.
+router.get("/therapy-bookings/mine-as-professional", requireAuth, requireRole("professional"), async (req: Request, res: Response): Promise<void> => {
+  const [prof] = await db.select({ id: professionalProfilesTable.id }).from(professionalProfilesTable)
+    .where(eq(professionalProfilesTable.userId, req.userId!));
+  if (!prof) { res.status(404).json({ error: "Professional profile not found" }); return; }
+
+  const rows = await db
+    .select({
+      id: therapyBookingsTable.id,
+      centreId: therapyBookingsTable.centreId,
+      centreName: therapyCentresTable.name,
+      parentId: therapyBookingsTable.parentId,
+      parentName: usersTable.fullName,
+      serviceId: therapyBookingsTable.serviceId,
+      serviceName: centreServicesTable.name,
+      bookedDate: therapyBookingsTable.bookedDate,
+      startTime: therapyBookingsTable.startTime,
+      endTime: therapyBookingsTable.endTime,
+      status: therapyBookingsTable.status,
+      amountInr: therapyBookingsTable.amountInr,
+      createdAt: therapyBookingsTable.createdAt,
+      sessionNote: therapyBookingsTable.sessionNote,
+    })
+    .from(therapyBookingsTable)
+    .innerJoin(therapyCentresTable, eq(therapyCentresTable.id, therapyBookingsTable.centreId))
+    .innerJoin(centreServicesTable, eq(centreServicesTable.id, therapyBookingsTable.serviceId))
+    .innerJoin(usersTable, eq(usersTable.id, therapyBookingsTable.parentId))
+    .where(eq(therapyBookingsTable.professionalId, prof.id))
+    .orderBy(desc(therapyBookingsTable.bookedDate), desc(therapyBookingsTable.startTime));
+
+  const result = rows.map(({ sessionNote, ...b }) => ({ ...b, hasFeedback: sessionNote !== null }));
+  res.json(result);
+});
+
 // ── GET /therapy-bookings/:id ───────────────────────────────────────────────
 // Mirrors GET /sessions-v2/:id's access-check + showOtps shape exactly —
 // admin/parent/participating-professional only; startOtp/endOtp stripped

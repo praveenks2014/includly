@@ -54,6 +54,7 @@ import { RecurringScheduleEditor } from "@/components/RecurringScheduleEditor";
 import { type RecurringScheduleSlot, checkAgainstGeneralAvailability, DEFAULT_SCHEDULE_WARNING_BUFFER_MINUTES } from "@/lib/recurringSchedule";
 import { VerticalCandidacyCard, type VerticalCandidacy } from "@/components/VerticalCandidacyCard";
 import { VerticalEngagementCard, type VerticalEngagement } from "@/components/VerticalEngagementCard";
+import { TherapyBookingCard, type TherapyBookingSummary } from "@/components/TherapyBookingCard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ProTab = "home" | "profile" | "availability" | "bookings" | "earnings" | "certifications" | "verification" | "notifications" | "messages" | "engagement" | "enquiries" | "vertical-requests";
@@ -1480,6 +1481,18 @@ function BookingsTab() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<"upcoming" | "past" | "all">("upcoming");
 
+  // Centre-employed professionals only -- fetches empty for everyone else,
+  // so the section below simply doesn't render rather than needing a
+  // separate employingCentreId check.
+  const { data: therapyBookings = [] } = useQuery({
+    queryKey: ["therapy-bookings", "mine-as-professional"],
+    queryFn: async () => {
+      const res = await fetchWithAuth("/api/therapy-bookings/mine-as-professional");
+      if (!res.ok) return [] as TherapyBookingSummary[];
+      return (await res.json()) as TherapyBookingSummary[];
+    },
+  });
+
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-[#2EC4A5]" /></div>;
 
   const typedSessions = sessions as SessionBookingWithDetails[];
@@ -1491,6 +1504,16 @@ function BookingsTab() {
 
   const shown = typedSessions.filter((s) => {
     const isPast = PAST_STATUSES.includes(s.status);
+    if (filter === "upcoming") return !isPast;
+    if (filter === "past") return isPast;
+    return true;
+  });
+
+  const THERAPY_PAST_STATUSES = [
+    "session_completed", "cancelled_by_parent", "cancelled_by_centre", "refunded", "no_show_parent", "no_show_centre",
+  ];
+  const shownTherapyBookings = therapyBookings.filter((b) => {
+    const isPast = THERAPY_PAST_STATUSES.includes(b.status);
     if (filter === "upcoming") return !isPast;
     if (filter === "past") return isPast;
     return true;
@@ -1512,19 +1535,33 @@ function BookingsTab() {
         ))}
       </div>
 
-      {shown.length === 0 ? (
+      {shownTherapyBookings.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Centre Sessions</h2>
+          {shownTherapyBookings.map((b) => (
+            <TherapyBookingCard
+              key={b.id}
+              b={b}
+              onRefresh={() => queryClient.invalidateQueries({ queryKey: ["therapy-bookings"] })}
+            />
+          ))}
+        </div>
+      )}
+
+      {shown.length === 0 && shownTherapyBookings.length === 0 ? (
         <div className="bg-white border border-gray-100 rounded-2xl p-10 text-center shadow-sm">
           <CalendarCheck size={36} className="mx-auto mb-3 text-gray-300" />
           <p className="font-semibold text-gray-600">No {filter} bookings</p>
           <p className="text-sm text-gray-400 mt-1">Sessions booked by parents will appear here.</p>
         </div>
-      ) : (
+      ) : shown.length > 0 ? (
         <div className="space-y-3">
+          {shownTherapyBookings.length > 0 && <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Individual Sessions</h2>}
           {shown.map((s) => (
             <BookingCard key={s.id} s={s} onRefresh={() => queryClient.invalidateQueries({ queryKey: ["sessions"] })} />
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
