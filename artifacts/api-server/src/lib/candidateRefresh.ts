@@ -197,7 +197,7 @@ export async function onProfessionalBecameEligible(professionalId: number): Prom
 
     if (await hasInteractionStarted(match.id)) continue;
 
-    const { passedIds } = await filterBySchoolHours([{ id: professionalId }], match.childId ?? null);
+    const { passedIds, schoolStartTime, schoolEndTime } = await filterBySchoolHours([{ id: professionalId }], match.childId ?? null);
     if (!passedIds.includes(professionalId)) continue;
 
     const activeCandidates = await db
@@ -214,6 +214,14 @@ export async function onProfessionalBecameEligible(professionalId: number): Prom
       childBudgetMaxInr: match.childBudgetMaxInr ?? null,
       childPreferredModes: match.childPreferredModes ?? null,
       childDesiredStartDate: match.childDesiredStartDate ?? null,
+      // Previously omitted entirely from this call site while the other
+      // two (initial surfacing, manual dismiss->refill) populated it -- the
+      // exact "2 real, 1 silently neutral" inconsistency this build closes.
+      // schoolStartTime/schoolEndTime come from filterBySchoolHours above,
+      // which already looked them up internally to run the exclusion.
+      childDesiredDaysOfWeek: match.childDesiredDaysOfWeek ?? null,
+      childSchoolStartTime: schoolStartTime,
+      childSchoolEndTime: schoolEndTime,
     };
     const scored = scoreCandidate(snap, proForScoring, tiers);
 

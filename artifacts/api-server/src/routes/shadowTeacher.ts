@@ -190,7 +190,7 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
   // School-hours exclusion (Rule 1): remove professionals whose ACTUAL
   // EXISTING commitment hours (own shadow-teaching schedule, or a booked
   // tutor/therapist session) overlap the child's school hours.
-  const { passedIds } = await filterBySchoolHours(allProfessionals, match.childId ?? null);
+  const { passedIds, schoolStartTime, schoolEndTime } = await filterBySchoolHours(allProfessionals, match.childId ?? null);
   const passedSet = new Set(passedIds);
   const professionals = allProfessionals.filter((p) => passedSet.has(p.id));
 
@@ -218,11 +218,12 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
     childBudgetMaxInr: match.childBudgetMaxInr ?? null,
     childPreferredModes: match.childPreferredModes ?? null,
     childDesiredStartDate: match.childDesiredStartDate ?? null,
-    // childDesiredDaysOfWeek/childSchoolStartTime/childSchoolEndTime wired
-    // in immediately after this foundational plumbing lands (Step 3 of the
-    // day-of-week scheduling build) -- omitted here only for this one
-    // commit, matching the interim state candidateRefresh.ts's own snap
-    // has always been in for this dimension.
+    childDesiredDaysOfWeek: match.childDesiredDaysOfWeek ?? null,
+    // schoolStartTime/schoolEndTime come from filterBySchoolHours above,
+    // not a second childrenTable query -- it already looked them up
+    // internally to run the exclusion itself.
+    childSchoolStartTime: schoolStartTime,
+    childSchoolEndTime: schoolEndTime,
   };
 
   const ranked = rankCandidates(snap, professionalsForScoring, tiers, 3);
@@ -3806,7 +3807,7 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
       );
 
     // School-hours exclusion (Rule 1) on refill too
-    const { passedIds: refillPassedIds } = await filterBySchoolHours(allCandidates, match.childId ?? null);
+    const { passedIds: refillPassedIds, schoolStartTime: refillSchoolStartTime, schoolEndTime: refillSchoolEndTime } = await filterBySchoolHours(allCandidates, match.childId ?? null);
     const refillPassedSet = new Set(refillPassedIds);
     const candidates = allCandidates.filter((p) => refillPassedSet.has(p.id));
 
@@ -3832,7 +3833,9 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
         childBudgetMaxInr: match.childBudgetMaxInr ?? null,
         childPreferredModes: match.childPreferredModes ?? null,
         childDesiredStartDate: match.childDesiredStartDate ?? null,
-        // See the identical note on the main matching path above.
+        childDesiredDaysOfWeek: match.childDesiredDaysOfWeek ?? null,
+        childSchoolStartTime: refillSchoolStartTime,
+        childSchoolEndTime: refillSchoolEndTime,
       };
 
       const [maxRankRow] = await db
