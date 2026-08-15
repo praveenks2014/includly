@@ -24,11 +24,21 @@ export interface MatchSnapshot {
   // Optional: tutor.ts/therapist.ts also reuse this scoring lib and don't
   // capture a desired start date — absent means neutral score for everyone.
   childDesiredStartDate?: string | null;
-  // Piece B — parent's initial, non-negotiated desired weekly schedule (see
-  // shadowTeacherMatchesTable.childDesiredWeeklyScheduleJson). Compatibility
+  // Piece B — parent's initial, non-negotiated desired DAYS of coverage
+  // (see shadowTeacherMatchesTable.childDesiredDaysOfWeek). Compatibility
   // signal only — never excludes. Optional for the same reason as
   // childDesiredStartDate above: tutor/therapist don't capture this.
-  childDesiredWeeklyScheduleJson?: WeeklyScheduleSlot[] | null;
+  // Days only, deliberately no times of its own — see
+  // childSchoolStartTime/childSchoolEndTime below for why.
+  childDesiredDaysOfWeek?: number[] | null;
+  // The child's actual school hours (childrenTable.schoolStartTime/
+  // schoolEndTime), paired with childDesiredDaysOfWeek above to synthesize
+  // the parent's desired schedule in scoreScheduleOverlap. Real shadow-
+  // teacher coverage always runs during school hours — asking the parent to
+  // separately type a time range here would create a second, potentially
+  // inconsistent time signal with no relationship to the actual school day.
+  childSchoolStartTime?: string | null;
+  childSchoolEndTime?: string | null;
 }
 
 export interface ProfessionalForScoring {
@@ -174,18 +184,30 @@ function overlapMinutes(a: WeeklyScheduleSlot, b: WeeklyScheduleSlot): number {
 
 // Compatibility scoring only — NEVER excludes a candidate (Rule 2), same
 // convention as scoreStartDate above. Measures what fraction of the
-// parent's desired weekly schedule (childDesiredWeeklyScheduleJson) falls
-// within the professional's stated general availability
-// (generalAvailabilityJson) — both are descriptive/non-committed inputs,
-// not the negotiated/committed schedule. Missing data on either side scores
-// a neutral default (~half of max), matching every other dimension's
-// convention for "nothing to compare".
+// parent's desired schedule falls within the professional's stated general
+// availability (generalAvailabilityJson) — both are descriptive/non-
+// committed inputs, not the negotiated/committed schedule. The parent's
+// side of the comparison is SYNTHESIZED, never parent-typed: each day in
+// childDesiredDaysOfWeek is paired with the child's real school hours
+// (childSchoolStartTime/childSchoolEndTime) to build the comparison
+// window, since real shadow-teacher coverage always runs during school
+// hours — there is deliberately no path for a parent-supplied time to
+// reach this function. Missing data on either side scores a neutral
+// default (~half of max), matching every other dimension's convention for
+// "nothing to compare".
 function scoreScheduleOverlap(snap: MatchSnapshot, pro: ProfessionalForScoring): number {
-  const desired = snap.childDesiredWeeklyScheduleJson;
+  const days = snap.childDesiredDaysOfWeek;
   const available = pro.generalAvailabilityJson as WeeklyScheduleSlot[] | null | undefined;
 
-  if (!desired || desired.length === 0) return 10;
+  if (!days || days.length === 0) return 10;
+  if (!snap.childSchoolStartTime || !snap.childSchoolEndTime) return 10;
   if (!available || available.length === 0) return 10;
+
+  const desired: WeeklyScheduleSlot[] = days.map((dayOfWeek) => ({
+    dayOfWeek,
+    startTime: snap.childSchoolStartTime!,
+    endTime: snap.childSchoolEndTime!,
+  }));
 
   const totalMinutes = desired.reduce((sum, s) => sum + Math.max(0, toMinutes(s.endTime) - toMinutes(s.startTime)), 0);
   if (totalMinutes === 0) return 10;

@@ -10,9 +10,10 @@ import { negotiationOfferStatusEnum } from "./negotiationOffers";
 // there is no well-defined "other party" to negotiate with before a
 // candidate exists. The parent's very first stated desire is instead a
 // plain, non-negotiated field (shadowTeacherMatchesTable.
-// childDesiredWeeklyScheduleJson, same pattern as the existing
+// childDesiredDaysOfWeek, same pattern as the existing
 // childDesiredStartDate) — this table only holds the back-and-forth that
-// happens once a specific candidate is live. Same
+// happens once a specific candidate is live -- see the schema comment on
+// that field for why it's day-of-week-only, not day+time. Same
 // supersede-then-insert/supersede-others-then-accept/mark-withdrawn-and-
 // restore-predecessor transaction logic as interviewTimeOffersTable, reusing
 // its status enum — not the same table, since slots (a weekly pattern) is a

@@ -197,7 +197,7 @@ export async function onProfessionalBecameEligible(professionalId: number): Prom
 
     if (await hasInteractionStarted(match.id)) continue;
 
-    const passedIds = await filterBySchoolHours([{ id: professionalId }], match.childId ?? null);
+    const { passedIds } = await filterBySchoolHours([{ id: professionalId }], match.childId ?? null);
     if (!passedIds.includes(professionalId)) continue;
 
     const activeCandidates = await db

@@ -28,6 +28,18 @@ export function parseTiers(tiersJson: string | null): TierDef[] {
   try { return JSON.parse(tiersJson) as TierDef[]; } catch { return []; }
 }
 
+export interface SchoolHoursFilterResult {
+  passedIds: number[];
+  // Surfaced alongside passedIds so callers that already need to look up a
+  // child's school hours for scoring (scoreScheduleOverlap) don't have to
+  // run a second, identical childrenTable query -- this function already
+  // looks them up internally to run the exclusion itself. Null when the
+  // child has no school hours on file (same case where the exclusion
+  // itself is skipped below).
+  schoolStartTime: string | null;
+  schoolEndTime: string | null;
+}
+
 /**
  * School-hours EXCLUSION for shadow-teacher matching (Rule 1). See the
  * original comment in shadowTeacher.ts's git history for the full
@@ -36,8 +48,10 @@ export function parseTiers(tiersJson: string | null): TierDef[] {
 export async function filterBySchoolHours(
   professionals: { id: number }[],
   childId: number | null,
-): Promise<number[]> {
-  if (!childId || professionals.length === 0) return professionals.map((p) => p.id);
+): Promise<SchoolHoursFilterResult> {
+  if (!childId || professionals.length === 0) {
+    return { passedIds: professionals.map((p) => p.id), schoolStartTime: null, schoolEndTime: null };
+  }
 
   const [child] = await db
     .select({ schoolStartTime: childrenTable.schoolStartTime, schoolEndTime: childrenTable.schoolEndTime })
@@ -45,7 +59,9 @@ export async function filterBySchoolHours(
     .where(eq(childrenTable.id, childId))
     .limit(1);
 
-  if (!child?.schoolStartTime || !child?.schoolEndTime) return professionals.map((p) => p.id);
+  if (!child?.schoolStartTime || !child?.schoolEndTime) {
+    return { passedIds: professionals.map((p) => p.id), schoolStartTime: null, schoolEndTime: null };
+  }
 
   const schoolStart = child.schoolStartTime;
   const schoolEnd   = child.schoolEndTime;
@@ -141,7 +157,11 @@ export async function filterBySchoolHours(
     }
   }
 
-  return professionals.filter((p) => !overlapIds.has(p.id)).map((p) => p.id);
+  return {
+    passedIds: professionals.filter((p) => !overlapIds.has(p.id)).map((p) => p.id),
+    schoolStartTime: schoolStart,
+    schoolEndTime: schoolEnd,
+  };
 }
 
 export function addDays(dateStr: string, days: number): string {

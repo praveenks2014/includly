@@ -23,7 +23,7 @@ import {
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { z } from "zod/v4";
-import { rankCandidates, maskBody, type MatchSnapshot, type ProfessionalForScoring, type WeeklyScheduleSlot } from "../lib/shadowTeacherScoring";
+import { rankCandidates, maskBody, type MatchSnapshot, type ProfessionalForScoring } from "../lib/shadowTeacherScoring";
 import { notifyMatchShortlisted, notifyMatchChatMessage, notifyParentOnTrialDone, createInAppNotification } from "../lib/notificationService";
 import { generateOtp } from "../lib/otp";
 import { creditWallet } from "../lib/ledger";
@@ -190,7 +190,7 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
   // School-hours exclusion (Rule 1): remove professionals whose ACTUAL
   // EXISTING commitment hours (own shadow-teaching schedule, or a booked
   // tutor/therapist session) overlap the child's school hours.
-  const passedIds = await filterBySchoolHours(allProfessionals, match.childId ?? null);
+  const { passedIds } = await filterBySchoolHours(allProfessionals, match.childId ?? null);
   const passedSet = new Set(passedIds);
   const professionals = allProfessionals.filter((p) => passedSet.has(p.id));
 
@@ -218,7 +218,11 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
     childBudgetMaxInr: match.childBudgetMaxInr ?? null,
     childPreferredModes: match.childPreferredModes ?? null,
     childDesiredStartDate: match.childDesiredStartDate ?? null,
-    childDesiredWeeklyScheduleJson: match.childDesiredWeeklyScheduleJson as WeeklyScheduleSlot[] | null ?? null,
+    // childDesiredDaysOfWeek/childSchoolStartTime/childSchoolEndTime wired
+    // in immediately after this foundational plumbing lands (Step 3 of the
+    // day-of-week scheduling build) -- omitted here only for this one
+    // commit, matching the interim state candidateRefresh.ts's own snap
+    // has always been in for this dimension.
   };
 
   const ranked = rankCandidates(snap, professionalsForScoring, tiers, 3);
@@ -343,11 +347,13 @@ const NewRequestBody = z.object({
   // shadowTeacherScoring.ts) and the choose-engagement fallback in this
   // file — both already read this column; this is the first write path.
   childDesiredStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  // Piece B — parent's initial, non-negotiated desired weekly schedule.
+  // Piece B — parent's initial, non-negotiated desired DAYS of coverage.
   // Same compatibility-scoring-signal role as childDesiredStartDate above,
   // set once at request time; NOT the negotiated result (see
-  // weeklyScheduleOffersTable for the per-candidate propose/counter).
-  childDesiredWeeklyScheduleJson: z.array(RecurringScheduleSlot).optional(),
+  // weeklyScheduleOffersTable for the per-candidate propose/counter). Days
+  // only, no times — see the schema comment on shadowTeacherMatchesTable.
+  // childDesiredDaysOfWeek for why times were retired from parent input.
+  childDesiredDaysOfWeek: z.array(z.number().int().min(0).max(6)).optional(),
 }).refine((b) => (b.schoolLat == null) === (b.schoolLng == null), {
   message: "schoolLat and schoolLng must both be present or both absent",
 });
@@ -370,7 +376,7 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
     return;
   }
 
-  const { childId, extraNotes, budgetMinInr, budgetMaxInr, schoolName, schoolLat, schoolLng, childDesiredStartDate, childDesiredWeeklyScheduleJson } = parsed.data;
+  const { childId, extraNotes, budgetMinInr, budgetMaxInr, schoolName, schoolLat, schoolLng, childDesiredStartDate, childDesiredDaysOfWeek } = parsed.data;
 
   // Load child (must belong to this parent)
   const [child] = await db
@@ -458,7 +464,7 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
         schoolLat:           schoolLat ?? null,
         schoolLng:           schoolLng ?? null,
         childDesiredStartDate: childDesiredStartDate ?? null,
-        childDesiredWeeklyScheduleJson: childDesiredWeeklyScheduleJson ?? null,
+        childDesiredDaysOfWeek: childDesiredDaysOfWeek ?? null,
       })
       .returning();
     await surfaceCandidatesForMatch(waivedMatch);
@@ -499,7 +505,7 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
       schoolLat: schoolLat ?? null,
       schoolLng: schoolLng ?? null,
       childDesiredStartDate: childDesiredStartDate ?? null,
-      childDesiredWeeklyScheduleJson: childDesiredWeeklyScheduleJson ?? null,
+      childDesiredDaysOfWeek: childDesiredDaysOfWeek ?? null,
       providerOrderId: order.id as string,
     })
     .returning();
@@ -1835,8 +1841,8 @@ router.delete("/shadow-teacher/:matchId/candidates/:candidateId/interview-time-o
 // a professional only ever attaches to a match via a specific
 // shadowMatchCandidatesTable row, so this negotiation only becomes available
 // once a candidate exists (the parent's own non-negotiated initial ask lives
-// separately on shadowTeacherMatchesTable.childDesiredWeeklyScheduleJson,
-// set at request time). Accepting snapshots onto
+// separately on shadowTeacherMatchesTable.childDesiredDaysOfWeek, set at
+// request time). Accepting snapshots onto
 // shadowMatchCandidatesTable.acceptedWeeklyScheduleJson — descriptive/
 // compatibility signal only (feeds Part 3's scoring), NOT the committed
 // schedule, which is still set independently at actual accept time.
@@ -3800,7 +3806,7 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
       );
 
     // School-hours exclusion (Rule 1) on refill too
-    const refillPassedIds = await filterBySchoolHours(allCandidates, match.childId ?? null);
+    const { passedIds: refillPassedIds } = await filterBySchoolHours(allCandidates, match.childId ?? null);
     const refillPassedSet = new Set(refillPassedIds);
     const candidates = allCandidates.filter((p) => refillPassedSet.has(p.id));
 
@@ -3826,7 +3832,7 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
         childBudgetMaxInr: match.childBudgetMaxInr ?? null,
         childPreferredModes: match.childPreferredModes ?? null,
         childDesiredStartDate: match.childDesiredStartDate ?? null,
-        childDesiredWeeklyScheduleJson: match.childDesiredWeeklyScheduleJson as WeeklyScheduleSlot[] | null ?? null,
+        // See the identical note on the main matching path above.
       };
 
       const [maxRankRow] = await db
