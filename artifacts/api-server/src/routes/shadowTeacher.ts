@@ -818,9 +818,18 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       trialDaysRequested:     shadowMatchCandidatesTable.trialDaysRequested,
       trialDaysAccepted:      shadowMatchCandidatesTable.trialDaysAccepted,
       acceptedWeeklyScheduleJson: shadowMatchCandidatesTable.acceptedWeeklyScheduleJson,
+      // Piece B — parent's initial, non-negotiated desired days, same
+      // scoring input scoreScheduleOverlap already uses — surfaced to the
+      // teacher too, not just consumed silently by scoring. schoolStartTime/
+      // schoolEndTime come from a new leftJoin (this query previously never
+      // touched childrenTable at all).
+      childDesiredDaysOfWeek: shadowTeacherMatchesTable.childDesiredDaysOfWeek,
+      childSchoolStartTime:   childrenTable.schoolStartTime,
+      childSchoolEndTime:     childrenTable.schoolEndTime,
     })
     .from(shadowMatchCandidatesTable)
     .innerJoin(shadowTeacherMatchesTable, eq(shadowMatchCandidatesTable.matchId, shadowTeacherMatchesTable.id))
+    .leftJoin(childrenTable, eq(shadowTeacherMatchesTable.childId, childrenTable.id))
     .where(
       and(
         eq(shadowMatchCandidatesTable.professionalId, pro.id),
@@ -866,9 +875,13 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
         trialDaysRequested:     shadowMatchCandidatesTable.trialDaysRequested,
         trialDaysAccepted:      shadowMatchCandidatesTable.trialDaysAccepted,
         acceptedWeeklyScheduleJson: shadowMatchCandidatesTable.acceptedWeeklyScheduleJson,
+        childDesiredDaysOfWeek: shadowTeacherMatchesTable.childDesiredDaysOfWeek,
+        childSchoolStartTime:   childrenTable.schoolStartTime,
+        childSchoolEndTime:     childrenTable.schoolEndTime,
       })
       .from(shadowMatchCandidatesTable)
       .innerJoin(shadowTeacherMatchesTable, eq(shadowMatchCandidatesTable.matchId, shadowTeacherMatchesTable.id))
+      .leftJoin(childrenTable, eq(shadowTeacherMatchesTable.childId, childrenTable.id))
       .where(
         and(
           eq(shadowMatchCandidatesTable.professionalId, pro.id),
@@ -948,6 +961,12 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       trialDaysAccepted:      c.trialDaysAccepted      ?? null,
       // Piece B — negotiated weekly-schedule outcome, once agreed.
       acceptedWeeklyScheduleJson: c.acceptedWeeklyScheduleJson ?? null,
+      // Piece B — parent's initial, non-negotiated desired days (the
+      // scoring input), paired with the child's real school hours so the
+      // teacher sees exactly what scoreScheduleOverlap compared against.
+      childDesiredDaysOfWeek: c.childDesiredDaysOfWeek ?? null,
+      childSchoolStartTime:   c.childSchoolStartTime   ?? null,
+      childSchoolEndTime:     c.childSchoolEndTime     ?? null,
       threadId:        thread?.threadId ?? null,
       messageCount:    counts ? Number(counts.messageCount) : 0,
       lastMessageAt:   counts?.lastMessageAt ?? null,

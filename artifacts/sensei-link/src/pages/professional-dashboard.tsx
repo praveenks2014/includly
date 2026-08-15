@@ -3783,6 +3783,12 @@ interface Candidacy {
   trialDaysAccepted:      number | null;
   // Piece B — negotiated weekly-schedule outcome, once agreed.
   acceptedWeeklyScheduleJson: RecurringScheduleSlot[] | null;
+  // Piece B — parent's initial, non-negotiated desired days (the same
+  // input scoreScheduleOverlap scores against), paired with the child's
+  // real school hours so the teacher sees what was actually compared.
+  childDesiredDaysOfWeek: number[] | null;
+  childSchoolStartTime:   string | null;
+  childSchoolEndTime:     string | null;
   threadId:            number | null;
   messageCount:        number;
   lastMessageAt:       string | null;
@@ -4150,6 +4156,12 @@ function RespondRequestBlock({ candidacy: c, onUpdated }: { candidacy: Candidacy
         {c.schoolDistanceKm != null && <span>🏫 {c.schoolDistanceKm} km from school</span>}
         {c.childPreferredModes.length > 0 && <span>🎓 {c.childPreferredModes.join(", ")}</span>}
         {c.childConditions.length > 0 && <span className="col-span-2">🏥 {c.childConditions.join(", ")}</span>}
+        {c.childDesiredDaysOfWeek && c.childDesiredDaysOfWeek.length > 0 && (
+          <span className="col-span-2">
+            📅 {c.childDesiredDaysOfWeek.map((d) => DAYS_SHORT[d]).join(", ")}
+            {c.childSchoolStartTime && c.childSchoolEndTime && ` · ${c.childSchoolStartTime}–${c.childSchoolEndTime}`}
+          </span>
+        )}
       </div>
       <div className="flex gap-2">
         <Button
@@ -4881,6 +4893,12 @@ function CandidacyCard({ candidacy: c, onOpen, myUserId, onUpdated }: { candidac
         )}
         {c.childGoalsAreas && (
           <span className="col-span-2 line-clamp-2">🎯 {c.childGoalsAreas}</span>
+        )}
+        {c.childDesiredDaysOfWeek && c.childDesiredDaysOfWeek.length > 0 && (
+          <span className="col-span-2">
+            📅 {c.childDesiredDaysOfWeek.map((d) => DAYS_SHORT[d]).join(", ")}
+            {c.childSchoolStartTime && c.childSchoolEndTime && ` · ${c.childSchoolStartTime}–${c.childSchoolEndTime}`}
+          </span>
         )}
       </div>
 

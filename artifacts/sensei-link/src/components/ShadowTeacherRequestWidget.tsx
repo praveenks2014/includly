@@ -28,7 +28,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShadowMatchChatDrawer } from "./ShadowMatchChatDrawer";
 import { UpiPayQRDialog } from "./UpiPayQRDialog";
 import { TermsAcknowledgment } from "./TermsAcknowledgment";
-import { formatRecurringScheduleSummary, type RecurringScheduleSlot } from "@/lib/recurringSchedule";
+import { formatRecurringScheduleSummary, type RecurringScheduleSlot, DAYS_SHORT } from "@/lib/recurringSchedule";
 import { RecurringScheduleEditor } from "./RecurringScheduleEditor";
 import { DaySelector } from "./DaySelector";
 import { SchoolAutocomplete } from "./SchoolAutocomplete";
@@ -44,6 +44,11 @@ interface Child {
   budgetMinInr: number | null;
   budgetMaxInr: number | null;
   preferredModes: string[] | null;
+  // Already present in the raw GET /children response (full row spread) --
+  // just previously un-typed here. Used to display the derived school-hours
+  // half of "desired coverage days" alongside childDesiredDaysOfWeek.
+  schoolStartTime: string | null;
+  schoolEndTime: string | null;
 }
 
 interface CandidateProfile {
@@ -113,6 +118,11 @@ interface MatchWithCandidates {
   // #18 — request-time school location (see schema comment for the
   // schoolLat/Lng precision guarantee).
   schoolName: string | null;
+  // Piece B — parent's own desired coverage days (raw column, present in
+  // the API response via the ...match spread; the school-hours half of
+  // this display comes from useChildren()'s own already-fetched child
+  // record instead, since school hours live on childrenTable, not here).
+  childDesiredDaysOfWeek: number[] | null;
   trialStartOtp: string | null;
   trialEndOtp: string | null;
   trialLocation: string | null;
@@ -2477,6 +2487,19 @@ export function ShadowTeacherRequestWidget() {
             {match.candidates.length} candidate{match.candidates.length !== 1 ? "s" : ""}
           </span>
         </div>
+
+        {match.childDesiredDaysOfWeek && match.childDesiredDaysOfWeek.length > 0 && (() => {
+          const requestChild = children.find((c) => c.id === match.childId);
+          const dayLabels = match.childDesiredDaysOfWeek.map((d) => DAYS_SHORT[d]).join(", ");
+          return (
+            <p className="text-xs text-muted-foreground">
+              Requested days: <span className="font-medium text-foreground">{dayLabels}</span>
+              {requestChild?.schoolStartTime && requestChild?.schoolEndTime && (
+                <> — during school hours ({requestChild.schoolStartTime}–{requestChild.schoolEndTime})</>
+              )}
+            </p>
+          );
+        })()}
 
         <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 text-xs text-teal-800">
           <span className="font-semibold">💚 Committing on Includly keeps you protected.</span> Attendance tracking, leave management, teacher-exclusivity, and dispute support only apply to on-platform engagements.
