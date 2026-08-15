@@ -795,10 +795,20 @@ export default function ChildOnboardingPage() {
             >
               <p className="text-sm font-semibold text-gray-800">Permissions</p>
               {([
-                { key: "intakeShare" as const, label: "Share this profile with matched specialists", required: true },
+                {
+                  key: "intakeShare" as const,
+                  label: "Share this profile with matched specialists",
+                  required: true,
+                  // Backend gate (POST /shadow-teacher/request + GET
+                  // /my-candidacies' read-time recheck) enforces exactly
+                  // this field list -- keep this copy in sync with those
+                  // two call sites if either changes.
+                  description:
+                    "When enabled, a specialist matched with your child can see: name, age, conditions, diagnosis status, goal areas, languages, and your care notes. Not shared: date of birth, school details, budget, therapy history, or any other notes. You can withdraw this at any time — new specialists won't be able to view it going forward.",
+                },
                 { key: "media" as const, label: "Allow session photos / videos with my consent" },
                 { key: "reports" as const, label: "Share session reports between specialists" },
-              ]).map(({ key, label, required }) => (
+              ]).map(({ key, label, required, description }) => (
                 <label key={key} className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
@@ -812,6 +822,9 @@ export default function ChildOnboardingPage() {
                   <span className="text-sm text-gray-700">
                     {label}
                     {required && <span className="ml-1 text-teal-600 font-medium">*</span>}
+                    {description && (
+                      <span className="block mt-1 text-xs text-gray-500 leading-relaxed">{description}</span>
+                    )}
                   </span>
                 </label>
               ))}
