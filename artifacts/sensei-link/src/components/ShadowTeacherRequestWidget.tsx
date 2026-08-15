@@ -30,6 +30,7 @@ import { UpiPayQRDialog } from "./UpiPayQRDialog";
 import { TermsAcknowledgment } from "./TermsAcknowledgment";
 import { formatRecurringScheduleSummary, type RecurringScheduleSlot } from "@/lib/recurringSchedule";
 import { RecurringScheduleEditor } from "./RecurringScheduleEditor";
+import { DaySelector } from "./DaySelector";
 import { SchoolAutocomplete } from "./SchoolAutocomplete";
 import { ProfessionalAvatar } from "./ProfessionalAvatar";
 import { useGetMe } from "@workspace/api-client-react";
@@ -1424,12 +1425,14 @@ export function ShadowTeacherRequestWidget() {
   // choose-engagement fallback in shadowTeacher.ts, both of which read this
   // column but had nothing real to read until now).
   const [desiredStartDate, setDesiredStartDate] = useState("");
-  // Piece B — parent's initial, non-negotiated desired weekly schedule.
+  // Piece B — parent's initial, non-negotiated desired DAYS of coverage.
   // Same "descriptive compatibility signal, set once at request time" role
   // as desiredStartDate above. NOT the negotiated result — once a candidate
   // is shortlisted, WeeklyScheduleNegotiation lets the parent and that
-  // specific professional propose/counter a real agreed schedule.
-  const [desiredWeeklySchedule, setDesiredWeeklySchedule] = useState<RecurringScheduleSlot[]>([]);
+  // specific professional propose/counter a real agreed schedule. Days
+  // only, no times — see the schema comment on shadowTeacherMatchesTable.
+  // childDesiredDaysOfWeek for why times were retired from parent input.
+  const [desiredDays, setDesiredDays] = useState<number[]>([]);
 
   function selectSalaryPreset(preset: typeof MONTHLY_SALARY_PRESETS[number]) {
     const toggling = preset.key === salaryPresetKey;
@@ -1525,7 +1528,7 @@ export function ShadowTeacherRequestWidget() {
           // free-typed text.
           ...(schoolLat != null && schoolLng != null && { schoolLat, schoolLng }),
           ...(desiredStartDate && { childDesiredStartDate: desiredStartDate }),
-          ...(desiredWeeklySchedule.length > 0 && { childDesiredWeeklyScheduleJson: desiredWeeklySchedule }),
+          ...(desiredDays.length > 0 && { childDesiredDaysOfWeek: desiredDays }),
         }),
       });
       const data = await res.json() as {
@@ -2129,16 +2132,14 @@ export function ShadowTeacherRequestWidget() {
             </div>
 
             <div>
-              <Label className="text-sm mb-1.5 block">Desired weekly schedule <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Label className="text-sm mb-1.5 block">Desired coverage days <span className="text-muted-foreground font-normal">(optional)</span></Label>
               <p className="text-xs text-muted-foreground mb-2">
-                A rough starting point — not final. Once you shortlist a teacher, you can propose and agree on the
-                actual weekly schedule together.
+                A rough starting point — not final. Sessions run during your child's school hours; once you
+                shortlist a teacher, you can propose and agree on the actual weekly schedule together.
               </p>
-              <RecurringScheduleEditor
-                slots={desiredWeeklySchedule}
-                onChange={setDesiredWeeklySchedule}
-                title="Days and times you're looking for"
-                description="Add the day(s) and time(s) you'd ideally like sessions to happen."
+              <DaySelector
+                days={desiredDays}
+                onChange={setDesiredDays}
               />
             </div>
 
