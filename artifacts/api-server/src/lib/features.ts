@@ -1,16 +1,15 @@
-// Backend feature flags for the tutor/therapist match/booking API.
+// Backend feature flags.
 //
-// CROSS-REFERENCE: artifacts/sensei-link/src/features.ts (the frontend flag
-// file) does NOT share state with this one — they must be flipped together
-// when this feature is ready to launch. This file is the server-side source
-// of truth: every tutor/therapist route checks its flag and returns 404
-// (not 403 — a disabled feature shouldn't even hint it exists) when off, so
-// nothing is reachable even if a URL is guessed while the frontend is hidden.
-export const SHOW_TUTOR_SEARCH = true;
-export const SHOW_THERAPIST_SEARCH = true;
-
-// SHOW_CONSULTATION_TILES / SHOW_COACH_TILE — unlike the two flags above,
-// these have no dedicated route to 404-gate: the consultation/coach tiles
+// SHOW_TUTOR_SEARCH/SHOW_THERAPIST_SEARCH used to live here — removed as
+// part of Step 3 (platform-admin vertical visibility toggle), which
+// replaced both with a live admin_settings-backed toggle (homeTutorVisible/
+// therapistVisible), enforced inside tutor.ts's/therapist.ts's own
+// router.use() gates. No redeploy-requiring code constant governs either
+// vertical's reachability anymore.
+//
+// SHOW_CONSULTATION_TILES / SHOW_COACH_TILE — unlike the two removed flags
+// described above, these have no dedicated route to 404-gate: the
+// consultation/coach tiles
 // route entirely through already-live, generic endpoints (search,
 // bookable-slots, sessions/book) shared with other, already-launched
 // specialties. These flags are consumed frontend-only (features.ts), to

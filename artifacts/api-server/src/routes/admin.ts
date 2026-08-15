@@ -630,6 +630,12 @@ router.get("/settings/me", requireAuth, async (_req, res): Promise<void> => {
     trialDirectPayEnabled: settings.trialDirectPayEnabled,
     trialFeeInr: settings.trialFeeInr,
     scheduleWarningBufferMinutes: settings.scheduleWarningBufferMinutes,
+    // Step 3 — any signed-in user (not just professionals) needs these to
+    // decide whether a category's tile/route should render as live.
+    shadowTeacherVisible: settings.shadowTeacherVisible,
+    homeTutorVisible: settings.homeTutorVisible,
+    therapistVisible: settings.therapistVisible,
+    therapyCentreVisible: settings.therapyCentreVisible,
   });
 });
 

@@ -45,6 +45,16 @@ async function ownscentre(userId: number, centreId: number): Promise<boolean> {
   return !!c;
 }
 
+// Step 3 — category-wide visibility gate, checked inline (not router.use())
+// since this file also serves centre-admin's own management routes
+// (/centres/mine, /centres/:id PATCH, /centres/:id/bookings, etc.) that
+// must stay reachable regardless of parent-facing discoverability. Only
+// the actual discovery endpoints (browse list/detail/roster) call this.
+async function isTherapyCentreVisible(): Promise<boolean> {
+  const [settings] = await db.select({ therapyCentreVisible: adminSettingsTable.therapyCentreVisible }).from(adminSettingsTable).limit(1);
+  return settings?.therapyCentreVisible !== false;
+}
+
 const UpsertCentreBody = z.object({
   name: z.string().min(2),
   description: z.string().optional(),
@@ -140,6 +150,7 @@ const publicCentreFields = {
 
 // ── GET /centres — public browse list, live centres only ────────────────────
 router.get("/centres", ...authGuard, async (_req, res): Promise<void> => {
+  if (!(await isTherapyCentreVisible())) { res.status(404).json({ error: "Not found" }); return; }
   const rows = await db
     .select(publicCentreFields)
     .from(therapyCentresTable)
@@ -150,6 +161,7 @@ router.get("/centres", ...authGuard, async (_req, res): Promise<void> => {
 
 // ── GET /centres/:id — public centre detail, live centres only ──────────────
 router.get("/centres/:id", ...authGuard, async (req, res): Promise<void> => {
+  if (!(await isTherapyCentreVisible())) { res.status(404).json({ error: "Not found" }); return; }
   const id = parsedId(req.params.id);
   if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
   const [centre] = await db

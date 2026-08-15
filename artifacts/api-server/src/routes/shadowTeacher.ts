@@ -353,6 +353,17 @@ const NewRequestBody = z.object({
 });
 
 router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
+  // Category-wide visibility gate (Step 3) -- blocks brand-new requests
+  // only; every other shadow-teacher endpoint (candidate accept,
+  // scheduling, my-request, engagement management) is untouched, so an
+  // already-in-progress match is completely unaffected by this toggle.
+  const visibilitySettings = await getSettings();
+  const shadowTeacherVisible = (visibilitySettings as Record<string, unknown>)["shadowTeacherVisible"] as boolean | undefined;
+  if (shadowTeacherVisible === false) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
   const parsed = NewRequestBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "childId (number) is required" });

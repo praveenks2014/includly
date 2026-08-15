@@ -819,6 +819,10 @@ export const GetMySettingsResponse = zod.object({
   trialDirectPayEnabled: zod.boolean(),
   trialFeeInr: zod.number(),
   scheduleWarningBufferMinutes: zod.number(),
+  shadowTeacherVisible: zod.boolean(),
+  homeTutorVisible: zod.boolean(),
+  therapistVisible: zod.boolean(),
+  therapyCentreVisible: zod.boolean(),
 });
 
 /**

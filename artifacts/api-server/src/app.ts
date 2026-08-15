@@ -11,7 +11,6 @@ import {
 import router from "./routes";
 import webhooksRouter from "./routes/webhooks";
 import { logger } from "./lib/logger";
-import { SHOW_TUTOR_SEARCH, SHOW_THERAPIST_SEARCH } from "./lib/features";
 
 const app: Express = express();
 
@@ -35,22 +34,13 @@ app.use(
   }),
 );
 
-// Earliest possible checkpoint for the tutor/therapist feature flags —
-// proactive defense-in-depth, ahead of Clerk entirely, so a disabled
-// vertical returns 404 regardless of auth state or auth-mode quirks. The
-// per-router gates in tutor.ts/therapist.ts still apply too; this is not a
-// replacement for those, just the earliest of two redundant checks.
-app.use((req, res, next) => {
-  if (!SHOW_TUTOR_SEARCH && req.path.startsWith("/api/tutor")) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-  if (!SHOW_THERAPIST_SEARCH && req.path.startsWith("/api/therapist")) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-  next();
-});
+// The old pre-Clerk SHOW_TUTOR_SEARCH/SHOW_THERAPIST_SEARCH early-checkpoint
+// middleware that used to live here is gone — Step 3 replaced those static
+// constants with a live admin_settings-backed toggle, enforced inside
+// tutor.ts's/therapist.ts's own router.use("/tutor"|"/therapist", ...)
+// gates (which already need a DB read per request; duplicating that same
+// read here, before Clerk, on every request regardless of path, wasn't
+// worth the redundancy once the flags themselves stopped being static).
 
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 

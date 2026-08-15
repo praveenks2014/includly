@@ -875,6 +875,10 @@ export interface MySettings {
   trialDirectPayEnabled: boolean;
   trialFeeInr: number;
   scheduleWarningBufferMinutes: number;
+  shadowTeacherVisible: boolean;
+  homeTutorVisible: boolean;
+  therapistVisible: boolean;
+  therapyCentreVisible: boolean;
 }
 
 export interface VapidPublicKeyResponse {

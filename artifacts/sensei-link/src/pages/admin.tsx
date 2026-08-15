@@ -1537,6 +1537,15 @@ function SettingsTab() {
 
   const [paymentConfirmationDefaultDays, setPaymentConfirmationDefaultDays] = useState<number | "">("");
 
+  // Step 3 — platform-admin vertical visibility toggle. Category-wide only
+  // (whether NEW discovery/requests can be made), never a specific
+  // professional's individual offering listability — see
+  // .agents/memory/vertical-type-duplication.md's sibling-risk section.
+  const [shadowTeacherVisible, setShadowTeacherVisible] = useState(true);
+  const [homeTutorVisible, setHomeTutorVisible] = useState(false);
+  const [therapistVisible, setTherapistVisible] = useState(false);
+  const [therapyCentreVisible, setTherapyCentreVisible] = useState(false);
+
   const [isSaving, setIsSaving] = useState(false);
   const [synced, setSynced] = useState(false);
 
@@ -1578,6 +1587,10 @@ function SettingsTab() {
     setTherapistTrialFeeGoesToProfessional((settingsRec["therapistTrialFeeGoesToProfessional"] as boolean) ?? true);
     setTherapistDirectPayEnabled((settingsRec["therapistDirectPayEnabled"] as boolean) ?? true);
     setPaymentConfirmationDefaultDays(settingsRec["paymentConfirmationDefaultDays"] as number ?? 7);
+    setShadowTeacherVisible((settingsRec["shadowTeacherVisible"] as boolean) ?? true);
+    setHomeTutorVisible((settingsRec["homeTutorVisible"] as boolean) ?? false);
+    setTherapistVisible((settingsRec["therapistVisible"] as boolean) ?? false);
+    setTherapyCentreVisible((settingsRec["therapyCentreVisible"] as boolean) ?? false);
     setSynced(true);
   }
 
@@ -1623,6 +1636,10 @@ function SettingsTab() {
         therapistTrialFeeGoesToProfessional,
         therapistDirectPayEnabled,
         paymentConfirmationDefaultDays: Number(paymentConfirmationDefaultDays) || 7,
+        shadowTeacherVisible,
+        homeTutorVisible,
+        therapistVisible,
+        therapyCentreVisible,
       };
       await updateSettings({ data: payload });
       queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() });
@@ -1812,6 +1829,39 @@ function SettingsTab() {
               onChange={(e) => setPaymentConfirmationDefaultDays(e.target.value === "" ? "" : Number(e.target.value))}
               className="rounded-lg focus-visible:ring-[#2EC4A5]" />
           </div>
+        </div>
+
+        {/* ── Vertical Visibility (Step 3) ── */}
+        <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-5">
+          <div>
+            <p className="text-base font-bold text-[#1A2340]">Vertical Visibility</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Live, no-deploy on/off switch per category. Off blocks brand-new parent-facing
+              discovery/requests only — an already-in-progress match, booking, or engagement in that
+              category is completely unaffected. This never touches a specific professional's
+              individual offering listability (a separate, per-professional axis).
+            </p>
+          </div>
+          {([
+            { label: "Shadow Teacher", visible: shadowTeacherVisible, setVisible: setShadowTeacherVisible },
+            { label: "Home Tutor", visible: homeTutorVisible, setVisible: setHomeTutorVisible },
+            { label: "Therapist", visible: therapistVisible, setVisible: setTherapistVisible },
+            { label: "Therapy Centre", visible: therapyCentreVisible, setVisible: setTherapyCentreVisible },
+          ] as const).map((row) => (
+            <div key={row.label} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50">
+              <div>
+                <p className="text-sm font-medium text-[#1A2340]">{row.label}</p>
+                <p className="text-xs text-gray-400">
+                  {row.visible ? "Live — parents can browse and start new requests." : "Hidden — shows \"coming soon\" to parents; new requests rejected server-side."}
+                </p>
+              </div>
+              <button type="button" onClick={() => row.setVisible(!row.visible)}
+                aria-label={row.visible ? `Hide ${row.label}` : `Make ${row.label} live`}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4A5] focus-visible:ring-offset-2 ${row.visible ? "bg-[#2EC4A5]" : "bg-gray-200"}`}>
+                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${row.visible ? "translate-x-5" : "translate-x-0"}`} />
+              </button>
+            </div>
+          ))}
         </div>
 
         {/* ── Listing Fees ── */}

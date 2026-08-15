@@ -144,6 +144,26 @@ export const adminSettingsTable = pgTable("admin_settings", {
   // definable well before any consumer existed, this dormancy is
   // intentional and sequenced, not an oversight.
   otpStallFlagDays: integer("otp_stall_flag_days").notNull().default(5),
+  // Platform-admin vertical visibility toggle (Step 3) — live, no-deploy
+  // replacement for SHOW_TUTOR_SEARCH/SHOW_THERAPIST_SEARCH (which drift
+  // between frontend/backend copies and required a redeploy) plus the
+  // first-ever off-switch for Shadow Teacher and on-switch for Therapy
+  // Centre. Category-wide only: gates whether NEW discovery/requests can
+  // be made for the vertical, never a specific professional's individual
+  // offering listability (that's professional_offerings/isOfferingListable's
+  // job, a separate axis — see vertical-type-duplication.md's sibling-risk
+  // section). Defaults preserve each category's REAL current behavior at
+  // migration time, so flipping this on doesn't change anything live:
+  // shadow_teacher is currently always-on (hardcoded, no off-switch until
+  // now); home_tutor/therapist currently show their tile as hidden
+  // (frontend SHOW_*_SEARCH=false) even though the backend flag is
+  // technically true today — defaulting false here matches the real,
+  // visible behavior and closes that frontend/backend drift as a direct
+  // consequence; therapy_centre is currently hardcoded "coming soon".
+  shadowTeacherVisible: boolean("shadow_teacher_visible").notNull().default(true),
+  homeTutorVisible: boolean("home_tutor_visible").notNull().default(false),
+  therapistVisible: boolean("therapist_visible").notNull().default(false),
+  therapyCentreVisible: boolean("therapy_centre_visible").notNull().default(false),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

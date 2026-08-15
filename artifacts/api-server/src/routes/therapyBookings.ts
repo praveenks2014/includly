@@ -141,6 +141,13 @@ const BookTherapySessionBody = z.object({
   packagePurchaseId: z.number().int().positive().optional(),
 });
 router.post("/therapy-bookings/book", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  // Step 3 — category-wide visibility gate, blocking only NEW bookings.
+  // Everything else in this file (cancel/reschedule/OTP/feedback/mine/
+  // admin endpoints) is untouched, so an already-booked parent or an
+  // already-employed therapist is completely unaffected by this toggle.
+  const [visibility] = await db.select({ therapyCentreVisible: adminSettingsTable.therapyCentreVisible }).from(adminSettingsTable).limit(1);
+  if (visibility?.therapyCentreVisible === false) { res.status(404).json({ error: "Not found" }); return; }
+
   const parsed = BookTherapySessionBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { professionalId, bookedDate, startTime, childId, notes, packagePurchaseId } = parsed.data;

@@ -7,6 +7,7 @@
 // out of sync with each other in the first place.
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { useGetMySettings } from "@workspace/api-client-react";
 import {
   GraduationCap,
   NotebookPen,
@@ -21,8 +22,6 @@ import {
 import { fetchWithAuth } from "@/lib/api";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import {
-  SHOW_TUTOR_SEARCH,
-  SHOW_THERAPIST_SEARCH,
   SHOW_CONSULTATION_TILES,
   SHOW_COACH_TILE,
 } from "@/features";
@@ -157,6 +156,17 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
   const [, setLocation] = useLocation();
   const { selectedChildId } = useSelectedChild();
 
+  // Step 3 — platform-admin vertical visibility toggle. Defaults match each
+  // category's real steady-state while this query is loading, matching
+  // admin_settings' own schema defaults, so there's no flash of the wrong
+  // state: shadow_teacher defaults visible (its long-standing always-on
+  // behavior), the other three default hidden.
+  const { data: mySettings } = useGetMySettings();
+  const shadowTeacherVisible = mySettings?.shadowTeacherVisible ?? true;
+  const homeTutorVisible = mySettings?.homeTutorVisible ?? false;
+  const therapistVisible = mySettings?.therapistVisible ?? false;
+  const therapyCentreVisible = mySettings?.therapyCentreVisible ?? false;
+
   // Shadow Teacher — reuses the exact same query key/endpoint
   // ShadowTeacherTab already fetches elsewhere on this page, so react-query
   // dedupes this instead of firing a second identical request.
@@ -172,9 +182,10 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
   });
   const shadowDot = deriveDot(stEngagements, selectedChildId);
 
-  // Tutor / Therapist — only queried when their flag is on; the backend
-  // 404s these routes entirely while the flag is off (app.ts's gate), so
-  // there's nothing to fetch until then.
+  // Tutor / Therapist — only queried when the admin_settings visibility
+  // toggle is on; the backend 404s these routes entirely while off
+  // (tutor.ts/therapist.ts's own router.use() gate, Step 3), so there's
+  // nothing to fetch until then.
   const { data: tutorEngagements = [] } = useQuery<EngagementRow[]>({
     queryKey: ["parent-tutor-engagements"],
     queryFn: async () => {
@@ -184,9 +195,9 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
       return Array.isArray(data) ? data : [];
     },
     staleTime: 20_000,
-    enabled: SHOW_TUTOR_SEARCH,
+    enabled: homeTutorVisible,
   });
-  const tutorDot = SHOW_TUTOR_SEARCH ? deriveDot(tutorEngagements, selectedChildId) : "none";
+  const tutorDot = homeTutorVisible ? deriveDot(tutorEngagements, selectedChildId) : "none";
 
   const { data: therapistEngagements = [] } = useQuery<EngagementRow[]>({
     queryKey: ["parent-therapist-engagements"],
@@ -197,9 +208,9 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
       return Array.isArray(data) ? data : [];
     },
     staleTime: 20_000,
-    enabled: SHOW_THERAPIST_SEARCH,
+    enabled: therapistVisible,
   });
-  const therapistDot = SHOW_THERAPIST_SEARCH ? deriveDot(therapistEngagements, selectedChildId) : "none";
+  const therapistDot = therapistVisible ? deriveDot(therapistEngagements, selectedChildId) : "none";
 
   // Consultation (Psychiatrist/Dev Ped/Neurologist) and Inclusive Coach have
   // no "engagement" concept at all — one-off session bookings, no match/
@@ -228,16 +239,20 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
   type CategoryResolution = { isLive: boolean; navigate: () => void; comingSoon: ComingSoonInfo };
   const resolutions: Record<string, CategoryResolution> = {
     shadow_teacher: {
-      isLive: true,
+      isLive: shadowTeacherVisible,
       // List View keeps the pre-existing page-navigation behavior;
       // Icon Grid expands inline on /services. Same category, same
       // isLive/dot/comingSoon — only the destination differs by mode.
       navigate: () =>
         setLocation(viewMode === "list" ? "/shadow-teacher" : "/services?open=shadow_teacher"),
-      comingSoon: { icon: GraduationCap, title: "", description: "" }, // never reached, isLive is always true
+      comingSoon: {
+        icon: GraduationCap,
+        title: "Shadow Teacher matching paused",
+        description: "This service is temporarily paused. Check back soon.",
+      },
     },
     home_tutor: {
-      isLive: SHOW_TUTOR_SEARCH,
+      isLive: homeTutorVisible,
       navigate: () =>
         setLocation(viewMode === "list" ? "/tutor-search" : "/services?open=home_tutor"),
       comingSoon: {
@@ -247,7 +262,7 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
       },
     },
     therapist: {
-      isLive: SHOW_THERAPIST_SEARCH,
+      isLive: therapistVisible,
       navigate: () =>
         setLocation(viewMode === "list" ? "/therapist-search" : "/services?open=therapist"),
       comingSoon: {
@@ -290,8 +305,12 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
       },
     },
     therapy_centre: {
-      isLive: false,
-      navigate: () => {},
+      isLive: therapyCentreVisible,
+      // Unlike shadow_teacher/home_tutor/therapist/consultation tiles,
+      // there's no inline mini-form for therapy centres (Commit 1 built a
+      // standalone browse page, not an expand-in-place form) — same
+      // destination regardless of view mode.
+      navigate: () => setLocation("/therapy-centres"),
       comingSoon: {
         icon: Building2,
         title: "Therapy Centres coming soon",

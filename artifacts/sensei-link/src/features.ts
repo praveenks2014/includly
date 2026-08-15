@@ -23,16 +23,30 @@ export const FEATURES = {
 export const SHOW_PRO_UPGRADE = false;
 
 /**
- * SHOW_TUTOR_SEARCH / SHOW_THERAPIST_SEARCH — gate the tutor/therapist
- * parent-facing search+match flows. CROSS-REFERENCE: the backend's own
- * flags of the same name (artifacts/api-server/src/lib/features.ts) do NOT
- * share state with these — both must be flipped together at launch. The
- * backend already 404s every tutor/therapist route regardless of this
- * flag, so this is a cosmetic gate (don't show a nav link to a dead page),
- * not the source of truth for whether the feature is reachable.
+ * SHOW_TUTOR_SEARCH / SHOW_THERAPIST_SEARCH — Step 3 (platform-admin
+ * vertical visibility toggle) replaced these as the source of truth for
+ * PARENT-FACING discoverability with a live admin_settings-backed toggle
+ * (see serviceCategories.ts's useServiceCategoryStatus, which now reads
+ * GET /settings/me's homeTutorVisible/therapistVisible instead of these
+ * constants). The backend's matching constants
+ * (artifacts/api-server/src/lib/features.ts) were removed entirely for the
+ * same reason — tutor.ts/therapist.ts's own router gates now read the live
+ * DB value directly.
+ *
+ * These two are kept, permanently `true`, only because a handful of
+ * OTHER, non-parent-discovery concerns still import them: App.tsx's
+ * /tutor-search and /therapist-search ROUTE REGISTRATION (now always-on,
+ * matching /therapy-centres' own unconditional-registration precedent —
+ * actual reachability is enforced by the backend's live gate + the tile's
+ * own isLive, not by whether the route exists), a professional's own
+ * "request an additional offering" options in professional-dashboard.tsx,
+ * and the corresponding nav tab in nav/config.ts (both about a
+ * PROFESSIONAL managing their own offerings, an axis Step 3 deliberately
+ * doesn't touch — see requirement #4, existing/in-progress professional
+ * activity stays unaffected by the parent-facing toggle).
  */
-export const SHOW_TUTOR_SEARCH = false;
-export const SHOW_THERAPIST_SEARCH = false;
+export const SHOW_TUTOR_SEARCH = true;
+export const SHOW_THERAPIST_SEARCH = true;
 
 /**
  * SHOW_CONSULTATION_TILES / SHOW_COACH_TILE — gate the Find-a-Specialist

@@ -30,7 +30,6 @@ import { isOfferingListable } from "../lib/verificationRequirements";
 import { creditWallet } from "../lib/ledger";
 import { RecurringScheduleSlot, checkRecurringScheduleConflict, getRecurringAndSessionBusyWindows, overlapsAnyWindow } from "../lib/recurringSchedule";
 import { resolveOffering } from "../lib/offeringResolver";
-import { SHOW_TUTOR_SEARCH } from "../lib/features";
 import { resolveOverdueTutorConfirmations } from "../lib/paymentConfirmationResolver";
 import { hasScheduleConflict } from "../lib/scheduleConflict";
 import { JITSI_CONFIG_SUFFIX } from "../lib/jitsi";
@@ -41,13 +40,13 @@ const OTP_MAX_ATTEMPTS = 5;
 
 const router: IRouter = Router();
 
-// Server-side feature gate — applies to every route in this file. Returns
-// 404 (not 403) when off, so nothing here is reachable even if a URL is
-// guessed while the frontend is hidden. CROSS-REFERENCE: the frontend's own
-// SHOW_TUTOR_SEARCH flag (artifacts/sensei-link/src/features.ts) does not
-// share state with this one — both must be flipped together at launch.
-// Also redundant with (not a replacement for) the earlier app.ts-level
-// path check, which is the first of the two checkpoints to run.
+// Server-side visibility gate — applies to every route in this file.
+// Returns 404 (not 403) when off, so nothing here is reachable even if a
+// URL is guessed while the frontend is hidden. Step 3: now reads the live,
+// admin-configurable admin_settings.homeTutorVisible column instead of the
+// static SHOW_TUTOR_SEARCH constant, so an admin can toggle this with no
+// redeploy — the SCOPING is unchanged from the original fix (still
+// "/tutor", not bare), only the CONDITION source changed.
 // Scoped to "/tutor" (Express's own path-prefix matching on router.use,
 // not a hand-rolled req.path check) — this router is mounted with no path
 // prefix in routes/index.ts, so an unscoped gate here would 404 EVERY
@@ -55,8 +54,9 @@ const router: IRouter = Router();
 // ones bound for entirely different, later-mounted routers. This is the
 // actual defect the Aug 12 "count: 1" / therapy-bookings incident traced
 // back to — mount order no longer matters after this fix.
-router.use("/tutor", (_req, res, next) => {
-  if (!SHOW_TUTOR_SEARCH) { res.status(404).json({ error: "Not found" }); return; }
+router.use("/tutor", async (_req, res, next) => {
+  const [settings] = await db.select({ homeTutorVisible: adminSettingsTable.homeTutorVisible }).from(adminSettingsTable).limit(1);
+  if (settings?.homeTutorVisible === false) { res.status(404).json({ error: "Not found" }); return; }
   next();
 });
 
