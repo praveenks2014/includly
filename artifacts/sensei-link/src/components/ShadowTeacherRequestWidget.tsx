@@ -2043,7 +2043,7 @@ export function ShadowTeacherRequestWidget() {
 
         {children.length === 0 ? (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-            You haven't added a child profile yet. <a href="/dashboard" className="underline font-medium">Add your child</a> first so we can pre-fill their details.
+            You haven't added a child profile yet. <a href="/onboarding/child" className="underline font-medium">Add your child</a> first so we can pre-fill their details.
           </div>
         ) : (
           <div className="space-y-4">

@@ -1156,7 +1156,7 @@ export function VerticalRequestWidget({ vertical }: { vertical: Vertical }) {
 
         {children.length === 0 ? (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-            You haven&apos;t added a child profile yet. <a href="/dashboard" className="underline font-medium">Add your child</a> first.
+            You haven&apos;t added a child profile yet. <a href="/onboarding/child" className="underline font-medium">Add your child</a> first.
           </div>
         ) : (
           <div className="space-y-4">
