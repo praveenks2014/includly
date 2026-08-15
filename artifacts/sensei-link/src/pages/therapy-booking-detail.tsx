@@ -1,11 +1,16 @@
 import { useParams, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useGetBookableSlots, type BookableSlot } from "@workspace/api-client-react";
 import { fetchWithAuth } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Calendar, Clock, IndianRupee, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Loader2, Calendar, Clock, IndianRupee, ShieldCheck, AlertTriangle, CalendarClock } from "lucide-react";
+
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 const BOOKING_STATUS_LABEL: Record<string, { label: string; color: string }> = {
   pending_payment: { label: "Pending payment", color: "bg-gray-100 text-gray-600 border-gray-200" },
@@ -27,6 +32,7 @@ interface TherapyBookingDetail {
   therapistName: string | null;
   serviceId: number;
   serviceName: string | null;
+  professionalId: number;
   bookedDate: string;
   startTime: string;
   endTime: string;
@@ -80,6 +86,10 @@ export default function TherapyBookingDetailPage() {
   const queryClient = useQueryClient();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState(todayIsoDate());
+  const [rescheduleSlot, setRescheduleSlot] = useState<BookableSlot | null>(null);
+  const [rescheduling, setRescheduling] = useState(false);
 
   const { data: booking, isLoading } = useQuery({
     queryKey: ["therapy-bookings", bookingId],
@@ -100,6 +110,36 @@ export default function TherapyBookingDetailPage() {
     },
     enabled: !!booking?.centreId && booking?.status === "confirmed",
   });
+
+  // Hook auto-disables via its own `enabled: !!id` when professionalId is
+  // 0 (booking not loaded yet) -- no need for an explicit options.query
+  // override, which would require satisfying UseQueryOptions' full shape.
+  const { data: rescheduleSlots, isLoading: rescheduleSlotsLoading } = useGetBookableSlots(
+    booking?.professionalId ?? 0,
+    { date: rescheduleDate },
+  );
+
+  async function handleReschedule() {
+    if (!rescheduleSlot) return;
+    setRescheduling(true);
+    try {
+      const res = await fetchWithAuth(`/api/therapy-bookings/${bookingId}/reschedule`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookedDate: rescheduleSlot.date, startTime: rescheduleSlot.startTime }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast({ title: data.error ?? "Reschedule failed", variant: "destructive" }); return; }
+      toast({ title: "Session rescheduled", description: "New session codes have been generated." });
+      setRescheduleDialogOpen(false);
+      setRescheduleSlot(null);
+      queryClient.invalidateQueries({ queryKey: ["therapy-bookings"] });
+    } catch {
+      toast({ title: "Network error", variant: "destructive" });
+    } finally {
+      setRescheduling(false);
+    }
+  }
 
   async function handleCancel() {
     setCancelling(true);
@@ -195,9 +235,14 @@ export default function TherapyBookingDetailPage() {
       )}
 
       {canCancel && (
-        <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => setCancelDialogOpen(true)}>
-          Cancel session
-        </Button>
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={() => setRescheduleDialogOpen(true)}>
+            Reschedule
+          </Button>
+          <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => setCancelDialogOpen(true)}>
+            Cancel session
+          </Button>
+        </div>
       )}
 
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
@@ -216,6 +261,58 @@ export default function TherapyBookingDetailPage() {
             <Button variant="outline" onClick={() => setCancelDialogOpen(false)} disabled={cancelling}>Keep session</Button>
             <Button variant="destructive" onClick={handleCancel} disabled={cancelling}>
               {cancelling ? <Loader2 size={14} className="animate-spin" /> : "Confirm cancellation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rescheduleDialogOpen} onOpenChange={(open) => { setRescheduleDialogOpen(open); if (!open) setRescheduleSlot(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-serif text-[#1A2340] flex items-center gap-2">
+              <CalendarClock size={18} /> Reschedule session
+            </DialogTitle>
+          </DialogHeader>
+
+          <input
+            type="date"
+            value={rescheduleDate}
+            min={todayIsoDate()}
+            onChange={(e) => { setRescheduleDate(e.target.value); setRescheduleSlot(null); }}
+            className="w-full border border-border rounded-lg px-3 py-2 text-sm"
+          />
+
+          {rescheduleSlotsLoading && (
+            <div className="flex justify-center py-6"><Loader2 size={20} className="animate-spin text-muted-foreground" /></div>
+          )}
+
+          {!rescheduleSlotsLoading && (rescheduleSlots?.length ?? 0) === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-6">No open slots on this date.</p>
+          )}
+
+          {!rescheduleSlotsLoading && (rescheduleSlots?.length ?? 0) > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {rescheduleSlots!.map((s) => (
+                <button
+                  key={s.startTime}
+                  onClick={() => setRescheduleSlot(s)}
+                  className={`text-xs rounded-lg border px-2 py-2 flex flex-col items-center gap-0.5 ${
+                    rescheduleSlot?.startTime === s.startTime
+                      ? "border-[#2EC4A5] bg-[#2EC4A5]/10 text-[#1A2340]"
+                      : "border-border text-muted-foreground hover:border-[#2EC4A5]/50"
+                  }`}
+                >
+                  <Clock size={12} />
+                  {s.startTime}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRescheduleDialogOpen(false)} disabled={rescheduling}>Cancel</Button>
+            <Button onClick={handleReschedule} disabled={!rescheduleSlot || rescheduling} className="bg-[#2EC4A5] hover:bg-[#2EC4A5]/90 text-white">
+              {rescheduling ? <Loader2 size={14} className="animate-spin" /> : "Confirm new time"}
             </Button>
           </DialogFooter>
         </DialogContent>
