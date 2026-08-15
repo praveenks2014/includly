@@ -389,6 +389,23 @@ router.post("/shadow-teacher/request", requireAuth, requireRole("parent"), async
     return;
   }
 
+  // Consent gate — shadow-teacher matching copies child.conditions/city/
+  // goalsAreas/preferredModes directly onto shadowTeacherMatchesTable below,
+  // visible to every shortlisted candidate (see GET /my-candidacies). This
+  // is real disclosure, not a cosmetic field, so it must be blocked outright
+  // rather than proceeding with those fields silently omitted — a match
+  // without conditions/goal areas can't score or surface candidates
+  // meaningfully anyway, so a "successful" request that quietly can't work
+  // is worse than an honest rejection.
+  const childConsent = child.consent as { intakeShare?: boolean } | null;
+  if (!childConsent?.intakeShare) {
+    res.status(403).json({
+      error: "Enable \"Share this profile with matched specialists\" in your child's profile before requesting a shadow teacher match.",
+      code: "INTAKE_SHARE_CONSENT_REQUIRED",
+    });
+    return;
+  }
+
   // Prevent duplicate active requests — scoped to THIS child only
   const existing = await db
     .select()
@@ -826,6 +843,13 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       childDesiredDaysOfWeek: shadowTeacherMatchesTable.childDesiredDaysOfWeek,
       childSchoolStartTime:   childrenTable.schoolStartTime,
       childSchoolEndTime:     childrenTable.schoolEndTime,
+      // Read-time consent recheck (not just the gate at request creation) —
+      // childConditions/childCity/childGoalsAreas/childPreferredModes/the
+      // schedule fields above are all a SNAPSHOT taken once at request
+      // time. A parent can revoke intakeShare afterward; this column lets
+      // the result mapper below withhold those fields going forward
+      // regardless of what's still sitting in the snapshot columns.
+      childCurrentIntakeShareConsent: childrenTable.consent,
     })
     .from(shadowMatchCandidatesTable)
     .innerJoin(shadowTeacherMatchesTable, eq(shadowMatchCandidatesTable.matchId, shadowTeacherMatchesTable.id))
@@ -878,6 +902,7 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
         childDesiredDaysOfWeek: shadowTeacherMatchesTable.childDesiredDaysOfWeek,
         childSchoolStartTime:   childrenTable.schoolStartTime,
         childSchoolEndTime:     childrenTable.schoolEndTime,
+        childCurrentIntakeShareConsent: childrenTable.consent,
       })
       .from(shadowMatchCandidatesTable)
       .innerJoin(shadowTeacherMatchesTable, eq(shadowMatchCandidatesTable.matchId, shadowTeacherMatchesTable.id))
@@ -926,18 +951,31 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
   const result = candidates.map(c => {
     const thread = threadByMatchId.get(c.matchId);
     const counts = thread ? countByThreadId.get(thread.threadId) : undefined;
+    // Read-time consent recheck. childConditions/childCity/childGoalsAreas/
+    // childPreferredModes/the schedule fields below are a SNAPSHOT copied
+    // onto shadowTeacherMatchesTable once, at request time (see
+    // POST /shadow-teacher/request's own consent gate). A parent can revoke
+    // intakeShare afterward via their child's profile; when that happens
+    // the snapshot columns still hold the old values, so this endpoint
+    // must independently check the child's CURRENT consent -- not just
+    // trust that request creation was gated correctly in the past -- and
+    // withhold those specific fields if consent is no longer granted.
+    // childCurrentIntakeShareConsent is undefined for a deleted child
+    // (leftJoin, no match) -- treated as revoked, not as "still granted".
+    const currentConsent = c.childCurrentIntakeShareConsent as { intakeShare?: boolean } | null | undefined;
+    const consentCurrentlyGranted = currentConsent?.intakeShare === true;
     return {
       candidateId:      c.candidateId,
       matchId:          c.matchId,
       matchStatus:      c.matchStatus,
       isSelected:       c.selectedProfessionalId === pro.id,
-      childCity:        c.childCity,
-      childConditions:  c.childConditions ?? [],
+      childCity:        consentCurrentlyGranted ? c.childCity : null,
+      childConditions:  consentCurrentlyGranted ? (c.childConditions ?? []) : [],
       // childBudgetMinInr/MaxInr deliberately excluded — the parent's stated
       // budget is an internal matching signal only (see scoreBudget() in
       // shadowTeacherScoring.ts) and must never reach the teacher's client.
-      childPreferredModes: c.childPreferredModes ?? [],
-      childGoalsAreas:        c.childGoalsAreas       ?? null,
+      childPreferredModes: consentCurrentlyGranted ? (c.childPreferredModes ?? []) : [],
+      childGoalsAreas:        consentCurrentlyGranted ? (c.childGoalsAreas ?? null) : null,
       schoolName:             c.schoolName            ?? null,
       // #18 — same display-only distance as the parent's my-request view,
       // never computed unless both points are known precisely.
@@ -964,9 +1002,10 @@ router.get("/shadow-teacher/my-candidacies", requireAuth, async (req: Request, r
       // Piece B — parent's initial, non-negotiated desired days (the
       // scoring input), paired with the child's real school hours so the
       // teacher sees exactly what scoreScheduleOverlap compared against.
-      childDesiredDaysOfWeek: c.childDesiredDaysOfWeek ?? null,
-      childSchoolStartTime:   c.childSchoolStartTime   ?? null,
-      childSchoolEndTime:     c.childSchoolEndTime     ?? null,
+      // Same consent recheck as childConditions/etc above.
+      childDesiredDaysOfWeek: consentCurrentlyGranted ? (c.childDesiredDaysOfWeek ?? null) : null,
+      childSchoolStartTime:   consentCurrentlyGranted ? (c.childSchoolStartTime ?? null) : null,
+      childSchoolEndTime:     consentCurrentlyGranted ? (c.childSchoolEndTime ?? null) : null,
       threadId:        thread?.threadId ?? null,
       messageCount:    counts ? Number(counts.messageCount) : 0,
       lastMessageAt:   counts?.lastMessageAt ?? null,
