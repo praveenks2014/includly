@@ -2051,7 +2051,7 @@ export function ShadowTeacherRequestWidget() {
           <h2 className="font-serif font-semibold text-lg text-foreground">Find a Shadow Teacher</h2>
         </div>
         <p className="text-sm text-muted-foreground">
-          A shadow teacher provides one-on-one support in inclusive classrooms or at home. Select your child's profile and we'll match you with the best available teachers — for free.
+          A shadow teacher provides one-on-one support in inclusive classrooms or at home. Select your child's profile and we'll match you with the best available teachers.
         </p>
 
         {children.length === 0 ? (
