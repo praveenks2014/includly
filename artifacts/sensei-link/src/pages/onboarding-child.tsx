@@ -21,6 +21,9 @@ type WizardData = {
   dob: string;
   gender: string;
   city: string;
+  area: string;
+  district: string;
+  state: string;
   lat: number | null;
   lng: number | null;
   diagnosisStatus: string;
@@ -54,6 +57,9 @@ const DEFAULT: WizardData = {
   dob: "",
   gender: "",
   city: "",
+  area: "",
+  district: "",
+  state: "",
   lat: null,
   lng: null,
   diagnosisStatus: "",
@@ -288,6 +294,9 @@ export default function ChildOnboardingPage() {
       dob:                  (c.dob as string) ?? "",
       gender:               (c.gender as string) ?? "",
       city:                 (c.city as string) ?? "",
+      area:                 (c.area as string) ?? "",
+      district:             (c.district as string) ?? "",
+      state:                (c.state as string) ?? "",
       lat:                  (c.lat as number | null) ?? null,
       lng:                  (c.lng as number | null) ?? null,
       diagnosisStatus:      (c.diagnosisStatus as string) ?? "",
@@ -367,6 +376,9 @@ export default function ChildOnboardingPage() {
       ...(data.dob && { dob: data.dob }),
       ...(data.gender && { gender: data.gender }),
       ...(data.city.trim() && { city: data.city.trim() }),
+      ...(data.area.trim() && { area: data.area.trim() }),
+      ...(data.district.trim() && { district: data.district.trim() }),
+      ...(data.state.trim() && { state: data.state.trim() }),
       ...(data.lat != null && { lat: data.lat }),
       ...(data.lng != null && { lng: data.lng }),
       ...(data.diagnosisStatus && { diagnosisStatus: data.diagnosisStatus }),
@@ -452,8 +464,17 @@ export default function ChildOnboardingPage() {
             <Field label="City">
               <CityAutocomplete
                 city={data.city}
-                onSelect={(result) => setData((prev) => ({ ...prev, city: result.city, lat: result.lat, lng: result.lng }))}
-                onManualChange={(city) => setData((prev) => ({ ...prev, city, lat: null, lng: null }))}
+                area={data.area}
+                onSelect={(result) => setData((prev) => ({
+                  ...prev,
+                  city: result.city,
+                  area: result.area,
+                  district: result.district,
+                  state: result.state,
+                  lat: result.lat,
+                  lng: result.lng,
+                }))}
+                onManualChange={(city) => setData((prev) => ({ ...prev, city, area: "", district: "", state: "", lat: null, lng: null }))}
                 placeholder="e.g. Hyderabad"
               />
             </Field>

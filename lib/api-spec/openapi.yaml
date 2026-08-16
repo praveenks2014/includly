@@ -1809,6 +1809,10 @@ components:
         displayArea:
           type: ["string", "null"]
           description: Human-readable neighbourhood/area label shown to parents
+        district:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
         clinicAddress:
           type: ["string", "null"]
           description: Full clinic/practice address — revealed to parents only after a booking is confirmed
@@ -2133,6 +2137,10 @@ components:
         displayArea:
           type: string
           description: Human-readable neighbourhood/area label shown to parents (e.g. "Bandra West, Mumbai")
+        district:
+          type: string
+        state:
+          type: string
         clinicAddress:
           type: string
           description: Full clinic/practice address — revealed to parents only after booking is confirmed
@@ -2202,6 +2210,10 @@ components:
         displayArea:
           type: string
           description: Human-readable neighbourhood/area label shown to parents (e.g. "Bandra West, Mumbai")
+        district:
+          type: string
+        state:
+          type: string
         clinicAddress:
           type: string
           description: Full clinic/practice address — revealed to parents only after booking is confirmed

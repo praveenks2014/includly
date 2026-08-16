@@ -52,6 +52,8 @@ const ChildBody = z.object({
   gender: z.string().optional(),
   city: z.string().optional(),
   area: z.string().optional(),
+  district: z.string().optional(),
+  state: z.string().optional(),
   lat: z.number().optional(),
   lng: z.number().optional(),
   notes: z.string().optional(),

@@ -32,6 +32,10 @@ export interface ProfessionalProfile {
    * @nullable
    */
   displayArea?: string | null;
+  /** @nullable */
+  district?: string | null;
+  /** @nullable */
+  state?: string | null;
   /**
    * Full clinic/practice address — revealed to parents only after a booking is confirmed
    * @nullable

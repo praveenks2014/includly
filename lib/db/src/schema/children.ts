@@ -9,6 +9,8 @@ export const childrenTable = pgTable("children", {
   notes: text("notes"),
   city: text("city"),
   area: text("area"),
+  district: text("district"),
+  state: text("state"),
   lat: real("lat"),
   lng: real("lng"),
   documentsJson: text("documents_json"),

@@ -182,6 +182,8 @@ export const GetMyProfessionalProfileResponse = zod.object({
     .string()
     .nullish()
     .describe("Human-readable neighbourhood\/area label shown to parents"),
+  district: zod.string().nullish(),
+  state: zod.string().nullish(),
   clinicAddress: zod
     .string()
     .nullish()
@@ -307,6 +309,8 @@ export const CreateProfessionalProfileBody = zod.object({
     .describe(
       'Human-readable neighbourhood\/area label shown to parents (e.g. \"Bandra West, Mumbai\")',
     ),
+  district: zod.string().optional(),
+  state: zod.string().optional(),
   clinicAddress: zod
     .string()
     .optional()
@@ -376,6 +380,8 @@ export const UpdateProfessionalProfileBody = zod.object({
     .describe(
       'Human-readable neighbourhood\/area label shown to parents (e.g. \"Bandra West, Mumbai\")',
     ),
+  district: zod.string().optional(),
+  state: zod.string().optional(),
   clinicAddress: zod
     .string()
     .optional()
@@ -462,6 +468,8 @@ export const UpdateProfessionalProfileResponse = zod.object({
     .string()
     .nullish()
     .describe("Human-readable neighbourhood\/area label shown to parents"),
+  district: zod.string().nullish(),
+  state: zod.string().nullish(),
   clinicAddress: zod
     .string()
     .nullish()

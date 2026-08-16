@@ -242,6 +242,8 @@ export default function OnboardPage() {
     latitude: existingProfile?.latitude ?? undefined as number | undefined,
     longitude: existingProfile?.longitude ?? undefined as number | undefined,
     displayArea: existingProfile?.displayArea ?? "",
+    district: existingProfile?.district ?? "",
+    state: existingProfile?.state ?? "",
     willingToTravel: existingProfile?.willingToTravel ?? false,
     travelRadiusKm: existingProfile?.travelRadiusKm?.toString() ?? "10",
     pricingMinINR: existingProfile?.pricingMinINR?.toString() ?? "",
@@ -273,6 +275,8 @@ export default function OnboardPage() {
         city: prev.city || existingProfile.city || "",
         country: prev.country || existingProfile.country || "India",
         displayArea: prev.displayArea || existingProfile.displayArea || "",
+        district: prev.district || existingProfile.district || "",
+        state: prev.state || existingProfile.state || "",
         pricingMinINR: prev.pricingMinINR || existingProfile.pricingMinINR?.toString() || "",
         pricingMaxINR: prev.pricingMaxINR || existingProfile.pricingMaxINR?.toString() || "",
       }));
@@ -487,6 +491,8 @@ export default function OnboardPage() {
           latitude: form.latitude,
           longitude: form.longitude,
           displayArea: form.displayArea.trim() || undefined,
+          district: form.district.trim() || undefined,
+          state: form.state.trim() || undefined,
           willingToTravel: form.willingToTravel,
           travelRadiusKm: form.willingToTravel ? Number(form.travelRadiusKm) : undefined,
         },
@@ -797,6 +803,8 @@ export default function OnboardPage() {
               onSelect={(result: CityResult) => {
                 setField("city", result.city);
                 setField("displayArea", result.area || form.displayArea);
+                setField("district", result.district);
+                setField("state", result.state);
                 setField("latitude", result.lat);
                 setField("longitude", result.lng);
               }}

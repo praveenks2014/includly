@@ -6,6 +6,13 @@ export interface CityResult {
   displayText: string;
   city: string;
   area: string;
+  // Photon's raw county/state fields were already being fetched here but
+  // only ever folded into displayText, never returned to callers -- both
+  // onboarding-child.tsx and onboard.tsx were silently discarding data
+  // Photon had already provided. Empty string (not null/undefined,
+  // matching `area`'s own convention above) when Photon doesn't return one.
+  district: string;
+  state: string;
   lat: number;
   lng: number;
 }
@@ -36,10 +43,12 @@ function parseFeature(f: PhotonFeature): CityResult {
   const isCityLevel = CITY_TYPES.has(p.type ?? "");
   const city = isCityLevel ? p.name : (p.city ?? p.county ?? p.name);
   const area = isCityLevel ? "" : p.name;
+  const district = p.county ?? "";
+  const state = p.state ?? "";
   const parts: string[] = [p.name];
   if (!isCityLevel && p.city && p.city !== p.name) parts.push(p.city);
   if (p.state) parts.push(p.state);
-  return { displayText: parts.join(", "), city, area, lat, lng };
+  return { displayText: parts.join(", "), city, area, district, state, lat, lng };
 }
 
 export interface CityAutocompleteProps {

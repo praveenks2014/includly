@@ -94,6 +94,8 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   isPremium: boolean("is_premium").notNull().default(false),
   specializationTags: text("specialization_tags").array().notNull().default([]),
   displayArea: text("display_area"),
+  district: text("district"),
+  state: text("state"),
   clinicAddress: text("clinic_address"),
   // Held-pending address change (Step 2, professional-verification-integrity
   // batch): once a verified, in-person-visiting professional (see

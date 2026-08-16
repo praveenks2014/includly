@@ -188,6 +188,10 @@ export interface ProfessionalProfile {
    * @nullable
    */
   displayArea?: string | null;
+  /** @nullable */
+  district?: string | null;
+  /** @nullable */
+  state?: string | null;
   /**
    * Full clinic/practice address — revealed to parents only after a booking is confirmed
    * @nullable
@@ -423,6 +427,8 @@ export interface CreateProfessionalProfileBody {
   pricingMaxINR?: number;
   /** Human-readable neighbourhood/area label shown to parents (e.g. "Bandra West, Mumbai") */
   displayArea?: string;
+  district?: string;
+  state?: string;
   /** Full clinic/practice address — revealed to parents only after booking is confirmed */
   clinicAddress?: string;
   /** Whether this specialist offers home-visit sessions */
@@ -483,6 +489,8 @@ export interface UpdateProfessionalProfileBody {
   pricingMaxINR?: number;
   /** Human-readable neighbourhood/area label shown to parents (e.g. "Bandra West, Mumbai") */
   displayArea?: string;
+  district?: string;
+  state?: string;
   /** Full clinic/practice address — revealed to parents only after booking is confirmed */
   clinicAddress?: string;
   /** Whether this specialist offers home-visit sessions */

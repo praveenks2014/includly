@@ -26,6 +26,8 @@ export interface ChildResponseType {
   notes: string | null;
   city: string | null;
   area: string | null;
+  district: string | null;
+  state: string | null;
   lat: number | null;
   lng: number | null;
   gender: string | null;

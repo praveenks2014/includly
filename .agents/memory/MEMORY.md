@@ -34,3 +34,4 @@
 - [Windows sandbox vite build blocked](windows-sandbox-vite-build.md) — missing win32 native optionals (rollup/esbuild/lightningcss/tailwindcss-oxide); install pinned win32 binaries locally via pnpm add -w -D, never commit them
 - [Feature-flag router mount order](feature-flag-router-mount-order.md) — therapist.ts/tutor.ts global router.use() blocks ALL requests when flag is false; mount therapyBookingsRouter before them in routes/index.ts
 - [Notification timing — await vs void](notification-timing-await.md) — createInAppNotification must be awaited on error paths where the response is sent immediately after, or the insert may not commit before the caller queries the DB
+- [openapi.yaml drift reconciliation](openapi-yaml-drift-reconciliation.md) — TRACKED FOLLOW-UP, not started: yaml missing coaching/centre_admin enums, generalAvailabilityJson, supportTypes, scheduleWarningBufferMinutes and more; full codegen regen unsafe until reconciled
