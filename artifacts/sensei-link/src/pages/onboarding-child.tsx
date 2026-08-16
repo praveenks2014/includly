@@ -799,12 +799,19 @@ export default function ChildOnboardingPage() {
                   key: "intakeShare" as const,
                   label: "Share this profile with matched specialists",
                   required: true,
-                  // Backend gate (POST /shadow-teacher/request + GET
-                  // /my-candidacies' read-time recheck) enforces exactly
-                  // this field list -- keep this copy in sync with those
-                  // two call sites if either changes.
+                  // ONE flag gates TWO structurally different flows with
+                  // DIFFERENT field lists -- this copy must describe both,
+                  // not either one alone (an earlier version of this text
+                  // described only GET /children/:id's field list while
+                  // claiming to describe shadow-teacher matching, which
+                  // shares an entirely different set). Keep both halves in
+                  // sync with their real source: GET /children/:id's
+                  // professional branch (individual booking) and GET
+                  // /shadow-teacher/my-candidacies' result mapper (shadow-
+                  // teacher matching) in artifacts/api-server/src/routes/
+                  // children.ts and shadowTeacher.ts respectively.
                   description:
-                    "When enabled, a specialist matched with your child can see: name, age, conditions, diagnosis status, goal areas, languages, and your care notes. Not shared: date of birth, school details, budget, therapy history, or any other notes. You can withdraw this at any time — new specialists won't be able to view it going forward.",
+                    "When enabled, a specialist matched with your child can see — if matched individually (tutor/therapist booking): name, age, conditions, diagnosis status, goal areas, languages, and care notes; if matched via Shadow Teacher: city, conditions, goal areas, preferred session modes, and (once set) your desired coverage days and school hours. Never shared either way: date of birth, budget, therapy history, or other free-text notes. You can withdraw this at any time — new specialists won't be able to view it going forward.",
                 },
                 { key: "media" as const, label: "Allow session photos / videos with my consent" },
                 { key: "reports" as const, label: "Share session reports between specialists" },
