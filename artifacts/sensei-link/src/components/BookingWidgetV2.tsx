@@ -64,6 +64,11 @@ export function BookingWidgetV2({
   // see consultationNotes.ts. Absent/expired/mismatched-specialty entries
   // resolve to "", identical to today's default.
   const [notes, setNotes] = useState(() => (specialty ? readPendingConsultationNotes(specialty)?.notes ?? "" : ""));
+  // Defaults to "online" — the one option that's always legal regardless of
+  // this professional's offersHomeVisits capability, so no explicit choice
+  // is required to book. Snapshotted onto the booking at request time (see
+  // handleBook), never read live later.
+  const [mode, setMode] = useState<"online" | "in_clinic" | "home_visit">("online");
   const [loading, setLoading] = useState(false);
   const [booking, setBooking] = useState<BookingV2Result | null>(null);
   const [step, setStep] = useState<"select" | "requested" | "pay" | "paid">("select");
@@ -85,6 +90,7 @@ export function BookingWidgetV2({
           durationMinutes: selectedSlot.durationMinutes,
           notes: notes.trim() || undefined,
           childId: selectedChildId ?? undefined,
+          mode,
         }),
       });
       const data = await res.json();
@@ -286,6 +292,27 @@ export function BookingWidgetV2({
               <div className="bg-muted/40 rounded-lg p-3 text-sm space-y-1">
                 <p className="font-medium">{selectedSlot.date} • {selectedSlot.startTime}–{selectedSlot.endTime} • ₹{selectedSlot.priceInr}</p>
                 <p className="text-xs text-muted-foreground">+ platform fee & GST calculated at checkout</p>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">Session type</Label>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      { value: "online" as const, label: "Online" },
+                      { value: "in_clinic" as const, label: "In-clinic" },
+                      ...(offersHomeVisits ? [{ value: "home_visit" as const, label: "Home visit" }] : []),
+                    ]
+                  ).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setMode(opt.value)}
+                      className={`px-3 py-1.5 rounded-lg border text-xs transition-colors ${mode === opt.value ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary hover:bg-primary/5"}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <Label htmlFor="bv2-notes" className="text-xs text-muted-foreground mb-1 block">Notes for the specialist (optional)</Label>

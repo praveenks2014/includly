@@ -703,7 +703,7 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
   // compatibility) but deliberately never read from here on — both branches
   // below resolve endTime/duration (and price, where relevant) from the
   // authoritative slots row instead. See each branch's slot lookup for why.
-  const { professionalId, bookedDate, startTime, notes, childId } = { childId: undefined as number | undefined, ...parsed.data };
+  const { professionalId, bookedDate, startTime, notes, childId, mode } = { childId: undefined as number | undefined, mode: undefined as "online" | "in_clinic" | "home_visit" | undefined, ...parsed.data };
 
   // Fast-path pre-check — not the authoritative guard (that's the
   // advisory-lock-protected re-check inside each branch below), just avoids
@@ -727,9 +727,14 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
   }
 
   const [prof] = await db
-    .select({ specialty: professionalProfilesTable.specialty, employingCentreId: professionalProfilesTable.employingCentreId })
+    .select({ specialty: professionalProfilesTable.specialty, employingCentreId: professionalProfilesTable.employingCentreId, offersHomeVisits: professionalProfilesTable.offersHomeVisits })
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.id, professionalId));
+
+  if (mode === "home_visit" && !prof?.offersHomeVisits) {
+    res.status(400).json({ error: "This specialist does not offer home visits" });
+    return;
+  }
 
   // URGENT fix — this endpoint has no concept of centre pricing, package
   // consumption, resolvedCommissionPct settlement (postDuesCharge), OTP via
@@ -830,6 +835,7 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
             commissionInr: 0,
             notes: notes ?? null,
             childId: childId ?? null,
+            mode: mode ?? null,
             status: "confirmed",
             startOtp: generateOtp(),
             endOtp: generateOtp(),
@@ -937,6 +943,7 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
           resolvedCommissionPct,
           notes: notes ?? null,
           childId: childId ?? null,
+          mode: mode ?? null,
           providerOrderId: order.id as string,
         })
         .returning();

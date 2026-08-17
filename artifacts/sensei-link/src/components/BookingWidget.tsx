@@ -60,6 +60,9 @@ export function BookingWidget({
   const [date, setDate] = useState<string>(todayIsoDate());
   const [selectedSlot, setSelectedSlot] = useState<BookableSlot | null>(null);
   const [notes, setNotes] = useState("");
+  // Same convention as BookingWidgetV2's mode selector — defaults to
+  // "online" (always legal), snapshotted at booking time.
+  const [mode, setMode] = useState<"online" | "in_clinic" | "home_visit">("online");
   const [booking, setBooking] = useState(false);
   const [booked, setBooked] = useState(false);
   const [bookedSessionId, setBookedSessionId] = useState<number | null>(null);
@@ -107,6 +110,7 @@ export function BookingWidget({
           durationMinutes: selectedSlot.durationMinutes,
           amountInr: selectedSlot.priceInr,
           notes: notes.trim() || undefined,
+          mode,
         },
       });
 
@@ -290,6 +294,27 @@ export function BookingWidget({
                   {selectedSlot.date} • {selectedSlot.startTime}–{selectedSlot.endTime}
                   {isCreditSpecialty ? " • 1 session credit" : ` • ₹${selectedSlot.priceInr}`}
                 </p>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">Session type</Label>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      { value: "online" as const, label: "Online" },
+                      { value: "in_clinic" as const, label: "In-clinic" },
+                      ...(offersHomeVisits ? [{ value: "home_visit" as const, label: "Home visit" }] : []),
+                    ]
+                  ).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setMode(opt.value)}
+                      className={`px-3 py-1.5 rounded-lg border text-xs transition-colors ${mode === opt.value ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary hover:bg-primary/5"}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <Label htmlFor="booking-notes" className="text-xs text-muted-foreground mb-1 block">

@@ -26,6 +26,14 @@ export const sessionStatusEnum = pgEnum("session_status", [
   "disputed",
 ]);
 
+// Individual-professional verticals (tutor/therapist/psychiatrist/coach) had
+// no structured per-booking mode signal until now — only offersHomeVisits
+// (a capability flag, not per-booking) and the parent's non-binding
+// preferredModes wishlist. Mirrors centreServiceModeEnum's shape; therapy-
+// centre bookings don't need their own copy of this — they already inherit
+// mode via therapyBookingsTable.serviceId -> centreServicesTable.mode.
+export const sessionModeEnum = pgEnum("session_mode", ["online", "in_clinic", "home_visit"]);
+
 export const professionalAvailabilityTable = pgTable("professional_availability", {
   id: serial("id").primaryKey(),
   professionalId: integer("professional_id").notNull().references(() => professionalProfilesTable.id, { onDelete: "cascade" }),
@@ -81,6 +89,10 @@ export const sessionBookingsTable = pgTable("session_bookings", {
   // centre's rate must never retroactively reinterpret an already-placed
   // booking's commission.
   resolvedCommissionPct: real("resolved_commission_pct"),
+  // Parent-selected, snapshotted at booking time (not read live) — see
+  // sessionModeEnum above. Nullable: legacy bookings predate this column,
+  // and the dead /sessions/book (Flow A) path doesn't set it.
+  mode: sessionModeEnum("mode"),
   status: sessionStatusEnum("status").notNull().default("pending_payment"),
   providerOrderId: text("provider_order_id"),
   providerPaymentId: text("provider_payment_id"),

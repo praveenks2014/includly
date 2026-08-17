@@ -68,13 +68,14 @@ const BookV2Body = z.object({
   durationMinutes: z.number().int().positive(),
   notes: z.string().max(1000).optional(),
   childId: z.number().int().positive().optional(),
+  mode: z.enum(["online", "in_clinic", "home_visit"]).optional(),
 });
 
 router.post("/sessions-v2/book", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
   const parsed = BookV2Body.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { professionalId, bookedDate, startTime, endTime, durationMinutes, notes, childId } = parsed.data;
+  const { professionalId, bookedDate, startTime, endTime, durationMinutes, notes, childId, mode } = parsed.data;
 
   // Conflict check
   const [existing] = await db
@@ -100,10 +101,15 @@ router.post("/sessions-v2/book", requireAuth, requireRole("parent"), async (req:
   }
 
   const [prof] = await db
-    .select({ pricingMinINR: professionalProfilesTable.pricingMinINR, userId: professionalProfilesTable.userId })
+    .select({ pricingMinINR: professionalProfilesTable.pricingMinINR, userId: professionalProfilesTable.userId, offersHomeVisits: professionalProfilesTable.offersHomeVisits })
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.id, professionalId));
   if (!prof) { res.status(404).json({ error: "Professional not found" }); return; }
+
+  if (mode === "home_visit" && !prof.offersHomeVisits) {
+    res.status(400).json({ error: "This specialist does not offer home visits" });
+    return;
+  }
 
   const settings = await getSettings();
   const proPrice = prof.pricingMinINR ?? 0;
@@ -125,6 +131,7 @@ router.post("/sessions-v2/book", requireAuth, requireRole("parent"), async (req:
       gstInr,
       notes: notes ?? null,
       childId: childId ?? null,
+      mode: mode ?? null,
       status: "requested",
     })
     .returning();

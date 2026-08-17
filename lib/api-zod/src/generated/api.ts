@@ -1940,6 +1940,7 @@ export const BookSessionBody = zod.object({
   durationMinutes: zod.number(),
   amountInr: zod.number(),
   notes: zod.string().optional(),
+  mode: zod.enum(["online", "in_clinic", "home_visit"]).optional(),
 });
 
 export const BookSessionResponse = zod.object({

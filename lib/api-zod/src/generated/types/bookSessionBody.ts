@@ -15,4 +15,5 @@ export interface BookSessionBody {
   durationMinutes: number;
   amountInr: number;
   notes?: string;
+  mode?: "online" | "in_clinic" | "home_visit";
 }
