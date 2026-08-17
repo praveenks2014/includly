@@ -15,7 +15,7 @@ export default function PrivacyPage() {
 
         <div className="prose prose-slate max-w-none">
           <h1 className="font-serif text-3xl font-semibold text-foreground mb-2">Privacy Policy</h1>
-          <p className="text-muted-foreground text-sm mb-8">Last updated: April 2026</p>
+          <p className="text-muted-foreground text-sm mb-8">Last updated: August 2026</p>
 
           <Section title="1. Introduction">
             <p>Includly ("we", "us", or "our") operates the Includly platform, which connects parents and guardians with special education professionals and medical specialists. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our service.</p>
@@ -63,11 +63,36 @@ export default function PrivacyPage() {
             <p>Professionals are informed about unlocks in their dashboard analytics.</p>
           </Section>
 
-          <Section title="5. Data Retention">
+          <Section title="5. Children's Data">
+            <p>Includly's core service involves parents and guardians sharing information about their children ("Children's Data") to receive matching and services from specialists. Children do not create their own accounts or submit their own data — all information about a child is entered and controlled by their parent or legal guardian.</p>
+
+            <h3>5.1 What We Collect About Children</h3>
+            <p>Basic profile information (name, date of birth, gender), diagnosis status and conditions, school and schedule details, goals and preferred session modes, and care notes provided by the parent.</p>
+
+            <h3>5.2 Consent Controls What Gets Shared</h3>
+            <p>Sharing a child's information with a specialist requires the parent's explicit, separately revocable consent ("Share this profile with matched specialists"). What's shared differs by how the child is matched:</p>
+            <ul>
+              <li><strong>Individually matched (tutor/therapist booking):</strong> name, age, conditions, diagnosis status, goal areas, languages, and care notes.</li>
+              <li><strong>Matched via Shadow Teacher:</strong> city, conditions, goal areas, preferred session modes, and (once set) desired coverage days and school hours.</li>
+              <li><strong>Never shared under either path:</strong> date of birth, budget, therapy history, or other free-text notes.</li>
+            </ul>
+            <p>A parent may withdraw this consent at any time; specialists lose access to the child's data going forward, though data already viewed cannot be un-seen. Separate consent flags govern media (e.g., photos shared during logged sessions) and progress reports — each can be granted or withdrawn independently of intake-sharing consent.</p>
+
+            <h3>5.3 Shadow Teacher Identity Protections</h3>
+            <p>Before a parent commits to a shadow-teacher match, the professional's identity (name, phone, email) is masked from view to protect the child until a match is confirmed — and reciprocally, the parent's identifying details are not shared with the professional until that same point.</p>
+
+            <h3>5.4 Retention and Deletion</h3>
+            <p>A child's profile is retained for as long as the parent's account is active, subject to the same retention terms and legal/audit-record exceptions described in Section 6 (Data Retention) below.</p>
+
+            <h3>5.5 No Independent Marketing or Third-Party Sharing</h3>
+            <p>We do not use children's data for advertising or marketing purposes, and we do not sell or share it with third parties outside of the matching and service-delivery purpose described above.</p>
+          </Section>
+
+          <Section title="6. Data Retention">
             <p>We retain your personal data for as long as your account is active. If you request account deletion, we will delete your personal data within 30 days, except for data we are required to retain for legal, regulatory, or audit purposes (e.g., payment transaction records for 7 years).</p>
           </Section>
 
-          <Section title="6. Your Rights">
+          <Section title="7. Your Rights">
             <h3>6.1 GDPR Rights (EU/EEA users)</h3>
             <ul>
               <li>Right to access your personal data.</li>
@@ -83,19 +108,19 @@ export default function PrivacyPage() {
             <p>To exercise any of these rights, please contact us at <a href="mailto:theglobalpitstop@gmail.com">theglobalpitstop@gmail.com</a>.</p>
           </Section>
 
-          <Section title="7. Cookies and Tracking">
+          <Section title="8. Cookies and Tracking">
             <p>We use session cookies necessary for authentication. We do not use third-party advertising cookies. You may disable cookies in your browser settings, but this may affect your ability to use the platform.</p>
           </Section>
 
-          <Section title="8. Data Security">
+          <Section title="9. Data Security">
             <p>We implement industry-standard security measures including HTTPS encryption, secure credential storage, and regular security audits. However, no method of transmission over the Internet is 100% secure.</p>
           </Section>
 
-          <Section title="9. Changes to This Policy">
+          <Section title="10. Changes to This Policy">
             <p>We may update this Privacy Policy periodically. We will notify you of significant changes by posting the new policy on this page with an updated date.</p>
           </Section>
 
-          <Section title="10. Contact Us">
+          <Section title="11. Contact Us">
             <p>For privacy-related queries, contact us at:</p>
             <p><strong>Includly</strong><br />Email: <a href="mailto:privacy@includly.in">privacy@includly.in</a></p>
           </Section>
