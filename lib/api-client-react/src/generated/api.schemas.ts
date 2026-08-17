@@ -202,6 +202,12 @@ export interface ProfessionalProfile {
    * @nullable
    */
   clinicAddress?: string | null;
+  /** @nullable */
+  clinicLat?: number | null;
+  /** @nullable */
+  clinicLng?: number | null;
+  /** @nullable */
+  clinicLocationSource?: "geocoded" | "city_center_approx" | "unresolved" | null;
   /** Whether this specialist offers home-visit sessions */
   offersHomeVisits: boolean;
   travelRadiusKm: number;
@@ -442,6 +448,9 @@ export interface CreateProfessionalProfileBody {
   state?: string;
   /** Full clinic/practice address — revealed to parents only after booking is confirmed */
   clinicAddress?: string;
+  clinicLat?: number;
+  clinicLng?: number;
+  clinicLocationSource?: "geocoded" | "city_center_approx" | "unresolved";
   /** Whether this specialist offers home-visit sessions */
   offersHomeVisits?: boolean;
   /** UPI ID for receiving session payments (never exposed to parents/clients) */
@@ -506,6 +515,9 @@ export interface UpdateProfessionalProfileBody {
   state?: string;
   /** Full clinic/practice address — revealed to parents only after booking is confirmed */
   clinicAddress?: string;
+  clinicLat?: number;
+  clinicLng?: number;
+  clinicLocationSource?: "geocoded" | "city_center_approx" | "unresolved";
   /** Whether this specialist offers home-visit sessions */
   offersHomeVisits?: boolean;
   /** UPI ID for receiving session payments (never exposed to parents/clients) */

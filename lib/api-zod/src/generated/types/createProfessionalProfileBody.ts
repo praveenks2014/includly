@@ -34,6 +34,9 @@ export interface CreateProfessionalProfileBody {
   locationSource?: "geocoded" | "city_center_approx" | "unresolved";
   /** Full clinic/practice address — revealed to parents only after booking is confirmed */
   clinicAddress?: string;
+  clinicLat?: number;
+  clinicLng?: number;
+  clinicLocationSource?: "geocoded" | "city_center_approx" | "unresolved";
   /** Whether this specialist offers home-visit sessions */
   offersHomeVisits?: boolean;
   /** UPI ID for receiving session payments (never exposed to parents/clients) */

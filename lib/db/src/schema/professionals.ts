@@ -100,6 +100,20 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   district: text("district"),
   state: text("state"),
   clinicAddress: text("clinic_address"),
+  // Geocoded coordinate for clinicAddress (vertical-expansion investigation,
+  // in-clinic distance scoring) — same three-tier locationSource discipline
+  // as childrenTable/professionalProfilesTable's own home-location fields.
+  // NOTE: as of this addition, the comment below's claim that clinicAddress
+  // "is never used for search, matching, or distance calculations" no
+  // longer holds for these coordinate fields specifically (only the TEXT
+  // clinicAddress remains display-only) — these ARE meant to feed in-clinic
+  // distance scoring once wired in. Held-pending exactly like
+  // pendingClinicAddress below, for the same reason: an unreviewed
+  // coordinate claim must not be usable for real distance scoring any more
+  // than an unreviewed address string should be shown to a parent.
+  clinicLat: real("clinic_lat"),
+  clinicLng: real("clinic_lng"),
+  clinicLocationSource: text("clinic_location_source"),
   // Held-pending address change (Step 2, professional-verification-integrity
   // batch): once a verified, in-person-visiting professional (see
   // offersHomeVisits below — the best available proxy today for "has a
@@ -111,11 +125,16 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   // (shown to parents post-booking) must never reflect an unverified claim.
   // Applied to clinicAddress (and cleared) on address-approve; cleared on
   // address-reject. Deliberately does NOT gate verificationStatus/listing —
-  // the professional stays fully searchable/bookable throughout, since
-  // clinicAddress itself is never used for search, matching, or distance
-  // calculations, only shown as a display string after a booking is
-  // already confirmed.
+  // the professional stays fully searchable/bookable throughout for
+  // credential purposes; the address (and, now, the coordinate) itself is
+  // what's held back until reviewed.
   pendingClinicAddress: text("pending_clinic_address"),
+  // Shadow pending copies of clinicLat/clinicLng/clinicLocationSource,
+  // promoted/cleared in lockstep with pendingClinicAddress on approve/
+  // reject — see admin.ts's address/approve and address/reject handlers.
+  pendingClinicLat: real("pending_clinic_lat"),
+  pendingClinicLng: real("pending_clinic_lng"),
+  pendingClinicLocationSource: text("pending_clinic_location_source"),
   addressReviewStatus: addressReviewStatusEnum("address_review_status"),
   offersHomeVisits: boolean("offers_home_visits").notNull().default(false),
   coachingSubType: coachingSubTypeEnum("coaching_sub_type"),

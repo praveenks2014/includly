@@ -1820,6 +1820,14 @@ components:
         clinicAddress:
           type: ["string", "null"]
           description: Full clinic/practice address — revealed to parents only after a booking is confirmed
+        clinicLat:
+          type: ["number", "null"]
+          description: Geocoded clinic coordinate — server-side distance scoring only, never exposed to a parent pre-booking
+        clinicLng:
+          type: ["number", "null"]
+        clinicLocationSource:
+          type: ["string", "null"]
+          enum: [geocoded, city_center_approx, unresolved, null]
         offersHomeVisits:
           type: boolean
           description: Whether this specialist offers home-visit sessions
@@ -2156,6 +2164,13 @@ components:
         clinicAddress:
           type: string
           description: Full clinic/practice address — revealed to parents only after booking is confirmed
+        clinicLat:
+          type: number
+        clinicLng:
+          type: number
+        clinicLocationSource:
+          type: string
+          enum: [geocoded, city_center_approx, unresolved]
         offersHomeVisits:
           type: boolean
           description: Whether this specialist offers home-visit sessions
@@ -2233,6 +2248,13 @@ components:
         clinicAddress:
           type: string
           description: Full clinic/practice address — revealed to parents only after booking is confirmed
+        clinicLat:
+          type: number
+        clinicLng:
+          type: number
+        clinicLocationSource:
+          type: string
+          enum: [geocoded, city_center_approx, unresolved]
         offersHomeVisits:
           type: boolean
           description: Whether this specialist offers home-visit sessions

@@ -195,6 +195,9 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
       rciCrrNumber: professionalProfilesTable.rciCrrNumber,
       specializationTags: professionalProfilesTable.specializationTags,
       clinicAddress: professionalProfilesTable.clinicAddress,
+      clinicLat: professionalProfilesTable.clinicLat,
+      clinicLng: professionalProfilesTable.clinicLng,
+      clinicLocationSource: professionalProfilesTable.clinicLocationSource,
       offersHomeVisits: professionalProfilesTable.offersHomeVisits,
       verticalDetails: professionalProfilesTable.verticalDetails,
       verificationStatus: professionalProfilesTable.verificationStatus,
@@ -211,7 +214,12 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
   }
 
   const { avatarUrl, verticalDetails: incomingVd, email: _clientEmail, ...profileData } = parsed.data;
-  const updateData: typeof profileData & { offersHomeVisits?: boolean; verticalDetails?: unknown; email?: string; verificationStatus?: "pending"; clinicAddress?: string | null; pendingClinicAddress?: string | null; addressReviewStatus?: null } = { ...profileData };
+  const updateData: typeof profileData & {
+    offersHomeVisits?: boolean; verticalDetails?: unknown; email?: string; verificationStatus?: "pending";
+    clinicAddress?: string | null; pendingClinicAddress?: string | null; addressReviewStatus?: null;
+    clinicLat?: number | null; clinicLng?: number | null; clinicLocationSource?: "geocoded" | "city_center_approx" | "unresolved" | null;
+    pendingClinicLat?: number | null; pendingClinicLng?: number | null; pendingClinicLocationSource?: "geocoded" | "city_center_approx" | "unresolved" | null;
+  } = { ...profileData };
 
   // Ignore any client-submitted email — always resync to the Clerk login email.
   const clerkEmail = await getClerkPrimaryEmail(req.clerkId!);
@@ -260,10 +268,14 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
   // a parent in person. offersHomeVisits is the best signal available today
   // for "has a walk-in/visited location" (there is no dedicated flag for
   // that); if one is ever added, it should take over this role instead.
-  // clinicAddress itself is never used for search, matching, or distance
-  // calculations (those use latitude/longitude) — only shown as a display
-  // string once a booking is already confirmed — so an online-only
-  // professional's address change is harmless and applies immediately.
+  // The TEXT clinicAddress is only ever shown as a display string once a
+  // booking is already confirmed. clinicLat/clinicLng are NOT display-only
+  // — once wired into in-clinic distance scoring (vertical-expansion work),
+  // an unreviewed coordinate claim would be just as real a trust gap as an
+  // unreviewed address string, so they're held pending in lockstep with
+  // clinicAddress below, never split off into a separate, ungated path. An
+  // online-only professional's address+coordinate change is harmless and
+  // applies immediately either way.
   const effectiveOffersHomeVisits = updateData.offersHomeVisits ?? existing?.offersHomeVisits ?? false;
 
   const togglingHomeVisitsOn = parsed.data.offersHomeVisits === true && existing?.offersHomeVisits === false;
@@ -278,30 +290,81 @@ router.patch("/professionals/me", requireAuth, requireRole("professional", "admi
       // it as a visit address) or is being submitted for the first time
       // right now. Either way the CURRENT live clinicAddress must not
       // remain visible during this review — unlike the branch below, there
-      // is no already-vetted value to safely leave in place.
-      const newAddressClaim = parsed.data.clinicAddress !== undefined ? parsed.data.clinicAddress : existing?.clinicAddress;
+      // is no already-vetted value to safely leave in place. Coordinates
+      // follow the address claim exactly (same fallback-to-existing logic),
+      // since the two are always submitted together from the same
+      // CityAutocomplete selection.
+      //
+      // Reads off updateData (not parsed.data) for the newer fields —
+      // UpdateProfessionalProfileBody's zod-inferred type silently drops
+      // hand-patched fields (district/state/locationSource/clinicLat/
+      // clinicLng/clinicLocationSource) from direct property access even
+      // though they parse correctly at runtime (confirmed: the schema and
+      // the actual parsed values are both correct, only TS's static
+      // property-access checking on this specific large zod.object() type
+      // doesn't see them — a real, reproduced inference gap, not a guess).
+      // updateData already carries an explicit, correct type annotation
+      // covering these fields and is an unmutated spread of parsed.data at
+      // this point, so it's both type-safe and behaviorally identical.
+      const newAddressClaim = updateData.clinicAddress !== undefined ? updateData.clinicAddress : existing?.clinicAddress;
+      const newLatClaim = updateData.clinicLat !== undefined ? updateData.clinicLat : existing?.clinicLat;
+      const newLngClaim = updateData.clinicLng !== undefined ? updateData.clinicLng : existing?.clinicLng;
+      const newLocationSourceClaim = updateData.clinicLocationSource !== undefined ? updateData.clinicLocationSource : existing?.clinicLocationSource;
       if (newAddressClaim) {
         updateData.pendingClinicAddress = newAddressClaim;
+        updateData.pendingClinicLat = newLatClaim ?? null;
+        updateData.pendingClinicLng = newLngClaim ?? null;
+        updateData.pendingClinicLocationSource = (newLocationSourceClaim as "geocoded" | "city_center_approx" | "unresolved" | null | undefined) ?? null;
         updateData.addressReviewStatus = null;
       }
       updateData.clinicAddress = null;
+      updateData.clinicLat = null;
+      updateData.clinicLng = null;
+      updateData.clinicLocationSource = null;
     } else if (
-      parsed.data.clinicAddress !== undefined &&
-      parsed.data.clinicAddress !== existing?.clinicAddress
+      (updateData.clinicAddress !== undefined && updateData.clinicAddress !== existing?.clinicAddress) ||
+      (updateData.clinicLat !== undefined && updateData.clinicLat !== existing?.clinicLat) ||
+      (updateData.clinicLng !== undefined && updateData.clinicLng !== existing?.clinicLng) ||
+      (updateData.clinicLocationSource !== undefined && updateData.clinicLocationSource !== existing?.clinicLocationSource)
     ) {
       // Already an in-person-visiting, verified professional: the CURRENT
-      // live clinicAddress was already vetted (either at initial
-      // verification or via a prior address-approve), so it's safe to leave
-      // live while the NEW claim is reviewed — a fresh claim just
-      // supersedes whatever review state an earlier queued address was in.
-      updateData.pendingClinicAddress = parsed.data.clinicAddress;
+      // live clinicAddress (and its coordinate) was already vetted (either
+      // at initial verification or via a prior address-approve), so it's
+      // safe to leave live while the NEW claim is reviewed — a fresh claim
+      // just supersedes whatever review state an earlier queued address was
+      // in. Coordinates travel with the address claim, deleted from
+      // updateData exactly like clinicAddress itself so neither can slip
+      // through to the live row via the generic spread above.
+      //
+      // Deliberately checks EACH of the four fields (address text,
+      // latitude, longitude, locationSource) INDIVIDUALLY — not "address
+      // changed" as a single proxy for "anything changed". A request that
+      // holds the address string and both coordinates identical but only
+      // flips locationSource (e.g. falsely reclaiming an approximate point
+      // as "geocoded") would otherwise skip this branch too, same failure
+      // shape as the address-text-only version this replaced. The
+      // coordinate-differs-but-address-matches case is caught by the
+      // executed verification script before shipping, not assumed safe —
+      // if a fifth related field is ever added here, it needs its own
+      // clause in this OR, not an assumption that the existing four cover it.
+      // Falls back to existing.clinicAddress the same way the toggling
+      // branch above does, so a coordinate-only change (address field
+      // absent from this request) doesn't null out pendingClinicAddress.
+      const newAddressClaim = updateData.clinicAddress !== undefined ? updateData.clinicAddress : existing?.clinicAddress;
+      updateData.pendingClinicAddress = newAddressClaim ?? null;
+      updateData.pendingClinicLat = updateData.clinicLat ?? null;
+      updateData.pendingClinicLng = updateData.clinicLng ?? null;
+      updateData.pendingClinicLocationSource = updateData.clinicLocationSource ?? null;
       updateData.addressReviewStatus = null;
       delete updateData.clinicAddress;
+      delete updateData.clinicLat;
+      delete updateData.clinicLng;
+      delete updateData.clinicLocationSource;
     }
   }
-  // else: either still online-only (clinicAddress applies directly, no
-  // gating — profileData already carries it through untouched) or
-  // pre-verification (normal onboarding review covers it).
+  // else: either still online-only (clinicAddress/clinicLat/clinicLng apply
+  // directly, no gating — profileData already carries them through
+  // untouched) or pre-verification (normal onboarding review covers it).
 
   const [profile] = await db
     .update(professionalProfilesTable)

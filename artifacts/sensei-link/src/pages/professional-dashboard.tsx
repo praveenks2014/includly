@@ -725,6 +725,10 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
     willingToTravel: profile?.willingToTravel ?? false,
     travelRadiusKm: profile?.travelRadiusKm ?? 0,
     languages: profile?.languages ?? [] as string[],
+    clinicAddress: profile?.clinicAddress ?? "",
+    clinicLat: (profile as unknown as { clinicLat?: number | null })?.clinicLat ?? undefined as number | undefined,
+    clinicLng: (profile as unknown as { clinicLng?: number | null })?.clinicLng ?? undefined as number | undefined,
+    clinicLocationSource: profile?.clinicLocationSource ?? "" as "" | "geocoded" | "city_center_approx" | "unresolved",
   });
 
   useEffect(() => {
@@ -748,6 +752,10 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
         willingToTravel: profile.willingToTravel ?? false,
         travelRadiusKm: profile.travelRadiusKm ?? 0,
         languages: profile.languages ?? [],
+        clinicAddress: profile.clinicAddress ?? "",
+        clinicLat: (profile as unknown as { clinicLat?: number | null })?.clinicLat ?? undefined,
+        clinicLng: (profile as unknown as { clinicLng?: number | null })?.clinicLng ?? undefined,
+        clinicLocationSource: profile.clinicLocationSource ?? "",
       });
     }
   }, [profile, editing]);
@@ -774,6 +782,10 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
           willingToTravel: form.willingToTravel,
           travelRadiusKm: Number(form.travelRadiusKm) || undefined,
           languages: form.languages.filter(Boolean),
+          clinicAddress: form.clinicAddress.trim() || undefined,
+          clinicLat: form.clinicLat,
+          clinicLng: form.clinicLng,
+          clinicLocationSource: form.clinicLocationSource || undefined,
         },
       });
       queryClient.invalidateQueries({ queryKey: getGetMyProfessionalProfileQueryKey() });
@@ -976,6 +988,41 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
             <div className="flex items-center gap-3">
               <Switch checked={form.offersHomeVisits} onCheckedChange={(v) => setForm((f) => ({ ...f, offersHomeVisits: v }))} aria-label="Offers home visits" />
               <Label className="text-sm cursor-pointer">Offer home visits</Label>
+            </div>
+            <div>
+              <Label className="text-sm">Clinic address</Label>
+              {/* Bare-minimum capture for in-clinic distance scoring — not a
+                  full street-address form, just enough for CityAutocomplete
+                  to resolve a real coordinate. If verified and offering
+                  home visits, a changed address is held for admin review
+                  before it (and its coordinate) go live — see
+                  professionals.ts PATCH's gating logic; this UI doesn't
+                  currently surface that pending state, only that the save
+                  succeeds. */}
+              <div className="mt-1">
+                <CityAutocomplete
+                  city={form.clinicAddress}
+                  onSelect={(result: CityResult) =>
+                    setForm((f) => ({
+                      ...f,
+                      clinicAddress: result.displayText,
+                      clinicLat: result.lat,
+                      clinicLng: result.lng,
+                      clinicLocationSource: result.locationSource,
+                    }))
+                  }
+                  onManualChange={(result) =>
+                    setForm((f) => ({
+                      ...f,
+                      clinicAddress: result.city,
+                      clinicLat: result.lat ?? undefined,
+                      clinicLng: result.lng ?? undefined,
+                      clinicLocationSource: result.locationSource,
+                    }))
+                  }
+                  placeholder="Search your clinic's area or building…"
+                />
+              </div>
             </div>
             {form.offersHomeVisits && (
               <div className="grid sm:grid-cols-2 gap-4">

@@ -191,6 +191,9 @@ export const GetMyProfessionalProfileResponse = zod.object({
     .describe(
       "Full clinic\/practice address — revealed to parents only after a booking is confirmed",
     ),
+  clinicLat: zod.number().nullish(),
+  clinicLng: zod.number().nullish(),
+  clinicLocationSource: zod.enum(["geocoded", "city_center_approx", "unresolved"]).nullish(),
   offersHomeVisits: zod
     .boolean()
     .describe("Whether this specialist offers home-visit sessions"),
@@ -319,6 +322,9 @@ export const CreateProfessionalProfileBody = zod.object({
     .describe(
       "Full clinic\/practice address — revealed to parents only after booking is confirmed",
     ),
+  clinicLat: zod.number().optional(),
+  clinicLng: zod.number().optional(),
+  clinicLocationSource: zod.enum(["geocoded", "city_center_approx", "unresolved"]).optional(),
   offersHomeVisits: zod
     .boolean()
     .optional()
@@ -391,6 +397,9 @@ export const UpdateProfessionalProfileBody = zod.object({
     .describe(
       "Full clinic\/practice address — revealed to parents only after booking is confirmed",
     ),
+  clinicLat: zod.number().optional(),
+  clinicLng: zod.number().optional(),
+  clinicLocationSource: zod.enum(["geocoded", "city_center_approx", "unresolved"]).optional(),
   offersHomeVisits: zod
     .boolean()
     .optional()
@@ -480,6 +489,9 @@ export const UpdateProfessionalProfileResponse = zod.object({
     .describe(
       "Full clinic\/practice address — revealed to parents only after a booking is confirmed",
     ),
+  clinicLat: zod.number().nullish(),
+  clinicLng: zod.number().nullish(),
+  clinicLocationSource: zod.enum(["geocoded", "city_center_approx", "unresolved"]).nullish(),
   offersHomeVisits: zod
     .boolean()
     .describe("Whether this specialist offers home-visit sessions"),

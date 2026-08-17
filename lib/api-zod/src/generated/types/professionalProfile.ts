@@ -46,6 +46,12 @@ export interface ProfessionalProfile {
    * @nullable
    */
   clinicAddress?: string | null;
+  /** @nullable */
+  clinicLat?: number | null;
+  /** @nullable */
+  clinicLng?: number | null;
+  /** @nullable */
+  clinicLocationSource?: "geocoded" | "city_center_approx" | "unresolved" | null;
   /** Whether this specialist offers home-visit sessions */
   offersHomeVisits: boolean;
   travelRadiusKm: number;

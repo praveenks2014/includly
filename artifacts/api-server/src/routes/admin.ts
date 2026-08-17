@@ -319,6 +319,9 @@ router.patch("/admin/professionals/:id/address/approve", ...adminGuard, async (r
   const [existing] = await db
     .select({
       pendingClinicAddress: professionalProfilesTable.pendingClinicAddress,
+      pendingClinicLat: professionalProfilesTable.pendingClinicLat,
+      pendingClinicLng: professionalProfilesTable.pendingClinicLng,
+      pendingClinicLocationSource: professionalProfilesTable.pendingClinicLocationSource,
       addressReviewStatus: professionalProfilesTable.addressReviewStatus,
     })
     .from(professionalProfilesTable)
@@ -347,7 +350,16 @@ router.patch("/admin/professionals/:id/address/approve", ...adminGuard, async (r
     .update(professionalProfilesTable)
     .set({
       clinicAddress: existing.pendingClinicAddress,
+      // Promoted in lockstep with the address — held pending for the exact
+      // same reason (see professionals.ts PATCH's gating comment), so must
+      // be released the exact same way, not left stuck pending forever.
+      clinicLat: existing.pendingClinicLat,
+      clinicLng: existing.pendingClinicLng,
+      clinicLocationSource: existing.pendingClinicLocationSource,
       pendingClinicAddress: null,
+      pendingClinicLat: null,
+      pendingClinicLng: null,
+      pendingClinicLocationSource: null,
       addressReviewStatus: null,
     })
     .where(eq(professionalProfilesTable.id, id))
@@ -365,7 +377,13 @@ router.patch("/admin/professionals/:id/address/reject", ...adminGuard, async (re
 
   const [profile] = await db
     .update(professionalProfilesTable)
-    .set({ pendingClinicAddress: null, addressReviewStatus: "rejected" })
+    .set({
+      pendingClinicAddress: null,
+      pendingClinicLat: null,
+      pendingClinicLng: null,
+      pendingClinicLocationSource: null,
+      addressReviewStatus: "rejected",
+    })
     .where(eq(professionalProfilesTable.id, id))
     .returning();
 
