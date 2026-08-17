@@ -485,6 +485,10 @@ function SetupWizard({ onComplete }: { onComplete: () => Promise<void> }) {
                   <Label>Full Address</Label>
                   <Textarea value={form.address} onChange={(e) => set("address", e.target.value)} placeholder="123, 2nd Floor, MG Road..." className="mt-1 min-h-[60px]" />
                 </div>
+                <div>
+                  <Label>Pincode</Label>
+                  <Input value={form.pincode} onChange={(e) => set("pincode", e.target.value)} placeholder="560034" className="mt-1" />
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>Phone</Label>
@@ -1088,6 +1092,7 @@ function ProfileSettingsTab({ form, setForm, onSave, saving }: {
           <div><Label>State</Label><Input value={form.state} onChange={(e) => setForm((p) => ({ ...p, state: e.target.value }))} className="mt-1" /></div>
         </div>
         <div><Label>Address</Label><Textarea value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} className="mt-1 min-h-[60px]" /></div>
+        <div><Label>Pincode</Label><Input value={form.pincode} onChange={(e) => setForm((p) => ({ ...p, pincode: e.target.value }))} className="mt-1" /></div>
         <div className="grid grid-cols-2 gap-3">
           <div><Label className="flex items-center gap-1"><Phone size={12} />Phone</Label><Input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} className="mt-1" /></div>
           <div><Label className="flex items-center gap-1"><Mail size={12} />Email</Label><Input value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} className="mt-1" /></div>
