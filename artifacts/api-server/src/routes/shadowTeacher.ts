@@ -1054,6 +1054,11 @@ router.get("/shadow-teacher/:matchId/thread/:candidateId", requireAuth, async (r
   const isPro = pro?.userId === req.userId!;
   if (!isParent && !isPro) { res.status(403).json({ error: "Access denied" }); return; }
 
+  // Mirrors propose-interview's identical check: chat opens only once the
+  // teacher has accepted the request, same as the negotiation flow — a
+  // client-hidden button alone isn't enough, this must be server-enforced.
+  if (candidate.requestStatus !== "accepted") { res.status(403).json({ error: "The teacher has not accepted your request yet" }); return; }
+
   // Get or create thread
   let [thread] = await db
     .select()
@@ -1134,6 +1139,11 @@ router.post("/shadow-teacher/:matchId/thread/:candidateId", requireAuth, async (
   const isParent = match.parentId === req.userId!;
   const isPro = pro?.userId === req.userId!;
   if (!isParent && !isPro) { res.status(403).json({ error: "Access denied" }); return; }
+
+  // Mirrors propose-interview's identical check: chat opens only once the
+  // teacher has accepted the request, same as the negotiation flow — a
+  // client-hidden button alone isn't enough, this must be server-enforced.
+  if (candidate.requestStatus !== "accepted") { res.status(403).json({ error: "The teacher has not accepted your request yet" }); return; }
 
   // Get or create thread
   let [thread] = await db

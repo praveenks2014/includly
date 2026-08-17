@@ -4984,7 +4984,9 @@ function CandidacyCard({ candidacy: c, onOpen, myUserId, onUpdated }: { candidac
         <Button
           size="sm"
           onClick={onOpen}
-          className="bg-[#1A2340] hover:bg-[#2a3660] text-white text-xs h-8 px-4 rounded-xl"
+          disabled={c.requestStatus !== "accepted"}
+          title={c.requestStatus !== "accepted" ? "Chat opens once you accept this request" : undefined}
+          className="bg-[#1A2340] hover:bg-[#2a3660] text-white text-xs h-8 px-4 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#1A2340]"
         >
           <MessageSquare size={12} className="mr-1.5" />
           Open Chat

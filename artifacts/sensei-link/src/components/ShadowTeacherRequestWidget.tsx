@@ -1326,8 +1326,10 @@ function CandidateCard({
           <Button
             variant="outline"
             size="sm"
-            className="gap-1 text-xs flex-1 border-[#2EC4A5] text-[#2EC4A5] hover:bg-[#2EC4A5]/10 rounded-xl"
+            className="gap-1 text-xs flex-1 border-[#2EC4A5] text-[#2EC4A5] hover:bg-[#2EC4A5]/10 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             onClick={() => setChatOpen(true)}
+            disabled={candidate.requestStatus !== "accepted"}
+            title={candidate.requestStatus !== "accepted" ? "Chat opens once the teacher accepts your request" : undefined}
           >
             <MessageSquare size={12} />
             Chat
