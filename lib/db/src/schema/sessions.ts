@@ -90,8 +90,10 @@ export const sessionBookingsTable = pgTable("session_bookings", {
   // booking's commission.
   resolvedCommissionPct: real("resolved_commission_pct"),
   // Parent-selected, snapshotted at booking time (not read live) — see
-  // sessionModeEnum above. Nullable: legacy bookings predate this column,
-  // and the dead /sessions/book (Flow A) path doesn't set it.
+  // sessionModeEnum above. Nullable: legacy bookings predate this column.
+  // Both live booking paths set it (POST /sessions/book — Flow A, still
+  // reachable via forum.tsx's "Book this expert" button, not dead despite
+  // being superseded by Flow B elsewhere — and POST /sessions-v2/book).
   mode: sessionModeEnum("mode"),
   status: sessionStatusEnum("status").notNull().default("pending_payment"),
   providerOrderId: text("provider_order_id"),
