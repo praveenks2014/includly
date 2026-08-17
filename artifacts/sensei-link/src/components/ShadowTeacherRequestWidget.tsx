@@ -22,7 +22,7 @@ import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import {
   UserCheck, Loader2, CheckCircle2, Clock, IndianRupee,
   AlertCircle, RefreshCw, MessageSquare, Star, MapPin, Languages,
-  ChevronRight, BadgeCheck, Send, Video, Info,
+  ChevronRight, BadgeCheck, Send, Video, Info, Lock,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShadowMatchChatDrawer } from "./ShadowMatchChatDrawer";
@@ -1229,6 +1229,14 @@ function CandidateCard({
               <Star size={10} className="fill-[#FFB830] text-[#FFB830]" />{p.averageRating.toFixed(1)}
             </span>
           )}
+          {/* Signals "locked, not broken" for the non-clickable name/photo
+              area below — maskProfile() nulls real identity until commit,
+              so there's genuinely nothing more to show yet, not a bug. */}
+          {!committed && (
+            <span className="text-[11px] text-gray-400 flex items-center gap-1">
+              <Lock size={10} />Full profile unlocks once you commit
+            </span>
+          )}
         </div>
       </div>
     </>
@@ -1255,7 +1263,7 @@ function CandidateCard({
               {profileInfo}
             </Link>
           ) : (
-            <div className="flex items-start gap-3 flex-1 min-w-0">
+            <div className="flex items-start gap-3 flex-1 min-w-0 cursor-default">
               {profileInfo}
             </div>
           )}
