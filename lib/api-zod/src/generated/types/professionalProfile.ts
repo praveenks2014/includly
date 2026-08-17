@@ -37,6 +37,11 @@ export interface ProfessionalProfile {
   /** @nullable */
   state?: string | null;
   /**
+   * Provenance of city/latitude/longitude — never a scoring input, display/data-quality only
+   * @nullable
+   */
+  locationSource?: "geocoded" | "city_center_approx" | "unresolved" | null;
+  /**
    * Full clinic/practice address — revealed to parents only after a booking is confirmed
    * @nullable
    */

@@ -24,6 +24,7 @@ type WizardData = {
   area: string;
   district: string;
   state: string;
+  locationSource: "geocoded" | "city_center_approx" | "unresolved" | "";
   lat: number | null;
   lng: number | null;
   diagnosisStatus: string;
@@ -60,6 +61,7 @@ const DEFAULT: WizardData = {
   area: "",
   district: "",
   state: "",
+  locationSource: "",
   lat: null,
   lng: null,
   diagnosisStatus: "",
@@ -297,6 +299,7 @@ export default function ChildOnboardingPage() {
       area:                 (c.area as string) ?? "",
       district:             (c.district as string) ?? "",
       state:                (c.state as string) ?? "",
+      locationSource:       (c.locationSource as WizardData["locationSource"]) ?? "",
       lat:                  (c.lat as number | null) ?? null,
       lng:                  (c.lng as number | null) ?? null,
       diagnosisStatus:      (c.diagnosisStatus as string) ?? "",
@@ -379,6 +382,7 @@ export default function ChildOnboardingPage() {
       ...(data.area.trim() && { area: data.area.trim() }),
       ...(data.district.trim() && { district: data.district.trim() }),
       ...(data.state.trim() && { state: data.state.trim() }),
+      ...(data.locationSource && { locationSource: data.locationSource }),
       ...(data.lat != null && { lat: data.lat }),
       ...(data.lng != null && { lng: data.lng }),
       ...(data.diagnosisStatus && { diagnosisStatus: data.diagnosisStatus }),
@@ -471,10 +475,20 @@ export default function ChildOnboardingPage() {
                   area: result.area,
                   district: result.district,
                   state: result.state,
+                  locationSource: result.locationSource,
                   lat: result.lat,
                   lng: result.lng,
                 }))}
-                onManualChange={(city) => setData((prev) => ({ ...prev, city, area: "", district: "", state: "", lat: null, lng: null }))}
+                onManualChange={(result) => setData((prev) => ({
+                  ...prev,
+                  city: result.city,
+                  area: "",
+                  district: "",
+                  state: "",
+                  locationSource: result.locationSource,
+                  lat: result.lat,
+                  lng: result.lng,
+                }))}
                 placeholder="e.g. Hyderabad"
               />
             </Field>

@@ -13,6 +13,11 @@ export const childrenTable = pgTable("children", {
   state: text("state"),
   lat: real("lat"),
   lng: real("lng"),
+  // "geocoded" | "city_center_approx" | "unresolved" — see
+  // sensei-link's knownCities.ts for the full explanation. Plain text, not
+  // an enum, matching this file's own convention for values still likely to
+  // gain a case (e.g. a future "device_geolocation" source).
+  locationSource: text("location_source"),
   documentsJson: text("documents_json"),
   // V2 additions — text[] for filterable arrays, jsonb for structured objects
   gender: text("gender"),

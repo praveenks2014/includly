@@ -22,6 +22,7 @@ export type CreateChildPayload = {
   area?: string;
   district?: string;
   state?: string;
+  locationSource?: "geocoded" | "city_center_approx" | "unresolved";
   lat?: number | null;
   lng?: number | null;
   notes?: string;

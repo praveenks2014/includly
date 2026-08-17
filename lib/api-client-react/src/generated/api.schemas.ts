@@ -193,6 +193,11 @@ export interface ProfessionalProfile {
   /** @nullable */
   state?: string | null;
   /**
+   * Provenance of city/latitude/longitude — never a scoring input, display/data-quality only
+   * @nullable
+   */
+  locationSource?: "geocoded" | "city_center_approx" | "unresolved" | null;
+  /**
    * Full clinic/practice address — revealed to parents only after a booking is confirmed
    * @nullable
    */
@@ -432,6 +437,8 @@ export interface CreateProfessionalProfileBody {
   /** Human-readable neighbourhood/area label shown to parents (e.g. "Bandra West, Mumbai") */
   displayArea?: string;
   district?: string;
+  /** Provenance of city/latitude/longitude — never a scoring input, display/data-quality only */
+  locationSource?: "geocoded" | "city_center_approx" | "unresolved";
   state?: string;
   /** Full clinic/practice address — revealed to parents only after booking is confirmed */
   clinicAddress?: string;
@@ -494,6 +501,8 @@ export interface UpdateProfessionalProfileBody {
   /** Human-readable neighbourhood/area label shown to parents (e.g. "Bandra West, Mumbai") */
   displayArea?: string;
   district?: string;
+  /** Provenance of city/latitude/longitude — never a scoring input, display/data-quality only */
+  locationSource?: "geocoded" | "city_center_approx" | "unresolved";
   state?: string;
   /** Full clinic/practice address — revealed to parents only after booking is confirmed */
   clinicAddress?: string;

@@ -244,6 +244,7 @@ export default function OnboardPage() {
     displayArea: existingProfile?.displayArea ?? "",
     district: existingProfile?.district ?? "",
     state: existingProfile?.state ?? "",
+    locationSource: existingProfile?.locationSource ?? "" as "" | "geocoded" | "city_center_approx" | "unresolved",
     willingToTravel: existingProfile?.willingToTravel ?? false,
     travelRadiusKm: existingProfile?.travelRadiusKm?.toString() ?? "10",
     pricingMinINR: existingProfile?.pricingMinINR?.toString() ?? "",
@@ -277,6 +278,7 @@ export default function OnboardPage() {
         displayArea: prev.displayArea || existingProfile.displayArea || "",
         district: prev.district || existingProfile.district || "",
         state: prev.state || existingProfile.state || "",
+        locationSource: prev.locationSource || existingProfile.locationSource || "",
         pricingMinINR: prev.pricingMinINR || existingProfile.pricingMinINR?.toString() || "",
         pricingMaxINR: prev.pricingMaxINR || existingProfile.pricingMaxINR?.toString() || "",
       }));
@@ -493,6 +495,7 @@ export default function OnboardPage() {
           displayArea: form.displayArea.trim() || undefined,
           district: form.district.trim() || undefined,
           state: form.state.trim() || undefined,
+          locationSource: form.locationSource || undefined,
           willingToTravel: form.willingToTravel,
           travelRadiusKm: form.willingToTravel ? Number(form.travelRadiusKm) : undefined,
         },
@@ -805,10 +808,16 @@ export default function OnboardPage() {
                 setField("displayArea", result.area || form.displayArea);
                 setField("district", result.district);
                 setField("state", result.state);
+                setField("locationSource", result.locationSource);
                 setField("latitude", result.lat);
                 setField("longitude", result.lng);
               }}
-              onManualChange={(city) => setField("city", city)}
+              onManualChange={(result) => {
+                setField("city", result.city);
+                setField("locationSource", result.locationSource);
+                setField("latitude", result.lat ?? undefined);
+                setField("longitude", result.lng ?? undefined);
+              }}
             />
             <div>
               <Label htmlFor="country" className="text-sm font-medium">Country</Label>

@@ -715,6 +715,7 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
     displayArea: profile?.displayArea ?? "",
     district: profile?.district ?? "",
     state: profile?.state ?? "",
+    locationSource: profile?.locationSource ?? "" as "" | "geocoded" | "city_center_approx" | "unresolved",
     latitude: (profile as unknown as { latitude?: number | null })?.latitude ?? undefined as number | undefined,
     longitude: (profile as unknown as { longitude?: number | null })?.longitude ?? undefined as number | undefined,
     phone: profile?.phone ?? "",
@@ -737,6 +738,7 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
         displayArea: profile.displayArea ?? "",
         district: profile.district ?? "",
         state: profile.state ?? "",
+        locationSource: profile.locationSource ?? "",
         latitude: (profile as unknown as { latitude?: number | null })?.latitude ?? undefined,
         longitude: (profile as unknown as { longitude?: number | null })?.longitude ?? undefined,
         phone: profile.phone ?? "",
@@ -762,6 +764,7 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
           displayArea: form.displayArea.trim() || undefined,
           district: form.district.trim() || undefined,
           state: form.state.trim() || undefined,
+          locationSource: form.locationSource || undefined,
           latitude: form.latitude,
           longitude: form.longitude,
           phone: form.phone.trim() || undefined,
@@ -932,11 +935,20 @@ function ProfileTab({ profile }: { profile: ProfessionalProfile | undefined }) {
                   displayArea: result.area || f.displayArea,
                   district: result.district,
                   state: result.state,
+                  locationSource: result.locationSource,
                   latitude: result.lat,
                   longitude: result.lng,
                 }))
               }
-              onManualChange={(city) => setForm((f) => ({ ...f, city }))}
+              onManualChange={(result) =>
+                setForm((f) => ({
+                  ...f,
+                  city: result.city,
+                  locationSource: result.locationSource,
+                  latitude: result.lat ?? undefined,
+                  longitude: result.lng ?? undefined,
+                }))
+              }
             />
           </div>
 

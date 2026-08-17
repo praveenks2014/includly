@@ -30,6 +30,8 @@ export interface CreateProfessionalProfileBody {
   displayArea?: string;
   district?: string;
   state?: string;
+  /** Provenance of city/latitude/longitude — never a scoring input, display/data-quality only */
+  locationSource?: "geocoded" | "city_center_approx" | "unresolved";
   /** Full clinic/practice address — revealed to parents only after booking is confirmed */
   clinicAddress?: string;
   /** Whether this specialist offers home-visit sessions */

@@ -54,6 +54,7 @@ const ChildBody = z.object({
   area: z.string().optional(),
   district: z.string().optional(),
   state: z.string().optional(),
+  locationSource: z.enum(["geocoded", "city_center_approx", "unresolved"]).optional(),
   lat: z.number().optional(),
   lng: z.number().optional(),
   notes: z.string().optional(),

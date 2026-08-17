@@ -184,6 +184,7 @@ export const GetMyProfessionalProfileResponse = zod.object({
     .describe("Human-readable neighbourhood\/area label shown to parents"),
   district: zod.string().nullish(),
   state: zod.string().nullish(),
+  locationSource: zod.enum(["geocoded", "city_center_approx", "unresolved"]).nullish(),
   clinicAddress: zod
     .string()
     .nullish()
@@ -311,6 +312,7 @@ export const CreateProfessionalProfileBody = zod.object({
     ),
   district: zod.string().optional(),
   state: zod.string().optional(),
+  locationSource: zod.enum(["geocoded", "city_center_approx", "unresolved"]).optional(),
   clinicAddress: zod
     .string()
     .optional()
@@ -382,6 +384,7 @@ export const UpdateProfessionalProfileBody = zod.object({
     ),
   district: zod.string().optional(),
   state: zod.string().optional(),
+  locationSource: zod.enum(["geocoded", "city_center_approx", "unresolved"]).optional(),
   clinicAddress: zod
     .string()
     .optional()
@@ -470,6 +473,7 @@ export const UpdateProfessionalProfileResponse = zod.object({
     .describe("Human-readable neighbourhood\/area label shown to parents"),
   district: zod.string().nullish(),
   state: zod.string().nullish(),
+  locationSource: zod.enum(["geocoded", "city_center_approx", "unresolved"]).nullish(),
   clinicAddress: zod
     .string()
     .nullish()

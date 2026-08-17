@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { MapPin, Loader2, WifiOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { findKnownCity, nearestKnownCity, resolveManualCity, type LocationSource, type ManualCityResolution } from "@/lib/knownCities";
 
 export interface CityResult {
   displayText: string;
@@ -15,6 +16,11 @@ export interface CityResult {
   state: string;
   lat: number;
   lng: number;
+  // Always "geocoded" here — a real Photon selection always has a real
+  // point, even on the rare occasion its city LABEL needed correcting via
+  // knownCities (see parseFeature below). "city_center_approx"/"unresolved"
+  // only ever come from resolveManualCity's free-typed-text path.
+  locationSource: LocationSource;
 }
 
 interface PhotonProperties {
@@ -41,21 +47,32 @@ function parseFeature(f: PhotonFeature): CityResult {
   const p = f.properties;
   const [lng, lat] = f.geometry.coordinates;
   const isCityLevel = CITY_TYPES.has(p.type ?? "");
-  const city = isCityLevel ? p.name : (p.city ?? p.county ?? p.name);
+  const rawCity = isCityLevel ? p.name : (p.city ?? p.county ?? p.name);
   const area = isCityLevel ? "" : p.name;
   const district = p.county ?? "";
   const state = p.state ?? "";
   const parts: string[] = [p.name];
   if (!isCityLevel && p.city && p.city !== p.name) parts.push(p.city);
   if (p.state) parts.push(p.state);
-  return { displayText: parts.join(", "), city, area, district, state, lat, lng };
+  // DISPLAY-ONLY normalization: Photon sometimes returns a mandal/taluk
+  // instead of the actual city (no p.city field for the locality picked),
+  // or a real-but-differently-spelled city name (Bengaluru vs Bangalore).
+  // The coordinate itself is always kept exactly as Photon gave it — only
+  // the city STRING gets corrected, and only when we can do so confidently.
+  // Never a scoring input; see knownCities.ts's own header comment.
+  const known = findKnownCity(rawCity) ?? nearestKnownCity(lat, lng);
+  const city = known ? known.canonical : rawCity;
+  return { displayText: parts.join(", "), city, area, district, state, lat, lng, locationSource: "geocoded" };
 }
 
 export interface CityAutocompleteProps {
   city?: string;
   area?: string;
   onSelect: (result: CityResult) => void;
-  onManualChange?: (city: string) => void;
+  // Fires on every keystroke of free-typed text (Photon down, or the user
+  // hasn't picked a suggestion yet) — resolveManualCity runs a pure local
+  // lookup (no network) against knownCities, so this stays cheap uncached.
+  onManualChange?: (result: ManualCityResolution) => void;
   placeholder?: string;
 }
 
@@ -129,7 +146,7 @@ export function CityAutocomplete({
     setQuery(q);
     setHasSelected(false);
     scheduleSearch(q);
-    onManualChange?.(q);
+    onManualChange?.(resolveManualCity(q));
   }
 
   function handleSelect(result: CityResult) {
@@ -186,7 +203,7 @@ export function CityAutocomplete({
             onChange={(e) => {
               hasInteractedRef.current = true;
               setQuery(e.target.value);
-              onManualChange?.(e.target.value);
+              onManualChange?.(resolveManualCity(e.target.value));
             }}
             placeholder="City (e.g. Mumbai)"
             className="pl-9 h-12 text-base"

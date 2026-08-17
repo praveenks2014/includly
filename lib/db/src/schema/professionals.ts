@@ -73,6 +73,9 @@ export const professionalProfilesTable = pgTable("professional_profiles", {
   country: text("country"),
   latitude: real("latitude"),
   longitude: real("longitude"),
+  // "geocoded" | "city_center_approx" | "unresolved" — see sensei-link's
+  // knownCities.ts. Plain text, matching children.ts's identical column.
+  locationSource: text("location_source"),
   travelRadiusKm: integer("travel_radius_km").notNull().default(10),
   willingToTravel: boolean("willing_to_travel").notNull().default(false),
   isVerified: boolean("is_verified").notNull().default(false),
