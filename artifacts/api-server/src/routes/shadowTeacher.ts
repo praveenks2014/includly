@@ -28,7 +28,7 @@ import { notifyMatchShortlisted, notifyMatchChatMessage, notifyParentOnTrialDone
 import { generateOtp } from "../lib/otp";
 import { creditWallet } from "../lib/ledger";
 import { resolveStuckShadowTeacherMatch } from "../lib/stuckEngagementResolver";
-import { getSettings, parseTiers, filterBySchoolHours, computeEffectiveAvailableFrom } from "../lib/shadowTeacherMatching";
+import { getSettings, parseTiers, filterBySchoolHours, computeEffectiveAvailableFrom, applyGeoFilter } from "../lib/shadowTeacherMatching";
 import { checkRecurringScheduleConflict, RecurringScheduleSlot } from "../lib/recurringSchedule";
 import { JITSI_CONFIG_SUFFIX } from "../lib/jitsi";
 import { haversineKm } from "../lib/geo";
@@ -192,7 +192,17 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
   // tutor/therapist session) overlap the child's school hours.
   const { passedIds, schoolStartTime, schoolEndTime } = await filterBySchoolHours(allProfessionals, match.childId ?? null);
   const passedSet = new Set(passedIds);
-  const professionals = allProfessionals.filter((p) => passedSet.has(p.id));
+  const afterSchoolHours = allProfessionals.filter((p) => passedSet.has(p.id));
+
+  // School-distance exclusion (Rule 3): hard-excludes only when BOTH the
+  // school and the candidate have real coordinates and they're beyond 20km
+  // — see applyGeoFilter's own doc comment for the full Tier 2/3 fallback
+  // reasoning. geoFilterStatus is persisted onto the match row below so
+  // GET /shadow-teacher/my-request can surface the parent-facing banner
+  // without re-deriving it from the candidate list's shape.
+  const geoResult = applyGeoFilter(match.schoolLat, match.schoolLng, afterSchoolHours);
+  const geoPassedSet = new Set(geoResult.passedIds);
+  const professionals = afterSchoolHours.filter((p) => geoPassedSet.has(p.id));
 
   // Rule 2 support: effective availability per candidate, never an exclusion.
   const availabilityMap = await computeEffectiveAvailableFrom(
@@ -264,7 +274,7 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
   // Set high-water-mark counter (never decrements from here)
   await db
     .update(shadowTeacherMatchesTable)
-    .set({ distinctTeachersShown: candidateCount })
+    .set({ distinctTeachersShown: candidateCount, geoFilterStatus: geoResult.geoFilterStatus })
     .where(eq(shadowTeacherMatchesTable.id, match.id));
 
   return candidateCount;
@@ -3881,7 +3891,20 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
     // School-hours exclusion (Rule 1) on refill too
     const { passedIds: refillPassedIds, schoolStartTime: refillSchoolStartTime, schoolEndTime: refillSchoolEndTime } = await filterBySchoolHours(allCandidates, match.childId ?? null);
     const refillPassedSet = new Set(refillPassedIds);
-    const candidates = allCandidates.filter((p) => refillPassedSet.has(p.id));
+    const afterSchoolHoursRefill = allCandidates.filter((p) => refillPassedSet.has(p.id));
+
+    // School-distance exclusion (Rule 3) on refill too — re-evaluated fresh
+    // against whatever's left in the pool, not just an incremental check,
+    // since dismissing the one close candidate should be able to move the
+    // match's geoFilterStatus back to "no_matches_in_radius" just as
+    // correctly as finding a new close one should move it to "applied".
+    const refillGeoResult = applyGeoFilter(match.schoolLat, match.schoolLng, afterSchoolHoursRefill);
+    const refillGeoPassedSet = new Set(refillGeoResult.passedIds);
+    const candidates = afterSchoolHoursRefill.filter((p) => refillGeoPassedSet.has(p.id));
+    await db
+      .update(shadowTeacherMatchesTable)
+      .set({ geoFilterStatus: refillGeoResult.geoFilterStatus })
+      .where(eq(shadowTeacherMatchesTable.id, matchId));
 
     if (candidates.length > 0) {
       const settings = await getSettings();

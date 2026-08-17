@@ -118,6 +118,10 @@ interface MatchWithCandidates {
   // #18 — request-time school location (see schema comment for the
   // schoolLat/Lng precision guarantee).
   schoolName: string | null;
+  // "applied" | "no_matches_in_radius" | "unavailable" — see applyGeoFilter()
+  // (shadowTeacherMatching.ts). Only "no_matches_in_radius" shows a banner;
+  // the other two are silent, expected states.
+  geoFilterStatus: string | null;
   // Piece B — parent's own desired coverage days (raw column, present in
   // the API response via the ...match spread; the school-hours half of
   // this display comes from useChildren()'s own already-fetched child
@@ -2506,6 +2510,15 @@ export function ShadowTeacherRequestWidget() {
         <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 text-xs text-teal-800">
           <span className="font-semibold">💚 Committing on Includly keeps you protected.</span> Attendance tracking, leave management, teacher-exclusivity, and dispute support only apply to on-platform engagements.
         </div>
+
+        {match.geoFilterStatus === "no_matches_in_radius" && (
+          <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl">
+            <AlertCircle size={13} className="shrink-0 mt-0.5" />
+            <span>
+              No verified shadow teachers found within 20km of {match.schoolName ?? "your child's school"} — showing all available candidates, sorted by best overall match.
+            </span>
+          </div>
+        )}
 
         {match.candidates.length === 0 ? (
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">

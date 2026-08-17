@@ -31,7 +31,7 @@ import {
   shadowMatchThreadsTable,
   childrenTable,
 } from "@workspace/db";
-import { getSettings, parseTiers, filterBySchoolHours, computeEffectiveAvailableFrom } from "./shadowTeacherMatching";
+import { getSettings, parseTiers, filterBySchoolHours, computeEffectiveAvailableFrom, applyGeoFilter } from "./shadowTeacherMatching";
 import { scoreCandidate, type MatchSnapshot, type ProfessionalForScoring } from "./shadowTeacherScoring";
 import { createInAppNotification } from "./notificationService";
 
@@ -200,6 +200,16 @@ export async function onProfessionalBecameEligible(professionalId: number): Prom
     const { passedIds, schoolStartTime, schoolEndTime } = await filterBySchoolHours([{ id: professionalId }], match.childId ?? null);
     if (!passedIds.includes(professionalId)) continue;
 
+    // School-distance exclusion (Rule 3), single-candidate form — only this
+    // one professional is in scope here, not the whole remaining pool, so
+    // this can only ever resolve to "applied" (this candidate confirmed
+    // within 20km) or "unavailable" (school has no coordinates); it can
+    // never itself observe "no_matches_in_radius" for a candidate who's
+    // about to be skipped by the `continue` below. See shadowTeacher.ts's
+    // refill call site for the full-pool recompute this intentionally isn't.
+    const geoCheck = applyGeoFilter(match.schoolLat, match.schoolLng, [{ id: professionalId, latitude: proRow.latitude, longitude: proRow.longitude }]);
+    if (!geoCheck.passedIds.includes(professionalId)) continue;
+
     const activeCandidates = await db
       .select()
       .from(shadowMatchCandidatesTable)
@@ -244,7 +254,17 @@ export async function onProfessionalBecameEligible(professionalId: number): Prom
       });
       await db
         .update(shadowTeacherMatchesTable)
-        .set({ distinctTeachersShown: sql`${shadowTeacherMatchesTable.distinctTeachersShown} + 1`, updatedAt: new Date() })
+        .set({
+          distinctTeachersShown: sql`${shadowTeacherMatchesTable.distinctTeachersShown} + 1`,
+          updatedAt: new Date(),
+          // Upgrade-only: this single candidate being confirmed within 20km
+          // can move a match from "no_matches_in_radius" to "applied", but
+          // this narrow, one-candidate check has no basis to move it the
+          // other way — that recompute only happens where the full
+          // remaining pool is actually re-scanned (surfaceCandidatesForMatch,
+          // the manual refill endpoint).
+          ...(geoCheck.geoFilterStatus === "applied" ? { geoFilterStatus: "applied" as const } : {}),
+        })
         .where(eq(shadowTeacherMatchesTable.id, match.id));
 
       const [child] = match.childId
@@ -277,7 +297,11 @@ export async function onProfessionalBecameEligible(professionalId: number): Prom
       });
       await db
         .update(shadowTeacherMatchesTable)
-        .set({ distinctTeachersShown: sql`${shadowTeacherMatchesTable.distinctTeachersShown} + 1`, updatedAt: new Date() })
+        .set({
+          distinctTeachersShown: sql`${shadowTeacherMatchesTable.distinctTeachersShown} + 1`,
+          updatedAt: new Date(),
+          ...(geoCheck.geoFilterStatus === "applied" ? { geoFilterStatus: "applied" as const } : {}),
+        })
         .where(eq(shadowTeacherMatchesTable.id, match.id));
       // No push/in-app notification here by design — banner-only for the
       // >=3 threshold-triggered case, per the confirmed design.

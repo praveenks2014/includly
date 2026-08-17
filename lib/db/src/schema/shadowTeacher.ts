@@ -53,6 +53,13 @@ export const shadowTeacherMatchesTable = pgTable("shadow_teacher_matches", {
   schoolName: text("school_name"),
   schoolLat: real("school_lat"),
   schoolLng: real("school_lng"),
+  // "applied" | "no_matches_in_radius" | "unavailable" — see applyGeoFilter()
+  // in shadowTeacherMatching.ts. Written whenever candidates are (re)surfaced
+  // (initial surfacing, manual refill, eligibility refresh), read back by
+  // GET /shadow-teacher/my-request so the parent-facing banner knows which
+  // of the three states it's in without re-deriving it from the candidate
+  // list's shape.
+  geoFilterStatus: text("geo_filter_status"),
   // Compatibility signal only (see scoreStartDate in shadowTeacherScoring.ts)
   // — never excludes a candidate, only ranks them relative to how well their
   // effective availability lines up with this date.

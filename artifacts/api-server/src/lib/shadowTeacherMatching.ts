@@ -16,6 +16,7 @@ import {
   sessionBookingsTable,
 } from "@workspace/db";
 import { overlaps } from "./scheduleConflict";
+import { haversineKm } from "./geo";
 import type { TierDef } from "./shadowTeacherScoring";
 
 export async function getSettings() {
@@ -161,6 +162,67 @@ export async function filterBySchoolHours(
     passedIds: professionals.filter((p) => !overlapIds.has(p.id)).map((p) => p.id),
     schoolStartTime: schoolStart,
     schoolEndTime: schoolEnd,
+  };
+}
+
+const GEO_EXCLUSION_RADIUS_KM = 20;
+
+export type GeoFilterStatus = "applied" | "no_matches_in_radius" | "unavailable";
+
+export interface GeoFilterResult {
+  passedIds: number[];
+  geoFilterStatus: GeoFilterStatus;
+}
+
+/**
+ * School-distance EXCLUSION for shadow-teacher matching (Rule 3 — distinct
+ * from this file's existing "Rule 2" label on computeEffectiveAvailableFrom
+ * below, which is a scoring input, never an exclusion; naming kept
+ * consistent with that established numbering rather than reusing "Rule 2"
+ * for something that actually does exclude).
+ *
+ * Hard-excludes a candidate ONLY when both the school and the candidate
+ * have real coordinates and the distance between them exceeds
+ * GEO_EXCLUSION_RADIUS_KM. A candidate with no coordinates on their own
+ * side is never excluded here — that's Tier 2, left entirely to
+ * scoreCityGeo's city-string fallback, same weight as always, never
+ * promoted to an exclusion (a missing coordinate is our own data gap, not
+ * evidence the candidate is actually far away).
+ *
+ * geoFilterStatus: "unavailable" whenever the school itself has no
+ * coordinates (most matches today — nothing to filter by); "applied" once
+ * at least one candidate is CONFIRMED within radius; "no_matches_in_radius"
+ * when the school has coordinates but nobody was confirmed within range —
+ * the one state the parent-facing banner fires on.
+ */
+export function applyGeoFilter(
+  schoolLat: number | null,
+  schoolLng: number | null,
+  professionals: { id: number; latitude: number | null; longitude: number | null }[],
+): GeoFilterResult {
+  if (schoolLat == null || schoolLng == null) {
+    return { passedIds: professionals.map((p) => p.id), geoFilterStatus: "unavailable" };
+  }
+
+  const passedIds: number[] = [];
+  let anyConfirmedWithinRadius = false;
+  for (const p of professionals) {
+    if (p.latitude == null || p.longitude == null) {
+      // No coordinate on the candidate's side -- Tier 2, passes through to
+      // scoreCityGeo's own string comparison, never excluded by this rule.
+      passedIds.push(p.id);
+      continue;
+    }
+    const km = haversineKm(schoolLat, schoolLng, p.latitude, p.longitude);
+    if (km <= GEO_EXCLUSION_RADIUS_KM) {
+      passedIds.push(p.id);
+      anyConfirmedWithinRadius = true;
+    }
+  }
+
+  return {
+    passedIds,
+    geoFilterStatus: anyConfirmedWithinRadius ? "applied" : "no_matches_in_radius",
   };
 }
 
