@@ -290,8 +290,10 @@ export interface ProfessionalDetail {
   /** @nullable */
   averageRating?: number | null;
   totalRatings: number;
-  phoneBlurred: string;
-  emailBlurred: string;
+  /** Null for shadow teachers — contact is always hidden pre-commitment, never blurred-but-shown. @nullable */
+  phoneBlurred: string | null;
+  /** Null for shadow teachers — contact is always hidden pre-commitment, never blurred-but-shown. @nullable */
+  emailBlurred: string | null;
   isUnlocked: boolean;
   /** @nullable */
   phone?: string | null;
@@ -349,8 +351,10 @@ export interface ProfessionalSearchResult {
   /** @nullable */
   averageRating?: number | null;
   totalRatings: number;
-  phoneBlurred: string;
-  emailBlurred: string;
+  /** Null for shadow teachers — contact is always hidden pre-commitment, never blurred-but-shown. @nullable */
+  phoneBlurred: string | null;
+  /** Null for shadow teachers — contact is always hidden pre-commitment, never blurred-but-shown. @nullable */
+  emailBlurred: string | null;
   /** @nullable */
   phone?: string | null;
   /** @nullable */

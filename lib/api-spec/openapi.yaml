@@ -1946,9 +1946,11 @@ components:
         totalRatings:
           type: integer
         phoneBlurred:
-          type: string
+          type: ["string", "null"]
+          description: Null for shadow teachers — contact is always hidden pre-commitment, never blurred-but-shown
         emailBlurred:
-          type: string
+          type: ["string", "null"]
+          description: Null for shadow teachers — contact is always hidden pre-commitment, never blurred-but-shown
         isUnlocked:
           type: boolean
         phone:
@@ -2020,9 +2022,11 @@ components:
         totalRatings:
           type: integer
         phoneBlurred:
-          type: string
+          type: ["string", "null"]
+          description: Null for shadow teachers — contact is always hidden pre-commitment, never blurred-but-shown
         emailBlurred:
-          type: string
+          type: ["string", "null"]
+          description: Null for shadow teachers — contact is always hidden pre-commitment, never blurred-but-shown
         phone:
           type: ["string", "null"]
         email:

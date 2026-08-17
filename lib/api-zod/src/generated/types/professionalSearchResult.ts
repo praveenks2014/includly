@@ -33,8 +33,10 @@ export interface ProfessionalSearchResult {
   /** @nullable */
   averageRating?: number | null;
   totalRatings: number;
-  phoneBlurred: string;
-  emailBlurred: string;
+  /** @nullable */
+  phoneBlurred: string | null;
+  /** @nullable */
+  emailBlurred: string | null;
   /** @nullable */
   phone?: string | null;
   /** @nullable */
