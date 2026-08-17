@@ -207,8 +207,11 @@ export async function onProfessionalBecameEligible(professionalId: number): Prom
 
     const snap: MatchSnapshot = {
       childCity: match.childCity ?? null,
-      childLat: null,
-      childLng: null,
+      // SCHOOL coordinates, not home — see shadowTeacher.ts's matching call
+      // sites for the full rationale. Falls back to city-string comparison
+      // on its own when absent.
+      childLat: match.schoolLat ?? null,
+      childLng: match.schoolLng ?? null,
       childLanguages: match.childLanguages ?? null,
       childBudgetMinInr: match.childBudgetMinInr ?? null,
       childBudgetMaxInr: match.childBudgetMaxInr ?? null,

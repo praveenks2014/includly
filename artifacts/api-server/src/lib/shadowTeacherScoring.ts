@@ -4,7 +4,7 @@
  * scoreCandidate() is a pure function — no DB calls, fully unit-testable.
  * maskBody()       applies server-side redaction before messages leave the API.
  */
-import { haversineKm } from "./geo";
+import { scoreDistance } from "./geo";
 
 export interface WeeklyScheduleSlot {
   dayOfWeek: number;
@@ -77,13 +77,18 @@ export interface TierDef {
 }
 
 function scoreCityGeo(snap: MatchSnapshot, pro: ProfessionalForScoring): number {
-  if (snap.childLat && snap.childLng && pro.latitude && pro.longitude) {
-    const km = haversineKm(snap.childLat, snap.childLng, pro.latitude, pro.longitude);
-    if (km <= 5) return 30;
-    if (km <= 10) return 20;
-    if (km <= 20) return 10;
-    return 0;
-  }
+  // Real distance first, wherever both points resolve to coordinates —
+  // "geocoded" is a placeholder until a real locationSource column exists;
+  // both childLat/Lng (currently the SCHOOL's coordinates, see MatchSnapshot)
+  // and pro.latitude/longitude are only ever set from an explicit
+  // autocomplete selection today, never a guess. City-string comparison
+  // below is the fallback for when no coordinates are available at all, NOT
+  // a parallel signal — never both.
+  const distanceScore = scoreDistance(
+    snap.childLat, snap.childLng, "geocoded",
+    pro.latitude, pro.longitude, "geocoded",
+  );
+  if (distanceScore != null) return distanceScore;
   if (snap.childCity && pro.city) {
     return snap.childCity.trim().toLowerCase() === pro.city.trim().toLowerCase() ? 30 : 0;
   }

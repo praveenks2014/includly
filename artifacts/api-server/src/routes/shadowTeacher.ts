@@ -204,15 +204,19 @@ async function surfaceCandidatesForMatch(match: MatchRow): Promise<number> {
   }));
 
   const tiers = parseTiers(settings.tiersJson);
-  // KNOWN GAP: childLat/childLng are hardcoded null here, so scoreCityGeo's
-  // haversine branch never actually runs for matching today — it silently
-  // falls back to exact-city-string matching. Not fixed as part of the D-day
-  // candidate-card distance work; this is shadow-teacher's SCHOOL-distance
-  // question (parked separately), not the tutor/therapist HOME-distance one.
+  // childLat/childLng feed scoreCityGeo's haversine branch (5/10/20km
+  // buckets) with the SCHOOL's coordinates, not the child's home — shadow
+  // teacher is a school-hours role, and schoolLat/schoolLng are already
+  // captured (SchoolAutocomplete-only, request-time, optional) on the match
+  // row. When absent (school location wasn't provided), scoreCityGeo falls
+  // back to exact-city-string comparison on its own — no branching needed
+  // here. Distinct, deliberately unrelated to the known-cities DISPLAY
+  // normalization in CityAutocomplete.tsx: that table only cleans up what's
+  // shown in the UI and is never a scoring input.
   const snap: MatchSnapshot = {
     childCity: match.childCity ?? null,
-    childLat: null,
-    childLng: null,
+    childLat: match.schoolLat ?? null,
+    childLng: match.schoolLng ?? null,
     childLanguages: match.childLanguages ?? null,
     childBudgetMinInr: match.childBudgetMinInr ?? null,
     childBudgetMaxInr: match.childBudgetMaxInr ?? null,
@@ -3872,9 +3876,9 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
     if (candidates.length > 0) {
       const settings = await getSettings();
       const tiers = parseTiers(settings.tiersJson);
-      // KNOWN GAP: see the identical note on the main matching path above —
-      // childLat/childLng are hardcoded null here too, so geo-scoring never
-      // runs on refill either.
+      // childLat/childLng: see the identical note on the main matching path
+      // above — SCHOOL coordinates, not home, falls back to city-string
+      // comparison on its own when absent.
       const refillAvailabilityMap = await computeEffectiveAvailableFrom(
         candidates.map((p) => ({ id: p.id, earliestStartDate: p.earliestStartDate })),
       );
@@ -3884,8 +3888,8 @@ router.post("/shadow-teacher/:matchId/mark-not-interested", requireAuth, require
       }));
       const snap: MatchSnapshot = {
         childCity: match.childCity ?? null,
-        childLat: null,
-        childLng: null,
+        childLat: match.schoolLat ?? null,
+        childLng: match.schoolLng ?? null,
         childLanguages: match.childLanguages ?? null,
         childBudgetMinInr: match.childBudgetMinInr ?? null,
         childBudgetMaxInr: match.childBudgetMaxInr ?? null,
