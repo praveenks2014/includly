@@ -3067,6 +3067,22 @@ components:
           type: integer
         scheduleWarningBufferMinutes:
           type: integer
+        shadowTeacherVisible:
+          type: boolean
+        homeTutorVisible:
+          type: boolean
+        therapistVisible:
+          type: boolean
+        therapyCentreVisible:
+          type: boolean
+        psychiatristVisible:
+          type: boolean
+        developmentalPediatricianVisible:
+          type: boolean
+        neurologistVisible:
+          type: boolean
+        coachingVisible:
+          type: boolean
       required:
         - placementFeeInr
         - activationFeeInr
@@ -3074,6 +3090,14 @@ components:
         - trialDirectPayEnabled
         - trialFeeInr
         - scheduleWarningBufferMinutes
+        - shadowTeacherVisible
+        - homeTutorVisible
+        - therapistVisible
+        - therapyCentreVisible
+        - psychiatristVisible
+        - developmentalPediatricianVisible
+        - neurologistVisible
+        - coachingVisible
 
     VapidPublicKeyResponse:
       type: object

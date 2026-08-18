@@ -48,19 +48,17 @@ export const SHOW_PRO_UPGRADE = false;
 export const SHOW_TUTOR_SEARCH = true;
 export const SHOW_THERAPIST_SEARCH = true;
 
-/**
- * SHOW_CONSULTATION_TILES / SHOW_COACH_TILE — gate the Find-a-Specialist
- * tile grid's Psychiatrist/Developmental Pediatrician/Neurologist tiles
- * and Inclusive Coach tile respectively. Same cross-reference caveat as
- * SHOW_TUTOR_SEARCH/SHOW_THERAPIST_SEARCH above — the backend copy of
- * these flags (artifacts/api-server/src/lib/features.ts) does not share
- * state, both must be flipped together. Even once true, an individual
- * tile also needs GET /professionals/specialty-availability to report at
- * least one verified professional for its specialty before it renders as
- * live rather than staying hidden — the flag alone isn't sufficient.
- */
-export const SHOW_CONSULTATION_TILES = false;
-export const SHOW_COACH_TILE = false;
+// SHOW_CONSULTATION_TILES / SHOW_COACH_TILE used to live here — removed,
+// same reasoning as SHOW_TUTOR_SEARCH/SHOW_THERAPIST_SEARCH above: replaced
+// by a live admin_settings-backed toggle per vertical (psychiatristVisible/
+// developmentalPediatricianVisible/neurologistVisible/coachingVisible, read
+// via GET /settings/me in serviceCategories.ts's useServiceCategoryStatus),
+// so changing any of these 4 no longer requires a redeploy. The backend's
+// dead copy (artifacts/api-server/src/lib/features.ts) was deleted outright
+// — it had no route to gate and nothing read it. Each tile's isLive still
+// ANDs the settings flag with GET /professionals/specialty-availability
+// reporting at least one professional for that specialty — the flag alone
+// still isn't sufficient, same as before.
 
 export const STAT_THRESHOLDS = {
   specialists: 50,

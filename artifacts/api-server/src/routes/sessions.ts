@@ -19,8 +19,10 @@ import {
   therapyCentresTable,
   centreServicesTable,
   therapyBookingsTable,
+  adminSettingsTable,
 } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
+import { isVerticalBookingBlocked } from "../lib/verticalVisibility";
 import { generateOtp } from "../lib/otp";
 import { sendPushNotification } from "../lib/notificationService";
 import { createLedgerHeld, releaseWithCommission, refundToWallet, findLedgerByBooking } from "../lib/ledger";
@@ -733,6 +735,28 @@ router.post("/sessions/book", requireAuth, async (req: Request, res: Response): 
 
   if (mode === "home_visit" && !prof?.offersHomeVisits) {
     res.status(400).json({ error: "This specialist does not offer home visits" });
+    return;
+  }
+
+  // Vertical visibility (psychiatrist/developmental_pediatrician/neurologist/
+  // coaching only) — inline check, not a router.use() prefix gate (traced
+  // and confirmed unsafe: this endpoint is shared with occupational_therapy/
+  // speech_therapy/other already-live specialties). Every other specialty
+  // is unaffected by this check — see isVerticalBookingBlocked.
+  const [visibilitySettings] = await db
+    .select({
+      psychiatristVisible: adminSettingsTable.psychiatristVisible,
+      developmentalPediatricianVisible: adminSettingsTable.developmentalPediatricianVisible,
+      neurologistVisible: adminSettingsTable.neurologistVisible,
+      coachingVisible: adminSettingsTable.coachingVisible,
+    })
+    .from(adminSettingsTable)
+    .limit(1);
+  if (
+    visibilitySettings &&
+    isVerticalBookingBlocked(prof?.specialty, visibilitySettings)
+  ) {
+    res.status(403).json({ error: "This service is not currently available" });
     return;
   }
 

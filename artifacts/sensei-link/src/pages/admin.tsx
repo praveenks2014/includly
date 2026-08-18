@@ -1545,6 +1545,13 @@ function SettingsTab() {
   const [homeTutorVisible, setHomeTutorVisible] = useState(false);
   const [therapistVisible, setTherapistVisible] = useState(false);
   const [therapyCentreVisible, setTherapyCentreVisible] = useState(false);
+  // Replaces the old hardcoded SHOW_CONSULTATION_TILES/SHOW_COACH_TILE
+  // constants. Unlike the 4 above, these have NO server-side route gate —
+  // frontend tile visibility only (see the second Vertical Visibility card).
+  const [psychiatristVisible, setPsychiatristVisible] = useState(false);
+  const [developmentalPediatricianVisible, setDevelopmentalPediatricianVisible] = useState(false);
+  const [neurologistVisible, setNeurologistVisible] = useState(false);
+  const [coachingVisible, setCoachingVisible] = useState(false);
 
   const [isSaving, setIsSaving] = useState(false);
   const [synced, setSynced] = useState(false);
@@ -1591,6 +1598,10 @@ function SettingsTab() {
     setHomeTutorVisible((settingsRec["homeTutorVisible"] as boolean) ?? false);
     setTherapistVisible((settingsRec["therapistVisible"] as boolean) ?? false);
     setTherapyCentreVisible((settingsRec["therapyCentreVisible"] as boolean) ?? false);
+    setPsychiatristVisible((settingsRec["psychiatristVisible"] as boolean) ?? false);
+    setDevelopmentalPediatricianVisible((settingsRec["developmentalPediatricianVisible"] as boolean) ?? false);
+    setNeurologistVisible((settingsRec["neurologistVisible"] as boolean) ?? false);
+    setCoachingVisible((settingsRec["coachingVisible"] as boolean) ?? false);
     setSynced(true);
   }
 
@@ -1640,6 +1651,10 @@ function SettingsTab() {
         homeTutorVisible,
         therapistVisible,
         therapyCentreVisible,
+        psychiatristVisible,
+        developmentalPediatricianVisible,
+        neurologistVisible,
+        coachingVisible,
       };
       await updateSettings({ data: payload });
       queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() });
@@ -1853,6 +1868,44 @@ function SettingsTab() {
                 <p className="text-sm font-medium text-[#1A2340]">{row.label}</p>
                 <p className="text-xs text-gray-400">
                   {row.visible ? "Live — parents can browse and start new requests." : "Hidden — shows \"coming soon\" to parents; new requests rejected server-side."}
+                </p>
+              </div>
+              <button type="button" onClick={() => row.setVisible(!row.visible)}
+                aria-label={row.visible ? `Hide ${row.label}` : `Make ${row.label} live`}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2EC4A5] focus-visible:ring-offset-2 ${row.visible ? "bg-[#2EC4A5]" : "bg-gray-200"}`}>
+                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-transform ${row.visible ? "translate-x-5" : "translate-x-0"}`} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Vertical Visibility — Consultations & Coaching ──
+            Replaces the old hardcoded SHOW_CONSULTATION_TILES/SHOW_COACH_TILE.
+            Deliberately a SEPARATE card, not merged into the one above: these
+            4 have no server-side route gate (frontend tile visibility only),
+            so the copy here must not claim "rejected server-side" the way
+            the enforced group above accurately does. */}
+        <div className="bg-white rounded-xl p-6 shadow-[0_4px_24px_rgba(26,35,64,0.08)] space-y-5">
+          <div>
+            <p className="text-base font-bold text-[#1A2340]">Vertical Visibility — Consultations & Coaching</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Controls whether the tile appears live to parents (still also requires at least one
+              verified professional in that specialty). Frontend-only — unlike the categories above,
+              there is no server-side route gate yet, so the underlying booking endpoints stay
+              reachable even while a tile here is off.
+            </p>
+          </div>
+          {([
+            { label: "Psychiatrist", visible: psychiatristVisible, setVisible: setPsychiatristVisible },
+            { label: "Developmental Pediatrician", visible: developmentalPediatricianVisible, setVisible: setDevelopmentalPediatricianVisible },
+            { label: "Neurologist", visible: neurologistVisible, setVisible: setNeurologistVisible },
+            { label: "Inclusive Coach", visible: coachingVisible, setVisible: setCoachingVisible },
+          ] as const).map((row) => (
+            <div key={row.label} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50">
+              <div>
+                <p className="text-sm font-medium text-[#1A2340]">{row.label}</p>
+                <p className="text-xs text-gray-400">
+                  {row.visible ? "Tile shows as live to parents (when a professional exists)." : "Tile shows \"coming soon\" to parents."}
                 </p>
               </div>
               <button type="button" onClick={() => row.setVisible(!row.visible)}

@@ -654,6 +654,10 @@ router.get("/settings/me", requireAuth, async (_req, res): Promise<void> => {
     homeTutorVisible: settings.homeTutorVisible,
     therapistVisible: settings.therapistVisible,
     therapyCentreVisible: settings.therapyCentreVisible,
+    psychiatristVisible: settings.psychiatristVisible,
+    developmentalPediatricianVisible: settings.developmentalPediatricianVisible,
+    neurologistVisible: settings.neurologistVisible,
+    coachingVisible: settings.coachingVisible,
   });
 });
 

@@ -164,6 +164,21 @@ export const adminSettingsTable = pgTable("admin_settings", {
   homeTutorVisible: boolean("home_tutor_visible").notNull().default(false),
   therapistVisible: boolean("therapist_visible").notNull().default(false),
   therapyCentreVisible: boolean("therapy_centre_visible").notNull().default(false),
+  // Same Step 3 pattern, extended to the 4 verticals that were still gated
+  // by hardcoded frontend-only flags (SHOW_CONSULTATION_TILES/SHOW_COACH_TILE
+  // in features.ts) — this is the "system config" those flags represented.
+  // Split one-per-vertical (not one bundled "consultationVisible" flag)
+  // so admin can open psychiatrist without also exposing dev-ped/neurologist.
+  // Defaults false, matching SHOW_CONSULTATION_TILES/SHOW_COACH_TILE's
+  // current false, so converting the config source doesn't flip anything
+  // live at migration time. Unlike shadow_teacher/home_tutor/therapist/
+  // therapy_centre above, these 4 verticals have NO server-side route gate
+  // yet (frontend-only enforcement, same as today) — logged as a follow-up,
+  // not built in this pass.
+  psychiatristVisible: boolean("psychiatrist_visible").notNull().default(false),
+  developmentalPediatricianVisible: boolean("developmental_pediatrician_visible").notNull().default(false),
+  neurologistVisible: boolean("neurologist_visible").notNull().default(false),
+  coachingVisible: boolean("coaching_visible").notNull().default(false),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -24,6 +24,7 @@ import {
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 import { createInAppNotification } from "../lib/notificationService";
 import { getRecurringAndSessionBusyWindows, overlapsAnyWindow } from "../lib/recurringSchedule";
+import { isVerticalBookingBlocked } from "../lib/verticalVisibility";
 import { z } from "zod/v4";
 
 const router: IRouter = Router();
@@ -101,13 +102,34 @@ router.post("/sessions-v2/book", requireAuth, requireRole("parent"), async (req:
   }
 
   const [prof] = await db
-    .select({ pricingMinINR: professionalProfilesTable.pricingMinINR, userId: professionalProfilesTable.userId, offersHomeVisits: professionalProfilesTable.offersHomeVisits })
+    .select({ pricingMinINR: professionalProfilesTable.pricingMinINR, userId: professionalProfilesTable.userId, offersHomeVisits: professionalProfilesTable.offersHomeVisits, specialty: professionalProfilesTable.specialty })
     .from(professionalProfilesTable)
     .where(eq(professionalProfilesTable.id, professionalId));
   if (!prof) { res.status(404).json({ error: "Professional not found" }); return; }
 
   if (mode === "home_visit" && !prof.offersHomeVisits) {
     res.status(400).json({ error: "This specialist does not offer home visits" });
+    return;
+  }
+
+  // Vertical visibility (psychiatrist/developmental_pediatrician/neurologist/
+  // coaching only) — inline check, not a router.use() prefix gate (same
+  // reasoning as sessions.ts's Flow A — traced and confirmed unsafe here).
+  // Every other specialty is unaffected by this check.
+  const [visibilitySettings] = await db
+    .select({
+      psychiatristVisible: adminSettingsTable.psychiatristVisible,
+      developmentalPediatricianVisible: adminSettingsTable.developmentalPediatricianVisible,
+      neurologistVisible: adminSettingsTable.neurologistVisible,
+      coachingVisible: adminSettingsTable.coachingVisible,
+    })
+    .from(adminSettingsTable)
+    .limit(1);
+  if (
+    visibilitySettings &&
+    isVerticalBookingBlocked(prof.specialty, visibilitySettings)
+  ) {
+    res.status(403).json({ error: "This service is not currently available" });
     return;
   }
 
