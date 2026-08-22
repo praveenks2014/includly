@@ -507,7 +507,17 @@ function HomeTab({ parentName, city, onTabChange }: { parentName: string; city?:
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#2EC4A5] mb-2">Includly</p>
           <h1 className="text-[1.6rem] font-bold text-white leading-tight">{greeting()}, {parentName}!</h1>
           <p className="text-sm text-white/45 mt-1">Your family's support hub.</p>
-          {walletData !== undefined && (
+          {/* Hidden when balance is zero — no reachable top-up path exists in
+              the UI today (POST /wallet/topup/order|verify are built
+              backend-side but unwired, per built-not-wired-pattern), so a
+              ₹0 card with nothing to add and nothing to show is pure
+              clutter. Shown whenever balance > 0 (refund credits — see
+              creditWallet/refundToWallet call sites in sessions.ts,
+              assessments.ts, stuckEngagementResolver.ts, tutor.ts,
+              therapist.ts, shadowTeacher.ts — are real, reachable events,
+              not dead code), so a parent who's actually owed money never
+              has it hidden from them. */}
+          {walletData !== undefined && walletData.balanceInr > 0 && (
             <div className="mt-5 flex items-center justify-between bg-white/[0.08] rounded-2xl px-4 py-3.5 border border-white/[0.07]">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#2EC4A5]">Wallet Balance</p>
@@ -1256,6 +1266,16 @@ function ShadowTeacherTab() {
     endedReason?: string | null;
     platformSalaryEnabled?: boolean;
     recurringScheduleJson?: RecurringScheduleSlot[] | null;
+    // Overview tab (2a) — see engagements.ts's parent-facing select comment.
+    teacherTermsAcknowledgedAt?: string | null;
+    absenceRetainerPct?: number | null;
+    absenceFreeDaysPerMonth?: number | null;
+    summerRetainerPct?: number | null;
+    summerRetainerMonths?: number | null;
+    leaveTermsNotes?: string | null;
+    childSickLeaveFreeDaysPerMonth?: number | null;
+    childSickLeaveRetainerPct?: number | null;
+    availableDuringBreaks?: boolean | null;
   }
   interface DailyLog {
     id: number;
@@ -1365,6 +1385,12 @@ function ShadowTeacherTab() {
   const pendingPR = lifecycleRequests.find(r => ["pause", "resume"].includes(r.type) && r.status === "pending") ?? null;
   const iAmPRRequester = myUserId > 0 && pendingPR?.raisedByUserId === myUserId;
 
+  // Wires the existing connectThreadsTable chat mechanism (already
+  // guaranteed to exist for this parent/professional/child by commit time,
+  // already used elsewhere in this file, already access-gated on having a
+  // non-ended engagement — see assertConnectAccess in connect.ts) into the
+  // active-engagement view. Not a new messaging system.
+  const [engagementChatOpen, setEngagementChatOpen] = useState(false);
   const [lifecycleType, setLifecycleType] = useState<"stop" | "pause" | "buyout" | "full_buyout" | "">("");
   const [lifecycleNotes, setLifecycleNotes] = useState("");
   const [pauseReason, setPauseReason] = useState("");
@@ -1717,10 +1743,20 @@ function ShadowTeacherTab() {
             {active.childName && <p className="text-sm opacity-75 mt-0.5">Supporting {active.childName}</p>}
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
-            <ProfessionalAvatar avatarUrl={active.professionalAvatarUrl} fullName={active.professionalName} size="sm" />
+            <ProfessionalAvatar avatarUrl={active.professionalAvatarUrl} fullName={active.professionalName} size="md" />
             <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/20 border border-white/15 uppercase tracking-wide whitespace-nowrap">
               {active.status.replace(/_/g, " ")}
             </span>
+            {/* Chat access matches assertConnectAccess's own condition
+                (connect.ts) exactly: any non-ended engagement. */}
+            {active.status !== "ended" && (
+              <button
+                onClick={() => setEngagementChatOpen(true)}
+                className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 border border-white/15 transition-colors"
+              >
+                <MessageCircle size={11} /> Chat
+              </button>
+            )}
           </div>
         </div>
         <div className="mt-4 flex items-center gap-4">
@@ -1742,6 +1778,15 @@ function ShadowTeacherTab() {
           </>}
         </div>
       </div>
+
+      {engagementChatOpen && (
+        <ChatModal
+          professionalId={active.professionalId}
+          professionalName={active.professionalName ?? `Teacher #${active.professionalId}`}
+          childName={active.childName}
+          onClose={() => setEngagementChatOpen(false)}
+        />
+      )}
 
       {/* Engagement summary strip — persistent across all tabs, not just
           Overview. Total Logs/Payments Made reuse the same `logs`/`payments`
@@ -1954,7 +1999,82 @@ function ShadowTeacherTab() {
               </div>
             </div>
           ) : (
-            active.notes && <p className="text-xs text-gray-500 bg-gray-50 rounded-xl p-3">{active.notes}</p>
+            // active / notice_period / paused — previously fell through to
+            // just `active.notes`, which is almost always empty (the
+            // "blank Overview" report). All fields below are already
+            // captured on this row at accept time (see engagements.ts's
+            // parent-facing select) — nothing here is invented or guessed.
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm font-bold text-[#1A2340] mb-2">Your Agreement</p>
+                <div className="bg-gray-50 rounded-xl p-3 space-y-2">
+                  <div className="flex justify-between items-center gap-3">
+                    <span className="text-xs text-gray-500 shrink-0">Monthly fee</span>
+                    <span className="text-xs font-semibold text-gray-700 text-right">₹{Number(active.monthlyFeeInr).toLocaleString("en-IN")}/month</span>
+                  </div>
+                  <div className="flex justify-between items-center gap-3">
+                    <span className="text-xs text-gray-500 shrink-0">Schedule</span>
+                    <span className="text-xs font-semibold text-gray-700 text-right">{formatRecurringScheduleSummary(active.recurringScheduleJson) ?? "Not set"}</span>
+                  </div>
+                  {active.teacherTermsAcknowledgedAt && (
+                    <div className="flex justify-between items-center gap-3">
+                      <span className="text-xs text-gray-500 shrink-0">Terms acknowledged</span>
+                      <span className="text-xs font-semibold text-gray-700 text-right">
+                        {new Date(active.teacherTermsAcknowledgedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-bold text-[#1A2340] mb-2">Leave &amp; Absence Terms</p>
+                <div className="bg-gray-50 rounded-xl p-3 space-y-2">
+                  <div className="flex justify-between items-center gap-3">
+                    <span className="text-xs text-gray-500 shrink-0">Teacher's own absence</span>
+                    <span className="text-xs font-semibold text-gray-700 text-right">
+                      {active.absenceFreeDaysPerMonth ?? 0} free day{active.absenceFreeDaysPerMonth === 1 ? "" : "s"}/mo, then {active.absenceRetainerPct ?? 0}% pay
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center gap-3">
+                    <span className="text-xs text-gray-500 shrink-0">Child's sick leave</span>
+                    <span className="text-xs font-semibold text-gray-700 text-right">
+                      {active.childSickLeaveFreeDaysPerMonth ?? 0} free day{active.childSickLeaveFreeDaysPerMonth === 1 ? "" : "s"}/mo, then {active.childSickLeaveRetainerPct ?? 0}% pay
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center gap-3">
+                    <span className="text-xs text-gray-500 shrink-0">School breaks</span>
+                    <span className="text-xs font-semibold text-gray-700 text-right">
+                      {active.availableDuringBreaks ? `Available (${active.summerRetainerPct ?? 0}% retainer)` : "Not available during breaks"}
+                    </span>
+                  </div>
+                  {active.leaveTermsNotes && (
+                    <p className="text-[11px] text-gray-500 pt-1.5 border-t border-gray-100">{active.leaveTermsNotes}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Qualitative only, deliberately no day-counts — the Manage
+                  tab's own preview still hardcodes "15 days" (2d, not yet
+                  fixed); repeating a number here without the real
+                  admin-configured value would just add a second place that
+                  could disagree with what's actually charged. */}
+              {(active.status === "active" || active.status === "notice_period") && (
+                <div>
+                  <p className="text-sm font-bold text-[#1A2340] mb-2">Ending This Engagement</p>
+                  <div className="bg-gray-50 rounded-xl p-3 space-y-1.5">
+                    <p className="text-xs text-gray-600"><span className="font-semibold text-gray-700">Give Notice</span> — end anytime at no extra cost. {active.professionalName ?? "Your teacher"} continues through the standard notice period, then the engagement ends.</p>
+                    <p className="text-xs text-gray-600"><span className="font-semibold text-gray-700">Early Exit</span> — end sooner for a one-time fee, prorated to a shorter notice window than Give Notice. {active.professionalName ?? "Your teacher"} continues working until then.</p>
+                    <p className="text-xs text-gray-600"><span className="font-semibold text-gray-700">Full Buyout</span> — pay one full month's fee (even if you end today) to end immediately or on any date you choose — no notice period required.</p>
+                    <button onClick={() => setStTab("lifecycle")} className="text-[11px] font-semibold text-teal-600 underline underline-offset-2 pt-1">
+                      See exact terms in Manage →
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {active.notes && <p className="text-xs text-gray-500 bg-gray-50 rounded-xl p-3">{active.notes}</p>}
+            </div>
           )}
         </div>
       )}

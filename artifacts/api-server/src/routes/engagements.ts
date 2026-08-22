@@ -130,6 +130,23 @@ router.get("/engagements", requireAuth, async (req, res): Promise<void> => {
         // own accepted weekly slots (captured at accept-time), previously
         // only ever selected on the professional-facing branch below.
         recurringScheduleJson: shadowTeacherEngagementsTable.recurringScheduleJson,
+        // Overview tab (2a) — negotiated terms, already snapshotted onto
+        // this row at accept time (choose-engagement's INSERT), never
+        // previously selected on the parent-facing branch. Sourced from
+        // the engagement's own columns, not negotiationOffersTable
+        // directly — that table is where these values ORIGINATE, but by
+        // commit time they're already permanently copied here, so
+        // re-querying it would be redundant and could surface a
+        // superseded/withdrawn offer instead of the one actually accepted.
+        teacherTermsAcknowledgedAt: shadowTeacherEngagementsTable.teacherTermsAcknowledgedAt,
+        absenceRetainerPct: shadowTeacherEngagementsTable.absenceRetainerPct,
+        absenceFreeDaysPerMonth: shadowTeacherEngagementsTable.absenceFreeDaysPerMonth,
+        summerRetainerPct: shadowTeacherEngagementsTable.summerRetainerPct,
+        summerRetainerMonths: shadowTeacherEngagementsTable.summerRetainerMonths,
+        leaveTermsNotes: shadowTeacherEngagementsTable.leaveTermsNotes,
+        childSickLeaveFreeDaysPerMonth: shadowTeacherEngagementsTable.childSickLeaveFreeDaysPerMonth,
+        childSickLeaveRetainerPct: shadowTeacherEngagementsTable.childSickLeaveRetainerPct,
+        availableDuringBreaks: shadowTeacherEngagementsTable.availableDuringBreaks,
         professionalName: professionalProfilesTable.fullName,
         professionalSpecialty: professionalProfilesTable.specialty,
         professionalAvatarUrl: usersTable.avatarUrl,
