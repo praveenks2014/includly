@@ -2071,17 +2071,16 @@ function ShadowTeacherTab() {
                 </div>
               </div>
 
-              {/* Qualitative only, deliberately no day-counts — the Manage
-                  tab's own preview still hardcodes "15 days" (2d, not yet
-                  fixed); repeating a number here without the real
-                  admin-configured value would just add a second place that
-                  could disagree with what's actually charged. */}
+              {/* 2d fix landed — noticePeriodDays/parentBuyoutDays now come
+                  from the same shadowTeacherPricing query the Manage tab
+                  uses below, both reading the live admin-configured value
+                  (GET /shadow-teacher/pricing), never hardcoded. */}
               {(active.status === "active" || active.status === "notice_period") && (
                 <div>
                   <p className="text-sm font-bold text-[#1A2340] mb-2">Ending This Engagement</p>
                   <div className="bg-gray-50 rounded-xl p-3 space-y-1.5">
-                    <p className="text-xs text-gray-600"><span className="font-semibold text-gray-700">Give Notice</span> — end anytime at no extra cost. {active.professionalName ?? "Your teacher"} continues through the standard notice period, then the engagement ends.</p>
-                    <p className="text-xs text-gray-600"><span className="font-semibold text-gray-700">Early Exit</span> — end sooner for a one-time fee, prorated to a shorter notice window than Give Notice. {active.professionalName ?? "Your teacher"} continues working until then.</p>
+                    <p className="text-xs text-gray-600"><span className="font-semibold text-gray-700">Give Notice</span> — end anytime at no extra cost. {active.professionalName ?? "Your teacher"} continues through the {noticePeriodDays}-day notice period, then the engagement ends.</p>
+                    <p className="text-xs text-gray-600"><span className="font-semibold text-gray-700">Early Exit</span> — end sooner for a one-time fee, prorated to a {parentBuyoutDays}-day notice window. {active.professionalName ?? "Your teacher"} continues working until then.</p>
                     <p className="text-xs text-gray-600"><span className="font-semibold text-gray-700">Full Buyout</span> — pay one full month's fee (even if you end today) to end immediately or on any date you choose — no notice period required.</p>
                     <button onClick={() => setStTab("lifecycle")} className="text-[11px] font-semibold text-teal-600 underline underline-offset-2 pt-1">
                       See exact terms in Manage →
