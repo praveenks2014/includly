@@ -1385,6 +1385,23 @@ function ShadowTeacherTab() {
   const pendingPR = lifecycleRequests.find(r => ["pause", "resume"].includes(r.type) && r.status === "pending") ?? null;
   const iAmPRRequester = myUserId > 0 && pendingPR?.raisedByUserId === myUserId;
 
+  // 2d — same public endpoint the professional side already reads
+  // (TermsAcknowledgment via professional-dashboard.tsx) for noticePeriodDays;
+  // now also used here for parentBuyoutDays. Replaces this tab's previous
+  // hardcoded "30"/"15" — both parties now read the identical live source.
+  // Defaults only cover the brief pre-load window (matching the schema's
+  // own defaults), same pattern as TermsAcknowledgment's `?? 30`.
+  const { data: shadowTeacherPricing } = useQuery<{ noticePeriodDays: number; parentBuyoutDays: number }>({
+    queryKey: ["shadow-teacher-pricing"],
+    queryFn: async () => {
+      const r = await fetchWithAuth("/api/shadow-teacher/pricing");
+      return r.json();
+    },
+    staleTime: 5 * 60_000,
+  });
+  const noticePeriodDays = shadowTeacherPricing?.noticePeriodDays ?? 30;
+  const parentBuyoutDays = shadowTeacherPricing?.parentBuyoutDays ?? 15;
+
   // Wires the existing connectThreadsTable chat mechanism (already
   // guaranteed to exist for this parent/professional/child by commit time,
   // already used elsewhere in this file, already access-gated on having a
@@ -2310,8 +2327,13 @@ function ShadowTeacherTab() {
 
           {/* End engagement — only when active or notice_period */}
           {(active.status === "active" || active.status === "notice_period") && (() => {
-            const buyoutFee = Math.round(15 * parseFloat(active.monthlyFeeInr) / 30);
-            const buyoutEndDate = new Date(); buyoutEndDate.setDate(buyoutEndDate.getDate() + 15);
+            // Same formula, same order of operations, as lifecycleRequests.ts's
+            // actual charge (buyoutFeeInr = Math.round(settings.parentBuyoutDays *
+            // eng.monthlyFeeInr / 30)) — this preview can never diverge from
+            // what would actually be charged, since it's the identical calc
+            // fed by the identical live source.
+            const buyoutFee = Math.round(parentBuyoutDays * parseFloat(active.monthlyFeeInr) / 30);
+            const buyoutEndDate = new Date(); buyoutEndDate.setDate(buyoutEndDate.getDate() + parentBuyoutDays);
             const buyoutEndStr = buyoutEndDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
             const teacherName = active.professionalName ?? "your teacher";
             return (
@@ -2324,22 +2346,22 @@ function ShadowTeacherTab() {
                   {/* Give Notice */}
                   <button onClick={() => setLifecycleType(lifecycleType === "stop" ? "" : "stop")}
                     className={`w-full py-2.5 px-3 rounded-xl border text-sm font-semibold transition-colors text-left ${lifecycleType === "stop" ? "border-[#FF6B6B] bg-[#FF6B6B]/10 text-[#FF6B6B]" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}>
-                    End (30-day notice) — no extra cost
+                    End ({noticePeriodDays}-day notice) — no extra cost
                   </button>
                   {lifecycleType === "stop" && (
                     <p className="text-xs text-gray-500 px-1">
-                      Ends this engagement after 30 days at no extra cost. {teacherName} continues for 30 days while you find alternative support. Either party can give notice.
+                      Ends this engagement after {noticePeriodDays} days at no extra cost. {teacherName} continues for {noticePeriodDays} days while you find alternative support. Either party can give notice.
                     </p>
                   )}
 
-                  {/* Early Exit / 15-day Buyout */}
+                  {/* Early Exit / prorated buyout */}
                   <button onClick={() => setLifecycleType(lifecycleType === "buyout" ? "" : "buyout")}
                     className={`w-full py-2.5 px-3 rounded-xl border text-sm font-semibold transition-colors text-left ${lifecycleType === "buyout" ? "border-[#FF6B6B] bg-[#FF6B6B]/10 text-[#FF6B6B]" : "border-gray-200 hover:border-gray-300 text-gray-600"}`}>
-                    Early Exit (15 days) — one-time fee of ₹{buyoutFee.toLocaleString("en-IN")}
+                    Early Exit ({parentBuyoutDays} days) — one-time fee of ₹{buyoutFee.toLocaleString("en-IN")}
                   </button>
                   {lifecycleType === "buyout" && (
                     <p className="text-xs text-gray-500 px-1">
-                      Ends this engagement in 15 days by paying a one-time fee of ₹{buyoutFee.toLocaleString("en-IN")}. {teacherName} continues working until {buyoutEndStr}. The engagement ends automatically on that date. The fee is non-refundable.
+                      Ends this engagement in {parentBuyoutDays} days by paying a one-time fee of ₹{buyoutFee.toLocaleString("en-IN")}. {teacherName} continues working until {buyoutEndStr}. The engagement ends automatically on that date. The fee is non-refundable.
                     </p>
                   )}
 

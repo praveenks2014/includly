@@ -287,6 +287,10 @@ router.get("/shadow-teacher/pricing", async (_req: Request, res: Response): Prom
     matchingFeeInr: s.matchingFeeInr,
     trialFeeInr: (s as Record<string, unknown>)["trialFeeInr"] as number ?? 500,
     noticePeriodDays: (s as Record<string, unknown>)["noticePeriodDays"] as number ?? 30,
+    // 2d — same live-read discipline as noticePeriodDays above. The parent-
+    // dashboard Manage tab previously hardcoded this as a literal "15",
+    // independent of this endpoint; now reads it from here instead.
+    parentBuyoutDays: (s as Record<string, unknown>)["parentBuyoutDays"] as number ?? 15,
   });
 });
 
