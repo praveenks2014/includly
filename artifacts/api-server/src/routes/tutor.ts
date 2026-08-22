@@ -40,25 +40,17 @@ const OTP_MAX_ATTEMPTS = 5;
 
 const router: IRouter = Router();
 
-// Server-side visibility gate — applies to every route in this file.
-// Returns 404 (not 403) when off, so nothing here is reachable even if a
-// URL is guessed while the frontend is hidden. Step 3: now reads the live,
-// admin-configurable admin_settings.homeTutorVisible column instead of the
-// static SHOW_TUTOR_SEARCH constant, so an admin can toggle this with no
-// redeploy — the SCOPING is unchanged from the original fix (still
-// "/tutor", not bare), only the CONDITION source changed.
-// Scoped to "/tutor" (Express's own path-prefix matching on router.use,
-// not a hand-rolled req.path check) — this router is mounted with no path
-// prefix in routes/index.ts, so an unscoped gate here would 404 EVERY
-// request that reaches this router regardless of destination, including
-// ones bound for entirely different, later-mounted routers. This is the
-// actual defect the Aug 12 "count: 1" / therapy-bookings incident traced
-// back to — mount order no longer matters after this fix.
-router.use("/tutor", async (_req, res, next) => {
-  const [settings] = await db.select({ homeTutorVisible: adminSettingsTable.homeTutorVisible }).from(adminSettingsTable).limit(1);
-  if (settings?.homeTutorVisible === false) { res.status(404).json({ error: "Not found" }); return; }
-  next();
-});
+// Removed: the router.use("/tutor", ...) prefix gate that used to live
+// here. Traced (chat, vertical-visibility follow-up) and confirmed unsafe
+// for the same reason as sessions.ts/sessionsV2.ts's shared endpoints,
+// just the opposite direction — this one WAS correctly scoped to "/tutor"
+// (no mount-order defect), but "/tutor" itself covers far more than new
+// request-creation: my-candidacies, respond-request, confirm-interview,
+// accept-trial, and every /tutor/engagements/* professional-management
+// route all matched this prefix too, contradicting admin.tsx's own
+// "already-in-progress work is unaffected" claim. Replaced with a single
+// inline check inside POST /tutor/request only (the one actual
+// new-request-creation entry point) — see that handler below.
 
 const PARENT_PLATFORM_NOTICE =
   "Includly tracks attendance, mediates disputes, and helps you rebook if this doesn't work out — as long as the engagement stays on-platform.";
@@ -240,6 +232,21 @@ router.get("/tutor/pricing", async (_req: Request, res: Response): Promise<void>
 router.post("/tutor/request", requireAuth, requireRole("parent"), async (req: Request, res: Response): Promise<void> => {
   const parsed = NewTutorRequestBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  // Inline visibility check — replaces the removed router.use() prefix
+  // gate, scoped to ONLY this new-request-creation endpoint. Same 403 +
+  // message convention as isVerticalBookingBlocked's sessions.ts/
+  // sessionsV2.ts call sites, for a consistent parent-facing error across
+  // every gated vertical.
+  const [visibilitySettings] = await db
+    .select({ homeTutorVisible: adminSettingsTable.homeTutorVisible })
+    .from(adminSettingsTable)
+    .limit(1);
+  if (visibilitySettings?.homeTutorVisible === false) {
+    res.status(403).json({ error: "This service is not currently available" });
+    return;
+  }
+
   const { childId, ...intake } = parsed.data;
 
   const [child] = await db.select().from(childrenTable).where(and(eq(childrenTable.id, childId), eq(childrenTable.parentId, req.userId!)));
