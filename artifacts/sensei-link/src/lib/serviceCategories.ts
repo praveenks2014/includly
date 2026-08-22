@@ -21,10 +21,6 @@ import {
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
-import {
-  SHOW_CONSULTATION_TILES,
-  SHOW_COACH_TILE,
-} from "@/features";
 
 export type DotState = "active" | "pending" | "none";
 
@@ -166,6 +162,14 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
   const homeTutorVisible = mySettings?.homeTutorVisible ?? false;
   const therapistVisible = mySettings?.therapistVisible ?? false;
   const therapyCentreVisible = mySettings?.therapyCentreVisible ?? false;
+  // Replaces SHOW_CONSULTATION_TILES/SHOW_COACH_TILE (removed from
+  // features.ts) — same admin_settings-backed pattern as the 4 above,
+  // split one-per-vertical rather than kept bundled. Defaults false,
+  // matching those flags' prior hardcoded false.
+  const psychiatristVisible = mySettings?.psychiatristVisible ?? false;
+  const developmentalPediatricianVisible = mySettings?.developmentalPediatricianVisible ?? false;
+  const neurologistVisible = mySettings?.neurologistVisible ?? false;
+  const coachingVisible = mySettings?.coachingVisible ?? false;
 
   // Shadow Teacher — reuses the exact same query key/endpoint
   // ShadowTeacherTab already fetches elsewhere on this page, so react-query
@@ -272,7 +276,7 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
       },
     },
     psychiatrist: {
-      isLive: SHOW_CONSULTATION_TILES && (counts["psychiatrist"] ?? 0) > 0,
+      isLive: psychiatristVisible && (counts["psychiatrist"] ?? 0) > 0,
       // Both view modes expand the consultation mini-form inline now (same
       // /services?open= mechanism as shadow_teacher/home_tutor/therapist
       // above) — List View used to go straight to /search instead, but
@@ -287,7 +291,7 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
       },
     },
     developmental_pediatrician: {
-      isLive: SHOW_CONSULTATION_TILES && (counts["developmental_pediatrician"] ?? 0) > 0,
+      isLive: developmentalPediatricianVisible && (counts["developmental_pediatrician"] ?? 0) > 0,
       navigate: () => setLocation("/services?open=developmental_pediatrician"),
       comingSoon: {
         icon: Baby,
@@ -296,7 +300,7 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
       },
     },
     neurologist: {
-      isLive: SHOW_CONSULTATION_TILES && (counts["neurologist"] ?? 0) > 0,
+      isLive: neurologistVisible && (counts["neurologist"] ?? 0) > 0,
       navigate: () => setLocation("/services?open=neurologist"),
       comingSoon: {
         icon: Activity,
@@ -318,7 +322,7 @@ export function useServiceCategoryStatus(viewMode: ServiceCategoryViewMode): Res
       },
     },
     coaching: {
-      isLive: SHOW_COACH_TILE && (counts["coaching"] ?? 0) > 0,
+      isLive: coachingVisible && (counts["coaching"] ?? 0) > 0,
       // Both view modes expand the activity-selection form inline now — see
       // the psychiatrist entry above for why the old List-View-only
       // /search escape hatch was removed.

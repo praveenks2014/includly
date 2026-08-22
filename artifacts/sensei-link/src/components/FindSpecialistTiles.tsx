@@ -42,7 +42,7 @@ export function FindSpecialistTiles() {
             <button
               key={t.key}
               onClick={() => t.onClick(setComingSoon)}
-              className="group relative bg-white border border-gray-100 rounded-2xl p-3.5 pt-4 flex flex-col items-center gap-2 text-center shadow-[0_1px_2px_rgba(26,35,64,0.04),0_1px_8px_rgba(26,35,64,0.03)] transition-[transform,box-shadow,border-color] duration-200 hover:[transform:perspective(600px)_rotateY(5deg)_translateY(-3px)] hover:shadow-[0_10px_24px_rgba(26,35,64,0.10),0_2px_6px_rgba(26,35,64,0.06)] hover:border-teal-200 focus-visible:[transform:perspective(600px)_rotateY(5deg)_translateY(-3px)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 active:[transform:scale(0.95)]"
+              className={`group relative bg-white border border-gray-100 rounded-2xl p-3.5 pt-4 flex flex-col items-center gap-2 text-center shadow-[0_1px_2px_rgba(26,35,64,0.04),0_1px_8px_rgba(26,35,64,0.03)] transition-[transform,box-shadow,border-color] duration-200 hover:[transform:perspective(600px)_rotateY(5deg)_translateY(-3px)] hover:shadow-[0_10px_24px_rgba(26,35,64,0.10),0_2px_6px_rgba(26,35,64,0.06)] hover:border-teal-200 focus-visible:[transform:perspective(600px)_rotateY(5deg)_translateY(-3px)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 active:[transform:scale(0.95)] ${!t.isLive ? "opacity-60 grayscale-[0.4]" : ""}`}
             >
               {t.dot !== "none" && (
                 <span
@@ -58,6 +58,11 @@ export function FindSpecialistTiles() {
                 <span className="lg:hidden">{t.mobileLabel ?? t.label}</span>
                 <span className="hidden lg:inline">{t.label}</span>
               </span>
+              {!t.isLive && (
+                <span className="text-[8px] font-bold uppercase tracking-wide text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 leading-none">
+                  Coming soon
+                </span>
+              )}
             </button>
           );
         })}

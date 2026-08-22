@@ -847,6 +847,10 @@ export const GetMySettingsResponse = zod.object({
   homeTutorVisible: zod.boolean(),
   therapistVisible: zod.boolean(),
   therapyCentreVisible: zod.boolean(),
+  psychiatristVisible: zod.boolean(),
+  developmentalPediatricianVisible: zod.boolean(),
+  neurologistVisible: zod.boolean(),
+  coachingVisible: zod.boolean(),
 });
 
 /**

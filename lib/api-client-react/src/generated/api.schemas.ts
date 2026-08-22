@@ -912,6 +912,10 @@ export interface MySettings {
   homeTutorVisible: boolean;
   therapistVisible: boolean;
   therapyCentreVisible: boolean;
+  psychiatristVisible: boolean;
+  developmentalPediatricianVisible: boolean;
+  neurologistVisible: boolean;
+  coachingVisible: boolean;
 }
 
 export interface VapidPublicKeyResponse {
